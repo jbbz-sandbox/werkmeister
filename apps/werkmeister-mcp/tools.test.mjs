@@ -65,6 +65,16 @@ test("every verb has one name: the merged names are listed, the old ones are not
   for (const n of GONE) assert.ok(!names.includes(n), `old name still served: ${n}`);
 });
 
+test("the Claude harness tools keep their names and workspace argument (SW-187)", async () => {
+  const { tools } = await (await connect()).listTools();
+  for (const n of ["claude-transcript", "claude-send", "claude-turn-status", "claude-resume"]) {
+    const t = tools.find((x) => x.name === n);
+    assert.ok(t, `missing ${n}`);
+    assert.ok(t.description, `${n} has a description`);
+    assert.ok(t.inputSchema?.properties?.workspace, `${n} has a workspace argument`);
+  }
+});
+
 test("the UI-only tools are visible to the app only", async () => {
   const { tools } = await (await connect()).listTools();
   for (const n of APP_ONLY) {

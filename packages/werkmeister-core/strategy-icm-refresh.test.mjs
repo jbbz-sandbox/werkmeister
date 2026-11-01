@@ -12,7 +12,7 @@ import {
   PRE_TOOL_USE_GATE_COMMAND,
   READ_ONLY_GIT_RULES,
   SESSION_START_COMMAND,
-} from "./dist/hooks_gen.js";
+} from "./dist/harness/claude/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { strategyById } from "./dist/strategies/index.js";
 import { withAgentState } from "./fixtures.mjs";

@@ -6,10 +6,10 @@
  * A `status:` label replaces the issue's other `status:` labels, so one is present (SW-27).
  */
 
-import { childEnv, ghBin } from "../claude_cli.js";
 import { loadReposConfig } from "../config.js";
 import { loadGithubOrg } from "../global_config.js";
 import { runAsync } from "../proc.js";
+import { childEnv, ghBin } from "../tool_bins.js";
 import type { Issue, IssueTrackerStrategy, TrackerScope } from "./types.js";
 
 /** `repo#12` or `owner/repo#12`. */

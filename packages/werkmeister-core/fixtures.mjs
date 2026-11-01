@@ -182,7 +182,9 @@ esac
 
 /** `hooks` plus the agent-state entry every workspace gets on each of its events (SW-46). */
 export async function withAgentState(hooks) {
-  const { AGENT_STATE_EVENTS, buildAgentStateEntry } = await import("./dist/hooks_gen.js");
+  const { AGENT_STATE_EVENTS, buildAgentStateEntry } = await import(
+    "./dist/harness/claude/hooks_gen.js"
+  );
   const out = { ...hooks };
   for (const event of AGENT_STATE_EVENTS)
     out[event] = [...(out[event] ?? []), buildAgentStateEntry()];

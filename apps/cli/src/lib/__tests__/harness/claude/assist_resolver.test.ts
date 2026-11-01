@@ -1,7 +1,11 @@
 /** The Claude pass's SDK options: isolated from every on-disk setting, plugin and MCP server. Never calls the SDK. */
 import { describe, expect, it } from "vitest";
 
-import { assistOptions, SdkMissingError, sdkLoadError } from "../assist_resolver.js";
+import {
+  assistOptions,
+  SdkMissingError,
+  sdkLoadError,
+} from "../../../harness/claude/assist_resolver.js";
 
 const notInstalled = Object.assign(new Error("Cannot find package"), {
   code: "ERR_MODULE_NOT_FOUND",

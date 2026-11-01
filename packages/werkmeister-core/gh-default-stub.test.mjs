@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { runCapture } from "./dist/claude_cli.js";
+import { runCapture } from "./dist/tool_bins.js";
 import { withFakeGh } from "./fixtures.mjs";
 
 const stubbed = async () => (await runCapture("gh", ["pr", "list"])).stderr;

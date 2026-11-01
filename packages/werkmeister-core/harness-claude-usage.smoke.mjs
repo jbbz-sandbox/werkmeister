@@ -1,5 +1,5 @@
 // Smoke test for the werkmeister-core usage reducer + cost math.
-//   npm run build && node lib/usage.smoke.mjs
+//   npm run build && node harness-claude-usage.smoke.mjs
 import assert from "node:assert";
 import path from "node:path";
 
@@ -101,4 +101,4 @@ assert.deepStrictEqual(ws.totals, { input: 100, output: 200, cacheCreation: 0, c
 assert.ok(Math.abs(ws.estUsd - (100e-6 * 15 + 200e-6 * 75)) < 1e-12, "ws estUsd");
 assert.strictEqual(ws.sessions.length, 1);
 
-console.log("usage.smoke OK");
+console.log("harness-claude-usage.smoke OK");

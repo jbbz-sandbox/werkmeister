@@ -11,6 +11,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { dotDir } from "./dot_dir.js";
+import { WRAP_UP } from "./harness/claude/desktop.js";
 import { findRecordRoot } from "./pr_guard.js";
 
 export type AgentState = "working" | "needs-you" | "done" | "idle";
@@ -27,9 +28,6 @@ export interface AgentStateFile {
 const STATES = new Set<AgentState>(["working", "needs-you", "done", "idle"]);
 // Tools that block on the person even though PreToolUse fired for them.
 const ASKS = new Set(["AskUserQuestion", "ExitPlanMode"]);
-// Claude Desktop's end-of-turn box: its `ask` is the run's question, and the
-// closing message after it is told not to repeat it.
-const WRAP_UP = "mcp__ccd_turn__wrap_up";
 // idle_prompt repeats a Stop that already happened; auth_success needs nothing.
 const BLOCKING_NOTIFICATIONS = new Set(["permission_prompt", "elicitation_dialog"]);
 

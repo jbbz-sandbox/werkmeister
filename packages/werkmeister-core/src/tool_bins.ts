@@ -1,8 +1,7 @@
 /**
- * The local `claude` CLI as a subprocess: locating it under Claude Desktop's
- * minimal PATH, running `claude -p`, and pulling a tagged result or a JSON
- * object out of what it prints. Shared by sandbox.ts and the issue trackers
- * (whose Atlassian-MCP fallback is a `claude -p` run).
+ * Child processes under a GUI app's minimal PATH: the augmented env, the
+ * `gh`/`docker` overrides, and {@link runCapture}. The `claude` CLI on top of
+ * this lives in harness/claude/cli.ts (SW-187).
  */
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
@@ -21,6 +20,14 @@ export async function isExecutable(p: string): Promise<boolean> {
   try {
     await fs.access(p, fs.constants.X_OK);
     return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function isFile(p: string): Promise<boolean> {
+  try {
+    return (await fs.stat(p)).isFile();
   } catch {
     return false;
   }
@@ -71,25 +78,6 @@ function fixtureGhStub(): string {
 }
 
 /**
- * Locate the `claude` CLI, robust to Claude Desktop's minimal PATH. Order:
- * $CLAUDE_BIN → the usual install locations → bare `claude` (resolved against
- * the augmented PATH in {@link childEnv}).
- */
-export async function resolveClaudeBin(): Promise<string> {
-  const candidates = [
-    process.env.CLAUDE_BIN,
-    path.join(os.homedir(), ".local", "bin", "claude"),
-    path.join(os.homedir(), ".claude", "local", "claude"),
-    "/opt/homebrew/bin/claude",
-    "/usr/local/bin/claude",
-  ].filter((p): p is string => Boolean(p));
-  for (const c of candidates) {
-    if (await isExecutable(c)) return c;
-  }
-  return "claude"; // Node resolves this against childEnv().PATH below.
-}
-
-/**
  * Run a binary, capturing stdout/stderr, with stdin CLOSED so `claude -p`
  * doesn't stall 3s waiting for piped input. Rejects on spawn error or timeout.
  * `"gh"` and `"docker"` resolve through {@link toolBin}.
@@ -124,66 +112,7 @@ export function runCapture(
   });
 }
 
-/** Pull the rewrite out of the model's tagged output; fall back to the whole text. */
-export function extractResult(out: string): string {
-  const m = out.match(/<result>\s*([\s\S]*?)\s*<\/result>/i);
-  return (m ? m[1] : out).trim();
-}
-
-/**
- * Slice a `{…}` (possibly fenced) JSON object out of free-form model output.
- * The outermost braces win when they parse, so a fence inside a JSON string
- * value (a starting prompt with a ```bash block) isn't mistaken for the answer.
- */
-export function extractJson(out: string): string | null {
-  const slice = (s: string): string | null => {
-    const start = s.indexOf("{");
-    const end = s.lastIndexOf("}");
-    return start !== -1 && end > start ? s.slice(start, end + 1) : null;
-  };
-  const whole = slice(out);
-  if (whole) {
-    try {
-      JSON.parse(whole);
-      return whole;
-    } catch {
-      // fall through to a fenced block
-    }
-  }
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(out);
-  return fenced ? slice(fenced[1]) : whole;
-}
-
-/**
- * One `claude -p` run, the tagged `<result>` body or null on any failure.
- * `tools` adds --dangerously-skip-permissions: the Atlassian MCP tools are
- * deferred, so --allowedTools cannot pre-approve them in headless mode.
- */
-export async function askClaude(
-  prompt: string,
-  opts: { tools?: boolean } = {},
-): Promise<string | null> {
-  try {
-    const args = opts.tools ? ["-p", prompt, "--dangerously-skip-permissions"] : ["-p", prompt];
-    const res = await runCapture(await resolveClaudeBin(), args);
-    if (res.code !== 0) return null;
-    return extractResult(stripAnsi(res.stdout));
-  } catch {
-    return null;
-  }
-}
-
-/** {@link askClaude}, then the JSON object in its answer; null when there is none. */
-export async function askClaudeJson(
-  prompt: string,
-  opts: { tools?: boolean } = {},
-): Promise<Record<string, unknown> | null> {
-  const out = await askClaude(prompt, opts);
-  const json = out === null ? null : extractJson(out);
-  if (!json) return null;
-  try {
-    return JSON.parse(json) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
+/** Wrap a value in single quotes for a POSIX shell, escaping embedded quotes. */
+export function shellQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
 }

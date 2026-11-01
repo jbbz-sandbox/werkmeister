@@ -11,7 +11,7 @@ import type { Answer, Resolver } from "werkmeister-core/fragment_detect";
 import type { Runner } from "werkmeister-core/machine_setup";
 import { type LogEvent, withReporter } from "werkmeister-core/reporter";
 import { type DetectDeps, runDetect } from "../../commands/detect.js";
-import { SdkMissingError } from "../assist_resolver.js";
+import { SdkMissingError } from "../harness/claude/assist_resolver.js";
 
 const noTools: Runner = (cmd) =>
   cmd[0] === "git" ? [128, "fatal: not a git repository"] : [127, `${cmd[0]}: command not found`];

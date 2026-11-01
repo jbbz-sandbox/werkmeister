@@ -18,7 +18,7 @@ const engine = http.createServer((_req, res) => {
 });
 
 let caddy;
-let claudeCli;
+let toolBins;
 // The "test" script's default gh stub would beat the fixture stub these tests probe.
 const suiteGhBin = process.env.WERKMEISTER_GH_BIN;
 before(async () => {
@@ -27,7 +27,7 @@ before(async () => {
   process.env.DOCKER_HOST = `tcp://127.0.0.1:${engine.address().port}`;
   process.env.WERKMEISTER_FIXTURE = "1";
   caddy = await import("./dist/caddy.js");
-  claudeCli = await import("./dist/claude_cli.js");
+  toolBins = await import("./dist/tool_bins.js");
 });
 after(() => {
   if (suiteGhBin !== undefined) process.env.WERKMEISTER_GH_BIN = suiteGhBin;
@@ -42,7 +42,7 @@ test("Caddy reload and start are skipped without touching Docker", async () => {
 });
 
 test("gh is a stub that fails loudly unless WERKMEISTER_GH_BIN names a fake", () => {
-  const stub = claudeCli.ghBin();
+  const stub = toolBins.ghBin();
   assert.notEqual(stub, "gh");
   assert.throws(
     () => execFileSync(stub, ["pr", "list"], { stdio: "pipe" }),
@@ -50,7 +50,7 @@ test("gh is a stub that fails loudly unless WERKMEISTER_GH_BIN names a fake", ()
   );
   process.env.WERKMEISTER_GH_BIN = "/fake/gh";
   try {
-    assert.equal(claudeCli.ghBin(), "/fake/gh");
+    assert.equal(toolBins.ghBin(), "/fake/gh");
   } finally {
     delete process.env.WERKMEISTER_GH_BIN;
   }
@@ -59,7 +59,7 @@ test("gh is a stub that fails loudly unless WERKMEISTER_GH_BIN names a fake", ()
 test("without the switch, gh is the real one", () => {
   delete process.env.WERKMEISTER_FIXTURE;
   try {
-    assert.equal(claudeCli.ghBin(), "gh");
+    assert.equal(toolBins.ghBin(), "gh");
   } finally {
     process.env.WERKMEISTER_FIXTURE = "1";
   }

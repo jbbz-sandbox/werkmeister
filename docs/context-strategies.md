@@ -40,10 +40,10 @@ The "context layer" is four of `initWorkspace`'s steps plus one refresh in `up`,
 | Step | Writes | Code |
 |---|---|---|
 | 5b active standards | `.werkmeister/standards.json` | `strategies/jit.ts:130`, `standards.ts:531` |
-| 6 notes + CLAUDE.md | `.werkmeister/notes/001-handoff-*`, `CLAUDE.md` | `strategies/jit.ts:164`, `claude_md.ts:247` |
+| 6 notes + CLAUDE.md | `.werkmeister/notes/001-handoff-*`, `CLAUDE.md` | `strategies/jit.ts:164`, `harness/claude/claude_md.ts:247` |
 | 6a skills | `.claude/skills/w9r-*` | `strategies/jit.ts:182`, `workspace_skills.ts:118` |
 | 6b agents | `.claude/agents/w9r-researcher.md`, `w9r-tester-*` | `strategies/jit.ts:187`, `agent_gen.ts:177` |
-| 6c hooks | `.claude/settings.json` | `strategies/jit.ts:197`, `hooks_gen.ts:107` |
+| 6c hooks | `.claude/settings.json` | `strategies/jit.ts:197`, `harness/claude/hooks_gen.ts:107` |
 | `up` refresh | `.claude/settings.json` again (jit); removes it (icm) | `lifecycle.ts:133` |
 
 The same writers are reachable from `werkmeister skills sync`, the SessionStart self-heal, and the MCP tools (`apps/werkmeister-mcp/src/tools.ts:489`, `:518`). `buildContext` (`notes.ts:282`) and `down` (`teardownNotes`) rewrite note frontmatter regardless. Everything else `initWorkspace` produces (worktrees, `.env`, compose, slot, `werkmeister-context.md`, service map) is strategy-neutral and both experiments used it unchanged.

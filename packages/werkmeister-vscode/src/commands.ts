@@ -8,6 +8,11 @@ import { DOT_DIR, getReposRoot, workspacesRoot } from "werkmeister-core/config";
 import { callTool } from "werkmeister-core/daemon_client";
 import { ARGV, LIFECYCLE } from "./argv.js";
 import type { WsNode } from "./build-tree.js";
+import {
+  CONTINUE_COMMAND,
+  NEW_SESSION_COMMAND,
+  openClaudeTerminal,
+} from "./harness/claude/terminals.js";
 import { showLogs } from "./logs.js";
 import { runInTerminal } from "./terminal.js";
 import type { SandboxTreeProvider } from "./tree.js";
@@ -123,10 +128,7 @@ async function pickRepo(): Promise<string | null> {
 
 async function claudeIn(node: WsNode | undefined, command: string): Promise<void> {
   const ws = await pickWorkspace(node);
-  if (!ws) return;
-  const term = vscode.window.createTerminal({ name: `claude ${ws.name}`, cwd: ws.path });
-  term.sendText(command, true);
-  term.show();
+  if (ws) openClaudeTerminal(ws, command);
 }
 
 /** Close out (no reason) or abandon (with one) through the daemon's `close-out` tool. */
@@ -356,13 +358,11 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
       if (confirm === "Abandon") await endWorkspace(provider, ws, reason);
     }),
 
-    // A Claude session never exits, so it gets its own terminal rather than a
-    // pooled `werkmeister` one it would hold busy forever.
     vscode.commands.registerCommand("sandbox.continue", (node?: WsNode) =>
-      claudeIn(node, "claude --continue"),
+      claudeIn(node, CONTINUE_COMMAND),
     ),
     vscode.commands.registerCommand("sandbox.newSession", (node?: WsNode) =>
-      claudeIn(node, "claude"),
+      claudeIn(node, NEW_SESSION_COMMAND),
     ),
 
     vscode.commands.registerCommand("sandbox.refreshPrs", () => provider.refreshPrs()),

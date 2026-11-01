@@ -26,9 +26,8 @@ import {
 } from "werkmeister-core/fragment_detect";
 import type { Runner } from "werkmeister-core/machine_setup";
 import { RegistryError } from "werkmeister-core/registry_sync";
-
-import { claudeResolver, SdkMissingError } from "../lib/assist_resolver.js";
 import { Colors, info, success, warn } from "../lib/config.js";
+import { claudeResolver, SdkMissingError } from "../lib/harness/claude/assist_resolver.js";
 import { confirm } from "../lib/wizard.js";
 
 export interface DetectArgs {

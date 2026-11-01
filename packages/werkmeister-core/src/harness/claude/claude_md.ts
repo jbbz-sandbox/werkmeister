@@ -17,23 +17,23 @@ import {
   serviceTestCommand,
   type ValidationRow,
   validationRows,
-} from "./archetypes.js";
+} from "../../archetypes.js";
 import {
   type ArchetypeRegistry,
   baselineUpstream,
   loadArchetypes,
   type ReposConfig,
   type ServicesConfig,
-} from "./config.js";
-import { ingressHostnames, loadFeatureRouters } from "./feature_routing.js";
-import { loadIngress } from "./global_config.js";
-import { issueLink } from "./issue_tracker.js";
-import { standardsSource, standardsUrl } from "./skill_gen.js";
-import { getServicePort } from "./slots.js";
-import { universalStandards } from "./standards.js";
-import { renderIssueRef } from "./strategies/issue_section.js";
-import type { IssueRef } from "./strategies/types.js";
-import { DEFAULT_PLAN, type Phase, planFor, type WorkTypePlan } from "./workspace_prompts.js";
+} from "../../config.js";
+import { ingressHostnames, loadFeatureRouters } from "../../feature_routing.js";
+import { loadIngress } from "../../global_config.js";
+import { issueLink } from "../../issue_tracker.js";
+import { standardsSource, standardsUrl } from "../../skill_gen.js";
+import { getServicePort } from "../../slots.js";
+import { universalStandards } from "../../standards.js";
+import { renderIssueRef } from "../../strategies/issue_section.js";
+import type { IssueRef } from "../../strategies/types.js";
+import { DEFAULT_PLAN, type Phase, planFor, type WorkTypePlan } from "../../workspace_prompts.js";
 
 /**
  * The public hostname to point the reader at, and the cookie's domain scope.
@@ -689,7 +689,7 @@ docker compose logs -f    # watch startup if something crashes
   AUTO-GENERATED FILE — DO NOT EDIT BY HAND.
   Source:    ~/.werkmeister/services.yaml + ports.yaml
              + .werkmeister/workspace.yml (feature, services, slot)
-  Generator: packages/werkmeister-core/src/claude_md.ts :: buildSandboxContextMd
+  Generator: packages/werkmeister-core/src/harness/claude/claude_md.ts :: buildSandboxContextMd
   Regen:     werkmeister workspace init  (or \`werkmeister feature up\` after slot changes)
   To change ports/health endpoints/services, edit services.yaml / ports.yaml.
   To change which services run locally, edit .werkmeister/workspace.yml and rerun.

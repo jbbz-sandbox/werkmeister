@@ -247,7 +247,7 @@ Rendered on the fly from the standards tree by `packages/werkmeister-core/src/sk
 
 ### 5.3 Workspace `CLAUDE.md` — the compiled routing table
 
-`packages/werkmeister-core/src/claude_md.ts::buildStandardsRoutingSection`. The "Standards routing" section
+`packages/werkmeister-core/src/harness/claude/claude_md.ts::buildStandardsRoutingSection`. The "Standards routing" section
 contains the Active table (`| Standard | Skill | Loads on |`, where "Loads on" = `applies_to`
 globs or "any code edit") and the by-phase table (`| Phase | Invoke first | Loads |`), which is
 the only statement of the phase chain. The table's rows come from the workspace's `work_type` (`workspace_prompts.ts::WORK_TYPE_PHASES`,
@@ -308,7 +308,7 @@ Server *definitions* live in the top-level `mcp_servers:` registry in services.y
 generator's managed namespace is the registry's names — added, refreshed, pruned. User-added
 servers under other names are preserved; unparseable files are left untouched.
 
-### 5.6 Generated hooks — `.claude/settings.json` (`packages/werkmeister-core/src/hooks_gen.ts`)
+### 5.6 Generated hooks — `.claude/settings.json` (`packages/werkmeister-core/src/harness/claude/hooks_gen.ts`)
 
 Two managed hooks, merged marker-based into the user's settings (stale managed entries are
 replaced, everything else preserved, malformed user JSON left untouched):
@@ -455,7 +455,7 @@ imported, to keep the import graph light. It carries a `ponytail:` comment sayin
 
 **Automated test coverage is thin.** `apps/cli/src/lib/__tests__/gate.test.ts` (22 tests) and
 `packages/werkmeister-core/gate.test.mjs` (phase gate) cover the gate;
-`packages/werkmeister-core/agent-gen.test.mjs`, `claude-md.test.mjs`, and
+`packages/werkmeister-core/agent-gen.test.mjs`, `harness-claude-md.test.mjs`, and
 `workspace-skills-scope.test.mjs` cover agent generation, CLAUDE.md generation, and skill
 scoping; `apps/cli/src/lib/__tests__/universal_standards.test.ts` covers standards resolution
 and the manifest, `hooks_gen.test.ts` the hooks, `packages/werkmeister-core/notes-context.test.mjs`
