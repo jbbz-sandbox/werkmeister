@@ -610,8 +610,15 @@ async function gateChecks(
     touchExecMarker(ws);
     const res = await deps.run("docker", ["exec", container, "sh", "-c", cmd]);
     const lines = [`${cmd} → exit ${res.code}`];
-    if (res.code)
-      lines.push((res.stdout + res.stderr).trimEnd().split("\n").slice(-tail).join("\n"));
+    // Written on a pass too, so a fixed row never leaves its old failing log behind (SW-317).
+    const log = path.join(dotDir(ws), `gate-${file.dir}-${name.replace(/\s+/g, "-")}.log`);
+    let saved = `full log: ${log}`;
+    try {
+      fs.writeFileSync(log, res.stdout + res.stderr);
+    } catch (e) {
+      saved = `full log not saved: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    if (res.code) lines.push(failedRowExcerpt(res.stdout + res.stderr, tail), saved);
     if (waited) lines.push(waited);
     if (res.code) {
       const { load, cores } = deps.hostLoad();
@@ -888,6 +895,18 @@ async function gateChecks(
   }
 
   return { ok: checks.every((c) => c.ok), checks, ...(release && { release }) };
+}
+
+const FAILING_TEST = /\bnot ok\b|✖|×|\bFAIL\b/;
+
+/** A failed row's output: the failing test lines above the tail (first 20), then the last `tail` lines (SW-317). */
+export function failedRowExcerpt(output: string, tail: number): string {
+  const lines = output.trimEnd().split("\n");
+  const failing = lines
+    .slice(0, -tail)
+    .filter((l) => FAILING_TEST.test(l))
+    .slice(0, 20);
+  return [...failing, ...lines.slice(-tail)].join("\n");
 }
 
 export function formatGate(dir: string, g: GateResult): string[] {

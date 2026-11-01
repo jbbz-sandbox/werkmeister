@@ -527,7 +527,7 @@ describe("generateFeatureEnv", () => {
     expect(fs.readFileSync(path.join(tmp, ".gitignore"), "utf8")).toBe(
       "/sandbox/\n/.env\n/.env.*\n/compose.yml\n/compose.gate.yml\n" +
         "/.werkmeister/agent-state.json\n/.werkmeister/last-exec\n/.werkmeister/starts.json\n" +
-        "/.werkmeister/token\n",
+        "/.werkmeister/token\n/.werkmeister/gate-*.log\n",
     );
   });
 

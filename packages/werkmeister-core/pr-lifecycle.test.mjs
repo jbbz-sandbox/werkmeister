@@ -19,6 +19,7 @@ import {
   claimCallbacks,
   closeOut,
   deliverHeadless,
+  failedRowExcerpt,
   failureExcerpt,
   formatGate,
   gatePrs,
@@ -521,6 +522,41 @@ test("gate: a failing lint fails the gate and blocks pr open (SW-133)", async ()
     const r = await open(ws, d);
     assert.equal(r.ok, false);
     assert.ok(!d.calls.some((c) => c.startsWith("gh pr create")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("failedRowExcerpt: failing test lines above the tail, then the tail; no match is the tail alone (SW-317)", () => {
+  const out = Array.from({ length: 40 }, (_, i) => `line ${i + 1}`);
+  out[4] = "not ok 3 - parses x";
+  out[9] = "✖ y throws";
+  out[35] = "FAIL in the tail";
+  const tail = out.slice(-15);
+  assert.equal(
+    failedRowExcerpt(`${out.join("\n")}\n`, 15),
+    ["not ok 3 - parses x", "✖ y throws", ...tail].join("\n"),
+  );
+  const plain = Array.from({ length: 40 }, (_, i) => `ok ${i}`).join("\n");
+  assert.equal(failedRowExcerpt(plain, 15), plain.split("\n").slice(-15).join("\n"));
+});
+
+test("gate: a failing test row names the failing test from early in its output and saves the full log (SW-317)", async () => {
+  const out = [
+    "TAP version 13",
+    "not ok 2 - api rejects a bad token",
+    ...Array.from({ length: 30 }, (_, i) => `# noise ${i}`),
+    " ELIFECYCLE  Test failed.",
+  ].join("\n");
+  const ws = icmWorkspace();
+  try {
+    const g = await gate(ws, deps([DIFF_API, [/npm test -w api/, { code: 1, stdout: out }]]));
+    assert.ok(failed(g).includes("test api"));
+    const log = path.join(dotDir(ws), "gate-app-test-api.log");
+    const detail = g.checks.find((c) => c.name === "test api").detail;
+    assert.match(detail, /exit 1\nnot ok 2 - api rejects a bad token\n/);
+    assert.ok(detail.includes(`full log: ${log}`));
+    assert.equal(fs.readFileSync(log, "utf8"), out);
   } finally {
     clean(ws);
   }
