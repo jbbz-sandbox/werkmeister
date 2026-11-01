@@ -27,6 +27,7 @@ import type { ClaudeSessionSignal } from "./harness/claude/session.js";
 import type { ClaudeTranscript } from "./harness/claude/transcript.js";
 import type { WorkspaceUsage } from "./harness/claude/usage.js";
 import { type HarnessAdapter, harness } from "./harness/index.js";
+import type { TurnOptions, TurnResult } from "./harness/types.js";
 import { buildStartArgs, deferMachineSteps, type StartArgs } from "./run_start.js";
 import { isExecutable, isFile, runCapture, shellQuote, stripAnsi } from "./tool_bins.js";
 
@@ -2842,17 +2843,31 @@ export async function sendToClaudeSession(
   message: string,
   sessionId?: string,
   startDir?: string,
-): Promise<{ sessionId: string | null; started: boolean; startedNew: boolean }> {
+  opts?: TurnOptions,
+): Promise<{
+  sessionId: string | null;
+  started: boolean;
+  startedNew: boolean;
+  result: TurnResult | null;
+}> {
   const body = message.trim();
   if (!body) throw new WorkspaceError("Message is empty.");
   const target = await resolveSessionDir(name);
   const transcript = await resolveSessionSource(name, sessionId, startDir);
   const { model } = await readWorkspaceConfig(target);
-  await harness().sendTurn(name, startDir ?? target, body, transcript.sessionId, model);
+  const result = await harness().sendTurn(
+    name,
+    startDir ?? target,
+    body,
+    transcript.sessionId,
+    model,
+    opts,
+  );
   return {
     sessionId: transcript.sessionId,
     started: true,
     startedNew: !transcript.sessionId,
+    result,
   };
 }
 

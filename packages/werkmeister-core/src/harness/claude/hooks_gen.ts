@@ -559,11 +559,14 @@ function _readEnv(workspaceRoot: string): Record<string, string> {
 
 /**
  * The allow rules this workspace should have, from its `.env`, the registry and
- * its `autonomous` input.
+ * its `autonomous` input; a `pr watch` wake passes `autonomous: true` (SW-313).
  * Reads `.env` itself: lifecycle.ts's reader would close an import cycle
  * (lifecycle → strategies → jit → here).
  */
-export function workspaceAllowRules(workspaceRoot: string): string[] {
+export function workspaceAllowRules(
+  workspaceRoot: string,
+  autonomous = readAutonomous(workspaceRoot),
+): string[] {
   const env = _readEnv(workspaceRoot);
   const feature = env["FEATURE"] ?? "";
   const services = (env["SERVICES"] ?? "")
@@ -580,14 +583,15 @@ export function workspaceAllowRules(workspaceRoot: string): string[] {
           tempHomeWrapper(workspaceRoot),
         )
       : [...READ_ONLY_GIT_RULES];
-  return readAutonomous(workspaceRoot)
-    ? [...new Set([...rules, ...autonomousRules(feature, services)])]
-    : rules;
+  return autonomous ? [...new Set([...rules, ...autonomousRules(feature, services)])] : rules;
 }
 
 /** The deny rules this workspace should have: AUTONOMOUS_DENY while `autonomous` is on. */
-export function workspaceDenyRules(workspaceRoot: string): string[] {
-  return readAutonomous(workspaceRoot) ? AUTONOMOUS_DENY : [];
+export function workspaceDenyRules(
+  workspaceRoot: string,
+  autonomous = readAutonomous(workspaceRoot),
+): string[] {
+  return autonomous ? AUTONOMOUS_DENY : [];
 }
 
 interface PermissionsRecord {

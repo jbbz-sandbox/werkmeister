@@ -12,6 +12,7 @@ import * as path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import YAML from "yaml";
 
+import { flagNeedsYou } from "./agent_state.js";
 import { serviceTestCommand } from "./archetypes.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import {
@@ -36,6 +37,7 @@ import {
   grantWaiters,
   idleStopMinutes,
   lastExecMarker,
+  liveSessions,
   readServicesFromWorkspace,
   startService,
   stop as stopFeature,
@@ -127,7 +129,10 @@ export interface Deps {
   sourceOf: (dir: string) => Promise<string | null>;
   /** The PR file's callback fields for the session running `pr open` (#236). */
   session: (ws: string) => Promise<Record<string, string>>;
-  /** Whether a terminal session wrote its transcript lately, so a headless resume would run beside it (SW-160). */
+  /**
+   * Whether the terminal session is open (its hooks' record) or wrote its transcript lately (SW-160).
+   * A headless resume beside an open session forks its history: the open one never shows the turn (SW-313).
+   */
   sessionBusy: (ws: string, session: string, cwd: string | null) => Promise<boolean>;
   /** The registry as built from *worktree*'s own fragment for *repo* (registry_sync.ts), or null. */
   branchRegistry: (repo: string, worktree: string) => MergedRegistry | null;
@@ -198,6 +203,7 @@ export function defaultDeps(): Deps {
     sourceOf: async (dir) => (await worktreeSources([dir]))[0] ?? null,
     session: (ws) => callbackFields(ws, process.env),
     sessionBusy: async (ws, session, cwd) => {
+      if (liveSessions(ws).some((s) => s.sessionId === session)) return true;
       const s = await resolveSessionSource(path.basename(ws), session, cwd ?? undefined).catch(
         () => null,
       );
@@ -1565,6 +1571,7 @@ export async function claimCallbacks(
         const held = async () => {
           if (hostSession || !(await deps.sessionBusy(ws, session, sessionDir))) return false;
           lines.push(`${f.dir}: wake held, session ${session} in use`);
+          flagNeedsYou(ws, `waiting for your open session: ${message?.split("\n")[0]}`);
           return true;
         };
         let message: string | null;
@@ -1638,14 +1645,33 @@ export async function shipMerged(
   return lines;
 }
 
-/** Resume a terminal session headlessly with its message. */
-export async function deliverHeadless(cb: PrCallback): Promise<void> {
+/**
+ * Resume a terminal session headlessly with its message, and wait for the turn. Nobody is there to
+ * approve, so it gets the workspace's autonomous rules (SW-313); returns the calls it was refused.
+ */
+export async function deliverHeadless(cb: PrCallback): Promise<string[]> {
   const name = path.basename(cb.ws);
   const dir = cb.sessionDir ?? (await sessionStartDir(cb.session)) ?? cb.ws;
   // sendToClaudeSession falls back to the newest session for an unknown id; a callback reaches its own or none.
   if ((await resolveSessionSource(name, cb.session, dir)).sessionId !== cb.session)
     throw new WorkspaceError(`session ${cb.session} is gone`);
-  await sendToClaudeSession(name, cb.message, cb.session, dir);
+  const { result } = await sendToClaudeSession(name, cb.message, cb.session, dir, {
+    unattended: cb.ws,
+    wait: true,
+  });
+  return result?.denied ?? [];
+}
+
+/**
+ * Uncommitted edits or commits on no remote in *dir*. A refused call the agent retried in an allowed
+ * form (Claude Code's own `cd … && git` and shell-operator checks outrank allow rules) leaves neither.
+ */
+async function fixLeftBehind(dir: string, deps: Deps): Promise<boolean> {
+  const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
+  const unpushed = await deps.run("git", ["-C", dir, "rev-list", "HEAD", "--not", "--remotes"]);
+  return (
+    status.code !== 0 || !!status.stdout.trim() || unpushed.code !== 0 || !!unpushed.stdout.trim()
+  );
 }
 
 /**
@@ -1657,7 +1683,7 @@ export async function deliverHeadless(cb: PrCallback): Promise<void> {
 export async function watchPrs(
   opts: { desktop: boolean },
   deps: Deps = defaultDeps(),
-  send: (cb: PrCallback) => Promise<void> = deliverHeadless,
+  send: (cb: PrCallback) => Promise<string[] | void> = deliverHeadless,
   idleLock = path.join(sandboxHome(), "idle-stop.lock"),
 ): Promise<{ ok: boolean; lines: string[]; desktop: PrCallback[] }> {
   const { workspaces } = await listWorkspaces();
@@ -1673,8 +1699,16 @@ export async function watchPrs(
       continue;
     }
     try {
-      await send(cb);
+      const denied = (await send(cb)) ?? [];
       lines.push(`${cb.dir}: resumed session ${cb.session}: ${cb.message}`);
+      if (denied.length && (await fixLeftBehind(path.join(cb.ws, cb.dir), deps))) {
+        const blocked = `auto-fix blocked: needs approval — ${denied.join("; ")}`;
+        lines.push(`${cb.dir}: ${blocked}`);
+        flagNeedsYou(cb.ws, `${blocked} (${cb.url})`);
+      } else if (denied.length)
+        lines.push(
+          `${cb.dir}: auto-fix: ${denied.length} calls refused and retried — ${denied.join("; ")}`,
+        );
     } catch (e) {
       lines.push(`${cb.dir}: could not resume session ${cb.session}: ${(e as Error).message}`);
     }

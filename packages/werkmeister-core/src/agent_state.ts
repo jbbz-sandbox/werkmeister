@@ -266,6 +266,19 @@ export function readNudge(root: string): string | null {
   }
 }
 
+/** Set `needs-you` with *question*, keeping the session records; the session's next hook event replaces it. */
+export function flagNeedsYou(root: string, question: string, now = new Date()): void {
+  const raw = readRaw(root);
+  if (stateOf(raw)?.question === question) return;
+  writeAtomic(stateFile(root), {
+    ...raw,
+    state: "needs-you",
+    at: now.toISOString(),
+    question,
+    via: undefined,
+  });
+}
+
 export function writeNudge(root: string, message: string, now = new Date()): void {
   writeAtomic(nudgePath(root), { message, at: now.toISOString() });
 }

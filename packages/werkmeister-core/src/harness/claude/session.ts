@@ -10,6 +10,7 @@ import fs from "node:fs/promises";
 import { type AgentState, asksQuestion, questionOf, readAgentState } from "../../agent_state.js";
 import { WorkspaceError } from "../../errors.js";
 import { childEnv, shellQuote, stripAnsi } from "../../tool_bins.js";
+import type { TurnOptions, TurnResult } from "../types.js";
 import { resolveClaudeBin } from "./cli.js";
 import { type ClaudeMessage, parseSessionLines } from "./transcript.js";
 
@@ -91,11 +92,16 @@ export function claudeSendArgs(
   body: string,
   sessionId: string | null,
   model: string | null,
+  opts: { allow?: string[]; deny?: string[]; json?: boolean } = {},
 ): string[] {
   return [
     "-p",
+    // Comma-joined, and followed by another flag: both are variadic and would take the body as a rule.
+    ...(opts.allow?.length ? ["--allowedTools", opts.allow.join(",")] : []),
+    ...(opts.deny?.length ? ["--disallowedTools", opts.deny.join(",")] : []),
     "--permission-mode",
     "acceptEdits",
+    ...(opts.json ? ["--output-format", "json"] : []),
     ...(model ? ["--model", model] : []),
     ...(sessionId ? ["--resume", sessionId] : []),
     body,
@@ -115,7 +121,9 @@ export function claudeSendArgs(
  * (Claude Code appends messages to the session JSONL as the turn progresses).
  *
  * Headless mode can't prompt for tool permissions; `acceptEdits` lets it edit
- * files in the workspace without stalling.
+ * files in the workspace without stalling. `unattended` also grants the
+ * workspace's autonomous rules, and `wait` holds the child to its end and
+ * returns what it was refused (`claude -p` exits 0 either way).
  */
 export async function startTurn(
   name: string,
@@ -123,15 +131,34 @@ export async function startTurn(
   body: string,
   sessionId: string | null,
   model: string | null,
-): Promise<void> {
+  opts: TurnOptions = {},
+): Promise<TurnResult | null> {
   const bin = await resolveClaudeBin();
-  const args = claudeSendArgs(body, sessionId, model);
+  const root = opts.unattended;
+  // Loaded here: a static import closes a cycle that reaches issue_tracker before it is initialised.
+  const rules = root && (await import("./hooks_gen.js"));
+  const args = claudeSendArgs(body, sessionId, model, {
+    ...(root &&
+      rules && {
+        allow: rules.workspaceAllowRules(root, true),
+        deny: rules.workspaceDenyRules(root, true),
+      }),
+    json: opts.wait,
+  });
 
   const child = spawn(bin, args, {
     cwd,
     env: childEnv(),
     detached: true,
-    stdio: ["ignore", "ignore", "pipe"],
+    stdio: ["ignore", opts.wait ? "pipe" : "ignore", "pipe"],
+  });
+  let stdout = "";
+  child.stdout?.on("data", (d) => {
+    stdout += d.toString();
+  });
+  const exited = new Promise<void>((resolve) => {
+    child.on("exit", () => resolve());
+    child.on("error", () => resolve());
   });
 
   // Register the turn so `claude-turn-status` can report exactly when it
@@ -181,7 +208,30 @@ export async function startTurn(
   if (turn.state === "failed") {
     throw new WorkspaceError(`Could not start the turn — ${turn.error}`);
   }
-  child.unref();
+  if (!opts.wait) {
+    child.unref();
+    return null;
+  }
+  await exited;
+  if (turn.error) throw new WorkspaceError(`The turn failed — ${turn.error}`);
+  return { denied: deniedIn(stdout) };
+}
+
+/** `tool: command` for each call in a `--output-format json` result's `permission_denials`. */
+export function deniedIn(stdout: string): string[] {
+  let result: { permission_denials?: Array<{ tool_name?: string; tool_input?: any }> };
+  try {
+    result = JSON.parse(stdout);
+  } catch {
+    return [];
+  }
+  const calls = (result.permission_denials ?? []).map((d) => {
+    const detail = String(d.tool_input?.command ?? "")
+      .split("\n")[0]
+      .slice(0, 120);
+    return detail ? `${d.tool_name}: ${detail}` : String(d.tool_name);
+  });
+  return [...new Set(calls)];
 }
 
 export interface ClaudeTurnState {
