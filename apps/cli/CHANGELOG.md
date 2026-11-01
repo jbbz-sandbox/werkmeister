@@ -1,5 +1,13 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.60.1
+
+### Patch Changes
+
+- 9238da2: SW-270: `werkmeister workspace close --no-pr "<reason>"` (MCP `close-out` `no_pr`) closes a workspace whose work changed no repo as done, not abandoned. It needs no PR files, `postmortem.md`, and every code worktree clean with no commits ahead of its base, and refuses with the failing repo named otherwise. The issue moves to Done with `No PR needed: <reason>`, which goes in `closeout.md` too. A no-PR workspace closed without the flag now hears about `--no-pr` beside `workspace abandon`.
+- 35c2dd8: SW-286: `pr gate` / `pr open` check `exercise.md` with the PR-file checks, so a malformed exercise table (`PASS: …`, `(reproduces bug)`) fails before any test command runs instead of after them. The generated ICM contracts that write `exercise.md` (03_implement, the bug-fix/incident 03_exercise, the refactor implement stage) now say the result cell is exactly `PASS` or `FAIL` with output in its own column (`| check | result | evidence |`, or `detail` for 03_exercise), that this holds for every table in the file, and that a superseded run goes in prose, not a `FAIL` row. 04_propose says the same for every result-column table in the PR body, and the JIT `w9r-test` skill matches.
+- 316d1d6: `werkmeister issue start` prints a `CLI:` line saying whether the installed werkmeister is current (the latest release, or a link on `main` containing `origin/main`) and the fix when it is stale; 01_research step 0 tells the agent to stop on a stale CLI.
+
 ## 0.60.0
 
 ### Minor Changes

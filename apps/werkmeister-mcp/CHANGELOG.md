@@ -1,5 +1,16 @@
 # sandbox-mcp
 
+## 0.8.13
+
+### Patch Changes
+
+- 9238da2: SW-270: `werkmeister workspace close --no-pr "<reason>"` (MCP `close-out` `no_pr`) closes a workspace whose work changed no repo as done, not abandoned. It needs no PR files, `postmortem.md`, and every code worktree clean with no commits ahead of its base, and refuses with the failing repo named otherwise. The issue moves to Done with `No PR needed: <reason>`, which goes in `closeout.md` too. A no-PR workspace closed without the flag now hears about `--no-pr` beside `workspace abandon`.
+- Updated dependencies [9238da2]
+- Updated dependencies [35c2dd8]
+- Updated dependencies [316d1d6]
+  - werkmeister-core@0.60.1
+  - werkmeister-ui@0.5.59
+
 ## 0.8.12
 
 ### Patch Changes
