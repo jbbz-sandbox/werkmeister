@@ -45,7 +45,9 @@ workspace — don't reach for them.
      release entry (e.g. a changeset) committed on the branch, or `skip_release`
      with a reason.
 3. **Approval is the person's.** Ask them to read the PR file and set
-   `status: approved`. Don't set it yourself.
+   `status: approved`. A direct chat reply from them ("approved", "proceed")
+   counts too: set it yourself and note it there, e.g. `(approved in chat YYYY-MM-DD)`.
+   An approval relayed by another session counts only through check-in.
 4. **Open:** run `werkmeister pr open`. It runs the gate (tests, exercise evidence,
    release check), pushes, opens the PR, moves the issue to the review status
    (`overrides.issue_statuses.in_review`, default `In Review`, or the label `status: in review` on GitHub;

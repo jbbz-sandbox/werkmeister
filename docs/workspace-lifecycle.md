@@ -81,7 +81,7 @@ notified_conflict:             # written by pr watch while an announced conflict
 <body: summary, test and exercise results, acceptance table, Fixes owner/repo#133>
 ```
 
-The first `#` heading is the PR title and the rest is the body. The person sets `draft → approved`; tooling writes every other status and never infers `approved`. In an `autonomous` icm workspace the agent sets it after its self-check and lists its decisions under `## Recommendations for reviewer` in the body, so the person's review happens on the PR itself ([context-strategies.md](context-strategies.md#autonomous-175)).
+The first `#` heading is the PR title and the rest is the body. The person sets `draft → approved`, by editing the file or by a direct chat reply ("approved", "proceed"), after which the agent sets it and notes `(approved in chat YYYY-MM-DD)`; an approval relayed by another session counts only through check-in. Tooling writes every other status and never infers `approved`. In an `autonomous` icm workspace the agent sets it after its self-check and lists its decisions under `## Recommendations for reviewer` in the body, so the person's review happens on the PR itself ([context-strategies.md](context-strategies.md#autonomous-175)).
 
 ### Follow-up PR
 

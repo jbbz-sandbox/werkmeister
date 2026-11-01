@@ -8,6 +8,7 @@
  */
 
 import { COMPOSE_FILE } from "../compose_file.js";
+import { CHAT_APPROVAL } from "../pr_rules.js";
 
 export interface IcmVars {
   /** Path from one stage dir to another stage's dir, by stage name: `../01_research`. */
@@ -113,8 +114,7 @@ const propose: Stage = {
       "One commit per code repo touched, on that worktree's branch",
       "`output/pr-<worktree>.md` per repo",
     ],
-    humanCheck:
-      "Read each `pr-*.md`. Set `status: approved` on each one to open — that flip is the approval. Then `werkmeister pr open`, run detached as `_shared/pr-rules.md` rule 3 shows, runs the gate and opens it. Merging is yours. After the release, `werkmeister pr status`, then the post-mortem (`postmortem` skill), then ask the person before `werkmeister workspace close`. Code written after a PR merged (e.g. found at release) is a follow-up: `werkmeister pr new <worktree> --slug <slug>`.",
+    humanCheck: `Read each \`pr-*.md\`. Set \`status: approved\` on each one to open — that flip is the approval. Then \`werkmeister pr open\`, run detached as \`_shared/pr-rules.md\` rule 3 shows, runs the gate and opens it. Merging is yours. After the release, \`werkmeister pr status\`, then the post-mortem (\`postmortem\` skill), then ask the person before \`werkmeister workspace close\`. Code written after a PR merged (e.g. found at release) is a follow-up: \`werkmeister pr new <worktree> --slug <slug>\`. ${CHAT_APPROVAL}`,
     selfCheck:
       "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `werkmeister pr open` detached, as `_shared/pr-rules.md` rule 3 shows. Stop at the PR URL. Merging is the person's.",
   }),
@@ -144,8 +144,7 @@ const feature: Stage[] = [
         "Write `output/decisions.md`: every open question in `BRIEF.md`, each as a heading with `status: proposed`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference).",
       ],
       outputs: ["`output/inventory.md`", "`output/decisions.md`"],
-      humanCheck:
-        "Open `output/decisions.md`. Edit each answer as needed and change its `status: proposed` to `status: decided`. The next stage must not start while any question is still `proposed`. When every question reads `decided`, that is the approval — the next session starts the next stage without asking for confirmation.",
+      humanCheck: `Open \`output/decisions.md\`. Edit each answer as needed and change its \`status: proposed\` to \`status: decided\`. The next stage must not start while any question is still \`proposed\`. When every question reads \`decided\`, that is the approval — the next session starts the next stage without asking for confirmation. ${CHAT_APPROVAL}`,
     }),
   },
   {
@@ -236,8 +235,7 @@ const bugfix: Stage[] = [
         "Write `output/repro.md`: steps 1–5, and a proposed fix in one paragraph under a `status: proposed` line.",
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
-      humanCheck:
-        "Read `output/repro.md`. Correct the root cause or the proposed fix if needed, then change `status: proposed` to `status: decided`. That is the approval — the next session starts the fix without asking again.",
+      humanCheck: `Read \`output/repro.md\`. Correct the root cause or the proposed fix if needed, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts the fix without asking again. ${CHAT_APPROVAL}`,
     }),
   },
   {
@@ -321,8 +319,7 @@ const refactor: Stage[] = [
         "Write `output/scope.md`: steps 1–3, the sequence of small steps you propose, and a `status: proposed` line.",
       ],
       outputs: ["`output/scope.md`"],
-      humanCheck:
-        "Read `output/scope.md`. Correct the scope or invariants, then change `status: proposed` to `status: decided`. That is the approval — the next session starts without asking again.",
+      humanCheck: `Read \`output/scope.md\`. Correct the scope or invariants, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts without asking again. ${CHAT_APPROVAL}`,
     }),
   },
   {
@@ -375,8 +372,7 @@ const spike: Stage[] = [
         "Write `output/questions.md`: steps 1–2 and a `status: proposed` line.",
       ],
       outputs: ["`output/questions.md`"],
-      humanCheck:
-        "Edit the questions, then change `status: proposed` to `status: decided`. That is the approval — the next session starts without asking again.",
+      humanCheck: `Edit the questions, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts without asking again. ${CHAT_APPROVAL}`,
     }),
   },
   {
