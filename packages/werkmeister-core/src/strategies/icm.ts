@@ -345,11 +345,18 @@ function settleOpenQuestions(prompt: string): string {
   );
 }
 
+// SW-308: the brief ends with the one canonical `## Run limits`; drop a copy the prompt or description brought along
+// (up to the next heading of the same or higher level, or the end).
+const RUN_LIMITS_SECTION_RE = /^(#{1,2}) Run limits[^\n]*\n[\s\S]*?(?=^#{1,2} |(?![\s\S]))/gim;
+const dropRunLimits = (text: string) => text.replace(RUN_LIMITS_SECTION_RE, "").trim();
+
 function renderBrief(ctx: InitContext): string {
   const autonomous = isTrue(ctx.inputs["autonomous"]);
   const raw = (ctx.inputs["starting_prompt"] ?? "").trim();
-  const prompt = autonomous ? deferMachineSteps(settleOpenQuestions(raw)) : raw;
-  const description = (ctx.inputs["description"] ?? "").trim();
+  const prompt = autonomous ? dropRunLimits(deferMachineSteps(settleOpenQuestions(raw))) : raw;
+  const description = autonomous
+    ? dropRunLimits(ctx.inputs["description"] ?? "")
+    : (ctx.inputs["description"] ?? "").trim();
   const copy = !!ctx.issue?.fetchedAt;
   const limits = autonomous ? ["## Run limits", "", RUN_LIMITS, ""] : [];
   if (!ctx.issue || (!copy && !description && !prompt)) {

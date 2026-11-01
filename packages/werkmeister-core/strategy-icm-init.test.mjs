@@ -659,3 +659,37 @@ test("the first stage contract, and only it, starts the issue when there is one 
     );
   });
 });
+
+test("an autonomous brief has one Run limits section even when the starting prompt brings its own (SW-308)", async () => {
+  const starting_prompt =
+    "## Goal\n\nShip it.\n\n## Run limits\n\n- Run `werkmeister up` and `werkmeister stop` freely.\n- Reload with `werkmeister proxy-reload`.";
+  let text;
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      icm.init({ ...ctx, issue: null });
+      text = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+    },
+    { inputs: { autonomous: "true", starting_prompt } },
+  );
+  assert.equal(text.match(/^## Run limits/gm)?.length, 1);
+  assert.doesNotMatch(text, /werkmeister up|werkmeister stop|werkmeister proxy-reload/);
+});
+
+test("a Run limits block in the description is merged away too; an interactive brief keeps its own text (SW-308)", async () => {
+  const own = "## Run limits\n\n- Run `werkmeister up`.";
+  const brief = async (inputs) => {
+    let text;
+    await withIcmWorkspace(
+      async (root, ctx) => {
+        icm.init({ ...ctx, issue: null });
+        text = fs.readFileSync(path.join(root, "BRIEF.md"), "utf8");
+      },
+      { inputs },
+    );
+    return text;
+  };
+  const auto = await brief({ autonomous: "true", description: `Why.\n\n${own}` });
+  assert.equal(auto.match(/^## Run limits/gm)?.length, 1);
+  assert.doesNotMatch(auto, /werkmeister up/);
+  assert.match(await brief({ starting_prompt: `Do it.\n\n${own}` }), /werkmeister up/);
+});
