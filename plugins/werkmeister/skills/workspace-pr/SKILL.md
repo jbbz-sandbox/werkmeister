@@ -35,10 +35,14 @@ is `docs/workspace-lifecycle.md` in the werkmeister repo.
 6. **`werkmeister workspace close`** is the one way to end a workspace. First the
    post-mortem: the `postmortem` skill writes `postmortem.md`, and close-out
    refuses without it unless the person says to skip it
-   (`--skip-postmortem "<reason>"`, MCP `skip_postmortem`). Two outcomes:
+   (`--skip-postmortem "<reason>"`, MCP `skip_postmortem`). Three outcomes:
    - **Shipped** (every PR file shipped, closed or abandoned): moves the issue
      to Done if shipping didn't, writes `closeout.md`, removes the workspace,
      deletes merged branches.
+   - **Done, no PR needed** (no PR files because the work changed no repo,
+     e.g. a fix in `~/.claude`): `werkmeister workspace close --no-pr "<reason>"`
+     (MCP `no_pr`). Refused unless every code worktree is clean with no commits
+     ahead of its base. Moves the issue to Done; never counted as abandoned.
    - **Abandoned**: `werkmeister workspace abandon "<reason>" <name>` records the
      reason, comments it on the issue (and applies the `abandoned` status if
      configured; on GitHub, closes it as not planned), pushes every branch and

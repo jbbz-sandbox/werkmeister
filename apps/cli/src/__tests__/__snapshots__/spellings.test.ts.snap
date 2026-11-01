@@ -21,6 +21,7 @@ exports[`command spellings > ["close-out","n","--abandon","why"] 1`] = `
 {
   "abandon": "why",
   "name": "n",
+  "noPr": null,
   "skipPostmortem": null,
   "yes": false,
 }
@@ -30,6 +31,7 @@ exports[`command spellings > ["close-out","n","-y"] 1`] = `
 {
   "abandon": null,
   "name": "n",
+  "noPr": null,
   "skipPostmortem": null,
   "yes": true,
 }

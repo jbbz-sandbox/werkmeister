@@ -1,10 +1,11 @@
 /**
- * werkmeister workspace close [name] [--yes] [--abandon <reason>] [--skip-postmortem <reason>]
+ * werkmeister workspace close [name] [--yes] [--abandon <reason>] [--skip-postmortem <reason>] [--no-pr <reason>]
  *
  * The one end-of-workspace verb (docs/workspace-lifecycle.md). Shipped: close
  * the issue, write closeout.md, remove the workspace, delete the merged code
  * branches. --abandon: record why, push every branch and keep them, remove. Both need
- * postmortem.md (SW-108) unless --skip-postmortem says why not.
+ * postmortem.md (SW-108) unless --skip-postmortem says why not. --no-pr: the work changed no
+ * repo, so close as done with the reason instead of a PR (SW-270).
  * `name` defaults to the workspace the cwd is in. The checks live in
  * werkmeister-core's `closeOut`, shared with the pane and the MCP tool.
  */
@@ -24,6 +25,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   }
   const abandon = (args.abandon as string | null | undefined) ?? null;
   const skipPostmortem = (args.skipPostmortem as string | null | undefined) ?? null;
+  const noPr = (args.noPr as string | null | undefined) ?? null;
 
   // Agents run this from a tool with no terminal: refuse rather than read an empty stdin (SW-90).
   // stderr, unlike `error`, so a caller that keeps only stderr still sees why.
@@ -55,6 +57,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const opts = {
     ...(abandon === null ? {} : { abandon }),
     ...(skipPostmortem === null ? {} : { skipPostmortem }),
+    ...(noPr === null ? {} : { noPr }),
   };
   const result = Object.keys(opts).length ? await closeOut(name, opts) : await closeOut(name);
   console.log(result.output);

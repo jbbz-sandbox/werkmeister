@@ -465,7 +465,7 @@ function registerAuthoringTools(server: McpServer): void {
         "commit and push every branch, tear the feature down, delete the workspace directory and the " +
         "merged code branches. With `abandon` (a reason) when work is unshipped: record the reason, leave " +
         "the issue, push and keep every branch with commits of its own, then remove. Without `abandon` it refuses while a PR is " +
-        "unshipped. Destructive — confirm with the person first. Nothing is deleted if any branch " +
+        "unshipped, unless `no_pr` gives a reason the work needed no PR (no PR files, clean worktrees, no commits ahead). Destructive — confirm with the person first. Nothing is deleted if any branch " +
         "cannot be pushed. Refuses without postmortem.md in the workspace: run the werkmeister " +
         "`postmortem` skill first.",
       inputSchema: {
@@ -482,6 +482,12 @@ function registerAuthoringTools(server: McpServer): void {
           .describe(
             "Close out without a post-mortem: why. Recorded in closeout.md. Only when the person says to skip it.",
           ),
+        no_pr: z
+          .string()
+          .optional()
+          .describe(
+            "Close out as done with no PR files: why no PR was needed (the work changed no repo). Needs postmortem.md; recorded in closeout.md and on the issue.",
+          ),
       },
     },
     async (args, extra): Promise<CallToolResult> =>
@@ -489,6 +495,7 @@ function registerAuthoringTools(server: McpServer): void {
         const result = await closeOut(resolveWorkspace(args.workspace, headersOf(extra)).name, {
           ...(args.abandon !== undefined ? { abandon: args.abandon } : {}),
           ...(args.skip_postmortem !== undefined ? { skipPostmortem: args.skip_postmortem } : {}),
+          ...(args.no_pr !== undefined ? { noPr: args.no_pr } : {}),
         });
         // closeOut installs its own collecting reporter for the teardown, and
         // that AsyncLocalStorage scope shadows adapt()'s — re-emit what it
