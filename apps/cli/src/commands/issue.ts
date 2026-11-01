@@ -44,6 +44,7 @@ import {
 import { loadProjects } from "werkmeister-core/projects";
 import { loadConfigFile } from "werkmeister-core/workspace_prompts";
 import { listRepoWorktrees, syncToBase } from "werkmeister-core/worktrees";
+import { checkCliCurrent } from "../lib/cli_currency.js";
 
 import { error, success, warn } from "../lib/config.js";
 
@@ -146,6 +147,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     (line.includes("not moved") ? warn : success)(`Issue: ${line}`);
     for (const r of syncToBase(await listRepoWorktrees(workspace)))
       (r.ok ? success : warn)(`Worktree: ${r.text}`);
+    const cli = checkCliCurrent();
+    (cli.current === true ? success : warn)(`CLI: ${cli.text}`);
     return;
   }
   const update = args.action === "update" ? updateFromArgs(args) : null;
