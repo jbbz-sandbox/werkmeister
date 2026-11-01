@@ -11,6 +11,7 @@ import { test } from "node:test";
 import { dotDir } from "./dist/config.js";
 import { buildFormSchema } from "./dist/form_schema.js";
 import { writeWorkspaceModel, writeWorkspacePermissions } from "./dist/harness/claude/hooks_gen.js";
+import { deniedIn } from "./dist/harness/claude/session.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { claudeResumeCommand, claudeSendArgs } from "./dist/sandbox.js";
 import { writeWorkspaceConfig } from "./dist/workspace_init.js";
@@ -92,6 +93,44 @@ test("no model: nothing is created", () => {
   writeWorkspaceModel(root, null);
   assert.ok(!fs.existsSync(path.join(root, ".claude")));
   assert.ok(!fs.existsSync(recordPath(root)));
+});
+
+test("an unattended turn's rules come before the next flag, so the body stays the prompt (SW-313)", () => {
+  assert.deepEqual(
+    claudeSendArgs("fix it", "s1", null, {
+      allow: ["Bash(git:*)", "Bash(gh pr checks:*)"],
+      deny: ["Bash(werkmeister down:*)"],
+      json: true,
+    }),
+    [
+      "-p",
+      "--allowedTools",
+      "Bash(git:*),Bash(gh pr checks:*)",
+      "--disallowedTools",
+      "Bash(werkmeister down:*)",
+      "--permission-mode",
+      "acceptEdits",
+      "--output-format",
+      "json",
+      "--resume",
+      "s1",
+      "fix it",
+    ],
+  );
+});
+
+test("deniedIn: each refused call once, as tool: first line of its command", () => {
+  const out = JSON.stringify({
+    subtype: "success",
+    permission_denials: [
+      { tool_name: "Bash", tool_input: { command: "pnpm run test\necho done" } },
+      { tool_name: "Bash", tool_input: { command: "pnpm run test\necho done" } },
+      { tool_name: "mcp__github__pull_request_read", tool_input: { pullNumber: 585 } },
+    ],
+  });
+  assert.deepEqual(deniedIn(out), ["Bash: pnpm run test", "mcp__github__pull_request_read"]);
+  assert.deepEqual(deniedIn("not json"), []);
+  assert.deepEqual(deniedIn(JSON.stringify({ subtype: "success" })), []);
 });
 
 test("claude-send passes --model only when the workspace has one", () => {

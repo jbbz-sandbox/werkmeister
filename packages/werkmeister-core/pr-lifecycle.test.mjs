@@ -9,6 +9,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
+import { readAgentState } from "./dist/agent_state.js";
 import { dotDir } from "./dist/config.js";
 import { resolveIssueStatuses } from "./dist/issue_status.js";
 import {
@@ -18,6 +19,7 @@ import {
   callbackMessage,
   claimCallbacks,
   closeOut,
+  defaultDeps,
   deliverHeadless,
   failedRowExcerpt,
   failureExcerpt,
@@ -2836,6 +2838,7 @@ test("claimCallbacks: a terminal session in use is held, unclaimed, and woken on
     const busy = await claim(ws, deps([view, JOB_LOG], { sessionBusy: async () => true }));
     assert.deepEqual(wakes(busy), []);
     assert.ok(busy.lines.includes("app: wake held, session s-1 in use"), busy.lines.join("\n"));
+    assert.match(readAgentState(ws).question, /^waiting for your open session: check test failed/);
     assert.ok(!("notified_checks" in readPrFiles(ws)[0].fm), "nothing claimed while held");
     assert.equal((await claim(ws, deps([view, JOB_LOG]))).claimed.length, 1);
   } finally {
@@ -2920,6 +2923,41 @@ test("watchPrs: headless claims are sent, desktop ones returned, a failed send i
         failed.lines.includes(`app: could not resume session s-1: session s-1 is gone`),
         failed.lines.join("\n"),
       );
+
+      // SW-313: a turn that was refused commands says so, in the log and on the workspace card.
+      fs.writeFileSync(
+        path.join(root, "a-ws", "stages", "03_propose", "output", "pr-app.md"),
+        callbackFile(),
+      );
+      const refused = async () => ["Bash: pnpm run test", "Bash: git commit -qam fix"];
+      const retried = await watchPrs({ desktop: false }, deps([MERGED, NO_TAG]), refused);
+      assert.ok(
+        retried.lines.includes(
+          "app: auto-fix: 2 calls refused and retried — Bash: pnpm run test; Bash: git commit -qam fix",
+        ),
+        retried.lines.join("\n"),
+      );
+      assert.notEqual(
+        readAgentState(path.join(root, "a-ws"))?.state,
+        "needs-you",
+        "a fix that landed",
+      );
+
+      fs.writeFileSync(
+        path.join(root, "a-ws", "stages", "03_propose", "output", "pr-app.md"),
+        callbackFile(),
+      );
+      const blocked = await watchPrs(
+        { desktop: false },
+        deps([MERGED, NO_TAG, [/status --porcelain$/, { stdout: " M index.js\n" }]]),
+        refused,
+      );
+      const line =
+        "auto-fix blocked: needs approval — Bash: pnpm run test; Bash: git commit -qam fix";
+      assert.ok(blocked.lines.includes(`app: ${line}`), blocked.lines.join("\n"));
+      const flagged = readAgentState(path.join(root, "a-ws"));
+      assert.equal(flagged.state, "needs-you");
+      assert.ok(flagged.question.startsWith(line), flagged.question);
     });
   } finally {
     if (prev === undefined) delete process.env.WERKMEISTER_WORKSPACES_ROOT;
@@ -2945,7 +2983,15 @@ test("deliverHeadless: a session started in a code worktree is resumed from ther
     hostSession: null,
     message: "merged",
   });
-  const resumed = (dir, id) => [dir, `-p --permission-mode acceptEdits --resume ${id} merged`];
+  // The allow and deny lists before it are the SW-313 test's.
+  const resumed = (dir, id) => [
+    dir,
+    `--permission-mode acceptEdits --output-format json --resume ${id} merged`,
+  ];
+  const tail = (lines) => [
+    lines.at(-2),
+    lines.at(-1).slice(lines.at(-1).indexOf("--permission-mode")),
+  ];
   try {
     await withSandboxHome(() =>
       withClaudeHome({ "s-sub": sub, "s-root": ws }, async (calls) => {
@@ -2955,14 +3001,14 @@ test("deliverHeadless: a session started in a code worktree is resumed from ther
         });
 
         await deliverHeadless(cb("s-sub", sub));
-        assert.deepEqual((await calls(2)).slice(-2), resumed(sub, "s-sub"));
+        assert.deepEqual(tail(await calls(2)), resumed(sub, "s-sub"));
 
         // Recorded before SW-16: no start folder, found by its id alone.
         await deliverHeadless(cb("s-sub"));
-        assert.deepEqual((await calls(4)).slice(-2), resumed(sub, "s-sub"));
+        assert.deepEqual(tail(await calls(4)), resumed(sub, "s-sub"));
 
         await deliverHeadless(cb("s-root", ws));
-        assert.deepEqual((await calls(6)).slice(-2), resumed(ws, "s-root"));
+        assert.deepEqual(tail(await calls(6)), resumed(ws, "s-root"));
 
         // Never another session: not the root's newest, not a wrong recorded folder.
         await assert.rejects(deliverHeadless(cb("s-gone")), /session s-gone is gone/);
@@ -2974,6 +3020,57 @@ test("deliverHeadless: a session started in a code worktree is resumed from ther
     if (prev === undefined) delete process.env.WERKMEISTER_WORKSPACES_ROOT;
     else process.env.WERKMEISTER_WORKSPACES_ROOT = prev;
     clean(root);
+  }
+});
+
+test("deliverHeadless: the wake can test, commit and push in a non-autonomous workspace (SW-313)", async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pr-deliver-")));
+  const prev = process.env.WERKMEISTER_WORKSPACES_ROOT;
+  process.env.WERKMEISTER_WORKSPACES_ROOT = root;
+  const ws = path.join(root, "a-ws");
+  fs.renameSync(icmWorkspace(), ws);
+  const cb = {
+    ws,
+    dir: "app",
+    url: URL9,
+    session: "s-root",
+    sessionDir: ws,
+    hostSession: null,
+    message: `check test failed on PR ${URL9}, fix it.`,
+  };
+  try {
+    await withSandboxHome(() =>
+      withClaudeHome({ "s-root": ws }, async (calls) => {
+        await deliverHeadless(cb);
+        const argv = (await calls(2)).at(-1);
+        // Without these the turn edits files, then every check, commit and push is refused.
+        for (const rule of ["Bash(git:*)", "Bash(pnpm run:*)", "Bash(gh pr checks:*)"])
+          assert.ok(argv.includes(rule), `wake argv lacks ${rule}: ${argv}`);
+        assert.ok(argv.includes("--disallowedTools"), "AUTONOMOUS_DENY still applies");
+      }),
+    );
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_WORKSPACES_ROOT;
+    else process.env.WERKMEISTER_WORKSPACES_ROOT = prev;
+    clean(root);
+  }
+});
+
+test("sessionBusy: an open terminal session is busy even when idle at its prompt (SW-313)", async () => {
+  const ws = icmWorkspace();
+  try {
+    await withSandboxHome(async () => {
+      const at = new Date().toISOString();
+      fs.writeFileSync(
+        path.join(dotDir(ws), "agent-state.json"),
+        JSON.stringify({ state: "done", at, sessions: { "s-open": { status: "idle", at } } }),
+      );
+      const { sessionBusy } = defaultDeps();
+      assert.equal(await sessionBusy(ws, "s-open", ws), true);
+      assert.equal(await sessionBusy(ws, "s-closed", ws), false);
+    });
+  } finally {
+    clean(ws);
   }
 });
 

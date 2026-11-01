@@ -13,6 +13,18 @@ import type { WorkspaceUsage } from "./claude/usage.js";
 
 export type HarnessId = "claude";
 
+export interface TurnOptions {
+  /** Workspace root whose autonomous rules the turn gets, `autonomous` or not: nobody is there to approve (SW-313). */
+  unattended?: string;
+  /** Wait for the turn to end and return a {@link TurnResult}. */
+  wait?: boolean;
+}
+
+export interface TurnResult {
+  /** The calls refused for lack of approval, as `tool: command`. */
+  denied: string[];
+}
+
 export interface HarnessAdapter {
   readonly id: HarnessId;
   /** One headless turn; its answer, or null on any failure. `tools` lets it call MCP tools. */
@@ -21,14 +33,15 @@ export interface HarnessAdapter {
   askJson(prompt: string, opts?: { tools?: boolean }): Promise<Record<string, unknown> | null>;
   /** {@link HarnessAdapter.ask}, throwing a WorkspaceError that says why it failed. */
   askOrThrow(prompt: string): Promise<string>;
-  /** Start one turn in *cwd*, continuing *sessionId* (a new session when null); *key* names it for {@link HarnessAdapter.turnStatus}. */
+  /** Start one turn in *cwd*, continuing *sessionId* (a new session when null); *key* names it for {@link HarnessAdapter.turnStatus}. Null unless `opts.wait`. */
   sendTurn(
     key: string,
     cwd: string,
     body: string,
     sessionId: string | null,
     model: string | null,
-  ): Promise<void>;
+    opts?: TurnOptions,
+  ): Promise<TurnResult | null>;
   turnStatus(key: string): ReturnType<typeof turnStatus>;
   /** The newest (or pinned) session started in *dir*, read as messages. */
   transcript(dir: string, limit?: number, sessionId?: string): Promise<ClaudeTranscript>;
