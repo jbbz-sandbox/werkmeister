@@ -46,8 +46,32 @@ export interface Stage {
   enter?: string;
   /** Which _shared/standards.md rows the contract names. */
   standards: "none" | "universal" | "all";
+  /**
+   * The stage's form, which a person answers to approve it. Absent: the renderer adds
+   * {@link APPROVAL_FILE}. null: none (propose, whose PR file's `status: approved` is the gate).
+   */
+  gate?: string | null;
   contract(v: IcmVars): Contract;
 }
+
+// SW-309: questions and approvals are Markdown forms the /workspaces pane draws on each workspace's card (md_form.ts).
+export const FORM_SYNTAX =
+  "Form syntax: each question is a `## ` heading (end it with `(optional)` when no answer is needed), then a `status: proposed` line. " +
+  "Options: `- ( )` pick one, `- [ ]` pick any (a single `- [ ]` is a yes/no); tick your pick (`(x)` / `[x]`) and end it with `(recommended)`; an `- ( ) Other:` option takes typed text. " +
+  "An empty `**Label:**` line is a text box; `**Label:** text` and other prose (e.g. `**Evidence:** …`) is read-only context.";
+
+export const APPROVAL_FILE = "question-approval.md";
+
+export const approvalForm = (dir: string) =>
+  `\`# Approve ${dir}\` / \`## Approve the ${dir} output?\` / \`status: proposed\` / \`- ( ) Approve\` / \`- ( ) Changes needed\` / \`**Changes:**\`, one per line with a blank line between blocks`;
+
+export const QUESTION_RULE = `A question only a person can answer: write \`output/question-<slug>.md\` in the current stage as a form (${FORM_SYNTAX}), with your recommendation ticked and the evidence, then stop. Never ask it only in chat.`;
+
+const ANSWER_IN_PANE = (file: string) =>
+  `Answer \`output/${file}\` on its workspace card in the /workspaces pane (Answer), or edit it by hand.`;
+
+const APPROVE_CHOICE =
+  "under a `## Approve …?` heading, as a form: `status: proposed` and the choice `- ( ) Approve` / `- ( ) Changes needed`, then an empty `**Changes:**` box";
 
 // SW-135: a container that never started has no `pnpm` in /opt/werkmeister-tools until `werkmeister feature up`
 // bootstraps it, so `docker restart` on it loops on "pnpm: not found".
@@ -93,6 +117,7 @@ const propose: Stage = {
   writes: "one commit per code repo touched, `output/pr-<worktree>.md` per repo",
   check: "approve each PR file; `werkmeister pr open` opens it",
   standards: "none",
+  gate: null,
   contract: (v) => ({
     oneJob: `One job: prove each acceptance criterion, commit in each code worktree, and write one PR file per repo touched. ${
       v.autonomous ? "You approve it after the self-check" : "Approving is the person's act"
@@ -127,6 +152,7 @@ const feature: Stage[] = [
     writes: "`output/inventory.md`, `output/decisions.md`",
     check: "answer every open question in `decisions.md`",
     standards: "none",
+    gate: "decisions.md",
     contract: (v) => ({
       oneJob:
         "One job: establish what the code the brief touches does today, and turn the brief's open questions into an editable decision sheet. No code is written in this stage.",
@@ -141,10 +167,10 @@ const feature: Stage[] = [
         "Check what is already installed that could do the job before recommending anything new.",
         "Write `output/inventory.md`: steps 1–3.",
         NAME_HISTORY_STEP,
-        "Write `output/decisions.md`: every open question in `BRIEF.md`, each as a heading with `status: proposed`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference).",
+        `Write \`output/decisions.md\` as a form. ${FORM_SYNTAX} Each open question in \`BRIEF.md\` is a \`## \` heading with \`status: proposed\`: a \`- ( )\` choice when one answer fits, \`- [ ]\` when several do, your pick ticked and marked \`(recommended)\`, an \`- ( ) Other:\` option, and the evidence from steps 1–3 and 5 as \`**Evidence:** …\`. When only a person can give the answer (a ticket key, a preference), leave an empty \`**Answer:**\` box instead of options.`,
       ],
       outputs: ["`output/inventory.md`", "`output/decisions.md`"],
-      humanCheck: `Open \`output/decisions.md\`. Edit each answer as needed and change its \`status: proposed\` to \`status: decided\`. The next stage must not start while any question is still \`proposed\`. When every question reads \`decided\`, that is the approval — the next session starts the next stage without asking for confirmation. ${CHAT_APPROVAL}`,
+      humanCheck: `${ANSWER_IN_PANE("decisions.md")} Edit each answer as needed and change its \`status: proposed\` to \`status: decided\`. The next stage must not start while any question is still \`proposed\`. When every question reads \`decided\`, that is the approval — the next session starts the next stage without asking for confirmation. ${CHAT_APPROVAL}`,
     }),
   },
   {
@@ -216,6 +242,7 @@ const bugfix: Stage[] = [
     writes: "`output/repro.md`",
     check: "agree the root cause",
     standards: "none",
+    gate: "repro.md",
     contract: (v) => ({
       oneJob:
         "One job: make the failure happen on demand and name its root cause. No fix is written in this stage.",
@@ -232,10 +259,10 @@ const bugfix: Stage[] = [
         "Trace to the root cause: the first place the code does something other than intended. A symptom site is not a root cause.",
         "List every other caller of the function at the root cause — a fix there reaches them too.",
         NAME_HISTORY_STEP,
-        "Write `output/repro.md`: steps 1–5, and a proposed fix in one paragraph under a `status: proposed` line.",
+        `Write \`output/repro.md\`: steps 1–5, and a proposed fix in one paragraph ${APPROVE_CHOICE}.`,
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
-      humanCheck: `Read \`output/repro.md\`. Correct the root cause or the proposed fix if needed, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts the fix without asking again. ${CHAT_APPROVAL}`,
+      humanCheck: `${ANSWER_IN_PANE("repro.md")} Read it, correct the root cause or the proposed fix if needed, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts the fix without asking again. ${CHAT_APPROVAL}`,
     }),
   },
   {
@@ -303,6 +330,7 @@ const refactor: Stage[] = [
     writes: "`output/scope.md`",
     check: "agree what must not change",
     standards: "none",
+    gate: "scope.md",
     contract: (v) => ({
       oneJob:
         "One job: pin down what the refactor may touch and what behaviour must not change. No code is written in this stage.",
@@ -316,10 +344,10 @@ const refactor: Stage[] = [
         "List the files in scope and every caller outside it.",
         "State the invariants: observable behaviour that must be identical after the refactor.",
         "Name the existing tests that pin each invariant, and the gaps no test covers.",
-        "Write `output/scope.md`: steps 1–3, the sequence of small steps you propose, and a `status: proposed` line.",
+        `Write \`output/scope.md\`: steps 1–3, and the sequence of small steps you propose ${APPROVE_CHOICE}.`,
       ],
       outputs: ["`output/scope.md`"],
-      humanCheck: `Read \`output/scope.md\`. Correct the scope or invariants, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts without asking again. ${CHAT_APPROVAL}`,
+      humanCheck: `${ANSWER_IN_PANE("scope.md")} Read it, correct the scope or invariants, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts without asking again. ${CHAT_APPROVAL}`,
     }),
   },
   {
@@ -361,6 +389,7 @@ const spike: Stage[] = [
     writes: "`output/questions.md`",
     check: "agree the questions and what settles them",
     standards: "none",
+    gate: "questions.md",
     contract: () => ({
       oneJob:
         "One job: turn the brief into questions, each with the evidence that would settle it. No code is written in this stage.",
@@ -369,10 +398,10 @@ const spike: Stage[] = [
       process: [
         "List the questions the brief asks or implies, most decision-relevant first.",
         "For each: how it will be answered (read code, measure, prototype) and what result settles it.",
-        "Write `output/questions.md`: steps 1–2 and a `status: proposed` line.",
+        `Write \`output/questions.md\`: steps 1–2, ending ${APPROVE_CHOICE}.`,
       ],
       outputs: ["`output/questions.md`"],
-      humanCheck: `Edit the questions, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts without asking again. ${CHAT_APPROVAL}`,
+      humanCheck: `${ANSWER_IN_PANE("questions.md")} Edit the questions, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts without asking again. ${CHAT_APPROVAL}`,
     }),
   },
   {

@@ -36,7 +36,15 @@ import {
   loadSandboxServiceConfigs,
 } from "../workspace_prompts.js";
 import { stageDecisions } from "./icm_decisions.js";
-import { type IcmVars, SELF_CHECK, type Stage, templateFor } from "./icm_templates.js";
+import {
+  APPROVAL_FILE,
+  approvalForm,
+  type IcmVars,
+  QUESTION_RULE,
+  SELF_CHECK,
+  type Stage,
+  templateFor,
+} from "./icm_templates.js";
 import { renderIssueRef } from "./issue_section.js";
 import type { ContextStrategy, InitContext } from "./types.js";
 
@@ -202,8 +210,16 @@ function standardsRef(tier: Stage["standards"], r: Resolved): string {
 const START_ISSUE =
   "Run `werkmeister issue start`: it moves the issue to In Progress, and does nothing when the issue is already past that or the tracker refuses. It also fetches each code worktree's base and fast-forwards a branch with no commits of its own; read its `Worktree:` lines. Also read its `CLI:` line: if the installed werkmeister is stale, stop and apply the fix it prints before step 1; if it could not check, say so and continue.";
 
+/** A stage with no form of its own ends with the approval form, except under `autonomous` (its self-check approves). */
+const endsWithApproval = (stage: Stage, v: IcmVars) => stage.gate === undefined && !v.autonomous;
+
 function renderContract(dir: string, stage: Stage, v: IcmVars, startsIssue = false): string {
   const c = stage.contract(v);
+  if (endsWithApproval(stage, v)) {
+    c.process.push(`Last, write \`output/${APPROVAL_FILE}\`: ${approvalForm(dir)}. Then stop.`);
+    c.outputs.push(`\`output/${APPROVAL_FILE}\``);
+    c.humanCheck = `Answer \`output/${APPROVAL_FILE}\` on its workspace card in the /workspaces pane (Answer), or edit it by hand. \`(x) Approve\` with \`status: decided\` is the approval; \`(x) Changes needed\` sends the **Changes:** text back to this stage. ${c.humanCheck}${c.humanCheck.includes(CHAT_APPROVAL) ? "" : ` ${CHAT_APPROVAL}`}`;
+  }
   return [
     `# ${dir} — ${stage.job}`,
     "",
@@ -270,8 +286,16 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     "|---|---|---|",
     ...stages.map(
       (s, i) =>
-        `| ${i === 0 ? "starting the run" : (s.enter ?? `\`${dirs[i - 1]}\` output ${v.autonomous ? "self-checked" : "approved"}`)} | \`stages/${dirs[i]}/CONTEXT.md\` | ${v.autonomous ? "`output/` written and self-checked" : "a person has read `output/`"} |`,
+        `| ${i === 0 ? "starting the run" : (s.enter ?? enterAfter(stages[i - 1] as Stage, dirs[i - 1] as string, v))} | \`stages/${dirs[i]}/CONTEXT.md\` | ${v.autonomous ? "`output/` written and self-checked" : "a person has read `output/`"} |`,
     ),
+    ...stages.flatMap((s, i) =>
+      endsWithApproval(s, v)
+        ? [
+            `| \`stages/${dirs[i]}/output/${APPROVAL_FILE}\` reads \`status: decided\` with \`(x) Changes needed\` | \`stages/${dirs[i]}/CONTEXT.md\`: apply the **Changes:** text, then write a fresh \`${APPROVAL_FILE}\` | the new form is written |`,
+          ]
+        : [],
+    ),
+    "| a `stages/*/output/question-*.md` you wrote reads `status: decided` | the stage that holds it: read the answer and continue | that stage's stop point |",
     "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `werkmeister pr open` (rule 5: `pr watch` is the auto-fix) | PR URL is in the PR file |",
     "| a PR merged or released, or asked to close out | `werkmeister pr status`, then the werkmeister `postmortem` skill (writes `postmortem.md`), then ask the person before `werkmeister workspace close` | `postmortem.md` written, then closed out after the person says yes |",
     "| asked for status | `ls stages/*/output/` | report which stages hold artifacts |",
@@ -287,7 +311,17 @@ const ONE_RULE = [
   "## The one rule",
   "",
   `Nothing moves to the next stage until a person has read — and edited if needed — the previous stage's \`output/\`. The next stage reads whatever is there. The person's edit (a \`decided\` status, or a "proceed" after a gate) is the approval; never ask them to confirm it a second time. ${CHAT_APPROVAL}`,
+  "",
+  QUESTION_RULE,
 ];
+
+/** The route-table "If" cell for entering the stage after `prev`. */
+function enterAfter(prev: Stage, dir: string, v: IcmVars): string {
+  if (v.autonomous) return `\`${dir}\` output self-checked`;
+  if (endsWithApproval(prev, v))
+    return `\`stages/${dir}/output/${APPROVAL_FILE}\` reads \`status: decided\` with \`(x) Approve\` — the flip *is* the approval, do not ask again`;
+  return `\`${dir}\` output approved`;
+}
 
 // `autonomous` (#175): the person's review moves to the PR, so these replace the one rule.
 function stopPoints(stages: Stage[]): string[] {
@@ -299,7 +333,7 @@ function stopPoints(stages: Stage[]): string[] {
     proposeDir(stages)
       ? "1. the PR URL from `werkmeister pr open`"
       : "1. the last stage's `output/` written",
-    "2. a question only a person can answer",
+    `2. ${QUESTION_RULE}`,
     "3. a gate failure outside this issue's scope",
     "",
     "The gate (`werkmeister pr gate`: tests, clean worktree, exercise PASS, release check) still applies; `skip_tests` only for a service this workspace doesn't run, with the reason.",
@@ -318,7 +352,7 @@ function renderPipeline(ctx: InitContext, stages: Stage[]): string {
     "Factory (stable, every run): `_shared/standards.md`, `_shared/issues-report.md`",
     "Product (new each run): each stage's `output/`, plus the commits in the code worktrees",
     "",
-    "Status is whatever exists: a stage is COMPLETE when its `output/` holds a real artifact — `.gitkeep` does not count.",
+    "Status is whatever exists: a stage is COMPLETE when its `output/` holds a real artifact — `.gitkeep` and `question-*.md` do not count.",
     "",
   ].join("\n");
 }

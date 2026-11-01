@@ -1,7 +1,7 @@
 import type { On } from "claude-code";
 import type { Engine, Plugin } from "claude-code/testing";
 import { expect, mock, test } from "claude-code/testing";
-import type { FormField, WorkspaceRow } from "../types";
+import type { FormField, OpenForm, WorkspaceRow } from "../types";
 import {
   actionsFor,
   applyFormFields,
@@ -283,6 +283,7 @@ function stubs(over: Partial<McpStub> = {}): McpStub {
     [`${WS}/workspace-prs`]: () => ok(PRS),
     [`${WS}/tracker-auth`]: () => ok({ ok: true, fix: "" }),
     [`${WS}/workspace-resources`]: () => ok(RESOURCES),
+    [`${WS}/open-forms`]: () => ok([]),
     ...over,
   };
 }
@@ -304,6 +305,7 @@ test("workspace data comes from the node child, not an MCP call", async ($, on) 
   ).toEqual([
     `${WS}/intercepts`,
     `${WS}/list-workspaces`,
+    `${WS}/open-forms`,
     `${WS}/tracker-auth`,
     `${WS}/workspace-prs`,
     `${WS}/workspace-resources`,
@@ -2746,5 +2748,179 @@ test("SW-41: the pane shows the host line and each card's vitals and crash line"
     "✗ api crash-looping · 2 restarts · exit 1",
   );
   expect(await ui.find({ key: "crash:abc" })).toBeUndefined();
+  await ui.unmount();
+});
+
+// SW-309: open forms on the workspace cards. werkmeister-core's parser, validation and stale check are tested in md-form.test.mjs;
+// here the ops are stubbed and the pane's drawing, drafting, Submit and relay are real.
+const OPEN_FORM: OpenForm = {
+  workspace: "ab",
+  path: "/f/ab/stages/01_research/output/decisions.md",
+  rel: "stages/01_research/output/decisions.md",
+  md: "# D\n",
+  hash: "h1",
+  form: {
+    title: "Decisions",
+    questions: [
+      {
+        key: "q1",
+        heading: "Which rule?",
+        required: true,
+        status: "proposed",
+        kind: "one",
+        options: [
+          { value: "Same", checked: false, recommended: true, other: false, otherText: "" },
+          { value: "Move", checked: false, recommended: false, other: false, otherText: "" },
+          { value: "Other", checked: false, recommended: false, other: true, otherText: "" },
+        ],
+        boxes: [],
+        context: ["**Evidence:** resultCells…"],
+      },
+      {
+        key: "q2",
+        heading: "Pipelines",
+        required: true,
+        status: "proposed",
+        kind: "any",
+        options: [
+          { value: "feature", checked: true, recommended: true, other: false, otherText: "" },
+        ],
+        boxes: [{ label: "Note" }],
+        context: [],
+      },
+      {
+        key: "q3",
+        heading: "Settled",
+        required: true,
+        status: "decided",
+        kind: "one",
+        options: [
+          { value: "Keep", checked: true, recommended: false, other: false, otherText: "" },
+        ],
+        boxes: [],
+        context: [],
+      },
+    ],
+  },
+  draft: { q1: { picked: ["Same"], other: "" }, q2: { picked: ["feature"], boxes: { Note: "" } } },
+};
+const Q = `qa:${OPEN_FORM.path}#`;
+
+async function questionsTab($: Engine, on: On, over: Partial<McpStub> = {}) {
+  const submitted: string[] = [];
+  on("prompt.submit", (_$, e) => {
+    submitted.push(e.text);
+    return { text: e.text };
+  });
+  const w = world(
+    on,
+    stubs({
+      [`${WS}/open-forms`]: () => ok([OPEN_FORM]),
+      [`${WS}/form-errors`]: () => ok({}),
+      [`${WS}/submit-form`]: () =>
+        ok({ file: OPEN_FORM.path, decided: ["Which rule?", "Pipelines"] }),
+      ...over,
+    }),
+  );
+  await openPane($);
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  await ui.press({ key: `answer:${OPEN_FORM.path}` });
+  return { w, ui, submitted };
+}
+
+test("an open form shows on its card; Answer opens it there as one sheet: recommended pre-ticked, decided read-only (SW-309)", async ($, on) => {
+  const { ui } = await questionsTab($, on);
+  expect(await ui.find({ key: "tab:questions" })).toBeUndefined();
+  expect(await ui.find({ text: "01_research/output/decisions.md · 2 open" })).toBeDefined();
+  expect((await ui.find({ key: `answer:${OPEN_FORM.path}` }))?.text).toBe("Hide");
+  expect(await ui.find({ text: "Which rule? *" })).toBeDefined();
+  expect(await ui.find({ text: "**Evidence:** resultCells…" })).toBeDefined();
+  expect((await ui.find({ key: `${Q}q1:Same` }))?.text).toBe("◉ Same (recommended)");
+  expect((await ui.find({ key: `${Q}q1:Move` }))?.text).toBe("○ Move");
+  expect((await ui.find({ key: `${Q}q2:feature` }))?.text).toBe("☑ feature (recommended)");
+  expect((await ui.find({ key: `${Q}q2.box.Note` }))?.type).toBe("Client");
+  // Decided: drawn as text, with no button to press.
+  expect(await ui.find({ text: "◉ Keep" })).toBeDefined();
+  expect(await ui.find({ key: `${Q}q3:Keep` })).toBeUndefined();
+  expect(await ui.find({ text: "Settled  ✓ decided" })).toBeDefined();
+  // Other opens a text box once picked.
+  expect(await ui.find({ key: `${Q}q1.other` })).toBeUndefined();
+  await ui.press({ key: `${Q}q1:Other` });
+  expect((await ui.find({ key: `${Q}q1:Other` }))?.text).toBe("◉ Other");
+  expect(await ui.find({ key: `${Q}q1.other` })).toBeDefined();
+  await ui.unmount();
+});
+
+test("Submit with a refused answer says why and writes nothing (SW-309)", async ($, on) => {
+  const { w, ui, submitted } = await questionsTab($, on, {
+    [`${WS}/form-errors`]: () => ok({ "q1.other": "required" }),
+  });
+  await ui.press({ key: `${Q}q1:Other` });
+  await ui.press({ key: `submit:${OPEN_FORM.path}` });
+  expect(await ui.find({ text: "Which rule? (other): required" })).toBeDefined();
+  expect(w.calls.some((c) => c.key === `${WS}/submit-form`)).toBe(false);
+  expect(submitted).toEqual([]);
+  await ui.unmount();
+});
+
+test("Submit sends the drafted answers with the hash as drawn, then relays through this session (SW-309)", async ($, on) => {
+  const { w, ui, submitted } = await questionsTab($, on);
+  await ui.press({ key: `${Q}q1:Move` });
+  await ui.post({ value: "why not" }, { in: `${Q}q2.box.Note` });
+  await ui.press({ key: `submit:${OPEN_FORM.path}` });
+  const call = must(w.calls.find((c) => c.key === `${WS}/submit-form`));
+  expect(call.args).toEqual({
+    path: OPEN_FORM.path,
+    hash: "h1",
+    answers: {
+      q1: { picked: ["Move"], other: "" },
+      q2: { picked: ["feature"], boxes: { Note: "why not" } },
+    },
+  });
+  expect(submitted).toEqual([
+    'Workspaces pane: ab/stages/01_research/output/decisions.md decided. Relay "gate decided, continue" to that workspace (/check-in step 4).',
+  ]);
+  await ui.unmount();
+});
+
+test("a stale file: Submit shows core's refusal, keeps the draft, and Reload drops it (SW-309)", async ($, on) => {
+  const { w, ui, submitted } = await questionsTab($, on, {
+    [`${WS}/submit-form`]: () => ({
+      content: [
+        {
+          type: "text",
+          text: `${OPEN_FORM.path} changed after the form was shown; reload the form`,
+        },
+      ],
+      isError: true,
+    }),
+  });
+  await ui.press({ key: `${Q}q1:Move` });
+  await ui.press({ key: `submit:${OPEN_FORM.path}` });
+  expect(await ui.find({ text: /changed after the form was shown/ })).toBeDefined();
+  expect((await ui.find({ key: `${Q}q1:Move` }))?.text).toBe("◉ Move");
+  expect(submitted).toEqual([]);
+  await ui.press({ key: `reload:${OPEN_FORM.path}` });
+  expect((await ui.find({ key: `${Q}q1:Move` }))?.text).toBe("○ Move");
+  expect(w.calls.filter((c) => c.key === `${WS}/open-forms`).length).toBeGreaterThan(1);
+  await ui.unmount();
+});
+
+test("Hide closes the sheet, and a successful Submit closes it too (SW-309)", async ($, on) => {
+  const { ui } = await questionsTab($, on);
+  await ui.press({ key: `answer:${OPEN_FORM.path}` });
+  expect(await ui.find({ key: `submit:${OPEN_FORM.path}` })).toBeUndefined();
+  await ui.press({ key: `answer:${OPEN_FORM.path}` });
+  await ui.press({ key: `submit:${OPEN_FORM.path}` });
+  expect(await ui.find({ key: `submit:${OPEN_FORM.path}` })).toBeUndefined();
+  expect(
+    await ui.find({ text: /Saved ab\/stages\/01_research\/output\/decisions\.md: 2 decided/ }),
+  ).toBeDefined();
   await ui.unmount();
 });
