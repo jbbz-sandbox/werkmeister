@@ -7,13 +7,15 @@ werkmeister\-daemon \- The host daemon (the MCP server on port 3002)
 .PP
 The host daemon is the werkmeister MCP server on port 3002 (\fBoverrides.mcp_port\fR). The VS Code extension, the SessionEnd stop and the scheduler reach it over HTTP. On macOS, launchd keeps it up once it is installed; elsewhere \fBwerkmeister infra connect\fR starts it with a PID file.
 .IP \(bu 3
-\fBstatus\fR says whether it is serving and whether the launchd agent is installed and current.
+\fBstatus\fR says whether it is serving, which build it loaded (\fBstale (loaded <x>, on disk <y>)\fR after a rebuild or upgrade), and whether the launchd agent is installed and current.
 .IP \(bu 3
 \fBinstall\fR writes or refreshes the launchd agent: the same step \fBwerkmeister machine setup\fR offers.
 .IP \(bu 3
 \fBuninstall\fR removes the agent and stops launchd's copy; \fBinfra connect\fR starts it again.
 .IP \(bu 3
 \fBrestart\fR restarts it, through launchd when launchd owns it.
+.PP
+Under launchd the daemon restarts itself on a new build: once its entry changes and no call or queued feature is in flight, it exits and launchd starts it on the new code. A PID\-file daemon only reports \fBstale\fR; run \fBrestart\fR. The CLI warns once per run when it reaches a daemon on another build.
 .SH EXAMPLES
 .PP
 .nf

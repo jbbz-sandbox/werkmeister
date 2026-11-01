@@ -8,17 +8,27 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, test } from "node:test";
 
+import { collectingReporter, withReporter } from "./dist/reporter.js";
+
 const seen = [];
 let openStreams = 0;
 const daemon = http.createServer(async (req, res) => {
   let body = "";
   for await (const chunk of req) body += chunk;
-  seen.push({ url: req.url, auth: req.headers.authorization, body });
+  seen.push({
+    url: req.url,
+    auth: req.headers.authorization,
+    build: req.headers["x-werkmeister-build"],
+    body,
+  });
   if (req.url === "/api/tool") {
     const { name } = JSON.parse(body);
     // SW-254: a daemon older than the CLI doesn't register newer tools; the MCP SDK says so.
     const unknown = name === "scheduler" || name === "lost";
-    res.writeHead(name === "boom" || unknown ? 400 : 200, { "content-type": "application/json" });
+    res.writeHead(name === "boom" || unknown ? 400 : 200, {
+      "content-type": "application/json",
+      "x-werkmeister-build": "1.0.0 @ 2026-10-31T10:16:00Z",
+    });
     return res.end(
       JSON.stringify(
         name === "boom"
@@ -165,4 +175,52 @@ test("interceptsFromSnapshot rebuilds the Map shape the extension renders from t
   assert.equal(r.connectedNamespace, "dev");
   assert.deepEqual(r.byFeature.get("a")?.get("api"), row);
   assert.deepEqual([...r.remoteServices], ["api", "web"]);
+});
+
+test("buildOf: the nearest package.json's version and the entry's mtime; null when unreadable", () => {
+  const pkg = path.join(home, "pkg");
+  const entry = path.join(pkg, "dist", "main.js");
+  fs.mkdirSync(path.dirname(entry), { recursive: true });
+  fs.writeFileSync(path.join(pkg, "package.json"), JSON.stringify({ version: "1.0.0" }));
+  fs.writeFileSync(entry, "");
+  fs.utimesSync(entry, new Date("2026-10-31T10:16:00Z"), new Date("2026-10-31T10:16:00Z"));
+  assert.equal(client.buildOf(entry), "1.0.0 @ 2026-10-31T10:16:00Z");
+  fs.utimesSync(entry, new Date("2026-11-01T21:54:00Z"), new Date("2026-11-01T21:54:00Z"));
+  assert.equal(client.buildOf(entry), "1.0.0 @ 2026-11-01T21:54:00Z");
+  fs.writeFileSync(path.join(pkg, "package.json"), JSON.stringify({ version: "1.1.0" }));
+  assert.equal(client.buildOf(entry), "1.1.0 @ 2026-11-01T21:54:00Z");
+  assert.equal(client.buildOf(path.join(pkg, "gone.js")), null);
+  assert.equal(client.buildOf(undefined), null);
+});
+
+const callsWarning = async (n) => {
+  const reporter = collectingReporter();
+  await withReporter(reporter, async () => {
+    for (let i = 0; i < n; i++) await client.callTool("status", {}, { token: "t" });
+  });
+  return reporter.text();
+};
+
+test("callTool sends no build and never warns until the CLI sets one", async () => {
+  assert.equal(await callsWarning(1), "");
+  assert.equal(seen.at(-1).build, undefined);
+});
+
+test("callTool sends the on-disk build and warns once per process when the daemon loaded another", async () => {
+  client.expectDaemonBuild(() => "1.0.0 @ 2026-10-31T10:16:00Z");
+  assert.equal(await callsWarning(1), "");
+  assert.equal(seen.at(-1).build, "1.0.0 @ 2026-10-31T10:16:00Z");
+
+  client.expectDaemonBuild(() => "1.0.0 @ 2026-11-01T21:54:00Z");
+  const text = await callsWarning(3);
+  assert.equal(text.match(/older build/g)?.length, 1, text);
+  assert.match(
+    text,
+    /loaded 1\.0\.0 @ 2026-10-31T10:16:00Z, on disk 1\.0\.0 @ 2026-11-01T21:54:00Z/,
+  );
+  assert.match(text, /`werkmeister daemon restart`/);
+  assert.deepEqual(
+    seen.slice(-3).map((c) => c.build),
+    Array(3).fill("1.0.0 @ 2026-11-01T21:54:00Z"),
+  );
 });
