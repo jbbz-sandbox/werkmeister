@@ -283,7 +283,7 @@ async function formErrors(
 }
 
 /**
- * Values from the workspace_form tool laid over the draft: a key the form doesn't
+ * Values from the workspaces_pane_fill_create_form tool laid over the draft: a key the form doesn't
  * have, a choice it doesn't offer or a value of the wrong shape is left out and
  * named in `problems`. "" or [] clears a field; a multi-pick also takes "a, b".
  */
@@ -343,9 +343,9 @@ export function applyFormFields(
   return { draft: out, problems };
 }
 
-const FORM_TOOL = "workspace_form";
+const FORM_TOOL = "workspaces_pane_fill_create_form";
 
-/** The workspace_form tool: fill the Create tab from the prompt, then the person reviews and creates. */
+/** The workspaces_pane_fill_create_form tool: fill the Create tab from the prompt, then the person reviews and creates. */
 async function fillFormTool($: EngineInterface, input: Record<string, unknown>): Promise<string> {
   await openPane($);
   await openCreate($);
@@ -1554,7 +1554,8 @@ export const register: Register = (on) => {
     await $.tool.register({
       name: FORM_TOOL,
       description:
-        "Fill fields of the New Werkmeister Workspace form in the /workspaces pane's Create tab, so the person can " +
+        "Served by the werkmeister plugin's /workspaces pane (its hook module, not the werkmeister CLI MCP server). " +
+        "Fills fields of the pane's Create tab (the New Werkmeister Workspace form), so the person can " +
         "set them from the prompt (e.g. paste a long starting prompt) and review before creating. Opens the pane on " +
         'the Create tab. Each value replaces the field; "" clears it. Fields: issue_id, feature (lowercase-hyphen ' +
         'slug), work_type, context_strategy, autonomous ("true" or "false"), model (an alias like sonnet, or a claude-… id), auto_stop ("true" or "false"), services (a list of choices), labels, test_path, task, ' +
@@ -1595,9 +1596,13 @@ export const register: Register = (on) => {
 
   // A regex: the tool-name type only lists tools laid when the types were written, and this one registers at start.
   // The call's input fields arrive on the event itself, beside `tool` and `tool_use_id`.
-  on("tool.call", { tool: /^mcp__werkmeister__workspace_form$/ }, async ($, e) => ({
-    result: await fillFormTool($, e as unknown as Record<string, unknown>),
-  })).catch(() => ({
+  on(
+    "tool.call",
+    { tool: /^mcp__werkmeister__workspaces_pane_fill_create_form$/ },
+    async ($, e) => ({
+      result: await fillFormTool($, e as unknown as Record<string, unknown>),
+    }),
+  ).catch(() => ({
     deny: "The workspace form could not be filled; open /workspaces and fill it by hand.",
   }));
 
