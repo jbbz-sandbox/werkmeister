@@ -1,5 +1,15 @@
 # sandbox-core
 
+## 0.60.0
+
+### Minor Changes
+
+- 429226a: SW-271: `werkmeister issue start`, step 0 of the first ICM stage and of JIT's `w9r-research`, now also brings each code worktree up to its base. It fetches origin, and a branch with no commits of its own is fast-forwarded to `origin/<base>`. A branch with its own commits, uncommitted changes, or a fetch that fails is left as is, with a `Worktree:` line such as `app: 4 commits behind origin/main (has its own commits, left as is)`. It still exits 0, so a stage never fails on it. A wave workspace created days before its run no longer starts research on stale code.
+
+### Patch Changes
+
+- c73f9ee: SW-262: the PR gate's host-load wait is one 10 min budget for the whole run, shared by lint, each test and the release check, instead of up to 30 min before each one. Before it waits, `pr gate` / `pr open` says how long it may wait (`waiting up to 10 min for host load …`) and prints a `still waiting …` line each minute; once the budget is spent the remaining checks run at once and their rows say so. `werkmeister internal wait-load` (run by `with-temp-home`) waits up to 10 min the same way. `_shared/pr-rules.md` rule 3 and the 04_propose contract now say to run `pr open` detached with `nohup … ; echo "exit $?" >> .werkmeister/pr-open.log` and read the log to the `exit` line (SW-266, SW-273, SW-298).
+
 ## 0.59.4
 
 ### Patch Changes
