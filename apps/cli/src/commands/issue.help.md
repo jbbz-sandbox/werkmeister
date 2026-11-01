@@ -5,7 +5,7 @@ Reads or updates one issue in this machine's tracker (`werkmeister machine setup
 - `view` prints the issue's briefing; `--json` prints it as JSON.
 - `update` moves its status and/or adds a comment; at least one is required.
 - `create` files a new issue and prints its URL. Only trackers with an API path (Jira); file GitHub issues with `gh issue create`.
-- `start` moves the workspace's issue to in progress, forward only. It exits 0 when the tracker refuses, so a stage never fails on it.
+- `start` moves the workspace's issue to in progress, forward only, then fetches each code worktree's base: a branch with no commits of its own is fast-forwarded, any other gets an `N commits behind <base>` line. It exits 0 when the tracker refuses or a fetch fails, so a stage never fails on it.
 - `ready` lists a project's open work in priority order: its board's ready column, else the open issues.
 
 Inside a workspace the issue reference can be left out: it is read from `.werkmeister/workspace.yml`.

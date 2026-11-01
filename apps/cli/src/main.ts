@@ -1533,7 +1533,7 @@ const SPECS: CommandSpec[] = [
         "File a new issue and print its URL (Jira)",
         ["project", "type", "title", "body-file"],
       ],
-      ["start", "Move the workspace's issue to in progress (forward only)", []],
+      ["start", "Move the workspace's issue to in progress and fast-forward its worktrees", []],
       ["ready", "List a project's open work in priority order", ["project", "json"]],
     ] as const
   ).map(

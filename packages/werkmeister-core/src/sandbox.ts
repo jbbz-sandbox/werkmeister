@@ -124,6 +124,7 @@ import { DASHBOARD, status as webStatus } from "./web_servers.js";
 import { provisionWorkspace, WorkspaceInitError } from "./workspace_init.js";
 import { computePromptSpec, isTrue, loadConfigFile, resolveInputs } from "./workspace_prompts.js";
 import { revokeWorkspaceToken } from "./workspace_token.js";
+import { hasGit, listRepoWorktrees } from "./worktrees.js";
 
 export {
   adoptPr,
@@ -142,6 +143,7 @@ export {
   waitForHostLoadNow,
   watchPrs,
 } from "./pr_lifecycle.js";
+export { listRepoWorktrees };
 
 const execFileAsync = promisify(execFile);
 
@@ -1833,30 +1835,6 @@ export interface RepoPr {
 export interface WorkspacePrs {
   name: string;
   repos: RepoPr[];
-}
-
-/** True when `dir` is a git working tree (worktree `.git` file or a `.git` dir). */
-async function hasGit(dir: string): Promise<boolean> {
-  try {
-    await fs.access(path.join(dir, ".git"));
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/** Immediate subdirectories of a workspace that are git worktrees (the repo checkouts). */
-export async function listRepoWorktrees(
-  workspaceDir: string,
-): Promise<Array<{ repo: string; dir: string }>> {
-  const entries = await fs.readdir(workspaceDir, { withFileTypes: true }).catch(() => []);
-  const out: Array<{ repo: string; dir: string }> = [];
-  for (const e of entries) {
-    if (!e.isDirectory() || e.name.startsWith(".")) continue;
-    const dir = path.join(workspaceDir, e.name);
-    if (await hasGit(dir)) out.push({ repo: e.name, dir });
-  }
-  return out;
 }
 
 /**

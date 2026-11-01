@@ -7,7 +7,8 @@ description: "Begin the research/planning phase in a workspace. Use when explori
 
 - **Step 0 — start the issue, then read workspace notes.** Run `werkmeister issue start`:
   it moves the workspace's issue to In Progress the first time, and does nothing once
-  it is past that or when the tracker refuses. Read relevant `finding` and `attempt` notes in
+  it is past that or when the tracker refuses. It also fetches each code worktree's base and
+  fast-forwards a branch with no commits of its own; read its `Worktree:` lines. Read relevant `finding` and `attempt` notes in
   `.werkmeister/notes/` (skip `status: superseded`); never redo answered
   questions or failed approaches. Continue if empty.
 - Skip code standards (`w9r-*-standard`, `ponytail`); they govern writing.

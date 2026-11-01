@@ -13,7 +13,7 @@ Reads or updates one issue in this machine's tracker (\fBwerkmeister machine set
 .IP \(bu 3
 \fBcreate\fR files a new issue and prints its URL. Only trackers with an API path (Jira); file GitHub issues with \fBgh issue create\fR.
 .IP \(bu 3
-\fBstart\fR moves the workspace's issue to in progress, forward only. It exits 0 when the tracker refuses, so a stage never fails on it.
+\fBstart\fR moves the workspace's issue to in progress, forward only, then fetches each code worktree's base: a branch with no commits of its own is fast\-forwarded, any other gets an \fBN commits behind <base>\fR line. It exits 0 when the tracker refuses or a fetch fails, so a stage never fails on it.
 .IP \(bu 3
 \fBready\fR lists a project's open work in priority order: its board's ready column, else the open issues.
 .PP
