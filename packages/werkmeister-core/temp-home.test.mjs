@@ -87,6 +87,22 @@ test("corepack keeps the caller's cache unless COREPACK_HOME is already set", ()
   }
 });
 
+// SW-285: OrbStack and Docker Desktop keep the compose plugin and context under ~/.docker.
+test("DOCKER_CONFIG keeps the caller's ~/.docker unless already set, exported before HOME swaps (SW-285)", () => {
+  const { root, bin } = wrapper();
+  const dockerConfig = (env) =>
+    spawnSync(bin, ["sh", "-c", 'printf %s "$DOCKER_CONFIG"'], { encoding: "utf8", env }).stdout;
+  try {
+    const { DOCKER_CONFIG: _, ...env } = process.env;
+    assert.equal(dockerConfig({ ...env, HOME: "/caller" }), "/caller/.docker");
+    assert.equal(dockerConfig({ ...env, HOME: "/caller", DOCKER_CONFIG: "/mine" }), "/mine");
+    const script = fs.readFileSync(bin, "utf8");
+    assert.ok(script.indexOf("export DOCKER_CONFIG=") < script.indexOf("HOME=$tmp"));
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 /** A stub `werkmeister` first on PATH that logs each call; *waitExit* is its exit status. */
 function stubbedPath(root, waitExit = 0) {
   const bin = path.join(root, "stub-bin");

@@ -91,8 +91,10 @@ function fnmatch(name: string, pat: string): boolean {
 
 /** The folder directly under one of *roots* that holds *start*, or null: what counts as a workspace. */
 export function workspaceUnder(start: string, roots: readonly string[]): string | null {
-  const directory = path.resolve(start);
-  for (const root of roots) {
+  const directory = _realpath(start);
+  for (const configured of roots) {
+    // Real paths on both sides: macOS cwd is /private/var/… for a /var/… root (SW-285).
+    const root = _realpath(configured);
     const rel = path.relative(root, directory);
     if (rel === "" || rel === ".." || rel.startsWith(".." + path.sep) || path.isAbsolute(rel)) {
       continue;
@@ -100,6 +102,14 @@ export function workspaceUnder(start: string, roots: readonly string[]): string 
     return path.join(root, rel.split(path.sep)[0]);
   }
   return null;
+}
+
+function _realpath(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
 }
 
 /**

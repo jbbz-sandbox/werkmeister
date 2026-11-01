@@ -55,6 +55,7 @@ services:
       Fast route for a core-only change: `cd packages/werkmeister-core && HOME=$(mktemp -d) node --test <file>.test.mjs`;
       set HOME on that call only, never for the whole shell (it breaks `pnpm build`).
       Then build, run the built werkmeister binary from a temp folder against a fixture workspace in it.
+      Make the temp folder with `T=$(cd "$(mktemp -d)" && pwd -P)`: on macOS `mktemp -d` gives `/var/…` but the CLI's cwd is `/private/var/…`, so use the real path everywhere you write `$T`.
       Export `WERKMEISTER_ROOT=<worktree>/apps/cli` for the run (or `env -u WERKMEISTER_ROOT`): the shell may export the main checkout's, and `with-temp-home` only swaps HOME, so templates and infra would come from main, not the branch under test.
       The fixture workspace must be a git repo (`git init` plus an empty commit); otherwise `init-workspace` fails with `Not inside a workspace … and no parent .git directory found`.
       Seed the temp folder with `services.yaml`, `ports.yaml` and a `config.yaml` that sets `paths.workspaces_root` (holding the fixture workspace), `overrides.services_yaml` and `overrides.ports_yaml` (the seeded files; the temp HOME has no `~/.werkmeister/services.yaml`, so otherwise you get `Required config file not found: services.yaml`), e.g.
@@ -72,6 +73,11 @@ services:
       `werkmeister pr open` runs the globally installed CLI, built from main, so it would check the PR with the old gate.
       Assert on exit code, stdout/stderr, and the files it writes.
       Exercise `workspace init` (old spelling `init-workspace`) with `--no-build`: it skips the image build, so the run makes no real docker call.
+      The exact sequence, from the fixture workspace `$T/ws/<name>`: `werkmeister workspace init --feature <name> --services <svc> --no-build`
+      (a bare fixture has no `.werkmeister/workspace.yml`, so without `--feature` it fails `No .werkmeister/workspace.yml found and no --feature given.`),
+      then, only for a real run against docker, `werkmeister feature up <name>`, `werkmeister feature stop <name>`, `werkmeister feature down <name>`
+      (without the name and with no workspace `.env` they fail `Feature name required: pass it as an argument or set FEATURE in a .env file.`).
+      A real `feature up` needs the real docker: leave `WERKMEISTER_DOCKER_BIN` unset for it; `with-temp-home` keeps `DOCKER_CONFIG` at your `~/.docker`, where the compose plugin and context live.
     internal_port: 3998
     port_offset: 3
     health_endpoint: /

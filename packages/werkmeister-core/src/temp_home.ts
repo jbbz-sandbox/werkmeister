@@ -22,6 +22,8 @@ trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' HUP INT TERM
 # Corepack keeps pnpm under HOME; without this a fresh HOME re-downloads it every run.
 export COREPACK_HOME="\${COREPACK_HOME:-$HOME/.cache/node/corepack}"
+# OrbStack and Docker Desktop keep the compose plugin and context here (SW-285).
+export DOCKER_CONFIG="\${DOCKER_CONFIG:-$HOME/.docker}"
 # A temp HOME isolates files, not the daemon: unreachable unless the caller sets it (SW-264).
 export WERKMEISTER_HOST="\${WERKMEISTER_HOST:-http://127.0.0.1:1}"
 HOME=$tmp "$@"
