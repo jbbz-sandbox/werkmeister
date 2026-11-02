@@ -318,6 +318,18 @@ describe("syncIngressCerts", () => {
     expect(received).toContain("--no-hosts");
   });
 
+  it("reports skipped trust and /etc/hosts as pending (⚠), not done (✓), with the command to finish", () => {
+    const script = path.join(home.dir, "generate-certs.sh");
+    fs.writeFileSync(script, "#!/bin/bash\n");
+    const [step] = syncIngressCerts(
+      false,
+      { hostnames: ["a.local.test"], scriptPath: script, skipSudo: true },
+      () => 0,
+    );
+    expect(step.ok).toBe(false);
+    expect(step.detail).toContain("werkmeister machine setup");
+  });
+
   it("fails the step when the generator errors", () => {
     const script = path.join(home.dir, "generate-certs.sh");
     fs.writeFileSync(script, "#!/bin/bash\n");

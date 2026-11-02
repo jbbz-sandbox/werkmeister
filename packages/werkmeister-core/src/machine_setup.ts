@@ -140,6 +140,8 @@ export interface Step {
   ok: boolean;
   detail: string;
   optional?: boolean;
+  /** Required but left undone on purpose (e.g. sudo skipped without a TTY): ⚠, exit 0, setup is not "set up". */
+  pending?: boolean;
 }
 
 /** Trim command output to the part worth showing, newest/most-specific first. */
@@ -944,9 +946,18 @@ export function syncIngressCerts(
   if (rc !== 0) {
     return [{ label, ok: false, detail: `generate-certs.sh failed (exit ${rc})` }];
   }
-  const detail =
-    `${ingress.certs_dir} covers ${hostnames.join(", ")}` +
-    (options.skipSudo ? " (trust + /etc/hosts skipped — rerun without --yes)" : "");
+  const detail = `${ingress.certs_dir} covers ${hostnames.join(", ")}`;
+  if (options.skipSudo) {
+    // SW-343: without trust + /etc/hosts the hostnames don't resolve and TLS fails, so this is not done.
+    return [
+      {
+        label,
+        ok: false,
+        pending: true,
+        detail: `${detail}; CA trust and /etc/hosts skipped — run \`werkmeister machine setup\` in a terminal to finish`,
+      },
+    ];
+  }
   return [{ label, ok: true, detail }];
 }
 

@@ -555,13 +555,13 @@ function report(steps: Step[]): number {
   for (const step of steps) {
     if (step.ok) {
       console.log(`${Colors.GREEN}✓${Colors.RESET} ${step.label}: ${step.detail}`);
-    } else if (step.optional) {
+    } else if (step.optional || step.pending) {
       console.log(`${Colors.YELLOW}⚠ ${step.label}: ${step.detail}${Colors.RESET}`);
     } else {
       console.log(`${Colors.RED}✗ ${step.label}: ${step.detail}${Colors.RESET}`);
     }
   }
-  return steps.filter((s) => !s.ok && !s.optional).length;
+  return steps.filter((s) => !s.ok && !s.optional && !s.pending).length;
 }
 
 export async function run(args: Record<string, unknown>): Promise<void> {
@@ -615,13 +615,20 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   const failed = report(steps);
   const warned = steps.filter((s) => !s.ok && s.optional).length;
+  const pending = steps.filter((s) => s.pending).length;
 
   if (failed) {
     warn(`${failed} required prerequisite(s) could not be converged (✗ above).`);
     process.exit(1);
   }
 
-  if (warned) {
+  // Exit stays 0 so `--yes` in CI keeps working; the summary just must not claim success.
+  if (pending) {
+    warn(
+      `Setup incomplete: ${pending} required step(s) skipped (⚠ above) — ` +
+        "run `werkmeister machine setup` in a terminal to finish.",
+    );
+  } else if (warned) {
     success(
       `Machine is set up. ${warned} optional prerequisite(s) are unconfigured ` +
         "(⚠ above) — everything works without them.",
