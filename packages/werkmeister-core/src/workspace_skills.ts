@@ -80,6 +80,7 @@ export function renderWorkspaceSkills(
   standardsDir?: string | null,
   entrySkillsDir?: string | null,
   active?: string[] | null,
+  repoPaths: string[] = [],
 ): Record<string, Record<string, string>> {
   const skills: Record<string, Record<string, string>> = {};
   try {
@@ -88,7 +89,9 @@ export function renderWorkspaceSkills(
     // load" line in the routing table (jit-context-system.md §2). Null means
     // no filter — the fallback when nothing about the workspace is known.
     const keep = active ? new Set(active.map(skillNameFor)) : null;
-    for (const [name, bundle] of Object.entries(generateSkills(standardsDir))) {
+    for (const [name, bundle] of Object.entries(
+      generateSkills(null, loadStandardsModules(standardsDir, repoPaths)),
+    )) {
       if (!keep || keep.has(name)) skills[name] = bundle;
     }
   } catch {
@@ -130,7 +133,12 @@ export function writeWorkspaceSkills(
   entrySkillsDir?: string | null,
   active?: string[] | null,
 ): string[] {
-  const rendered = renderWorkspaceSkills(standardsDir, entrySkillsDir, active);
+  const rendered = renderWorkspaceSkills(
+    standardsDir,
+    entrySkillsDir,
+    active,
+    repoDirs(workspaceRoot),
+  );
   const target = workspaceSkillsDir(workspaceRoot);
   const written: string[] = [];
   for (const name of Object.keys(rendered).sort()) {
@@ -180,7 +188,12 @@ export function checkWorkspaceSkills(
   entrySkillsDir?: string | null,
   active?: string[] | null,
 ): string[] {
-  const rendered = renderWorkspaceSkills(standardsDir, entrySkillsDir, active);
+  const rendered = renderWorkspaceSkills(
+    standardsDir,
+    entrySkillsDir,
+    active,
+    repoDirs(workspaceRoot),
+  );
   const target = workspaceSkillsDir(workspaceRoot);
   const errors: string[] = [];
 
@@ -244,7 +257,7 @@ export function canonical(value: unknown): unknown {
 export function resolveWorkspaceActive(
   workspace: string,
 ): { active: string[]; modules: Record<string, Record<string, any>>; workType: string } | null {
-  const modules = loadStandardsModules();
+  const modules = loadStandardsModules(null, repoDirs(workspace));
   if (!Object.keys(modules).length) {
     return null;
   }
@@ -302,7 +315,7 @@ export interface SkillsCheck {
  */
 export function checkSkills(workspace: string, active: string[] | null = null): SkillsCheck {
   return {
-    authoring: validateModuleReferences(),
+    authoring: validateModuleReferences(loadStandardsModules(null, repoDirs(workspace))),
     drift: checkWorkspaceSkills(workspace, null, null, active),
   };
 }

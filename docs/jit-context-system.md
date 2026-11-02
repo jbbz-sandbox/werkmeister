@@ -81,6 +81,15 @@ unset. An example set, in directory form:
 `repos/*.md` are per-repo quirk snippets keyed by `repo:`, referenced from
 standard bodies. They are **not** loadable standards.
 
+**Repo standards.** A repo can also carry standards that apply only to its own code, in
+`<repo>/.werkmeister/standards/`. That folder uses the same two shapes and frontmatter as
+the global tree. A workspace that checks out the repo loads them on top of the global tree,
+and they are active there without an archetype selecting them; `standards_override.remove`
+can still drop one. Workspaces without the repo never see them. Each one's generated skill
+links to that repo's checkout. A repo module whose `domain` the global tree also has is
+dropped, so the global module wins. `werkmeister standards check` validates every main
+checkout's tree under `paths.repos_root` and reports such a clash.
+
 ### 3.1 Frontmatter schema
 
 Enforced by `validateStandardModules`:

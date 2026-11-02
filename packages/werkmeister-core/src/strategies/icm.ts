@@ -138,7 +138,7 @@ function vars(ctx: InitContext, stages: Stage[]): IcmVars {
 
 // The same resolution jit's step 5b makes; the gate manifest is not written.
 function resolveStandards(ctx: InitContext): Resolved {
-  const modules = loadStandardsModules();
+  const modules = loadStandardsModules(null, repoDirs(ctx.workspaceRoot));
   if (!Object.keys(modules).length) {
     warn(
       standardsDirProblem() ||
@@ -167,9 +167,10 @@ function appliesWhen(meta: Record<string, any>): string {
 // The file is tracked in the run's record, so a machine path here would read
 // as drift on any other machine (#163); name the root and say how to find it.
 function standardsPath(meta: Record<string, any>): string {
-  return (
-    "<standards_dir>/" + path.relative(standardsDirPath(), meta["path"]).split(path.sep).join("/")
-  );
+  const rel = (from: string) => path.relative(from, meta["path"]).split(path.sep).join("/");
+  // A repo's own module is in that repo's worktree, which the workspace has.
+  if (meta["repo"]) return `${meta["repo"]}/${rel(path.resolve(meta["root"], "..", ".."))}`;
+  return `<standards_dir>/${rel(standardsDirPath())}`;
 }
 
 function renderStandards(r: Resolved): string {

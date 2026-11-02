@@ -12,7 +12,7 @@ import { checkStandards } from "werkmeister-core/standards";
 import { error, info, success } from "../lib/config.js";
 
 export async function run(_args: Record<string, unknown>): Promise<void> {
-  const { dir, moduleCount, errors } = checkStandards();
+  const { dir, repoTrees, moduleCount, errors } = checkStandards();
 
   if (errors.length) {
     // A zero module count means the tree itself is unusable (missing, or empty)
@@ -29,5 +29,8 @@ export async function run(_args: Record<string, unknown>): Promise<void> {
     process.exit(1);
   }
 
-  success(`${dir} is well-formed (${moduleCount} standard module(s) checked).`);
+  const trees = repoTrees.length ? ` and ${repoTrees.length} repo tree(s)` : "";
+  success(
+    `${dir}${trees} ${trees ? "are" : "is"} well-formed (${moduleCount} standard module(s) checked).`,
+  );
 }

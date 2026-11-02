@@ -34,6 +34,7 @@ import { info, success, warn } from "../reporter.js";
 import {
   buildStandardsManifest,
   loadStandardsModules,
+  repoDirs,
   resolveActiveStandards,
   validateServiceStandards,
   writeStandardsManifest,
@@ -180,7 +181,7 @@ function init(ctx: InitContext): void {
   // 5b. Resolve the workspace's active standards (docs/jit-context-system.md §4.1).
   let standardsSection: string | null = null;
   let activeStandards: string[] | null = null;
-  const modules = loadStandardsModules();
+  const modules = loadStandardsModules(null, repoDirs(workspaceRoot));
   if (Object.keys(modules).length) {
     const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
     for (const err of validateServiceStandards(servicesConfig, modules)) {

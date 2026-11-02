@@ -27,6 +27,7 @@ import { serviceStandards, validateServiceArchetypes } from "./archetypes.js";
 import {
   type ArchetypeRegistry,
   dotDir,
+  getReposRoot,
   loadArchetypes,
   loadServices,
   type ReposConfig,
@@ -47,7 +48,18 @@ export interface StandardModule {
   task_signatures?: string[];
   path?: string;
   references_dir?: string;
+  /** The tree the module was loaded from: the global standards dir or a repo's. */
+  root?: string;
+  /** Set on a module from a repo's own tree: that repo's directory name. */
+  repo?: string;
   [key: string]: unknown;
+}
+
+/** Where a repo keeps standards that apply only to workspaces that check it out. */
+export const REPO_STANDARDS_DIR = path.join(".werkmeister", "standards");
+
+export function repoStandardsDir(repo: string): string {
+  return path.join(repo, REPO_STANDARDS_DIR);
 }
 
 /** domain → module, as {@link loadStandardsModules} returns them. */
@@ -229,7 +241,9 @@ export function standardsMatchingDiff(
   workspace: string,
   modules?: StandardModules | null,
 ): Array<[string, string]> {
-  if (modules === undefined || modules === null) modules = loadStandardsModules();
+  if (modules === undefined || modules === null) {
+    modules = loadStandardsModules(null, repoDirs(workspace));
+  }
   if (!Object.keys(modules).length) return [];
 
   const changed = new Set<string>();
@@ -301,11 +315,30 @@ function iterStandardFiles(standardsDir: string): string[] {
  * repos/ are keyed by repo, not domain, and are not loadable standards.
  * Files without valid frontmatter are skipped (a malformed module should
  * not block workspace init).
+ *
+ * *repoPaths* are the workspace's repo checkouts: each one's
+ * {@link REPO_STANDARDS_DIR} is merged in, tagged with `repo`. A repo module
+ * whose domain the global tree already has is dropped — the global one wins,
+ * and `werkmeister standards check` reports the clash.
  */
-export function loadStandardsModules(standardsDir?: string | null): StandardModules {
+export function loadStandardsModules(
+  standardsDir?: string | null,
+  repoPaths: string[] = [],
+): StandardModules {
   if (standardsDir === undefined || standardsDir === null) {
     standardsDir = standardsDirPath();
   }
+  const modules = loadTree(standardsDir);
+  for (const repo of repoPaths) {
+    for (const [domain, meta] of Object.entries(loadTree(repoStandardsDir(repo)))) {
+      if (domain in modules) continue;
+      modules[domain] = { ...meta, repo: path.basename(repo) };
+    }
+  }
+  return modules;
+}
+
+function loadTree(standardsDir: string): StandardModules {
   const modules: StandardModules = {};
   if (!(fs.existsSync(standardsDir) && fs.statSync(standardsDir).isDirectory())) {
     return modules;
@@ -315,6 +348,7 @@ export function loadStandardsModules(standardsDir?: string | null): StandardModu
     const domain = meta["domain"];
     if (!domain) continue;
     meta["path"] = filePath;
+    meta["root"] = standardsDir;
     if (path.basename(filePath) === "STANDARD.md") {
       const refs = path.join(path.dirname(filePath), "references");
       if (
@@ -489,7 +523,9 @@ export function validateStandardModules(standardsDir?: string | null): string[] 
 export interface StandardsCheck {
   /** The tree that was checked (resolved even when it does not exist). */
   dir: string;
-  /** Loadable modules found. Zero means the tree itself is unusable. */
+  /** Repo standards trees checked too ({@link repoStandardTrees}). */
+  repoTrees: string[];
+  /** Loadable modules found, repo trees included. Zero means the global tree itself is unusable. */
   moduleCount: number;
   /** Empty means well-formed. */
   errors: string[];
@@ -511,25 +547,66 @@ export interface StandardsCheck {
  */
 export function checkStandards(): StandardsCheck {
   const dir = standardsDirPath();
+  const repoTrees = repoStandardTrees();
 
   const problem = standardsDirProblem();
-  if (problem) return { dir, moduleCount: 0, errors: [problem] };
+  if (problem) return { dir, repoTrees, moduleCount: 0, errors: [problem] };
 
   const modules = loadStandardsModules();
-  const moduleCount = Object.keys(modules).length;
-  if (!moduleCount) {
-    return { dir, moduleCount, errors: [`no standard modules found in ${dir}`] };
+  if (!Object.keys(modules).length) {
+    return { dir, repoTrees, moduleCount: 0, errors: [`no standard modules found in ${dir}`] };
+  }
+
+  const all: StandardModules = { ...modules };
+  const repoErrors: string[] = [];
+  for (const tree of repoTrees) {
+    const repo = path.basename(path.resolve(tree, "..", ".."));
+    const repoModules = loadTree(tree);
+    const tag = (e: string) => `${repo}: ${e}`;
+    repoErrors.push(...validateStandardModules(tree).map(tag));
+    repoErrors.push(...validateModuleReferences(repoModules).map(tag));
+    for (const domain of Object.keys(repoModules)) {
+      if (domain in modules) {
+        repoErrors.push(
+          tag(`\`${domain}\` is also a module in ${dir}, which wins; rename this one`),
+        );
+      } else {
+        all[domain] = repoModules[domain];
+      }
+    }
   }
 
   return {
     dir,
-    moduleCount,
+    repoTrees,
+    moduleCount: Object.keys(all).length,
     errors: [
       ...validateStandardModules(),
       ...validateModuleReferences(modules),
-      ...validateServiceStandards(loadServices(), modules),
+      ...repoErrors,
+      ...validateServiceStandards(loadServices(), all),
     ],
   };
+}
+
+/**
+ * The {@link REPO_STANDARDS_DIR} of every main checkout under `paths.repos_root`, sorted.
+ * Linked worktrees are skipped: they repeat their main checkout's tree.
+ */
+export function repoStandardTrees(reposRoot: string = getReposRoot()): string[] {
+  let names: string[];
+  try {
+    names = fs.readdirSync(reposRoot).sort();
+  } catch {
+    return [];
+  }
+  return names
+    .map((name) => path.join(reposRoot, name))
+    .filter((repo) =>
+      fs.statSync(path.join(repo, ".git"), { throwIfNoEntry: false })?.isDirectory(),
+    )
+    .map(repoStandardsDir)
+    .filter((tree) => fs.statSync(tree, { throwIfNoEntry: false })?.isDirectory());
 }
 
 /**
@@ -598,6 +675,9 @@ export function resolveActiveStandards(
   const wc = workspaceConfig ?? {};
   const override = wc["standards_override"] ?? {};
   for (const key of override["add"] ?? []) active.add(key);
+  // A repo's own standards were loaded only because the repo is in this
+  // workspace, so they are active; `remove` below can still drop one.
+  for (const [key, meta] of Object.entries(modules)) if (meta.repo) active.add(key);
   // Task-time routing: surface domains the task text names but service
   // selection missed. Placed before `remove` so an explicit remove still
   // wins over a false-positive keyword match.

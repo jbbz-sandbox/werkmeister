@@ -5,7 +5,7 @@ werkmeister\-standards \- Validate the configured standards tree (structural reg
 \fBwerkmeister standards\fR <action>
 .SH DESCRIPTION
 .PP
-Checks the configured standards tree for structural errors and exits 1 on any, so a malformed standards edit fails loudly instead of silently dropping out. It prints the tree's path. Unlike \fBwerkmeister skills check\fR, it is not tied to a workspace.
+Checks the configured standards tree for structural errors and exits 1 on any, so a malformed standards edit fails loudly instead of silently dropping out. It also checks each repo's own tree (\fB<repo>/.werkmeister/standards/\fR, for every main checkout under \fBpaths.repos_root\fR) and fails when a repo module reuses a global module's \fBdomain\fR. It prints the tree's path. Unlike \fBwerkmeister skills check\fR, it is not tied to a workspace.
 .SH EXAMPLES
 .PP
 .nf
