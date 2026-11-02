@@ -50,7 +50,7 @@ jobs:
       # SW-327: the plugin's turbo `typecheck`/`test` run `claude`. A global install, not a
       # dependency: its licence is outside the allowlist. Bump with the plugin's types.
       - run: npm i -g @anthropic-ai/claude-code@2.1.316
-      - run: pnpm turbo run typecheck build test --filter='!werkmeister-core'
+      - run: pnpm turbo run typecheck build test --continue --filter='!werkmeister-core'
       # After the build: commands and flags come from the built CLI's `__complete`.
       # Its unit test runs with `licenses` above (scripts/*.test.mjs).
       - run: pnpm run docs:check
@@ -107,7 +107,7 @@ jobs:
       - uses: ./.github/actions/install
         with:
           node-version: 22
-      - run: pnpm turbo run test --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core
+      - run: pnpm turbo run test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core
 
   # Gated on the test jobs rather than repeating their checks: a publish cannot
   # be taken back, and this used to be a separate workflow that raced CI on
