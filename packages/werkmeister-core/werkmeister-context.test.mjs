@@ -121,6 +121,11 @@ test("the host test command is stated through the temp-HOME wrapper; the contain
         wrapped,
         /^- `frontend`: `docker exec test-frontend sh -c 'npm test -w frontend'`$/m,
       );
+      assert.match(
+        wrapped,
+        /`\/ws\/\.werkmeister\/bin\/with-temp-home env WERKMEISTER_ROOT=… <cmd>`/,
+      );
+      assert.match(wrapped, /`Bash\(\/ws\/\.werkmeister\/bin\/with-temp-home:\*\)`/);
       assert.doesNotMatch(buildSandboxContextMd(...args), /with-temp-home/);
     },
     { services: SERVICES },
