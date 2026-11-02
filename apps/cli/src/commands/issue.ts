@@ -191,5 +191,5 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const issue = await tracker.fetchIssue(ref, why);
   if (!issue)
     fail(`Could not read ${ref} from ${tracker.label}${why.length ? `: ${why.join("; ")}` : ""}.`);
-  console.log(args.json ? JSON.stringify(issue, null, 2) : issueBriefing(issue));
+  console.log(args.json ? JSON.stringify(issue, null, 2) : issueBriefing(issue, { full: true }));
 }

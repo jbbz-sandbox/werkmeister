@@ -89,6 +89,16 @@ test("a briefing carries title, meta, description and the non-blank comments", (
   assert.equal(it.issueBriefing({ ref: "PROJ-2" }), "PROJ-2: (no title)");
 });
 
+test("a briefing marks a capped description; full: true prints all of it (SW-324)", () => {
+  const description = "x".repeat(5853);
+  const capped = it.issueBriefing({ ref: "P-1", description });
+  assert.match(capped, /\[cut: 1853 more characters not shown\]$/);
+  assert.ok(!capped.includes("x".repeat(4001)));
+  const full = it.issueBriefing({ ref: "P-1", description }, { full: true });
+  assert.ok(full.endsWith(description));
+  assert.doesNotMatch(full, /cut:/);
+});
+
 test("the issues guide routes app-code issues to the registry repos", () => {
   const md = buildIssuesReportMd("ws");
   assert.match(md, /one of `acme\/api`, `acme\/web`/);
