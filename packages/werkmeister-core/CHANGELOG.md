@@ -1,5 +1,13 @@
 # sandbox-core
 
+## 0.64.1
+
+### Patch Changes
+
+- d1f17bc: A workspace whose worktree is the werkmeister repo now pre-approves the built CLI run through its temp-HOME wrapper (`Bash(<workspace>/.werkmeister/bin/with-temp-home <worktree>/apps/cli/werkmeister:*)`), so the auto-mode classifier no longer refuses a CLI-level exercise. The bare wrapper is still never allowed. Existing workspaces pick the rule up with `werkmeister machine migrate`.
+- ce1256e: SW-231: the generated `werkmeister-context.md` tells the exercise step to start each command with the `with-temp-home` script (`with-temp-home env WERKMEISTER_ROOT=… <cmd>`) and names the allow rule `Bash(<script>:*)` that covers it, so a permission rule can match.
+- 3223e06: SW-343: `machine setup` without a TTY (or with `--yes`) now reports the skipped CA trust and /etc/hosts as ⚠ with the command to finish, and ends with "Setup incomplete" instead of "Machine is set up."
+
 ## 0.64.0
 
 ### Minor Changes
