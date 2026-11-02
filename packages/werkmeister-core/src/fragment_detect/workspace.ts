@@ -11,6 +11,12 @@ const INSTALL: Record<PackageManager, string> = {
   pnpm: "corepack enable && pnpm install",
   yarn: "corepack enable && yarn install",
 };
+// With a lockfile, an install that never rewrites it, so an up can't dirty the worktree (SW-31).
+// shortcut: yarn has no entry because v1 (--frozen-lockfile) and berry (--immutable) differ; add one when a yarn repo shows up.
+const LOCKED: Partial<Record<PackageManager, [lockfile: string, command: string]>> = {
+  npm: ["package-lock.json", "npm ci"],
+  pnpm: ["pnpm-lock.yaml", "corepack enable && pnpm install --frozen-lockfile"],
+};
 
 /** Glob patterns from `workspaces` / `pnpm-workspace.yaml` → the package dirs present in *files*. */
 export function expandWorkspaceGlobs(patterns: string[], files: string[]): string[] {
@@ -36,13 +42,14 @@ export function expandWorkspaceGlobs(patterns: string[], files: string[]): strin
 }
 
 /**
- * The workspace shape. *existingSetupName* is the `setup_service` an existing
- * fragment already uses, so a re-run doesn't add a second install service
- * under a new name.
+ * The workspace shape. *existingSetupName* and *existingVolume* are the
+ * `setup_service` and `node_modules_volume` an existing fragment already uses,
+ * so a re-run doesn't add a second install service or volume under a new name.
  */
 export function detectWorkspace(
   ctx: DetectContext,
   existingSetupName: string | null = null,
+  existingVolume: string | null = null,
 ): Workspace {
   const has = (f: string) => ctx.files.includes(f);
   const pm: PackageManager =
@@ -69,13 +76,19 @@ export function detectWorkspace(
         : [];
     if (patterns.length) source = "package.json → workspaces";
   }
+  const locked = LOCKED[pm];
+  const install = locked && has(locked[0]) ? locked[1] : INSTALL[pm];
   return {
     pm,
     packageDirs: expandWorkspaceGlobs(patterns, ctx.files),
     setupName: existingSetupName ?? `${path.basename(ctx.root)}-install`,
     setupFields: {
-      command: stated(INSTALL[pm], `${source} (${pm})`),
-      node_modules_volume: stated("node-modules", source),
+      command: stated(install, `${source} (${pm})`),
+      // Named after the repo: the volume is per feature, so a shared name mixes two repos' installs (SW-106).
+      node_modules_volume: stated(
+        existingVolume ?? `${path.basename(ctx.root)}-node-modules`,
+        source,
+      ),
     },
   };
 }

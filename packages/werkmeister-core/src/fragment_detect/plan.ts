@@ -104,9 +104,13 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
     Object.values(existingDoc?.services ?? {})
       .map((s: any) => s?.setup_service)
       .find((s): s is string => typeof s === "string") ?? null;
+  const existingVolume =
+    Object.values(existingDoc?.services ?? {})
+      .map((s: any) => s?.node_modules_volume)
+      .find((v): v is string => typeof v === "string") ?? null;
   const noWorkspace: Workspace = { pm: "npm", packageDirs: [], setupName: null, setupFields: {} };
   const ws = safely(ctx.skipped, "workspace detection", noWorkspace, () =>
-    detectWorkspace(ctx, existingSetup),
+    detectWorkspace(ctx, existingSetup, existingVolume),
   );
   const findings: Finding[] = [
     ...safely(ctx.skipped, "package.json detection", [] as Finding[], () =>
