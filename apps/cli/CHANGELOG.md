@@ -1,5 +1,15 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.65.0
+
+### Minor Changes
+
+- 7fa111c: `werkmeister pr status` (and the PR watch pass) now notices a merged PR that changes its repo's `.werkmeister/services.yaml` fragment. By default it prints `registry sync needed: <repo> fragment changed in <url>` and shows it on the workspace card. With `sync_on_merge: auto` in the fragment's `repo:` (or in `services.local.yaml` under `repos.<repo>`), it fast-forwards the clean source checkout, runs `registry sync`, prints what changed and names the running features to bring up again with `werkmeister feature up`.
+
+### Patch Changes
+
+- 5c4353f: SW-338: `werkmeister feature up --service <svc>` now regenerates the Caddyfile and reloads Caddy after the service starts, so the feature cookie reaches this workspace's container instead of falling through to another workspace's upstream.
+
 ## 0.64.2
 
 ### Patch Changes
