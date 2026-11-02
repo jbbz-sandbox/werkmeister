@@ -41,6 +41,7 @@ import {
   watchPrs,
   writePrFields,
 } from "./dist/pr_lifecycle.js";
+import { syncRegistry } from "./dist/registry_sync.js";
 import { withReporter } from "./dist/reporter.js";
 import { removeWorkspace, WorkspaceError } from "./dist/sandbox.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
@@ -133,6 +134,10 @@ function deps(table, over = {}) {
     session: async () => ({}),
     sessionBusy: async () => false,
     branchRegistry: () => null,
+    syncRegistry: () => {
+      throw new Error("unexpected registry sync");
+    },
+    runningServices: () => [],
     stop: async (ws) => {
       stopped.push(ws);
       return "containers stopped";
@@ -1391,6 +1396,193 @@ test("refreshPrStatus: ship: merge ships on merge", async () => {
       deps([], { repos: { app: { ...REGISTRY.repos.app, ship: "merge" } } }),
     );
     assert.equal(readPrFiles(ws)[0].fm.status, "shipped");
+  } finally {
+    clean(ws);
+  }
+});
+
+// --- SW-340: sync the machine registry when a merged PR changes its repo's fragment ----------
+const FRAGMENT_CHANGED = [{ path: ".werkmeister/services.yaml" }, { path: "src/server.ts" }];
+const mergedWith = (files) => [
+  /^gh pr view/,
+  { stdout: JSON.stringify({ state: "MERGED", mergeCommit: { oid: "abc" }, files }) },
+];
+const sourceGit = ({ branch = "main", status = "" } = {}) => [
+  [/rev-parse --abbrev-ref HEAD/, { stdout: `${branch}\n` }],
+  [/status --porcelain --untracked-files=no/, { stdout: status }],
+];
+const autoRepos = { app: { ...REGISTRY.repos.app, sync_on_merge: "auto" } };
+const openPr = () =>
+  icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) } });
+
+/** A temp HOME whose generated registry holds app's `node src/server.js`; *fn* gets `ship()`, which lands the PR's server.ts fragment in the checkout. */
+async function withAppRegistry(fn) {
+  const repos = fs.mkdtempSync(path.join(os.tmpdir(), "sw340-repos-"));
+  const fragment = path.join(repos, "app", ".werkmeister", "services.yaml");
+  fs.mkdirSync(path.dirname(fragment), { recursive: true });
+  const write = (cmd) =>
+    fs.writeFileSync(fragment, `services:\n  api:\n    path: apps/api\n    command: node ${cmd}\n`);
+  write("src/server.js");
+  try {
+    return await withSandboxHome(
+      async (home) => {
+        // The fixture's registry is hand-written; generate it first, as machine setup does.
+        assert.equal(syncRegistry({ reposRoot: repos })[0].ok, true);
+        const registry = () => fs.readFileSync(path.join(home, "services.yaml"), "utf8");
+        const sync = () => syncRegistry({ reposRoot: repos, generatedOnly: true });
+        return await fn({ registry, sync, ship: () => write("src/server.ts") });
+      },
+      { config: `paths:\n  repos_root: ${repos}\n` },
+    );
+  } finally {
+    fs.rmSync(repos, { recursive: true, force: true });
+  }
+}
+
+test("SW-340 auto: a merged PR that changes the fragment pulls, syncs the registry and names the stale feature", async () => {
+  const ws = openPr();
+  try {
+    await withAppRegistry(async ({ registry, sync, ship }) => {
+      ship();
+      const d = deps([mergedWith(FRAGMENT_CHANGED), ...sourceGit()], {
+        repos: autoRepos,
+        syncRegistry: sync,
+        runningServices: () => [
+          { feature: "feat", services: ["api", "lib"] },
+          { feature: "other", services: ["web"] },
+        ],
+      });
+      const r = await refreshPrStatus(ws, d);
+      assert.ok(d.calls.includes("git -C /src/app pull --ff-only"), d.calls.join("\n"));
+      assert.match(registry(), /node src\/server\.ts/);
+      assert.ok(
+        r.lines.includes("registry synced for app (https://x/pr/9): changed services.api"),
+        r.lines.join("\n"),
+      );
+      assert.ok(
+        r.lines.includes("feat runs changed api: run werkmeister feature up feat to apply"),
+        r.lines.join("\n"),
+      );
+      assert.ok(!r.lines.some((l) => l.startsWith("other ")), r.lines.join("\n"));
+      assert.equal(readPrFiles(ws)[0].fm.registry_sync, "synced");
+    });
+  } finally {
+    clean(ws);
+  }
+});
+
+test("SW-340 warn (default): only the notice, on pr status and the card; never repeated", async () => {
+  const ws = openPr();
+  try {
+    await withAppRegistry(async ({ registry }) => {
+      const before = registry();
+      const d = deps([mergedWith(FRAGMENT_CHANGED), ...sourceGit()]);
+      const r = await refreshPrStatus(ws, d);
+      const notice = "registry sync needed: app fragment changed in https://x/pr/9";
+      assert.ok(r.lines.includes(notice), r.lines.join("\n"));
+      assert.ok(!d.calls.some((c) => c.startsWith("git -C /src/app")), d.calls.join("\n"));
+      assert.equal(registry(), before);
+      assert.equal(readAgentState(ws).question, notice);
+      assert.equal(readPrFiles(ws)[0].fm.registry_sync, "needed");
+      const again = await refreshPrStatus(ws, deps([]));
+      assert.ok(!again.lines.some((l) => l.includes("registry")), again.lines.join("\n"));
+    });
+  } finally {
+    clean(ws);
+  }
+});
+
+test("SW-340 auto, dirty checkout: notice only, then synced on a later pass once clean", async () => {
+  const ws = openPr();
+  try {
+    await withAppRegistry(async ({ registry, sync, ship }) => {
+      ship();
+      const before = registry();
+      const dirty = deps([mergedWith(FRAGMENT_CHANGED), ...sourceGit({ status: " M x\n" })], {
+        repos: autoRepos,
+      });
+      const r = await refreshPrStatus(ws, dirty);
+      assert.ok(
+        r.lines.includes(
+          "registry sync needed: app fragment changed in https://x/pr/9 (checkout has uncommitted changes)",
+        ),
+        r.lines.join("\n"),
+      );
+      assert.ok(!dirty.calls.some((c) => c.includes("pull")), dirty.calls.join("\n"));
+      assert.equal(registry(), before);
+      assert.equal(readPrFiles(ws)[0].fm.registry_sync, "needed");
+      const later = await refreshPrStatus(
+        ws,
+        deps(sourceGit(), { repos: autoRepos, syncRegistry: sync }),
+      );
+      assert.equal(readPrFiles(ws)[0].fm.registry_sync, "synced", later.lines.join("\n"));
+      assert.match(registry(), /node src\/server\.ts/);
+    });
+  } finally {
+    clean(ws);
+  }
+});
+
+test("SW-340 auto, checkout off the base branch: notice only, no pull", async () => {
+  const ws = openPr();
+  try {
+    const d = deps([mergedWith(FRAGMENT_CHANGED), ...sourceGit({ branch: "feature/x" })], {
+      repos: autoRepos,
+    });
+    const r = await refreshPrStatus(ws, d);
+    assert.ok(
+      r.lines.includes(
+        "registry sync needed: app fragment changed in https://x/pr/9 (checkout is on feature/x, not main)",
+      ),
+      r.lines.join("\n"),
+    );
+    assert.ok(!d.calls.some((c) => c.includes("pull")), d.calls.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("SW-340: a merged PR that leaves the fragment alone does nothing new", async () => {
+  const ws = openPr();
+  try {
+    const d = deps([mergedWith([{ path: "src/a.ts" }])], { repos: autoRepos });
+    const r = await refreshPrStatus(ws, d);
+    assert.equal(readPrFiles(ws)[0].fm.status, "merged");
+    assert.equal(readPrFiles(ws)[0].fm.registry_sync, undefined);
+    assert.ok(!r.lines.some((l) => l.includes("registry")), r.lines.join("\n"));
+    assert.ok(!d.calls.some((c) => c.startsWith("git -C /src/app")), d.calls.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("SW-340: adoptPr of a merged PR that changed the fragment syncs under auto", async () => {
+  const ws = icmWorkspace({ files: {} });
+  fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  try {
+    await withAppRegistry(async ({ registry, sync, ship }) => {
+      ship();
+      const view = {
+        url: "https://github.com/o/app/pull/140",
+        headRefName: "other/fix",
+        baseRefName: "main",
+        title: "fix: the thing",
+        state: "MERGED",
+        mergeCommit: { oid: "abc" },
+        files: FRAGMENT_CHANGED,
+      };
+      const d = deps(
+        [
+          [/^gh pr view 140 /, { stdout: JSON.stringify(view) }],
+          [/ls-remote/, { code: 2 }],
+          ...sourceGit(),
+        ],
+        { repos: autoRepos, syncRegistry: sync },
+      );
+      const r = await adoptPr(ws, { pr: "140" }, d);
+      assert.equal(readPrFiles(ws)[0].fm.registry_sync, "synced", r.lines.join("\n"));
+      assert.match(registry(), /node src\/server\.ts/);
+    });
   } finally {
     clean(ws);
   }
