@@ -102,7 +102,10 @@ export function detectPackages(ctx: DetectContext, ws: Workspace): Finding[] {
     );
     if (ws.setupName) {
       fields.setup_service = stated(ws.setupName, "shared workspace install");
-      fields.node_modules_volume = stated("node-modules", "shared workspace install");
+      fields.node_modules_volume = stated(
+        ws.setupFields.node_modules_volume.value,
+        "shared workspace install",
+      );
     }
     out.push({
       kind: "package",

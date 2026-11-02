@@ -20,7 +20,7 @@ Never ask Claude
 .PP
 It reads \fBpackage.json\fR and workspaces (npm, pnpm, yarn), Dockerfiles, docker\-compose files, Helm charts (rendered with \fBhelm template\fR), raw k8s manifests and kustomize overlays (\fBkubectl kustomize\fR). For each value the report shows where it came from, and every guess is marked. Guesses are written with a \fB# guessed:\fR comment, so they're easy to find and fix.
 .PP
-\fBport_offset\fR is picked from the offsets no other repo under \fBpaths.repos_root\fR uses. Infrastructure (redis, postgres and other datastores) gets the next free \fBk8s_forward_port\fR from 9050.
+\fBport_offset\fR is picked from the offsets no other repo under \fBpaths.repos_root\fR uses. The shared install service's \fBnode_modules_volume\fR is named \fB<repo>\-node\-modules\fR, and with a lockfile its command never rewrites the lockfile (for pnpm, \fBpnpm install \-\-frozen\-lockfile\fR). Infrastructure (redis, postgres and other datastores) gets the next free \fBk8s_forward_port\fR from 9050.
 .PP
 Re\-running only adds services and keys the file doesn't have yet. Nothing already in the file changes: not values, comments or formatting. After writing, run \fBwerkmeister registry sync\fR.
 .PP

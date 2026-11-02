@@ -82,8 +82,8 @@ test("a new fragment: header, every section, guessed comments, the env rewrite",
   });
   assert.deepEqual(doc.setup_services["demo-services-install"], {
     image: "node:22-alpine",
-    command: "npm install",
-    node_modules_volume: "node-modules",
+    command: "npm ci",
+    node_modules_volume: "demo-services-node-modules",
   });
   assert.match(r.yaml, /type: api # guessed: no web, api or bin marker/);
   assert.match(r.yaml, /# guessed: compose environment|# guessed: k8s env; DATABASE_URL rewritten/);

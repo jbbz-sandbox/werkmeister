@@ -1162,7 +1162,7 @@ Generate \<repo>/.werkmeister/services.yaml from the repo's package manifests, D
 
 It reads `package.json` and workspaces (npm, pnpm, yarn), Dockerfiles, docker-compose files, Helm charts (rendered with `helm template`), raw k8s manifests and kustomize overlays (`kubectl kustomize`). For each value the report shows where it came from, and every guess is marked. Guesses are written with a `# guessed:` comment, so they're easy to find and fix.
 
-`port_offset` is picked from the offsets no other repo under `paths.repos_root` uses. Infrastructure (redis, postgres and other datastores) gets the next free `k8s_forward_port` from 9050.
+`port_offset` is picked from the offsets no other repo under `paths.repos_root` uses. The shared install service's `node_modules_volume` is named `<repo>-node-modules`, and with a lockfile its command never rewrites the lockfile (for pnpm, `pnpm install --frozen-lockfile`). Infrastructure (redis, postgres and other datastores) gets the next free `k8s_forward_port` from 9050.
 
 Re-running only adds services and keys the file doesn't have yet. Nothing already in the file changes: not values, comments or formatting. After writing, run `werkmeister registry sync`.
 
@@ -1494,6 +1494,7 @@ the list and sync again.
 ### Writing a fragment
 
 A fragment is a slice of the registry committed at `<repo>/.werkmeister/services.yaml`. `werkmeister machine detect` writes a first draft of this file for you; see [werkmeister machine detect](#werkmeister-machine-detect).
+For the whole process of adding a repo, with a checklist of common mistakes, see [Setting up a repo](repo-setup.md).
 Its JSON Schema is `apps/cli/infra/schemas/services-fragment.schema.json`. `werkmeister machine setup`
 offers to map it (and `workspace.schema.json`) in VS Code's user `yaml.schemas` by local
 path, which turns on validation through the redhat.vscode-yaml extension. Don't add a

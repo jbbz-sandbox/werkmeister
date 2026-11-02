@@ -44,8 +44,12 @@ test("npm workspaces give the package dirs and a shared install named after the 
   assert.equal(ws.pm, "npm");
   assert.deepEqual(ws.packageDirs, ["apps/backend", "apps/frontend"]);
   assert.equal(ws.setupName, "demo-services-install");
-  assert.equal(ws.setupFields.command.value, "npm install");
-  assert.equal(ws.setupFields.node_modules_volume.value, "node-modules");
+  assert.equal(
+    ws.setupFields.command.value,
+    "npm ci",
+    "a lockfile means an install that can't rewrite it",
+  );
+  assert.equal(ws.setupFields.node_modules_volume.value, "demo-services-node-modules");
 });
 
 test("pnpm-workspace.yaml selects pnpm and its package globs", () => {
@@ -59,6 +63,17 @@ test("pnpm-workspace.yaml selects pnpm and its package globs", () => {
   assert.equal(ws.pm, "pnpm");
   assert.deepEqual(ws.packageDirs, ["services/api", "services/group/worker"]);
   assert.equal(ws.setupFields.command.value, "corepack enable && pnpm install");
+});
+
+test("a pnpm lockfile gives a frozen install", () => {
+  const root = fixture({
+    "package.json": { name: "root" },
+    "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+  });
+  assert.equal(
+    detectWorkspace(ctxFor(root)).setupFields.command.value,
+    "corepack enable && pnpm install --frozen-lockfile",
+  );
 });
 
 test("negated workspace patterns exclude", () => {
@@ -81,4 +96,10 @@ test("a single-package repo still gets a setup service", () => {
 test("an existing fragment's setup service name is reused", () => {
   const root = fixture({ "package.json": { workspaces: ["apps/*"] } }, "demo-services");
   assert.equal(detectWorkspace(ctxFor(root), "demo-install").setupName, "demo-install");
+});
+
+test("an existing fragment's node_modules volume name is reused", () => {
+  const root = fixture({ "package.json": { workspaces: ["apps/*"] } }, "demo-services");
+  const ws = detectWorkspace(ctxFor(root), "demo-install", "node-modules");
+  assert.equal(ws.setupFields.node_modules_volume.value, "node-modules");
 });
