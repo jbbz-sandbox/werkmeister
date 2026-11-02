@@ -52,6 +52,7 @@ import {
   loadServices,
   type ServicesConfig,
 } from "../../config.js";
+import { repoDirs } from "../../standards.js";
 import { tempHomeWrapper } from "../../temp_home.js";
 import { readAutonomous, readAutoStop, readModel } from "../../workspace_prompts.js";
 
@@ -524,7 +525,8 @@ const permissionsRecord = (workspaceRoot: string) =>
  * git. Each command gets the container form the agent is told to run, plus the
  * bare command as a prefix, plus the bare command through *tempHome* (the
  * form werkmeister-context.md states; never the wrapper alone, which runs anything).
- * A service with no command gets none.
+ * A service with no command gets none. Each of *builtClis* (SW-172) also gets
+ * the wrapped form: the temp HOME is what makes running it safe to pre-approve.
  */
 export function buildAllowRules(
   feature: string,
@@ -532,6 +534,7 @@ export function buildAllowRules(
   servicesConfig: ServicesConfig,
   archetypes: ArchetypeRegistry,
   tempHome = "",
+  builtClis: string[] = [],
 ): string[] {
   const rules: string[] = [];
   for (const svc of services) {
@@ -539,6 +542,7 @@ export function buildAllowRules(
     if (cmd) rules.push(`Bash(${containerTestCommand(feature, svc, cmd)})`, `Bash(${cmd}:*)`);
     if (cmd && tempHome) rules.push(`Bash(${tempHome} ${cmd}:*)`);
   }
+  if (tempHome) for (const cli of builtClis) rules.push(`Bash(${tempHome} ${cli}:*)`);
   return [...new Set([...rules, ...READ_ONLY_GIT_RULES])];
 }
 
@@ -573,16 +577,14 @@ export function workspaceAllowRules(
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  const wrapper = tempHomeWrapper(workspaceRoot);
+  const builtClis = repoDirs(workspaceRoot)
+    .map((d) => path.join(d, "apps", "cli", "werkmeister"))
+    .filter((f) => fs.existsSync(f));
   const rules =
     feature && services.length
-      ? buildAllowRules(
-          feature,
-          services,
-          loadServices(),
-          loadArchetypes(),
-          tempHomeWrapper(workspaceRoot),
-        )
-      : [...READ_ONLY_GIT_RULES];
+      ? buildAllowRules(feature, services, loadServices(), loadArchetypes(), wrapper, builtClis)
+      : buildAllowRules("", [], {}, {}, wrapper, builtClis);
   return autonomous ? [...new Set([...rules, ...autonomousRules(feature, services)])] : rules;
 }
 
