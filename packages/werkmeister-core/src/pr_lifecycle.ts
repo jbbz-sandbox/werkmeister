@@ -799,35 +799,51 @@ async function gateChecks(
     }
   }
 
+  // A branch id maps to the compose id that owns the same path.
+  const toRendered = (s: string): string | undefined => {
+    if (rendered.includes(s)) return s;
+    const at = Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>).find(
+      ([, name]) => name === s,
+    )?.[0];
+    return at === undefined
+      ? undefined
+      : ((machineRepo["path_mappings"] ?? {}) as Record<string, string>)[at];
+  };
+  const renamed = touched.filter((s) => toRendered(s) && toRendered(s) !== s);
+  if (renamed.length)
+    add(
+      "registry",
+      true,
+      `compose.yml still names ${renamed.map((s) => `${s} as ${toRendered(s)}`).join(", ")} — ` +
+        "resync the machine registry with `werkmeister registry`",
+    );
+  const tested = touched.filter(
+    (s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes),
+  );
+  // A sibling can differ in image, toolchain and node_modules, so each test gets its own container (SW-336).
+  const ownStarts = [
+    ...new Set(tested.map(toRendered).filter((s): s is string => Boolean(s))),
+  ].filter((s) => !running.has(containerOf(feature, s)));
+  if (!(await portsFree(ownStarts))) return { ok: false, checks };
+  for (const svc of ownStarts) {
+    touchExecMarker(ws);
+    try {
+      await deps.startService(ws, feature, svc);
+      running.add(containerOf(feature, svc));
+      started.push(containerOf(feature, svc));
+    } catch (e) {
+      add(`start ${svc}`, false, e instanceof Error ? e.message : String(e));
+    }
+  }
+
   const repoServices = (repo["services"] ?? []) as string[];
-  const needsContainer =
-    releaseRuns ||
-    Boolean(repo["lint"]) ||
-    touched.some((s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes));
+  const needsContainer = releaseRuns || Boolean(repo["lint"]) || tested.some((s) => !toRendered(s));
   if (needsContainer && !repoServices.some(containerFor)) {
-    // A branch id maps to the compose id that owns the same path.
-    const toRendered = (s: string): string | undefined => {
-      if (rendered.includes(s)) return s;
-      const at = Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>).find(
-        ([, name]) => name === s,
-      )?.[0];
-      return at === undefined
-        ? undefined
-        : ((machineRepo["path_mappings"] ?? {}) as Record<string, string>)[at];
-    };
-    const renamed = touched.filter((s) => toRendered(s) && toRendered(s) !== s);
-    if (renamed.length)
-      add(
-        "registry",
-        true,
-        `compose.yml still names ${renamed.map((s) => `${s} as ${toRendered(s)}`).join(", ")} — ` +
-          "resync the machine registry with `werkmeister registry`",
-      );
     const candidates = [
       ...touched.map(toRendered).filter((s): s is string => Boolean(s)),
       ...rendered,
     ];
-    // Any one container serves the whole repo (containerFor's sibling fallback); an
+    // Lint and release are repo-wide, so any one container serves them; an
     // idle one only sleeps, where a web service would start its dev server.
     const pick =
       candidates.find((s) => IDLE_SERVICE_TYPES.includes(deps.services[s]?.["type"] ?? "")) ??
@@ -871,7 +887,13 @@ async function gateChecks(
       );
       continue;
     }
-    const container = containerFor(svc);
+    const own = toRendered(svc);
+    // Only a service compose.yml doesn't define falls back to a sibling's container.
+    const container = own
+      ? running.has(containerOf(feature, own))
+        ? containerOf(feature, own)
+        : null
+      : containerFor(svc);
     if (!container) {
       add(
         `test ${svc}`,

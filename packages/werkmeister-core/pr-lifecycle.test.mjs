@@ -707,7 +707,7 @@ test("gate: a touched service with a test command but no container fails unless 
   });
   try {
     const g = await gate(ws, noContainers(ws));
-    assert.deepEqual(failed(g), ["start lib", "test api"]);
+    assert.deepEqual(failed(g), ["start api", "test api"]);
     assert.match(
       g.checks.find((c) => c.name === "test api").detail,
       /no running container for this repo/,
@@ -747,17 +747,63 @@ function noServices(ws, table = []) {
   return d;
 }
 
-test("gate starts one idle container for a repo with none, tests through it, then stops it (SW-34)", async () => {
+test("gate starts the touched service's container for a repo with none, tests through it, then stops it (SW-34, SW-336)", async () => {
   const ws = icmWorkspace();
   try {
     const d = noServices(ws);
     const g = await gate(ws, d);
     assert.deepEqual(failed(g), []);
-    assert.deepEqual(d.started, ["feat-lib"], "the idle lib, not the touched api's server");
-    assert.ok(d.calls.includes("docker exec feat-lib sh -c npm test -w api"), d.calls.join("\n"));
-    assert.ok(d.calls.includes("docker exec feat-lib sh -c npx changeset status"));
-    assert.equal(d.calls.at(-1), "docker stop feat-lib");
-    assert.match(g.checks.find((c) => c.name === "containers").detail, /started feat-lib/);
+    assert.deepEqual(
+      d.started,
+      ["feat-api"],
+      "api's own container; it also serves the release check",
+    );
+    assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api"), d.calls.join("\n"));
+    assert.ok(d.calls.includes("docker exec feat-api sh -c npx changeset status"));
+    assert.equal(d.calls.at(-1), "docker stop feat-api");
+    assert.match(g.checks.find((c) => c.name === "containers").detail, /started feat-api/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a touched web service's test runs in its own container, started on demand, not a sibling's (SW-336)", async () => {
+  const services = {
+    ...REGISTRY.services,
+    web: { type: "web", port_offset: 4, test: "pnpm --filter web build", setup_service: "install" },
+  };
+  const app = REGISTRY.repos.app;
+  const repos = {
+    app: {
+      ...app,
+      services: [...app.services, "web"],
+      path_mappings: { ...app.path_mappings, "apps/web": "web" },
+    },
+  };
+  const diffWeb = [/diff --name-only/, { stdout: "apps/web/x.ts\n" }];
+  const ws = icmWorkspace();
+  try {
+    // Nothing running: the gate must start web itself (compose brings up its setup service).
+    const none = noServices(ws, [diffWeb]);
+    Object.assign(none, { services, repos });
+    const g = await gate(ws, none);
+    assert.ok(none.started.includes("feat-web"), `started: ${none.started}`);
+    assert.ok(
+      none.calls.includes("docker exec feat-web sh -c pnpm --filter web build"),
+      none.calls.join("\n"),
+    );
+    assert.deepEqual(failed(g), []);
+
+    // A sibling (api) already runs: web still gets its own container, not api's.
+    const sib = deps([diffWeb], { services, repos });
+    const r = stubRun([[/^docker ps/, { stdout: "feat-api\n" }], diffWeb]);
+    Object.assign(sib, { run: r.run, calls: r.calls });
+    await gate(ws, sib);
+    assert.ok(
+      !r.calls.includes("docker exec feat-api sh -c pnpm --filter web build"),
+      r.calls.join("\n"),
+    );
+    assert.ok(sib.started.includes("feat-web"), `started: ${sib.started}`);
   } finally {
     clean(ws);
   }
@@ -769,7 +815,7 @@ test("gate stops the container it started when a test fails (SW-34)", async () =
     const d = noServices(ws, [[/npm test -w api/, { code: 1, stdout: "1 failing" }]]);
     const g = await gate(ws, d);
     assert.deepEqual(failed(g), ["test api"]);
-    assert.equal(d.calls.at(-1), "docker stop feat-lib");
+    assert.equal(d.calls.at(-1), "docker stop feat-api");
   } finally {
     clean(ws);
   }
@@ -868,9 +914,12 @@ test("gate: baseline checks only touched local api/web services (SW-34)", async 
     assert.deepEqual(baselines(await gate(ws, deps([DIFF_API]))), ["baseline api"]);
     const libOnly = deps([]);
     libOnly.run = stubRun([[/^docker ps/, { stdout: "feat-lib\n" }], DIFF_API]).run;
+    libOnly.startService = async () => {
+      throw new Error("compose up failed");
+    };
     const g = await gate(ws, libOnly);
-    assert.deepEqual(failed(g), ["baseline api"]);
-    assert.deepEqual(libOnly.started, [], "a running sibling serves the tests");
+    // A running sibling does not serve api's test, and api's own container never came up.
+    assert.deepEqual(failed(g), ["start api", "test api", "baseline api"]);
   } finally {
     clean(ws);
   }
