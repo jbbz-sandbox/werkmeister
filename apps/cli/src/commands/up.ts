@@ -11,7 +11,7 @@
  */
 
 import type { UpResult } from "werkmeister-core/lifecycle";
-import { startService, up as upFeature } from "werkmeister-core/lifecycle";
+import { reloadProxy, startService, up as upFeature } from "werkmeister-core/lifecycle";
 import { Colors, error, resolveWorkspace } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 import { interruptSignal } from "../lib/interrupt.js";
@@ -87,6 +87,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.service) {
     const service = args.service as string;
     await startService(feature, workspace, service);
+    // startService skips Caddy (gate path); unrouted, the cookie hits another feature (SW-338).
+    await reloadProxy();
     console.log(`${Colors.GREEN}Started ${feature}-${service}${Colors.RESET}`);
     return;
   }
