@@ -131,6 +131,17 @@ test("buildAllowRules: the command through the temp-HOME wrapper, never the wrap
   assert.ok(!rules.includes("Bash(/ws/w:*)"));
 });
 
+test("buildAllowRules: a built CLI runs through the temp-HOME wrapper, never the wrapper alone (SW-172)", () => {
+  const cli = "/ws/w/werkmeister/apps/cli/werkmeister";
+  const rules = buildAllowRules("feat", [], {}, {}, "/ws/w/.werkmeister/bin/with-temp-home", [cli]);
+  assert.ok(
+    rules.includes(`Bash(/ws/w/.werkmeister/bin/with-temp-home ${cli}:*)`),
+    rules.join("\n"),
+  );
+  assert.ok(!rules.includes("Bash(/ws/w/.werkmeister/bin/with-temp-home:*)"));
+  assert.ok(!buildAllowRules("feat", [], {}, {}, "", [cli]).some((r) => r.includes(cli)));
+});
+
 test("buildAllowRules: an archetype's {service} template is expanded", () => {
   const rules = buildAllowRules(
     "feat",
@@ -146,6 +157,19 @@ test("buildAllowRules: an archetype's {service} template is expanded", () => {
 
 test("workspaceAllowRules: no .env means the git rules alone, without the registry", () => {
   assert.deepEqual(workspaceAllowRules(workspace()), READ_ONLY_GIT_RULES);
+});
+
+test("workspaceAllowRules: a werkmeister worktree gets the wrapped built-CLI rule, no .env needed (SW-172)", () => {
+  const root = workspace();
+  const cli = path.join(root, "werkmeister", "apps", "cli", "werkmeister");
+  fs.mkdirSync(path.dirname(cli), { recursive: true });
+  fs.writeFileSync(path.join(root, "werkmeister", ".git"), "gitdir: x\n");
+  fs.writeFileSync(cli, "#!/bin/bash\n");
+  const wrapper = path.join(root, ".werkmeister", "bin", "with-temp-home");
+  assert.deepEqual(workspaceAllowRules(root, false), [
+    `Bash(${wrapper} ${cli}:*)`,
+    ...READ_ONLY_GIT_RULES,
+  ]);
 });
 
 test("jit refresh writes its hooks and the same allow rules", async () => {
