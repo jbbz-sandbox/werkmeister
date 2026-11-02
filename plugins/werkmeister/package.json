@@ -1,0 +1,16 @@
+{
+  "name": "werkmeister-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "types": "node scripts/gen-types.mjs",
+    "typecheck": "node scripts/gen-types.mjs && tsc -p . --noEmit",
+    "test": "claude plugin validate . && claude plugin test .",
+    "check": "pnpm run typecheck && pnpm run test"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

@@ -106,29 +106,19 @@ claude plugin validate ./plugins/werkmeister
 claude plugin validate .   # validates the marketplace manifest
 ```
 
-The full check, from `plugins/werkmeister`:
+The full check, from the repo root after `corepack pnpm install` (or `pnpm check` inside
+`plugins/werkmeister`):
 
 ```
-claude plugin validate . && claude plugin test . && npx -p typescript tsc -p . --noEmit
+pnpm --filter werkmeister-plugin check
 ```
 
-`tsc` reads its types from `.claude-plugin/types/`, which is gitignored: Claude Code writes it
-beside the plugin the first time a session loads the folder as a plugin (`claude --plugin-dir
-plugins/werkmeister`, or a hot-reloaded dev mod). A fresh worktree has none, so `tsc` reports
-`Cannot read file '.claude-plugin/types/tsconfig.json'`. The types are Claude Code's, not this
-repo's, so they are not committed. Until a session has loaded the folder, point `tsc` at the
-`claude-code.d.ts` the `plugin-authoring` skill writes (its path is printed when the skill loads)
-with a throwaway tsconfig kept outside the repo:
-
-```json
-{ "compilerOptions": { "target": "es2023", "lib": ["es2023"], "types": [], "module": "esnext",
-    "moduleResolution": "bundler", "strict": true, "noUncheckedIndexedAccess": true, "noEmit": true,
-    "skipLibCheck": true, "jsx": "react", "jsxFactory": "h", "jsxFragmentFactory": "Fragment" },
-  "include": ["<path to claude-code.d.ts>", "<repo>/plugins/werkmeister/hooks", "<repo>/plugins/werkmeister/types"] }
-```
-
-then `npx -p typescript tsc -p <that tsconfig>`. TypeScript is not a dependency here, so a bare
-`npx tsc` fails with "This is not the tsc command you are looking for".
+It regenerates the gitignored `.claude-plugin/types/` that `tsc` reads, then runs
+`tsc -p . --noEmit`, `claude plugin validate .` and `claude plugin test .`. The types are Claude
+Code's, so `plugins/werkmeister/scripts/gen-types.mjs` has the `claude` on your PATH write them, by
+loading the folder as a plugin under a throwaway HOME with no login: no API call, and the types
+always match your installed Claude Code. CI runs the same `typecheck` and `test` scripts through
+turbo, against the Claude Code version pinned in `.github/workflows/ci.yml`.
 
 ## Migrating from `sandbox-tools`
 
