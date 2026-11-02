@@ -1,5 +1,15 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.64.0
+
+### Minor Changes
+
+- a34b387: A repo can carry its own standards in `<repo>/.werkmeister/standards/`, laid out like the global standards tree. A workspace that checks out the repo loads them on top of `overrides.standards_dir`, and they are active there without an archetype naming them (`standards_override.remove` still drops one). Their generated `w9r-*-standard` skills link to the repo they came from. `werkmeister standards check` also validates every repo tree under `paths.repos_root` and fails when a repo module reuses a global module's `domain`; the global one wins at load time. `checkStandards()` returns the repo trees it checked as `repoTrees`, and `loadStandardsModules` takes the workspace's repo paths as a second argument.
+
+### Patch Changes
+
+- 90c30e8: SW-335: `werkmeister machine detect` names the shared install's `node_modules_volume` `<repo>-node-modules` instead of `node-modules`, so two repos in one workspace no longer share one install volume (an existing fragment's name is kept on a re-run). With a lockfile, the install command is npm's clean install or `pnpm install --frozen-lockfile`, so an up can't rewrite it. New docs page: docs/repo-setup.md, on setting up a repo for Werkmeister.
+
 ## 0.63.0
 
 ### Minor Changes
