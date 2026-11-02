@@ -27,6 +27,7 @@ import {
   type ReposConfig,
   type ServicesConfig,
   sandboxHome,
+  servicesYamlPath,
 } from "./config.js";
 import { GATE_COMPOSE_FILE, renderGateCompose } from "./generate.js";
 import { updateNoteStatus } from "./graduate.js";
@@ -39,15 +40,21 @@ import {
   lastExecMarker,
   liveSessions,
   readServicesFromWorkspace,
+  runningFeatures,
   startService,
   stop as stopFeature,
   stopIdle,
 } from "./lifecycle.js";
-import { originSlug } from "./machine_setup.js";
+import { originSlug, type Step } from "./machine_setup.js";
 import { isQuestionFile } from "./md_form.js";
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
-import { branchRegistry, type MergedRegistry } from "./registry_sync.js";
+import {
+  branchRegistry,
+  type MergedRegistry,
+  registryChanges,
+  syncRegistry,
+} from "./registry_sync.js";
 import { info } from "./reporter.js";
 import { loadNote } from "./resources.js";
 import {
@@ -138,6 +145,10 @@ export interface Deps {
   sessionBusy: (ws: string, session: string, cwd: string | null) => Promise<boolean>;
   /** The registry as built from *worktree*'s own fragment for *repo* (registry_sync.ts), or null. */
   branchRegistry: (repo: string, worktree: string) => MergedRegistry | null;
+  /** Regenerate the machine registry (registry_sync.ts); never throws. */
+  syncRegistry: () => Step[];
+  /** Each running feature and its local services; [] when docker can't be read. */
+  runningServices: () => { feature: string; services: string[] }[];
   /** Stop the workspace's feature containers (SW-39); one line, never throws. */
   stop: (ws: string) => Promise<string>;
   /** `os.loadavg()` and the core count, read before and after each gate check (SW-209). */
@@ -216,6 +227,13 @@ export function defaultDeps(): Deps {
       );
     },
     branchRegistry: (repo, worktree) => branchRegistry(repo, worktree),
+    // generatedOnly: a sync on merge never converts a hand-written registry behind the person's back (SW-340).
+    syncRegistry: () => syncRegistry({ generatedOnly: true }),
+    runningServices: () =>
+      (runningFeatures() ?? []).map((r) => ({
+        feature: r.feature,
+        services: readServicesFromWorkspace(r.workspace),
+      })),
     stop: stopWorkspace,
     hostLoad: readHostLoad,
     sleep: (ms) => delay(ms),
@@ -1215,13 +1233,14 @@ export async function refreshPrStatus(
   for (const f of readPrFiles(ws)) {
     const before = statusOf(f);
     const reviewBefore = f.fm["review"];
+    const registryBefore = f.fm["registry_sync"];
     if (opts.gh !== false && before === "open" && f.fm["url"]) {
       const v = await deps.run("gh", [
         "pr",
         "view",
         String(f.fm["url"]),
         "--json",
-        "state,mergeCommit,reviewDecision,latestReviews,number,headRefOid,baseRefName,mergeable,statusCheckRollup,reviews,comments",
+        "state,mergeCommit,reviewDecision,latestReviews,number,headRefOid,baseRefName,mergeable,statusCheckRollup,reviews,comments,files",
       ]);
       if (v.code !== 0) {
         lines.push(`${f.stem}: gh pr view failed — ${v.stderr.trim()}`);
@@ -1235,7 +1254,11 @@ export async function refreshPrStatus(
         (view.latestReviews ?? []).some((r) => r.state === "CHANGES_REQUESTED");
       const url = String(f.fm["url"]);
       if (view.state === "MERGED") {
-        writePrFields(f, { status: "merged", merge_sha: view.mergeCommit?.oid ?? "" });
+        writePrFields(f, {
+          status: "merged",
+          merge_sha: view.mergeCommit?.oid ?? "",
+          ...(touchesFragment(view) ? { registry_sync: "pending" } : {}),
+        });
         seen.merged.push(url);
       } else if (view.state === "CLOSED") {
         writePrFields(f, {
@@ -1254,6 +1277,7 @@ export async function refreshPrStatus(
         seen.reReview.push(url);
       }
     }
+    lines.push(...(await syncRegistryOnMerge(ws, f, deps)));
     if (statusOf(f) === "merged") {
       const repo = deps.repos[f.dir] ?? {};
       // skip_release only skips the gate's release check; a ship: tag repo still ships with its tag (#145).
@@ -1285,7 +1309,11 @@ export async function refreshPrStatus(
     }
     const after = statusOf(f);
     if (after === "shipped" && before !== "shipped") seen.shipped.push(f);
-    if (after !== before || f.fm["review"] !== reviewBefore)
+    if (
+      after !== before ||
+      f.fm["review"] !== reviewBefore ||
+      f.fm["registry_sync"] !== registryBefore
+    )
       changed.push(path.relative(ws, f.path));
     lines.push(
       `${f.stem}: ${after}${f.fm["release"] ? ` (${f.fm["release"]})` : ""}${f.fm["url"] ? ` ${f.fm["url"]}` : ""}`,
@@ -1297,6 +1325,79 @@ export async function refreshPrStatus(
   if (changed.length)
     lines.push((await deps.commitRecord(ws, "chore: record PR status", changed)).message);
   return { lines, changed: changed.length > 0, views };
+}
+
+// The literal path: GitHub always reports `/`, while FRAGMENT_REL is built with path.join.
+const touchesFragment = (v: PrView): boolean =>
+  (v.files ?? []).some((f) => f.path === ".werkmeister/services.yaml");
+
+const readText = (file: string): string | null =>
+  fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
+
+/**
+ * A merged PR changed its repo's registry fragment (SW-340): with `repo.sync_on_merge: auto`,
+ * fast-forward the clean source checkout and sync; otherwise, or when that can't run, flag
+ * the card. `pending` runs once; `needed` retries only under auto. Never throws.
+ */
+async function syncRegistryOnMerge(ws: string, f: PrFile, deps: Deps): Promise<string[]> {
+  const state = f.fm["registry_sync"];
+  const auto = deps.repos[f.dir]?.["sync_on_merge"] === "auto";
+  if (state !== "pending" && !(state === "needed" && auto)) return [];
+  const url = String(f.fm["url"] ?? "");
+  const notice = `registry sync needed: ${f.dir} fragment changed in ${url}`;
+  const fail = (why?: string): string[] => {
+    writePrFields(f, { registry_sync: "needed" });
+    flagNeedsYou(ws, notice);
+    return [why ? `${notice} (${why})` : notice];
+  };
+  if (!auto) return fail();
+  try {
+    const src = await deps.sourceOf(path.join(ws, f.dir));
+    if (!src) return fail("no source checkout");
+    const base = String(f.fm["base"] ?? "");
+    const branch = (
+      await deps.run("git", ["-C", src, "rev-parse", "--abbrev-ref", "HEAD"])
+    ).stdout.trim();
+    if (branch !== base) return fail(`checkout is on ${branch || "?"}, not ${base}`);
+    const dirty = await deps.run("git", [
+      "-C",
+      src,
+      "status",
+      "--porcelain",
+      "--untracked-files=no",
+    ]);
+    if (dirty.code !== 0 || dirty.stdout.trim()) return fail("checkout has uncommitted changes");
+    const pull = await deps.run("git", ["-C", src, "pull", "--ff-only"]);
+    if (pull.code !== 0) return fail(`pull failed: ${pull.stderr.trim().split("\n")[0]}`);
+    const target = servicesYamlPath();
+    const before = readText(target);
+    const [step] = deps.syncRegistry();
+    if (!step?.ok) return fail(`sync failed: ${step?.detail ?? "no result"}`);
+    const c = registryChanges(before, readText(target) ?? "");
+    writePrFields(f, { registry_sync: "synced" });
+    const groups = (["added", "removed", "changed"] as const)
+      .filter((k) => c[k].length)
+      .map((k) => `${k} ${c[k].join(", ")}`);
+    const lines = [
+      `registry synced for ${f.dir} (${url}): ${groups.join("; ") || "no service changes"}`,
+    ];
+    const stale = new Set(
+      [...c.changed, ...c.removed]
+        .filter((l) => l.startsWith("services.") || l.startsWith("setup_services."))
+        .map((l) => l.slice(l.indexOf(".") + 1)),
+    );
+    for (const r of deps.runningServices()) {
+      const hit = r.services.filter((s) => stale.has(s));
+      // `feature up`, not `restart`: only up re-renders compose.yml from the new registry.
+      if (hit.length)
+        lines.push(
+          `${r.feature} runs changed ${hit.join(", ")}: run werkmeister feature up ${r.feature} to apply`,
+        );
+    }
+    return lines;
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : String(e));
+  }
 }
 
 const shippedComment = (files: PrFile[]): string =>
@@ -1413,6 +1514,7 @@ interface PrView {
     submittedAt?: string;
   }>;
   comments?: Array<{ author?: { login?: string }; body?: string; createdAt?: string }>;
+  files?: Array<{ path?: string }>;
 }
 
 export type WakeEvent =
@@ -1834,17 +1936,22 @@ export async function adoptPr(
     if (!opts.pr) throw new WorkspaceError("Give a PR number or URL, or --no-pr <reason>.");
     const v = await deps.run(
       "gh",
-      ["pr", "view", opts.pr, "--json", "url,headRefName,baseRefName,title,state,mergeCommit"],
+      [
+        "pr",
+        "view",
+        opts.pr,
+        "--json",
+        "url,headRefName,baseRefName,title,state,mergeCommit,files",
+      ],
       path.join(ws, repo),
     );
     if (v.code !== 0) throw new WorkspaceError(`gh pr view ${opts.pr} failed — ${v.stderr.trim()}`);
-    const pr = JSON.parse(v.stdout) as {
+    const pr = JSON.parse(v.stdout) as PrView & {
       url: string;
       headRefName: string;
       baseRefName: string;
       title: string;
       state: string;
-      mergeCommit?: { oid?: string } | null;
     };
     if (pr.state !== "MERGED" && pr.state !== "OPEN")
       throw new WorkspaceError(
@@ -1866,6 +1973,7 @@ export async function adoptPr(
       status: merged ? "merged" : "open",
       url: pr.url,
       ...(merged ? { merge_sha: pr.mergeCommit?.oid ?? "" } : {}),
+      ...(merged && touchesFragment(pr) ? { registry_sync: "pending" } : {}),
       adopted: true,
     };
     title = pr.title;

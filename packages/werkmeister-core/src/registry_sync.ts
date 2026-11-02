@@ -376,6 +376,39 @@ function orphanedEntries(oldText: string, merged: MergedRegistry): string[] {
   return orphans;
 }
 
+export interface RegistryChanges {
+  added: string[];
+  removed: string[];
+  changed: string[];
+}
+
+/** `section.name` entries of the fragment sections that differ between two registry texts; null *before* = all added. */
+export function registryChanges(before: string | null, after: string): RegistryChanges {
+  const sections = (text: string | null): YamlMap => {
+    try {
+      const doc = text === null ? null : parseYaml(text);
+      return isDict(doc) ? doc : {};
+    } catch {
+      return {};
+    }
+  };
+  const old = sections(before);
+  const now = sections(after);
+  const out: RegistryChanges = { added: [], removed: [], changed: [] };
+  for (const section of FRAGMENT_KEYS) {
+    const a = isDict(old[section]) ? old[section] : {};
+    const b = isDict(now[section]) ? now[section] : {};
+    for (const name of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      const label = `${section}.${name}`;
+      if (!(name in a)) out.added.push(label);
+      else if (!(name in b)) out.removed.push(label);
+      else if (JSON.stringify(a[name]) !== JSON.stringify(b[name])) out.changed.push(label);
+    }
+  }
+  for (const list of Object.values(out)) list.sort();
+  return out;
+}
+
 export interface SyncRegistryOptions {
   /** Defaults to `paths.repos_root`. */
   reposRoot?: string;

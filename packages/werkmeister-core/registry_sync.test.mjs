@@ -26,6 +26,7 @@ import {
   inheritedK8sContext,
   mergeRegistry,
   RegistryError,
+  registryChanges,
   renderRegistry,
   syncRegistry,
 } from "./dist/registry_sync.js";
@@ -625,4 +626,23 @@ test("branchRegistry honours disabled_fragments but never drops the gated repo (
   const reg = branchRegistry("demo", worktree, repos);
   assert.deepEqual(Object.keys(reg.services), ["api"]);
   assert.equal(reg.disabled_fragments, undefined);
+});
+
+test("registryChanges names added, removed and changed entries per section (SW-340)", () => {
+  const before =
+    "# GENERATED\nservices:\n  api: { command: node src/server.js }\n  old: { port_offset: 4 }\n" +
+    "infrastructure:\n  db: { image: postgres }\n";
+  const after =
+    "# GENERATED\nservices:\n  api: { command: node src/server.ts }\n  web: { port_offset: 5 }\n" +
+    "setup_services:\n  api-setup: { command: npm ci }\ninfrastructure:\n  db: { image: postgres }\n";
+  assert.deepEqual(registryChanges(before, after), {
+    added: ["services.web", "setup_services.api-setup"],
+    removed: ["services.old"],
+    changed: ["services.api"],
+  });
+  assert.deepEqual(registryChanges(null, "services:\n  b: {}\n  a: {}\n"), {
+    added: ["services.a", "services.b"],
+    removed: [],
+    changed: [],
+  });
 });

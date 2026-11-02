@@ -1321,7 +1321,7 @@ Regenerate ~/.werkmeister/services.yaml from every \<repo>/.werkmeister/services
 
 - `--check`: Report drift without writing; nonzero exit when stale.
 
-Regenerates `~/.werkmeister/services.yaml` from every repo's `.werkmeister/services.yaml` fragment under `paths.repos_root`, merged under `~/.werkmeister/services.local.yaml`. It is the same step `werkmeister machine setup` runs, on its own: use it after cloning a new repo.
+Regenerates `~/.werkmeister/services.yaml` from every repo's `.werkmeister/services.yaml` fragment under `paths.repos_root`, merged under `~/.werkmeister/services.local.yaml`. It is the same step `werkmeister machine setup` runs, on its own: use it after cloning a new repo. `werkmeister pr status` runs it too when a merged PR changes a fragment and the repo sets `sync_on_merge: auto` ([Ship detection](workspace-lifecycle.md#ship-detection-registry-repo)).
 
 **Examples**
 

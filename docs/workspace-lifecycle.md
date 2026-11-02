@@ -129,6 +129,7 @@ repo:
   release_check: pnpm changeset status --since=origin/main
   lint: pnpm exec biome ci .                  # the gate's lint row; any ship mode
   no_service_paths: [docs, .changeset, .gitignore, README.md]  # prefixes that touch no service in the gate
+  sync_on_merge: warn                         # warn (default) | auto: when a merged PR changes this fragment
 ```
 
 `werkmeister registry sync` merges this into `repos.<repo>` of `~/.werkmeister/services.yaml`.
@@ -137,6 +138,7 @@ repo:
 - With `ship: tag`, it is shipped once a tag matching `release_tag` contains its merge commit (`git tag --contains`). A PR file with `release: none` needs no release, so it is shipped as soon as it merges.
 - `release_check` stops a PR that would never reach a release. For changesets, a branch that changes a package without a changeset fails it.
 - `lint` is the repo's lint/format check (the gate's `lint` row). Set it to CI's own command so a format error fails before the PR opens.
+- `sync_on_merge` covers a merged PR whose diff changes this fragment (SW-340). With `warn`, `pr status` prints `registry sync needed: <repo> fragment changed in <url>` and puts it on the workspace card. With `auto`, it fast-forwards the repo's source checkout (only when it is on the PR's base branch with no uncommitted changes), runs `registry sync` (a hand-written registry is left as is), prints the services added, removed or changed, and names each running feature that uses a changed service with `werkmeister feature up <feature>` to apply it. It restarts nothing. When the checkout isn't ready, `auto` prints the notice and tries again on each later pass. A machine pins its own choice in `~/.werkmeister/services.local.yaml` under `repos.<repo>.sync_on_merge`, which wins over the fragment. The PR file's `registry_sync:` records the step: `pending`, `needed` or `synced`.
 
 ## Commands
 
@@ -144,7 +146,7 @@ repo:
 |---|---|
 | `werkmeister pr gate [repo]` | run the gate, change nothing. Skips a merged PR file whose worktree has a follow-up in progress. `repo` is a worktree (its PR files) or one PR file's name (`werkmeister-why-page`), for every `pr` action. `--tests` runs only the lint and test rows, in the container, on the uncommitted tree, with no PR file needed: the implement stage's container run (SW-316) |
 | `werkmeister pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to `in_review` ([Issue status](#issue-status)), commit and push the PR file on the record branch |
-| `werkmeister pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`, and `review: changes_requested` while a review asks for changes. For `merged` files, write `shipped` (+ `release`) per the registry. Moves the issue per [Issue status](#issue-status). Commits and pushes the changed PR files on the record branch. |
+| `werkmeister pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`, and `review: changes_requested` while a review asks for changes. For `merged` files, write `shipped` (+ `release`) per the registry. When the merged PR changed the repo's fragment, sync or warn per `sync_on_merge` ([Ship detection](#ship-detection-registry-repo)). Moves the issue per [Issue status](#issue-status). Commits and pushes the changed PR files on the record branch. |
 | `werkmeister pr new <worktree> --slug <slug>` | after that worktree's PRs merged: cut `<branch>-<slug>` from `origin/<base>` and write a draft `pr-<worktree>-<slug>.md` ([Follow-up PR](#follow-up-pr)) |
 | `werkmeister issue start` | the first stage or phase began: move the workspace's issue to `in_progress` ([Issue status](#issue-status)), then fast-forward each code worktree with no commits of its own to `origin/<base>`, or print how far behind it is |
 | `werkmeister pr adopt <pr-number\|url> [repo]` | for a fix that landed outside the workspace: write `pr-<repo>.md` from `gh pr view` (`repo`, `branch`, `base`, title, `url`, `merge_sha`, `status: merged`, or `open` for an open PR, and `adopted: true`), then run `pr status` on it. `repo` defaults to the workspace's only code worktree. When `pr-<repo>.md` is taken, writes `pr-<repo>-<number>.md` with `worktree: <repo>`. Refuses if a PR file already has that PR's URL, or the PR closed unmerged. |
