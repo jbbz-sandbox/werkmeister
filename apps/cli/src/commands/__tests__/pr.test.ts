@@ -8,13 +8,14 @@ import { beforeEach, expect, it, type MockInstance, vi } from "vitest";
 vi.mock("werkmeister-core", () => ({
   adoptPr: vi.fn(),
   gatePrs: vi.fn(),
+  gateTests: vi.fn(),
   openPrs: vi.fn(),
   refreshPrStatus: vi.fn(),
   watchPrs: vi.fn(),
 }));
 vi.mock("werkmeister-core/pr_guard", () => ({ findRecordRoot: vi.fn() }));
 
-import { adoptPr, gatePrs, openPrs, refreshPrStatus, watchPrs } from "werkmeister-core";
+import { adoptPr, gatePrs, gateTests, openPrs, refreshPrStatus, watchPrs } from "werkmeister-core";
 import { findRecordRoot } from "werkmeister-core/pr_guard";
 import { run } from "../pr.js";
 
@@ -40,6 +41,13 @@ it("--no-wait reaches gatePrs and openPrs as { wait: false } (SW-209)", async ()
   expect(gatePrs).toHaveBeenCalledWith("/features/ws", undefined, undefined, { wait: false });
   await run({ action: "open", repo: "app", wait: false, json: false });
   expect(openPrs).toHaveBeenCalledWith("/features/ws", "app", undefined, { wait: false });
+});
+
+it("--tests reaches gateTests, not gatePrs (SW-316)", async () => {
+  vi.mocked(gateTests).mockResolvedValue({ ok: true, lines: [] });
+  await run({ action: "gate", repo: "app", tests: true, wait: false, json: false });
+  expect(gateTests).toHaveBeenCalledWith("/features/ws", "app", undefined, { wait: false });
+  expect(gatePrs).not.toHaveBeenCalled();
 });
 
 it("a failed gate exits 1", async () => {

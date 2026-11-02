@@ -164,6 +164,7 @@ export {
   callbackMessage,
   closeOut,
   gatePrs,
+  gateTests,
   type Lifecycle,
   lifecycleOf,
   newPr,

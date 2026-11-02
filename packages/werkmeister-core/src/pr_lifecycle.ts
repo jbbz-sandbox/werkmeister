@@ -64,6 +64,7 @@ import {
 } from "./sandbox.js";
 import { hostLoadLimit, portHolders } from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
+import { repoDirs } from "./standards.js";
 import { childEnv, toolBin } from "./tool_bins.js";
 import { writeUsageSnapshot } from "./usage_snapshot.js";
 import { loadConfigFile } from "./workspace_prompts.js";
@@ -496,13 +497,13 @@ export async function runGate(
   ws: string,
   file: PrFile,
   deps: Deps = defaultDeps(),
-  { wait = true }: { wait?: boolean } = {},
+  { wait = true, testsOnly = false }: { wait?: boolean; testsOnly?: boolean } = {},
 ): Promise<GateResult> {
   const started: string[] = [];
   const recreated: string[] = [];
   let result!: GateResult;
   try {
-    result = await gateChecks(ws, file, deps, started, recreated, wait);
+    result = await gateChecks(ws, file, deps, started, recreated, wait, testsOnly);
   } finally {
     fs.rmSync(path.join(ws, GATE_COMPOSE_FILE), { force: true });
     const feature = String(loadConfigFile(ws, null)["feature"] ?? readEnv(ws, "FEATURE")).trim();
@@ -606,8 +607,10 @@ async function gateChecks(
   started: string[],
   recreated: string[],
   wait: boolean,
+  // SW-316: the lint and test rows only, on the uncommitted tree, so implement sees container-only failures.
+  testsOnly = false,
 ): Promise<GateResult> {
-  const checks: GateCheck[] = [stagesCheck(ws)];
+  const checks: GateCheck[] = testsOnly ? [] : [stagesCheck(ws)];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
   const loadBudget = { leftMs: LOAD_WAIT_MS };
   // A failure ends with the host load, so a timeout under load reads as load (SW-209).
@@ -635,41 +638,47 @@ async function gateChecks(
     return res;
   };
 
-  const table = passTable(file.body);
-  add("acceptance", table === null, table ? `PR file ${table}` : "all PASS");
-  add("approved", statusOf(file) === "approved", `status: ${statusOf(file)}`);
-  add("repo", ...(await repoCheck(path.join(ws, file.dir), file, deps)));
-  // exercise.md is a file read too, so a malformed table fails before the tests (SW-286).
-  const skipExercise = reason(file.fm["skip_exercise"]);
-  if (skipExercise) add("exercise", true, `skipped: ${skipExercise}`);
-  else {
-    const evidence = exerciseFile(ws);
-    const evidenceProblem = evidence ? passTable(fs.readFileSync(evidence, "utf8")) : "is missing";
-    add(
-      "exercise",
-      evidenceProblem === null,
-      evidence
-        ? `${path.relative(ws, evidence)} ${evidenceProblem ?? "all PASS"}`
-        : "no exercise.md — record the exercise checks first",
-    );
-  }
-  // The PR-file checks are instant; the test commands can take ten minutes cold (SW-150).
-  if (checks.some((c) => !c.ok)) {
-    add("tests", false, "not run — fix the PR-file checks above first");
-    return { ok: false, checks };
+  if (!testsOnly) {
+    const table = passTable(file.body);
+    add("acceptance", table === null, table ? `PR file ${table}` : "all PASS");
+    add("approved", statusOf(file) === "approved", `status: ${statusOf(file)}`);
+    add("repo", ...(await repoCheck(path.join(ws, file.dir), file, deps)));
+    // exercise.md is a file read too, so a malformed table fails before the tests (SW-286).
+    const skipExercise = reason(file.fm["skip_exercise"]);
+    if (skipExercise) add("exercise", true, `skipped: ${skipExercise}`);
+    else {
+      const evidence = exerciseFile(ws);
+      const evidenceProblem = evidence
+        ? passTable(fs.readFileSync(evidence, "utf8"))
+        : "is missing";
+      add(
+        "exercise",
+        evidenceProblem === null,
+        evidence
+          ? `${path.relative(ws, evidence)} ${evidenceProblem ?? "all PASS"}`
+          : "no exercise.md — record the exercise checks first",
+      );
+    }
+    // The PR-file checks are instant; the test commands can take ten minutes cold (SW-150).
+    if (checks.some((c) => !c.ok)) {
+      add("tests", false, "not run — fix the PR-file checks above first");
+      return { ok: false, checks };
+    }
   }
 
   const dir = path.join(ws, file.dir);
-  const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
-  add(
-    "clean",
-    status.code === 0 && status.stdout.trim() === "",
-    status.code
-      ? status.stderr.trim()
-      : status.stdout.trim()
-        ? `uncommitted:\n${status.stdout.trimEnd()}`
-        : "clean",
-  );
+  if (!testsOnly) {
+    const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
+    add(
+      "clean",
+      status.code === 0 && status.stdout.trim() === "",
+      status.code
+        ? status.stderr.trim()
+        : status.stdout.trim()
+          ? `uncommitted:\n${status.stdout.trimEnd()}`
+          : "clean",
+    );
+  }
 
   // The shared registry holds main's fragment; a branch that renames packages
   // must be tested with its own `test:` filters and path mappings (SW-25).
@@ -729,7 +738,9 @@ async function gateChecks(
   };
 
   const base = String(file.fm["base"] ?? "main");
-  const diff = await deps.run("git", ["-C", dir, "diff", "--name-only", `origin/${base}...HEAD`]);
+  const diff = testsOnly
+    ? await uncommittedDiff(dir, base, deps)
+    : await deps.run("git", ["-C", dir, "diff", "--name-only", `origin/${base}...HEAD`]);
   if (diff.code !== 0) {
     add("tests", false, `cannot diff against origin/${base}: ${diff.stderr.trim()}`);
   }
@@ -874,6 +885,8 @@ async function gateChecks(
     await execCheck(`test ${svc}`, container, cmd, 15);
   }
 
+  if (testsOnly) return { ok: checks.every((c) => c.ok), checks };
+
   const slot = Number(readEnv(ws, "WERKMEISTER_SLOT"));
   // Only a served endpoint has a baseline; the test check already proved a container ran the rest.
   const isServed = (s: string) => ["api", "web"].includes(services[s]?.["type"] ?? "");
@@ -902,6 +915,28 @@ async function gateChecks(
   }
 
   return { ok: checks.every((c) => c.ok), checks, ...(release && { release }) };
+}
+
+/** Files changed since *base*, committed or not, plus untracked ones, as one `git diff --name-only`-shaped result. */
+async function uncommittedDiff(
+  dir: string,
+  base: string,
+  deps: Deps,
+): Promise<Awaited<ReturnType<Run>>> {
+  const mb = await deps.run("git", ["-C", dir, "merge-base", `origin/${base}`, "HEAD"]);
+  if (mb.code !== 0) return mb;
+  const changed = await deps.run("git", ["-C", dir, "diff", "--name-only", mb.stdout.trim()]);
+  if (changed.code !== 0) return changed;
+  const untracked = await deps.run("git", [
+    "-C",
+    dir,
+    "ls-files",
+    "--others",
+    "--exclude-standard",
+  ]);
+  if (untracked.code !== 0) return untracked;
+  const files = new Set([changed.stdout, untracked.stdout].join("\n").split("\n").filter(Boolean));
+  return { ...changed, stdout: [...files].join("\n") };
 }
 
 const FAILING_TEST = /\bnot ok\b|✖|×|\bFAIL\b/;
@@ -941,6 +976,41 @@ export async function gatePrs(
     const g = await runGate(ws, f, deps, { wait });
     ok &&= g.ok;
     lines.push(...formatGate(f.stem, g));
+  }
+  return { ok, lines };
+}
+
+/** `pr gate --tests`: each code worktree's lint and test rows, no PR file needed (SW-316). */
+export async function gateTests(
+  ws: string,
+  only?: string,
+  deps: Deps = defaultDeps(),
+  { wait = true }: { wait?: boolean } = {},
+): Promise<{ ok: boolean; lines: string[] }> {
+  const all = readPrFiles(ws);
+  let dirs = repoDirs(ws).map((d) => path.basename(d));
+  if (only) {
+    if (!dirs.includes(only))
+      throw new WorkspaceError(
+        `No code worktree named ${only}; worktrees: ${dirs.join(", ") || "none"}`,
+      );
+    dirs = [only];
+  }
+  const lines: string[] = [];
+  let ok = true;
+  for (const dir of dirs) {
+    // A PR file, when one exists, supplies its base and skip_tests.
+    const file = all.filter((f) => f.dir === dir && !superseded(f, all)).at(-1) ?? {
+      path: "",
+      dir,
+      stem: dir,
+      fm: { base: "main" },
+      title: "",
+      body: "",
+    };
+    const g = await runGate(ws, file, deps, { wait, testsOnly: true });
+    ok &&= g.ok;
+    lines.push(...formatGate(dir, g));
   }
   return { ok, lines };
 }

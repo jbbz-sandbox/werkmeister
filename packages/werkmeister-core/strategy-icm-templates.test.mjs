@@ -96,6 +96,9 @@ test("each template renders with no undefined and a route per stage", async () =
         if (c.includes("Run the test command")) {
           assert.match(c, /through `\.werkmeister\/bin\/with-temp-home`/, `${wt}/${d}`);
           assert.match(c, /A subagent you brief to run tests/, `${wt}/${d}`);
+          // SW-316: the host run misses the container env; the tests-only gate runs where pr open will.
+          assert.match(c, /without the container's env \(`HOST`, `WERKMEISTER_SLOT`/, `${wt}/${d}`);
+          assert.match(c, /run `werkmeister pr gate --tests`/, `${wt}/${d}`);
         }
         // SW-143: every exercise step defers a library/CLI to its Validation text, and the
         // templates stay app-agnostic — the werkmeister recipe lives in its services.yaml.

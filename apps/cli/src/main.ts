@@ -1469,7 +1469,7 @@ const SPECS: CommandSpec[] = [
   },
   ...(
     [
-      ["gate", "Run the pre-PR gate", ["[repo]"], ["wait", "json"]],
+      ["gate", "Run the pre-PR gate", ["[repo]"], ["wait", "tests", "json"]],
       ["open", "Gate, push and open each approved PR file", ["[repo]"], ["wait", "json"]],
       ["status", "Record merged, shipped or closed for each PR file", ["[repo]"], ["json"]],
       ["adopt", "Record a PR opened outside the workspace", ["[pr]", "[repo]"], ["no-pr", "json"]],
@@ -1511,6 +1511,11 @@ const SPECS: CommandSpec[] = [
             "--no-wait",
             "Don't wait for host load under budget.host_load before each check",
           );
+        if (has("tests"))
+          cmd.option(
+            "--tests",
+            "Only the lint and test rows, on the uncommitted tree, before a PR file exists",
+          );
         if (has("install"))
           cmd
             .option(
@@ -1532,6 +1537,7 @@ const SPECS: CommandSpec[] = [
           repo: args[pr ? 1 : 0] ?? null,
           slug: o.slug ?? null,
           wait: o.wait !== false,
+          tests: Boolean(o.tests),
           json: Boolean(o.json),
           install: Boolean(o.install),
           uninstall: Boolean(o.uninstall),
