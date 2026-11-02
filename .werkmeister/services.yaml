@@ -48,7 +48,7 @@ services:
     type: cli
     archetype: node-tool
     # apps/werkmeister-mcp ships inside the CLI (dist/mcp.js), so its tests run here.
-    test: "pnpm turbo run typecheck test --filter=werkmeister --filter=werkmeister-mcp"
+    test: "pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp"
     # SW-143: the ICM exercise step defers to this text for a CLI, so the whole recipe lives here.
     validate: &cli_validate >-
       Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION),
@@ -114,7 +114,7 @@ services:
     path: packages/werkmeister-core
     type: library
     archetype: node-tool
-    test: "pnpm turbo run typecheck test --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core"
+    test: "pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core"
     # Bundled into the CLI, so a core change is exercised through the built binary, not node-tool's "run the tests".
     validate: *cli_validate
     internal_port: 3999
@@ -139,7 +139,7 @@ services:
     path: packages/werkmeister-vscode
     type: extension
     archetype: mcp-client
-    test: "pnpm turbo run typecheck test --filter=werkmeister-vscode"
+    test: "pnpm turbo run typecheck test --continue --filter=werkmeister-vscode"
     validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-vscode` before the first test. Then build, run npm run test:integration (Extension Development Host via @vscode/test-cli), and walk the open items in MANUAL-CHECKLIST.md for anything visual."
     internal_port: 3997
     port_offset: 4
@@ -163,7 +163,7 @@ services:
     path: apps/werkmeister-dashboard
     type: web
     archetype: node-web
-    test: "pnpm turbo run test --filter=werkmeister-dashboard"
+    test: "pnpm turbo run test --continue --filter=werkmeister-dashboard"
     validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-dashboard` before the first test. Then check the URL health (see Quick Health Checks)."
     internal_port: 3001
     port_offset: 5
@@ -187,7 +187,7 @@ services:
     path: apps/docs-site
     type: web
     archetype: node-web
-    test: "pnpm turbo run test --filter=docs-site"
+    test: "pnpm turbo run test --continue --filter=docs-site"
     validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=docs-site` before the first test. Then open the page and the sidebar entry for the doc you changed; `pnpm --filter docs-site build` fails on a dead link."
     internal_port: 5173
     port_offset: 6
