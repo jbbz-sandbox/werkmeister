@@ -1,5 +1,11 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.63.0
+
+### Minor Changes
+
+- 7b92579: `werkmeister pr gate --tests` runs the gate's lint and test rows in the workspace container on the uncommitted tree; the implement stage runs it so container-only failures show before `pr open` (SW-316).
+
 ## 0.62.1
 
 ### Patch Changes
