@@ -60,8 +60,7 @@ function httpsRemote(url: string): string {
  * directory) or has no origin. Callers degrade to unlinked text, matching
  * `serviceRepoBase()`: a guessed URL that 404s is worse than no link.
  */
-export function standardsSource(): StandardsSource | null {
-  const dir = standardsDirPath();
+export function standardsSource(dir: string = standardsDirPath()): StandardsSource | null {
   const git = (...args: string[]): string => {
     try {
       const res = run(["git", "-C", dir, ...args], { capture: true, timeout: _GIT_TIMEOUT });
@@ -154,12 +153,17 @@ export function generateSkills(
     modules = loadStandardsModules(standardsDir);
   }
   const knownDomains = new Set(Object.keys(modules));
-  // Resolved once, not per link: it shells out to git, and every module body
-  // carries several links.
-  const src = standardsSource();
+  // Resolved once per tree, not per link: it shells out to git, and every
+  // module body carries several links. A repo's own modules link to that repo.
+  const sources = new Map<string, StandardsSource | null>();
+  const sourceOf = (root: string): StandardsSource | null => {
+    if (!sources.has(root)) sources.set(root, standardsSource(root));
+    return sources.get(root) ?? null;
+  };
   const rendered: Record<string, Record<string, string>> = {};
   for (const domain of Object.keys(modules).sort()) {
     const meta = modules[domain];
+    const src = sourceOf(meta["root"] ?? standardsDirPath());
     const body = moduleBody(meta["path"]);
     const bundle: Record<string, string> = {
       "SKILL.md": renderSkill(domain, meta, body, knownDomains, src),
