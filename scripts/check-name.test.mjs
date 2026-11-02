@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { checkName } from "./check-name.mjs";
+import { checkName, oldNameFiles } from "./check-name.mjs";
 
 const check = (text, rel = "apps/cli/src/x.ts") => checkName(rel, text);
 
@@ -29,4 +33,13 @@ test("keeps VS Code IDs only in the extension", () => {
   const ids = '"command": "sandbox.refresh", getConfiguration("sandbox")';
   assert.deepEqual(check(ids, "packages/werkmeister-vscode/package.json"), []);
   assert.equal(check(ids).length, 1);
+});
+
+test("oldNameFiles includes untracked files and skips gitignored ones", () => {
+  const root = mkdtempSync(join(tmpdir(), "check-name-"));
+  execFileSync("git", ["init", "-q"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "ign.md\n");
+  for (const f of ["tracked.md", "new.md", "ign.md"]) writeFileSync(join(root, f), "sandbox\n");
+  execFileSync("git", ["add", "tracked.md"], { cwd: root });
+  assert.deepEqual(oldNameFiles(root).sort(), ["new.md", "tracked.md"]);
 });

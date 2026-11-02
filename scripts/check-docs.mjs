@@ -314,6 +314,16 @@ export function isIgnored(p, cwd) {
   });
 }
 
+/** Tracked and untracked-but-not-ignored files, so a new file is checked before its first commit (SW-200). */
+export function listFiles(root) {
+  return execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard"], {
+    cwd: root,
+    encoding: "utf8",
+  })
+    .split("\n")
+    .filter(Boolean);
+}
+
 /** The built CLI's commands and their long flags, hidden ones included. */
 function loadCli() {
   return {
@@ -332,12 +342,10 @@ function loadTools() {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  // Judged against tracked files, not the disk, so a build product present on
+  // Judged against git's file list (tracked + untracked, not ignored), not the disk, so a build product present on
   // this machine (the generated Caddyfile) can't pass here and fail in CI. A
   // gitignored path is generated, so it can't be checked and is accepted.
-  const tracked = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" })
-    .split("\n")
-    .filter(Boolean);
+  const tracked = listFiles(ROOT);
   const files = new Set(tracked);
   const dirs = new Set(
     tracked.flatMap((f) =>

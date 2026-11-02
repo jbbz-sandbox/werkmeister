@@ -65,10 +65,18 @@ export function checkName(rel, text) {
   return hits;
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const files = execFileSync("git", ["grep", "-Iil", "sandbox"], { cwd: ROOT, encoding: "utf8" })
+/** Tracked and untracked-but-not-ignored files that mention the old name, so a new file is checked before its first commit (SW-200). */
+export function oldNameFiles(root) {
+  return execFileSync("git", ["grep", "--untracked", "-Iil", "sandbox"], {
+    cwd: root,
+    encoding: "utf8",
+  })
     .split("\n")
     .filter((f) => f && !SKIP.some((re) => re.test(f)));
+}
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const files = oldNameFiles(ROOT);
   const hits = files.flatMap((rel) => checkName(rel, readFileSync(join(ROOT, rel), "utf8")));
   for (const h of hits) console.error(h);
   console.log(
