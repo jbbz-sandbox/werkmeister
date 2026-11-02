@@ -90,8 +90,11 @@ const IMPLEMENT_STEPS = [
 ];
 
 // SW-124: one wrapper, so no session or subagent hand-rolls (or forgets) its temp HOME.
+// SW-316: a host run misses the container's env; the tests-only gate runs where pr open will.
 const TEST_STEP =
   "Run the test command exactly as `../../.werkmeister/werkmeister-context.md` states it: through `.werkmeister/bin/with-temp-home`, which gives it a fresh temporary HOME — never hand-roll `HOME=…`. " +
+  "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. " +
+  "Once it passes, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record both exit codes. " +
   "A subagent you brief to run tests or the CLI gets that wrapped command verbatim in its brief. " +
   "Redirect output to a file, trust the exit code, read back only the failing slice.";
 
@@ -222,7 +225,7 @@ const feature: Stage[] = [
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         TEST_STEP,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
-        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the test exit code and summary line, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
+        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
       ],
       outputs: [
         "Code changes, uncommitted — the next stage commits after the person reads the diff",

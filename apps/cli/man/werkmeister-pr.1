@@ -9,6 +9,8 @@ Opens PRs from a workspace and tracks them to a release. Each action:
 .IP \(bu 3
 \fBgate\fR runs the pre\-PR gate for each PR file and changes nothing.
 .IP \(bu 3
+\fBgate \-\-tests\fR runs only the gate's lint and test rows, in the workspace container, on each worktree's uncommitted tree (committed, staged, unstaged and untracked changes since its base). It needs no PR file and skips the PR\-file, clean, baseline and release rows. It starts a container when none is running and stops it after. The implement stage runs it, so a failure that only happens with the container's env shows up before \fBpr open\fR.
+.IP \(bu 3
 \fBopen\fR gates, pushes and opens a PR for each PR file at \fBstatus: approved\fR, and records its URL.
 .IP \(bu 3
 Before each gate check (lint, tests, release), \fBgate\fR and \fBopen\fR wait while the host's 1\-minute load is above \fBbudget.host_load\fR in \fB~/.werkmeister/config.yaml\fR (default: 2 × CPUs; \fB0\fR turns it off), for up to 10 minutes in all across the run, saying up front how long they may wait and printing progress each minute, then run anyway. \fB\-\-no\-wait\fR skips the wait. With tests on top, a gate under load can run well past a 10\-minute tool call: run \fBpr open\fR detached, as rule 3 of \fB_shared/pr\-rules.md\fR shows. \fB.werkmeister/bin/with\-temp\-home\fR runs the same wait before its command (\fBWERKMEISTER_NO_WAIT=1\fR skips it). A failed check ends with the host load.
@@ -27,6 +29,7 @@ Inside a workspace, \fBgh pr create\fR (and so \fB/create\-pr\fR) is blocked by 
 .nf
 .RS 4
 werkmeister pr gate
+werkmeister pr gate \-\-tests
 werkmeister pr open
 werkmeister pr status \-\-json
 .RE

@@ -142,7 +142,7 @@ repo:
 
 | Command | Does |
 |---|---|
-| `werkmeister pr gate [repo]` | run the gate, change nothing. Skips a merged PR file whose worktree has a follow-up in progress. `repo` is a worktree (its PR files) or one PR file's name (`werkmeister-why-page`), for every `pr` action |
+| `werkmeister pr gate [repo]` | run the gate, change nothing. Skips a merged PR file whose worktree has a follow-up in progress. `repo` is a worktree (its PR files) or one PR file's name (`werkmeister-why-page`), for every `pr` action. `--tests` runs only the lint and test rows, in the container, on the uncommitted tree, with no PR file needed: the implement stage's container run (SW-316) |
 | `werkmeister pr open [repo]` | for each `approved` PR file: gate, push the branch, reuse or create the PR, write `status: open` and `url`, move the issue to `in_review` ([Issue status](#issue-status)), commit and push the PR file on the record branch |
 | `werkmeister pr status` | for `open` files, read `gh pr view` and write `merged` + `merge_sha` or `closed`, and `review: changes_requested` while a review asks for changes. For `merged` files, write `shipped` (+ `release`) per the registry. Moves the issue per [Issue status](#issue-status). Commits and pushes the changed PR files on the record branch. |
 | `werkmeister pr new <worktree> --slug <slug>` | after that worktree's PRs merged: cut `<branch>-<slug>` from `origin/<base>` and write a draft `pr-<worktree>-<slug>.md` ([Follow-up PR](#follow-up-pr)) |

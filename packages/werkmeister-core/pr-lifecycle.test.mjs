@@ -25,6 +25,7 @@ import {
   failureExcerpt,
   formatGate,
   gatePrs,
+  gateTests,
   lifecycleOf,
   mapTouched,
   newPr,
@@ -254,6 +255,89 @@ test("gate passes: tests, exercise, baseline, release check, approved", async ()
     assert.deepEqual(failed(g), []);
     assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api"));
     assert.ok(d.calls.includes("docker exec feat-api sh -c npx changeset status"));
+  } finally {
+    clean(ws);
+  }
+});
+
+// SW-316: `pr gate --tests` during implement: no PR file, uncommitted code, lint and test rows only.
+function implementWorkspace(files = {}) {
+  const ws = icmWorkspace({ files, exercise: null, researchDone: false });
+  fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  return ws;
+}
+const MERGE_BASE = [/merge-base origin\/main HEAD$/, { stdout: "abc\n" }];
+const gateT = (ws, d, only) => withSandboxHome(() => gateTests(ws, only, d));
+
+test("gate --tests: no PR file, an uncommitted api change runs only the api test row", async () => {
+  const ws = implementWorkspace();
+  try {
+    const d = deps([MERGE_BASE, [/diff --name-only abc$/, { stdout: "apps/api/x.ts\n" }]]);
+    const g = await gateT(ws, d);
+    assert.equal(g.ok, true, g.lines.join("\n"));
+    assert.deepEqual(
+      g.lines.filter((l) => /^ {2}[✓✗]/.test(l)).map((l) => l.split(":")[0].trim()),
+      ["✓ test api"],
+    );
+    assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api"));
+    assert.ok(!d.calls.some((c) => c.includes("...HEAD") || c.includes("changeset status")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate --tests: an untracked file maps to its service", async () => {
+  const ws = implementWorkspace();
+  try {
+    const d = deps([MERGE_BASE, [/ls-files --others/, { stdout: "apps/api/new.ts\n" }]]);
+    const g = await gateT(ws, d);
+    assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api"), g.lines.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate --tests: a test that fails only in the container fails the run (SW-294's shape)", async () => {
+  const ws = implementWorkspace();
+  try {
+    const d = deps([
+      MERGE_BASE,
+      [/diff --name-only abc$/, { stdout: "apps/api/x.ts\n" }],
+      [/docker exec feat-api sh -c npm test/, { code: 1, stdout: "not ok 1 - 401\n" }],
+    ]);
+    const g = await gateT(ws, d);
+    assert.equal(g.ok, false);
+    assert.ok(
+      g.lines.some((l) => l.includes("✗ test api")),
+      g.lines.join("\n"),
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate --tests: a PR file's base applies", async () => {
+  const pr = "---\nrepo: o/app\nbranch: me/ws\nbase: dev\nstatus: draft\n---\n# t\n";
+  const ws = implementWorkspace({ app: pr });
+  try {
+    const d = deps([
+      [/merge-base origin\/dev HEAD$/, { stdout: "abc\n" }],
+      [/diff --name-only abc$/, { stdout: "apps/api/x.ts\n" }],
+    ]);
+    const g = await gateT(ws, d);
+    assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api"), g.lines.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate --tests: an unknown worktree name throws naming the worktrees", async () => {
+  const ws = implementWorkspace();
+  try {
+    await assert.rejects(
+      gateT(ws, deps([]), "nope"),
+      /No code worktree named nope; worktrees: app/,
+    );
   } finally {
     clean(ws);
   }

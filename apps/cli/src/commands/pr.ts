@@ -6,7 +6,7 @@
  * The workspace's only way to open a PR (docs/workspace-lifecycle.md). Run
  * from anywhere inside a workspace; `repo` is a code worktree's directory name
  * and limits the action to that repo's PR files; a PR file's name (`werkmeister-why-page`) limits it to that file.
- *   gate    run the pre-PR gate, change nothing
+ *   gate    run the pre-PR gate, change nothing; --tests: only its lint and test rows, on the uncommitted tree
  *   open    gate each `approved` PR file, push, open the PR, record its URL
  *   status  record merged / shipped / closed from GitHub and release tags
  *   adopt   write the PR file for a fix that landed outside the workspace
@@ -16,7 +16,15 @@
  *   watch --install | --uninstall   add / remove the 10-minute schedule (launchd on macOS, else crontab)
  */
 
-import { adoptPr, gatePrs, newPr, openPrs, refreshPrStatus, watchPrs } from "werkmeister-core";
+import {
+  adoptPr,
+  gatePrs,
+  gateTests,
+  newPr,
+  openPrs,
+  refreshPrStatus,
+  watchPrs,
+} from "werkmeister-core";
 import { installPrWatchSchedule, uninstallPrWatchSchedule } from "werkmeister-core/machine_setup";
 import { findRecordRoot } from "werkmeister-core/pr_guard";
 import { error } from "../lib/config.js";
@@ -51,7 +59,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       : args.action === "new"
         ? await newPr(ws, repo as string, args.slug as string)
         : args.action === "gate"
-          ? await gatePrs(ws, repo, undefined, { wait: args.wait !== false })
+          ? await (args.tests ? gateTests : gatePrs)(ws, repo, undefined, {
+              wait: args.wait !== false,
+            })
           : args.action === "open"
             ? await openPrs(ws, repo, undefined, { wait: args.wait !== false })
             : { ok: true, ...(await refreshPrStatus(ws)) };

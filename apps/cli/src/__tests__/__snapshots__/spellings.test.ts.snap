@@ -238,6 +238,7 @@ exports[`command spellings > ["pr","adopt","--no-pr","on base","sandbox"] 1`] = 
   "pr": null,
   "repo": "sandbox",
   "slug": null,
+  "tests": false,
   "uninstall": false,
   "wait": true,
 }
@@ -252,6 +253,7 @@ exports[`command spellings > ["pr","adopt","12","sandbox"] 1`] = `
   "pr": "12",
   "repo": "sandbox",
   "slug": null,
+  "tests": false,
   "uninstall": false,
   "wait": true,
 }
@@ -266,6 +268,7 @@ exports[`command spellings > ["pr","new","sandbox","--slug","s"] 1`] = `
   "pr": null,
   "repo": "sandbox",
   "slug": "s",
+  "tests": false,
   "uninstall": false,
   "wait": true,
 }
@@ -280,6 +283,7 @@ exports[`command spellings > ["pr","open","sandbox","--no-wait"] 1`] = `
   "pr": null,
   "repo": "sandbox",
   "slug": null,
+  "tests": false,
   "uninstall": false,
   "wait": false,
 }
@@ -294,6 +298,7 @@ exports[`command spellings > ["pr","watch","--install"] 1`] = `
   "pr": null,
   "repo": null,
   "slug": null,
+  "tests": false,
   "uninstall": false,
   "wait": true,
 }
