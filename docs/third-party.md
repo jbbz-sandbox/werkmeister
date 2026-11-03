@@ -72,7 +72,7 @@ These are the direct dependencies. All are devDependencies of `apps/cli`, or dep
 | … docker-modem 5.0.7 | | Apache-2.0 | dockerode transport |
 | … @grpc/grpc-js 1.14.5, protobufjs | | Apache-2.0, BSD-3-Clause | dockerode's BuildKit session |
 | … ssh2 1.17.0, cpu-features 0.0.10 (optional) | | MIT | dockerode's `ssh://` hosts |
-| @anthropic-ai/claude-agent-sdk | ^0.3.288 → 0.3.288 | none (Anthropic Commercial Terms) | `detect --assist` only, an `optionalDependency` loaded lazily (`apps/cli/src/lib/harness/claude/assist_resolver.ts`); `detect --assist` prints the install command when it is absent. Pulls a ~240 MB `claude-agent-sdk-<platform>` binary package and peer `@anthropic-ai/sdk` (MIT). See [Terms that need attention](#terms-that-need-attention) |
+| @anthropic-ai/claude-agent-sdk | ^0.3.288 → 0.3.288 | none (Anthropic Commercial Terms) | A `dependency` since SW-386 (optional from SW-73 to then): the `ask` helpers (`packages/werkmeister-core/src/harness/claude/cli.ts`) and `detect --assist` load it lazily. Pulls a ~240 MB `claude-agent-sdk-<platform>` binary package and peer `@anthropic-ai/sdk` (MIT). See [Terms that need attention](#terms-that-need-attention) |
 
 ### Dev and build tooling
 
@@ -185,7 +185,7 @@ Werkmeister runs without each of these. The person turns one on.
 
 | Item | Finding | Recommendation |
 |---|---|---|
-| `@anthropic-ai/claude-agent-sdk` | Not an OSI licence: "SEE LICENSE IN README.md" → Anthropic Commercial Terms. The platform package says "© Anthropic PBC. All rights reserved". Werkmeister doesn't redistribute it: esbuild keeps it external, and the user's npm fetches it from the registry under Anthropic's terms | Never bundle it. Done (SW-73): it is an `optionalDependency`, so an install can skip it (`--omit=optional`) or survive its failure, and `detect --assist` says how to install it when it's absent |
+| `@anthropic-ai/claude-agent-sdk` | Not an OSI licence: "SEE LICENSE IN README.md" → Anthropic Commercial Terms. The platform package says "© Anthropic PBC. All rights reserved". Werkmeister doesn't redistribute it: esbuild keeps it external, and the user's npm fetches it from the registry under Anthropic's terms | Never bundle it. SW-73 made it an `optionalDependency`; SW-386 made it a `dependency` again (refine, distillation and the Jira MCP fallback run through it), so an install needs the registry to serve it |
 | Redis Insight image | SSPL-1.0, not OSI. Pulled, not redistributed. SSPL's obligations bite when you offer the software as a service, which local use doesn't do. It is opt-in, so it never starts for everyone | Done: off by default behind a compose profile (SW-76) |
 | `split-ca` in the .vsix | ISC by its `package.json`, but neither the npm package nor its repository carries a licence text, so the .vsix can only name it | It comes in through `docker-modem`. Ask upstream to add the text, or drop the dependency |
 | OrbStack, Docker Desktop, Claude Code, Claude Desktop, VS Code (Microsoft build), Chrome | proprietary host software the person installs under its own terms | Fine. Werkmeister neither bundles nor requires the proprietary editions: any Docker Engine works, and Code - OSS / Chromium work where the code allows a path |
@@ -211,7 +211,7 @@ At 0.22.0: build `apps/cli` (`npm run build`), run `npm pack --dry-run`, and com
 
 ## Follow-ups
 
-1. ~~Move `@anthropic-ai/claude-agent-sdk` to `optionalDependencies`, with a clear install hint from `detect --assist`.~~ Done in SW-73.
+1. ~~Move `@anthropic-ai/claude-agent-sdk` to `optionalDependencies`, with a clear install hint from `detect --assist`.~~ Done in SW-73. Reverted in SW-386: it is a `dependency` again.
 2. ~~Ship LICENSE and third-party licence texts in the .vsix.~~ Done (SW-74).
 3. ~~Remove `infra/compose/scripts/otel-init.bundle.js`, or restore its source and licences.~~ Resolved (SW-75): nothing referenced the bundle, so it was deleted.
 4. ~~Make Redis Insight (SSPL-1.0), and perhaps Jaeger, opt-in in shared infra.~~ Done (SW-76): both are opt-in through `infra.profiles`.

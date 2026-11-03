@@ -1,13 +1,15 @@
 /**
- * The local `claude` CLI as a subprocess: locating it under Claude Desktop's
- * minimal PATH, running `claude -p`, and pulling a tagged result or a JSON
- * object out of what it prints. Shared by sandbox.ts and the issue trackers
- * (whose Atlassian-MCP fallback is a `claude -p` run).
+ * The local `claude` CLI: locating it under Claude Desktop's minimal PATH and
+ * asking it one question through the Agent SDK, answered as structured output
+ * (SW-386). Shared by sandbox.ts and the issue trackers (whose Atlassian-MCP
+ * fallback is a tools-enabled run).
  */
+
 import os from "node:os";
 import path from "node:path";
+import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
 import { WorkspaceError } from "../../errors.js";
-import { isExecutable, runCapture, shellQuote, stripAnsi } from "../../tool_bins.js";
+import { childEnv, isExecutable, shellQuote } from "../../tool_bins.js";
 
 /**
  * Locate the `claude` CLI, robust to Claude Desktop's minimal PATH. Order:
@@ -58,64 +60,104 @@ export function extractJson(out: string): string | null {
   return fenced ? slice(fenced[1]) : whole;
 }
 
+type AskOpts = { tools?: boolean };
+
+/** `ask`'s answer as one string field: no tag scraping. */
+const TEXT_SCHEMA = {
+  type: "object",
+  properties: { result: { type: "string" } },
+  required: ["result"],
+};
+
 /**
- * One `claude -p` run, the tagged `<result>` body or null on any failure.
- * `tools` adds --dangerously-skip-permissions: the Atlassian MCP tools are
- * deferred, so --allowedTools cannot pre-approve them in headless mode.
+ * One Agent SDK run of *prompt* on the user's own `claude` (their auth, settings,
+ * plugins and MCP servers), from $HOME so a project's files can't leak in, capped
+ * at 120 s like runCapture was. `tools` is the old --dangerously-skip-permissions:
+ * the Atlassian MCP tools are deferred, so an allow-list cannot pre-approve them
+ * headless. Without it the model holds no tools at all.
  */
-export async function askClaude(
+async function runQuery(
   prompt: string,
-  opts: { tools?: boolean } = {},
-): Promise<string | null> {
+  schema: Record<string, unknown>,
+  opts: AskOpts,
+): Promise<SDKResultMessage> {
+  // Loaded on use: the MCP server imports this module at start, and the SDK is heavy.
+  const { query } = await import("@anthropic-ai/claude-agent-sdk");
+  const abortController = new AbortController();
+  const timer = setTimeout(() => abortController.abort(), 120_000);
   try {
-    const args = opts.tools ? ["-p", prompt, "--dangerously-skip-permissions"] : ["-p", prompt];
-    const res = await runCapture(await resolveClaudeBin(), args);
-    if (res.code !== 0) return null;
-    return extractResult(stripAnsi(res.stdout));
-  } catch {
-    return null;
+    for await (const m of query({
+      prompt,
+      options: {
+        cwd: os.homedir(),
+        pathToClaudeCodeExecutable: await resolveClaudeBin(),
+        env: childEnv(),
+        abortController,
+        outputFormat: { type: "json_schema", schema },
+        ...(opts.tools
+          ? { permissionMode: "bypassPermissions" as const, allowDangerouslySkipPermissions: true }
+          : { tools: [] }),
+      },
+    })) {
+      if (m.type === "result") return m;
+    }
+    throw new WorkspaceError("the Claude session ended without a result");
+  } catch (e) {
+    if (abortController.signal.aborted)
+      throw new WorkspaceError("The `claude` CLI timed out after 120s.");
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-/** {@link askClaude}, then the JSON object in its answer; null when there is none. */
+/** The structured answer in a result message, or the WorkspaceError that says why there is none. */
+export function fromResult(m: SDKResultMessage): Record<string, unknown> {
+  if (m.subtype !== "success")
+    throw new WorkspaceError(`claude ended with ${m.subtype}:\n${m.errors.join("\n")}`);
+  // "Not logged in", an API outage: a success-shaped result with the reason in `result`.
+  if (m.is_error) throw new WorkspaceError(`claude ended with an error:\n${m.result}`);
+  if (!m.structured_output || typeof m.structured_output !== "object")
+    throw new WorkspaceError("Claude returned no text.");
+  return m.structured_output as Record<string, unknown>;
+}
+
+/** One run, the answer or null on any failure. */
+export function askClaude(prompt: string, opts: AskOpts = {}): Promise<string | null> {
+  return askClaudeStrict(prompt, opts).catch(() => null);
+}
+
+/** {@link askClaude} with a JSON object as the answer; null when there is none. */
 export async function askClaudeJson(
   prompt: string,
-  opts: { tools?: boolean } = {},
+  opts: AskOpts = {},
 ): Promise<Record<string, unknown> | null> {
-  const out = await askClaude(prompt, opts);
-  const json = out === null ? null : extractJson(out);
-  if (!json) return null;
   try {
-    return JSON.parse(json) as Record<string, unknown>;
+    return fromResult(await runQuery(prompt, { type: "object" }, opts));
   } catch {
     return null;
   }
 }
 
 /**
- * {@link askClaude} for a caller that reports why it failed: the `<result>`
- * body, or a WorkspaceError naming a missing CLI, a non-zero exit or no text.
+ * {@link askClaude} for a caller that reports why it failed: the answer, or a
+ * WorkspaceError naming a missing CLI, the result's error subtype or no text.
  */
-export async function askClaudeStrict(prompt: string): Promise<string> {
-  const bin = await resolveClaudeBin();
-  let res: { stdout: string; stderr: string; code: number | null };
+export async function askClaudeStrict(prompt: string, opts: AskOpts = {}): Promise<string> {
+  let res: SDKResultMessage;
   try {
-    res = await runCapture(bin, ["-p", prompt]);
+    res = await runQuery(prompt, TEXT_SCHEMA, opts);
   } catch (e) {
-    const err = e as { code?: string; message?: string };
-    if (err.code === "ENOENT") {
+    if (e instanceof WorkspaceError) throw e;
+    const err = e as { message?: string };
+    if (/not found/i.test(err.message ?? ""))
       throw new WorkspaceError(
         "Could not find the `claude` CLI. Set CLAUDE_BIN to its path, or install Claude Code.",
       );
-    }
-    if (e instanceof WorkspaceError) throw e;
     throw new WorkspaceError(`Refine via claude failed: ${err.message ?? String(e)}`);
   }
-  if (res.code !== 0) {
-    const detail = stripAnsi((res.stderr || res.stdout || "").trim());
-    throw new WorkspaceError(`claude exited with code ${res.code}:\n${detail}`);
-  }
-  const out = extractResult(stripAnsi(res.stdout));
+  // The prompts still ask for <result> tags; a model that writes them into the field loses nothing.
+  const out = extractResult(String(fromResult(res).result ?? ""));
   if (!out) throw new WorkspaceError("Claude returned no text.");
   return out;
 }
