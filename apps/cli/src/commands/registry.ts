@@ -8,6 +8,7 @@
  *
  *   werkmeister registry            # regenerate (sync is the default action)
  *   werkmeister registry --check    # report drift; nonzero exit when stale
+ *   werkmeister registry --from <worktree> --out <file>   # prove a branch fragment (SW-281)
  */
 
 import { syncRegistry } from "werkmeister-core/registry_sync";
@@ -20,7 +21,13 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     process.exit(2);
   }
   const check = Boolean(args.check);
-  const steps = syncRegistry({ checkOnly: check });
+  const from = args.from ? String(args.from) : undefined;
+  const target = args.out ? String(args.out) : undefined;
+  if (from && !target) {
+    warn("`--from` needs `--out`: a branch fragment never writes ~/.werkmeister/services.yaml.");
+    process.exit(2);
+  }
+  const steps = syncRegistry({ checkOnly: check, from, target });
   for (const step of steps) {
     const mark = step.ok ? `${Colors.GREEN}✓${Colors.RESET}` : `${Colors.RED}✗${Colors.RESET}`;
     console.log(`${mark} ${step.label}: ${step.detail}`);

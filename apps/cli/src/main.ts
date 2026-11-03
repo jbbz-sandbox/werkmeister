@@ -1082,9 +1082,19 @@ const SPECS: CommandSpec[] = [
             "~/.werkmeister/services.local.yaml)",
         )
         .argument("[action]", "sync — the default and only action")
-        .option("--check", "Report drift without writing; nonzero exit when stale.");
+        .option("--check", "Report drift without writing; nonzero exit when stale.")
+        .option(
+          "--from <worktree>",
+          "Use this checkout's .werkmeister/services.yaml for its repo (needs --out).",
+        )
+        .option("--out <file>", "Write the registry here instead of ~/.werkmeister/services.yaml.");
     },
-    namespace: ([action], o) => ({ action: action ?? "sync", check: Boolean(o.check) }),
+    namespace: ([action], o) => ({
+      action: action ?? "sync",
+      check: Boolean(o.check),
+      from: o.from ?? null,
+      out: o.out ?? null,
+    }),
   },
   {
     name: "machine migrate",

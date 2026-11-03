@@ -311,6 +311,8 @@ exports[`command spellings > ["registry","--check"] 1`] = `
 {
   "action": "sync",
   "check": true,
+  "from": null,
+  "out": null,
 }
 `;
 

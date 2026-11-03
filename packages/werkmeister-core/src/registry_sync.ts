@@ -420,6 +420,10 @@ export interface SyncRegistryOptions {
   now?: () => number;
   /** Leave a hand-written registry untouched (a failing step) instead of backing it up and replacing it. */
   generatedOnly?: boolean;
+  /** A checkout whose `.werkmeister/services.yaml` replaces its repo's fragment under repos_root (SW-281). */
+  from?: string;
+  /** Write here instead of `~/.werkmeister/services.yaml` (SW-281). */
+  target?: string;
 }
 
 function placeholderPaths(): PlaceholderPaths {
@@ -512,7 +516,7 @@ export function workspaceServices(
 export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   const label = "config services.yaml";
   const reposRoot = opts.reposRoot ?? getReposRoot();
-  const target = servicesYamlPath();
+  const target = opts.target ?? servicesYamlPath();
   const localPath = servicesLocalYamlPath();
   if (
     opts.generatedOnly &&
@@ -537,12 +541,13 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   // seedFile never overwrites, so an existing file is untouched.
   let seededLocal = "";
   try {
-    if (!opts.checkOnly && !fs.existsSync(localPath)) {
+    // A sync to another target proves a branch; it must leave the real ~/.werkmeister alone.
+    if (!opts.checkOnly && !opts.target && !fs.existsSync(localPath)) {
       const context = inheritedK8sContext(target) ?? "orbstack";
       seedFile(localPath, renderServicesLocalYaml(context));
       seededLocal = `; seeded ${localPath} (k8s_context: ${context} — edit there)`;
     }
-    const fragments = discoverFragments(reposRoot);
+    let fragments = discoverFragments(reposRoot);
     if (fragments.length === 0) {
       return [
         {
@@ -554,7 +559,17 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
         },
       ];
     }
-    split = applyDisabled(fragments, readLocalOverlay(localPath), localPath);
+    const local = readLocalOverlay(localPath);
+    if (opts.from) {
+      const file = fragmentPath(opts.from);
+      if (!file) return [{ label, ok: false, detail: `no ${FRAGMENT_REL} in ${opts.from}` }];
+      const repo = path.basename(opts.from);
+      fragments = [...fragments.filter((f) => f.repo !== repo), readFragment(repo, file)];
+      // The person asked to see this repo's branch; a local disable must not hide it (as branchRegistry).
+      const listed = local[DISABLED_KEY];
+      if (Array.isArray(listed)) local[DISABLED_KEY] = listed.filter((n) => n !== repo);
+    }
+    split = applyDisabled(fragments, local, localPath);
     merged = mergeRegistry(split.fragments, {
       defaults: REGISTRY_DEFAULTS,
       local: split.local,

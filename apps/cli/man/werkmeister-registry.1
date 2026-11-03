@@ -7,15 +7,25 @@ werkmeister\-registry \- Regenerate ~/.werkmeister/services.yaml from every \e<r
 .TP
 \fB\-\-check\fR
 Report drift without writing; nonzero exit when stale.
+.TP
+\fB\-\-from <worktree>\fR
+Use this checkout's .werkmeister/services.yaml for its repo (needs \-\-out).
+.TP
+\fB\-\-out <file>\fR
+Write the registry here instead of ~/.werkmeister/services.yaml.
 .SH DESCRIPTION
 .PP
 Regenerates \fB~/.werkmeister/services.yaml\fR from every repo's \fB.werkmeister/services.yaml\fR fragment under \fBpaths.repos_root\fR, merged under \fB~/.werkmeister/services.local.yaml\fR. It is the same step \fBwerkmeister machine setup\fR runs, on its own: use it after cloning a new repo. \fBwerkmeister pr status\fR runs it too when a merged PR changes a fragment and the repo sets \fBsync_on_merge: auto\fR (Ship detection).
+.PP
+To prove a fragment change before it merges, \fB\-\-from <worktree>\fR takes that checkout's \fB.werkmeister/services.yaml\fR in place of its repo's fragment under \fBpaths.repos_root\fR, and \fB\-\-out <file>\fR writes the merged registry there instead of \fB~/.werkmeister/services.yaml\fR (which is never touched, nor is \fBservices.local.yaml\fR seeded). \fB\-\-check\fR compares against \fB\-\-out\fR the same way.
 .SH EXAMPLES
 .PP
 .nf
 .RS 4
 werkmeister registry            # regenerate (sync is the default action)
 werkmeister registry \-\-check    # report drift; nonzero exit when stale
+werkmeister registry \-\-from ./werkmeister \-\-out /tmp/services.yaml          # branch fragment, temp registry
+werkmeister registry \-\-check \-\-from ./werkmeister \-\-out /tmp/services.yaml  # is that file current?
 .RE
 .fi
 .SH SEE ALSO
