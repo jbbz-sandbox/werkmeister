@@ -127,8 +127,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   const newCfg = {
     version: 1,
     paths: {
-      // werkmeister_root is self-derived (the running checkout is authoritative);
-      // stored only so env.sh can export WERKMEISTER_ROOT for external processes.
+      // werkmeister_root is self-derived; stored only so env.sh can export
+      // WERKMEISTER_ROOT. save() keeps the stored value unless this is the installed CLI (SW-363).
       werkmeister_root: String(getSandboxRoot()),
       repos_root: resolved.repos_root,
       workspaces_root: resolved.workspaces_root,

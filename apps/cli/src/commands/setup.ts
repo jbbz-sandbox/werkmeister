@@ -466,8 +466,8 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   const newCfg: Record<string, any> = {
     version: 1,
     paths: {
-      // Self-derived — the running checkout is authoritative. Stored only so
-      // env.sh can export WERKMEISTER_ROOT for external processes.
+      // Self-derived; stored only so env.sh can export WERKMEISTER_ROOT. save()
+      // keeps the stored value unless this is the installed CLI (SW-363).
       werkmeister_root: String(getSandboxRoot()),
       repos_root: resolvedPaths.repos_root,
       workspaces_root: resolvedPaths.workspaces_root,
