@@ -29,6 +29,7 @@ import {
   registryChanges,
   renderRegistry,
   syncRegistry,
+  workspaceServices,
 } from "./dist/registry_sync.js";
 import { REGISTRY_DEFAULTS } from "./dist/scaffold.js";
 
@@ -520,6 +521,36 @@ test("branchRegistry reads a worktree's .werkmeister/ fragment (SW-92)", () => {
 test("branchRegistry is null for a worktree without a fragment", () => {
   writeFragment("app", "services:\n  api: {}\n");
   assert.equal(branchRegistry("app", path.join(root, "nowhere"), repos), null);
+});
+
+test("workspaceServices merges each workspace repo's fragment over the registry and leaves other repos' services alone (SW-337)", () => {
+  const ws = path.join(root, "features", "ws");
+  mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  mkdirSync(path.join(ws, "app", ".werkmeister"));
+  writeFileSync(
+    path.join(ws, "app", ".werkmeister", "services.yaml"),
+    "services:\n  api:\n    command: node src/server.ts\n",
+  );
+  mkdirSync(path.join(ws, "bare", ".git"), { recursive: true });
+  const registry = {
+    api: { repo: "app", command: "node src/server.js" },
+    web: { repo: "other", command: "node web.js" },
+  };
+  const merged = workspaceServices(registry, ws);
+  assert.equal(merged.api.command, "node src/server.ts");
+  assert.equal(merged.api.repo, "app");
+  assert.deepEqual(merged.web, registry.web, "another repo's service is the registry's");
+  assert.equal(registry.api.command, "node src/server.js", "the input is not mutated");
+  assert.equal(existsSync(registryPath()), false, "the shared registry is not written");
+});
+
+test("workspaceServices skips a fragment that fails to parse and keeps the registry's service", () => {
+  const ws = path.join(root, "features", "ws");
+  mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  mkdirSync(path.join(ws, "app", ".werkmeister"));
+  writeFileSync(path.join(ws, "app", ".werkmeister", "services.yaml"), "bogus: {}\n");
+  const merged = workspaceServices({ api: { repo: "app", command: "old" } }, ws);
+  assert.equal(merged.api.command, "old");
 });
 
 // --- SW-129: disabled_fragments in services.local.yaml ----------------------

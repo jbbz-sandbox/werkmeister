@@ -47,6 +47,7 @@ import {
 import { loadFeatureRouters } from "./feature_routing.js";
 import { buildSandboxContextMd } from "./harness/claude/claude_md.js";
 import { sandboxLock } from "./locks.js";
+import { workspaceServices } from "./registry_sync.js";
 import { info, success, warn } from "./reporter.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import {
@@ -1621,7 +1622,7 @@ export async function generateWorkspaceCompose(
   // file makes a bare `docker compose` in the workspace warn about two configs.
   migrateWorkspaceCompose(workspaceRoot);
   info(`Generating ${COMPOSE_FILE}...`);
-  const servicesConfig = loadServices();
+  const servicesConfig = workspaceServices(loadServices(), workspaceRoot);
   const portsConfig = loadPorts();
   const config = { services: servicesConfig, ports: portsConfig };
 

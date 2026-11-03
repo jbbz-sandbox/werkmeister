@@ -32,7 +32,9 @@ import {
 } from "./config.js";
 import { loadIngress } from "./global_config.js";
 import type { Step } from "./machine_setup.js";
+import { warn } from "./reporter.js";
 import { REGISTRY_DEFAULTS, renderServicesLocalYaml, seedFile } from "./scaffold.js";
+import { repoDirs } from "./standards.js";
 
 /** Where a new repo fragment goes, relative to its checkout root. */
 export const FRAGMENT_REL = path.join(DOT_DIR, "services.yaml");
@@ -470,6 +472,34 @@ export function branchRegistry(
     local: split.local,
     paths: placeholderPaths(),
   });
+}
+
+/**
+ * *registry*'s services with each workspace repo's own fragment merged over them,
+ * so a branch's `command:`/`image:` runs in its feature containers before merge,
+ * as the gate already tests it (SW-337). Other repos' services stay the
+ * registry's; nothing is written. A fragment the branch broke is skipped with a
+ * warning: `up` keeps working, and the gate fails loud on it.
+ */
+export function workspaceServices(
+  registry: Record<string, ServiceEntry>,
+  workspace: string,
+): Record<string, ServiceEntry> {
+  const services = { ...registry };
+  for (const worktree of repoDirs(workspace)) {
+    const repo = path.basename(worktree);
+    let own: MergedRegistry | null;
+    try {
+      own = branchRegistry(repo, worktree);
+    } catch (e) {
+      warn(`${repo}: branch fragment ignored: ${e instanceof Error ? e.message : String(e)}`);
+      continue;
+    }
+    for (const [id, svc] of Object.entries(own?.services ?? {})) {
+      if (svc.repo === repo) services[id] = svc;
+    }
+  }
+  return services;
 }
 
 /**

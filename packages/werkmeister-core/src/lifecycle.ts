@@ -86,6 +86,7 @@ import { writeAgentStateHooks } from "./harness/claude/hooks_gen.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { latestHandoff, type Note } from "./notes.js";
 import { type RunResult, run } from "./proc.js";
+import { workspaceServices } from "./registry_sync.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { withStartRecord } from "./resources.js";
 import type { Lease, Rank } from "./scheduler.js";
@@ -194,7 +195,7 @@ export async function up(
   // Config first because the proxy generation needs it, then fail on a missing
   // secret before any slot state is mutated or any container starts.
   info("Loading configuration...");
-  const servicesConfig = loadServices();
+  const servicesConfig = workspaceServices(loadServices(), workspace);
   const config = { services: servicesConfig, ports: loadPorts() };
   const localServices = readServicesFromWorkspace(workspace);
   requireSecrets(servicesConfig, localServices, workspace);
@@ -417,7 +418,7 @@ export async function startService(
       "NO_COMPOSE",
     );
   }
-  const config = { services: loadServices(), ports: loadPorts() };
+  const config = { services: workspaceServices(loadServices(), workspace), ports: loadPorts() };
   requireSecrets(config.services, [service], workspace);
   // compose refuses to start a service whose `.env.<svc>` is missing.
   writeServiceSecretEnvs(workspace, [service], config.services);
@@ -1172,6 +1173,9 @@ export interface RemoveResult {
  * always did — which is why the message carries no list: that line is layout.
  */
 export async function removeService(feature: string, service: string): Promise<RemoveResult> {
+  // shortcut: renders the registry's view, not the branch fragment's (SW-337), because no
+  // workspace path reaches here; the next `up` sees the compose as stale and re-renders it.
+  // Pass the workspace in, as `up` does, if a removed service must keep branch settings.
   const config = { services: loadServices(), ports: loadPorts() };
 
   const slot = await requireSlot(feature);
