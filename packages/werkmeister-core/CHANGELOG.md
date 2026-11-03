@@ -1,5 +1,16 @@
 # sandbox-core
 
+## 0.68.0
+
+### Minor Changes
+
+- 9368784: `werkmeister registry sync --from <worktree> --out <file>` merges that checkout's `.werkmeister/services.yaml` in place of its repo's fragment and writes the registry to `<file>`, so a fragment change can be proven inside the workspace before merge. `~/.werkmeister` is left untouched; `--check` works against `--out` too (SW-281).
+
+### Patch Changes
+
+- b442dfd: Devcontainer workspaces install the ponytail plugin in `postCreateCommand`, into the shared `~/.claude` volume, so Claude sessions inside the container run with ponytail like host sessions do.
+- 2c525f2: SW-377: the werkmeister-install-check hooks ship with the Claude Code plugin. The plugin's hooks module runs `skills/install-check/check.sh --fix` when an interactive session starts and, after a repair, refuses the person's next typed prompt once; messages from other sessions, background notifications, slash commands and headless sessions are never refused (SW-348). `werkmeister machine setup` retires the hand-copied `~/.claude/settings.json` hook entries and names the leftover `~/.claude/skills/werkmeister-install-check` folder.
+
 ## 0.67.0
 
 ### Minor Changes
