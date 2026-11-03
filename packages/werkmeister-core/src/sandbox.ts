@@ -151,6 +151,7 @@ import {
   type Deps,
   type Lifecycle,
   lifecycleOf,
+  originBase,
   removalBlockers,
   shipMerged,
 } from "./pr_lifecycle.js";
@@ -2332,8 +2333,27 @@ export async function commitAndPush(
     () => null,
   );
   const branch = br && br.code === 0 ? stripAnsi(br.stdout).trim() : null;
-  if (!branch || branch === "HEAD")
-    return { ok: false, message: `${label}: no branch to push (detached HEAD)` };
+  if (!branch || branch === "HEAD") {
+    // SW-372: after a merge a code worktree can be left detached at the base with its
+    // branch deleted. Clean and already on origin it has nothing to lose: pass it.
+    const st = await runCapture("git", ["-C", dir, "status", "--porcelain"]).catch(() => null);
+    const base = await originBase(dir);
+    const ahead = await commitsAhead(dir, base);
+    if (st?.code === 0 && !st.stdout.trim() && ahead === 0)
+      return {
+        ok: true,
+        message: `${label}: nothing to hand off (detached HEAD, already on ${base})`,
+      };
+    const why =
+      st?.code !== 0
+        ? "can't read its status"
+        : st.stdout.trim()
+          ? "uncommitted changes"
+          : ahead === null
+            ? `can't tell what's on ${base}`
+            : `${ahead} commit(s) not on ${base}`;
+    return { ok: false, message: `${label}: no branch to push (detached HEAD, ${why})` };
+  }
 
   // Named paths may be new files (an adopted PR file), so `-A` them; otherwise tracked changes only.
   // Commit only if something is staged (`diff --cached --quiet` exits 1 when there is).
