@@ -2167,7 +2167,8 @@ async function untouchedBlockers(ws: string, run: Run): Promise<string[]> {
   return out;
 }
 
-async function originBase(dir: string, run: Run): Promise<string> {
+/** Origin's default branch as a remote ref: `origin/HEAD`, else `origin/main`. */
+export async function originBase(dir: string, run: Run = execRun): Promise<string> {
   const head = await run("git", ["-C", dir, "rev-parse", "--abbrev-ref", "origin/HEAD"]);
   return head.code === 0 && head.stdout.trim() ? head.stdout.trim() : "origin/main";
 }
