@@ -558,10 +558,47 @@ function refuseInsideContainer(file: string): void {
   }
 }
 
+/** Where the `werkmeister` on PATH really lives (its `apps/cli`), or null when none. */
+function installedRoot(): string | null {
+  for (const dir of (process.env.PATH ?? "").split(path.delimiter)) {
+    if (!dir) continue;
+    try {
+      return path.dirname(fs.realpathSync(path.join(dir, "werkmeister")));
+    } catch {}
+  }
+  return null;
+}
+
+/**
+ * SW-363: werkmeister_root is self-derived, so a branch-built CLI run on the host
+ * (a test without with-temp-home, a worktree's `machine config`) would record its
+ * own worktree. Only the installed CLI moves the stored value; to move it by hand,
+ * edit config.yaml and run `werkmeister machine config --write`.
+ */
+function keepStoredRoot(cfg: GlobalConfig): void {
+  const next = cfg.paths?.werkmeister_root;
+  const stored = load().paths?.werkmeister_root;
+  if (!cfg.paths || !next || !stored || next === stored) return;
+  const real = (p: string) => {
+    try {
+      return fs.realpathSync(p);
+    } catch {
+      return p;
+    }
+  };
+  if (real(next) === real(stored) || real(next) === installedRoot()) return;
+  warn(
+    `Keeping werkmeister_root ${stored}: the running checkout ${next} is not the installed ` +
+      `werkmeister. Edit ${configPath()} to move it.`,
+  );
+  cfg.paths.werkmeister_root = stored;
+}
+
 /** Write the config YAML (creating ~/.werkmeister/ as needed). */
 export function save(cfg: GlobalConfig): string {
   const p = configPath();
   refuseInsideContainer(p);
+  keepStoredRoot(cfg);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, _HEADER + YAML.stringify(cfg));
   // `jira.api_token` is a live Atlassian credential — owner-only, like the
@@ -605,6 +642,7 @@ export function renderEnvSh(cfg: GlobalConfig): string {
 export function writeEnvSh(cfg: GlobalConfig): string {
   const p = envShPath();
   refuseInsideContainer(p);
+  keepStoredRoot(cfg);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, renderEnvSh(cfg));
   return p;
