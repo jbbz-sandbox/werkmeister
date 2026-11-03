@@ -196,9 +196,11 @@ export function registerClaudeTools(
     {
       title: "Resume Claude Session in Terminal",
       description:
-        "Open a macOS Terminal window in the workspace directory resuming its newest Claude " +
+        "Open a terminal in the workspace directory resuming its newest Claude " +
         "Code session (`claude --resume <id>`), fully interactive. Starts a fresh session " +
-        "when the workspace has none, or when `new` is set.",
+        "when the workspace has none, or when `new` is set. A VS Code integrated terminal " +
+        "when the caller runs in VS Code (`TERM_PROGRAM=vscode`, or `WERKMEISTER_LAUNCHER=vscode`), " +
+        "else a macOS Terminal window; the reply says which.",
       inputSchema: {
         ...sessionArg,
         sessionId: z
@@ -209,20 +211,31 @@ export function registerClaudeTools(
           .boolean()
           .optional()
           .describe("Start a fresh session instead of resuming one; ignores `sessionId`."),
+        prompt: z
+          .string()
+          .optional()
+          .describe("Text sent as the first message of the opened session."),
       },
       annotations: { readOnlyHint: false },
       outputSchema: z.object({
         path: z.string(),
         sessionId: z.string().nullable(),
+        launcher: z.enum(["terminal", "vscode"]),
       }),
     },
     async (args, extra): Promise<CallToolResult> => {
       try {
         const name = sessionKey(args.workspace, extra);
-        const result = await resumeClaudeInTerminal(name, args.sessionId, args.new === true);
+        const result = await resumeClaudeInTerminal(
+          name,
+          args.sessionId,
+          args.new === true,
+          args.prompt,
+        );
+        const where = result.launcher === "vscode" ? "a VS Code terminal" : "Terminal";
         const text = result.sessionId
-          ? `Opened Terminal resuming session ${result.sessionId} in ${result.path}.`
-          : `Opened Terminal with a new Claude session in ${result.path}.`;
+          ? `Opened ${where} resuming session ${result.sessionId} in ${result.path}.`
+          : `Opened ${where} with a new Claude session in ${result.path}.`;
         return {
           content: [{ type: "text", text }],
           structuredContent: result as unknown as Record<string, unknown>,

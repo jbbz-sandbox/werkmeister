@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { disposeOutputChannel, registerCommands } from "./commands.js";
+import { registerClaudeUriHandler } from "./harness/claude/terminals.js";
 import { disposeLogTerminals } from "./logs.js";
 import { disposeTerminals } from "./terminal.js";
 import { SandboxTreeProvider } from "./tree.js";
@@ -60,6 +61,7 @@ export function activate(context: vscode.ExtensionContext): void {
       provider.refresh();
     }),
     ...registerCommands(provider),
+    registerClaudeUriHandler(),
   );
 }
 

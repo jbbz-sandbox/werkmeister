@@ -58,8 +58,8 @@ export interface HarnessAdapter {
   ): Promise<{ signal: ClaudeSessionSignal; lastActivity: string | null }>;
   /** Token totals and cost estimate for the sessions started in *dir*. */
   usage(name: string, dir: string): Promise<WorkspaceUsage>;
-  /** Shell command that reopens a session interactively. */
-  resumeCommand(sessionId: string | null, model: string | null): string;
+  /** Shell command that reopens a session interactively; *prompt* becomes its first message. */
+  resumeCommand(sessionId: string | null, model: string | null, prompt?: string): string;
   /** Shell command that starts a tools-off PR-reconcile session in *dir*. */
   reconcileCommand(dir: string, ctxFile: string, prompt: string): string;
 }

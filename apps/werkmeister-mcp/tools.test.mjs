@@ -73,6 +73,8 @@ test("the Claude harness tools keep their names and workspace argument (SW-187)"
     assert.ok(t.description, `${n} has a description`);
     assert.ok(t.inputSchema?.properties?.workspace, `${n} has a workspace argument`);
   }
+  const resume = tools.find((x) => x.name === "claude-resume");
+  assert.ok(resume.inputSchema.properties.prompt, "claude-resume takes a prompt");
 });
 
 test("the UI-only tools are visible to the app only", async () => {
