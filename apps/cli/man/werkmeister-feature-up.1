@@ -38,6 +38,8 @@ Verifies k8s port\-forwards are healthy (restarts if needed)
 Starts containers with \fBdocker compose up \-d \-\-build \-\-remove\-orphans\fR
 .IP 7. 3
 Regenerates \fB~/.werkmeister/infra/proxy/Caddyfile\fR and reloads Caddy
+.IP 8. 3
+Warns about routed hostnames that do not resolve to 127.0.0.1 on this machine and prints the \fB/etc/hosts\fR line to add (the command still succeeds)
 .PP
 \fBOutput example:\fR
 .PP

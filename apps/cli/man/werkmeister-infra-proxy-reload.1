@@ -5,6 +5,6 @@ werkmeister\-infra\-proxy\-reload \- Regenerate Caddyfile and reload Caddy
 \fBwerkmeister infra proxy\-reload\fR
 .SH DESCRIPTION
 .PP
-Reads all active slot assignments, regenerates \fB~/.werkmeister/infra/proxy/Caddyfile\fR, and reloads (or starts) Caddy. Useful after manual config changes or if the proxy gets out of sync.
+Reads all active slot assignments, regenerates \fB~/.werkmeister/infra/proxy/Caddyfile\fR, and reloads (or starts) Caddy. Useful after manual config changes or if the proxy gets out of sync. Warns about routed hostnames that do not resolve to 127.0.0.1 on this machine and prints the \fB/etc/hosts\fR line to add.
 .SH SEE ALSO
 \fBwerkmeister\fR(1)

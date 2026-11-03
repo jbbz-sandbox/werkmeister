@@ -64,7 +64,12 @@ import {
 import { docker, listVolumeNames, projectContainers, removeVolume } from "./docker.js";
 import { dotDir } from "./dot_dir.js";
 import { SandboxError } from "./errors.js";
-import { loadFeatureRouters } from "./feature_routing.js";
+import {
+  type HostLookup,
+  ingressHostnames,
+  loadFeatureRouters,
+  warnUnresolvedHosts,
+} from "./feature_routing.js";
 import {
   generateCaddyfile,
   generateFeatureCompose,
@@ -270,6 +275,8 @@ export async function up(
 
   info("Configuring reverse proxy...");
   await generateCaddyfile(null, config);
+  // Not gated on the Caddy skip below: the resolver is this machine's whichever Caddy serves (SW-341).
+  await warnUnresolvedHosts(ingressHostnames(servicesConfig));
 
   let caddy: UpResult["caddy"];
   const caddySkip = sharedProxySkipReason();
@@ -1239,6 +1246,10 @@ export interface ProxyOps {
   running: () => Promise<boolean>;
   reload: () => Promise<boolean>;
   start: () => boolean;
+  /** Every host the Caddyfile just written routes (SW-341). */
+  hosts: () => string[];
+  /** Omitted: the platform resolver. */
+  lookup?: HostLookup;
 }
 
 // Wrapped rather than referenced: a bare `slots: getAllSlots` reads the imported
@@ -1251,6 +1262,7 @@ const REAL_PROXY_OPS: ProxyOps = {
   running: () => isCaddyRunning(),
   reload: () => reloadCaddy(),
   start: () => startCaddy(),
+  hosts: () => ingressHostnames(),
 };
 
 export async function reloadProxy(
@@ -1259,6 +1271,7 @@ export async function reloadProxy(
 ): Promise<ProxyReloadResult> {
   info(start ? "Regenerating Caddyfile..." : "Updating reverse proxy configuration...");
   await ops.generate();
+  await warnUnresolvedHosts(ops.hosts(), ops.lookup);
 
   const allFeatures = await ops.slots();
   const features = Object.keys(allFeatures)

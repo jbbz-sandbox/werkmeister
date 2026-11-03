@@ -23,10 +23,13 @@ const SLOTS = {
 };
 
 /** Real ops replaced by recorders. `calls` is the sequence, for ordering. */
-function fakeOps({ slots = SLOTS, running = true, reload = true, start = true } = {}) {
+function fakeOps({ slots = SLOTS, running = true, reload = true, start = true, hosts = [] } = {}) {
   const calls = [];
   return {
     calls,
+    hosts: () => hosts,
+    // Every host unresolved: the fake never consults this machine's /etc/hosts.
+    lookup: async () => [],
     generate: async () => {
       calls.push("generate");
       return "/tmp/Caddyfile";
@@ -126,4 +129,11 @@ test("a failed start reports ok: false and still counts as started", async () =>
   const { result } = await transcript({ start: true }, fakeOps({ running: false, start: false }));
   assert.equal(result.ok, false);
   assert.equal(result.started, true);
+});
+
+test("a routed host that does not resolve is warned about after the Caddyfile is written, and ok stays true", async () => {
+  // SW-341: `feature up --service` reaches the proxy only through here.
+  const { result, text } = await transcript(undefined, fakeOps({ hosts: ["x.local.test"] }));
+  assert.equal(result.ok, true);
+  assert.ok(text.includes('echo "127.0.0.1 x.local.test" | sudo tee -a /etc/hosts'), text);
 });

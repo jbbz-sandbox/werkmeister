@@ -14,6 +14,7 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 5. Verifies k8s port-forwards are healthy (restarts if needed)
 6. Starts containers with `docker compose up -d --build --remove-orphans`
 7. Regenerates `~/.werkmeister/infra/proxy/Caddyfile` and reloads Caddy
+8. Warns about routed hostnames that do not resolve to 127.0.0.1 on this machine and prints the `/etc/hosts` line to add (the command still succeeds)
 
 **Output example:**
 
