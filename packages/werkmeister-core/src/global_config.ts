@@ -41,6 +41,7 @@ import {
   servicesLocalYamlPath,
   servicesYamlPath,
 } from "./config.js";
+import { SandboxError } from "./errors.js";
 import { projectProblems } from "./projects.js";
 import { warn } from "./reporter.js";
 
@@ -527,9 +528,40 @@ const _HEADER =
   "# Managed by `werkmeister machine config`; safe to hand-edit, then run " +
   "`werkmeister machine config --check`.\n";
 
+/**
+ * True inside any workspace container: compose exports `WERKMEISTER_FEATURE`
+ * (`SANDBOX_FEATURE` before SW-106) and Docker writes `/.dockerenv`. The
+ * feature-agnostic twin of `lifecycle.ts` `insideOwnContainer`, kept here so the
+ * config layer does not import compose, docker and k8s.
+ */
+export function insideContainer(
+  env: NodeJS.ProcessEnv = process.env,
+  dockerenv = "/.dockerenv",
+): boolean {
+  return Boolean(env.WERKMEISTER_FEATURE ?? env.SANDBOX_FEATURE) && fs.existsSync(dockerenv);
+}
+
+/**
+ * SW-354: a workspace container runs with HOME set to the host home and the
+ * host's `~/.werkmeister` bind-mounted read-write, so writing the default config
+ * from inside pins the host's werkmeister_root to the container's /app. A
+ * relocated config (`WERKMEISTER_CONFIG_FILE`, what every test sets) is still written.
+ */
+function refuseInsideContainer(file: string): void {
+  if (insideContainer() && !envVar("CONFIG_FILE")) {
+    throw new SandboxError(
+      `Refusing to write ${file} from inside a workspace container: it is the host's ` +
+        "machine config, bind-mounted here, and the running checkout is the container's /app.\n" +
+        "       Run it from the host, or set WERKMEISTER_CONFIG_FILE to a scratch file.",
+      "INSIDE_CONTAINER",
+    );
+  }
+}
+
 /** Write the config YAML (creating ~/.werkmeister/ as needed). */
 export function save(cfg: GlobalConfig): string {
   const p = configPath();
+  refuseInsideContainer(p);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, _HEADER + YAML.stringify(cfg));
   // `jira.api_token` is a live Atlassian credential — owner-only, like the
@@ -572,6 +604,7 @@ export function renderEnvSh(cfg: GlobalConfig): string {
 
 export function writeEnvSh(cfg: GlobalConfig): string {
   const p = envShPath();
+  refuseInsideContainer(p);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, renderEnvSh(cfg));
   return p;

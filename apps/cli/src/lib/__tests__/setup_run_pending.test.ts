@@ -1,6 +1,7 @@
 /**
  * SW-343: a required step skipped on purpose (no TTY / --yes) is ⚠ and the summary
- * must not claim success. runSetup and the reporter are stubbed: nothing touches the machine.
+ * must not claim success. runSetup, the reporter and the config writers are stubbed: nothing
+ * touches the machine (SW-354: unstubbed, `run` wrote the host's ~/.werkmeister from the gate container).
  */
 import { expect, it, vi } from "vitest";
 
@@ -10,6 +11,14 @@ vi.mock("werkmeister-core/reporter", async (orig) => ({
   success: (m: string) => said.push(`[ok] ${m}`),
   warn: (m: string) => said.push(`[warn] ${m}`),
   info: () => {},
+}));
+vi.mock("werkmeister-core/global_config", async (orig) => ({
+  ...(await orig<object>()),
+  save: () => "",
+  writeEnvSh: () => "",
+  ensureZshenvSources: () => false,
+  ensureZshrcCompletion: () => false,
+  patchDesktopConfig: () => false,
 }));
 vi.mock("werkmeister-core/machine_setup", async (orig) => ({
   ...(await orig<object>()),
