@@ -18,6 +18,7 @@ import {
   writePrGuardHook,
   writeWorkspaceSettings,
 } from "../harness/claude/hooks_gen.js";
+import { harnessLayoutFor, hooksAvailable } from "../harness/layout.js";
 import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import { buildPrRulesMd, CHAT_APPROVAL } from "../pr_rules.js";
@@ -500,10 +501,11 @@ function init(ctx: InitContext): void {
         "To regenerate them from the current template, move stages/ aside and rerun.",
     );
   }
+  const layout = harnessLayoutFor(root);
   const files: Record<string, string> = foreign.length
     ? {}
     : {
-        "CLAUDE.md": renderClaudeMd(ctx, stages),
+        [layout.instructionsFile]: renderClaudeMd(ctx, stages) + layout.notice(),
         "CONTEXT.md": renderPipeline(ctx, stages),
         ...render(ctx),
       };
@@ -548,6 +550,7 @@ export const icm: ContextStrategy = {
       fs.rmSync(gateDir, { recursive: true, force: true });
       info(`Removed ${path.basename(dotDir(root))}/.gate/`);
     }
+    if (!hooksAvailable(root)) return;
     writePrGuardHook(root);
     writeWorkspaceSettings(root);
   },
@@ -564,6 +567,6 @@ export const icm: ContextStrategy = {
   // Re-injection is the route table the agent reads by itself; there is no hook.
   sessionContext: () => null,
   gate() {},
-  ownedPaths: () => ["CLAUDE.md", "CONTEXT.md", "BRIEF.md", "_shared", "stages"],
+  ownedPaths: () => ["CLAUDE.md", "AGENTS.md", "CONTEXT.md", "BRIEF.md", "_shared", "stages"],
   decisions: stageDecisions,
 };

@@ -148,6 +148,43 @@ test("a tool call goes through to core: list-workspaces reads the workspaces roo
   }
 });
 
+test("hooks: says written on claude and unavailable on the mcp harness (SW-188)", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-tools-root-"));
+  for (const [name, harness] of [
+    ["claudews", ""],
+    ["mcpws", "harness: mcp\n"],
+  ]) {
+    fs.mkdirSync(path.join(root, name, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(
+      path.join(root, name, ".werkmeister", "workspace.yml"),
+      `context_strategy: icm\n${harness}`,
+    );
+  }
+  try {
+    await withSandboxHome(
+      async () => {
+        const client = await connect();
+        const claude = await client.callTool({
+          name: "hooks",
+          arguments: { workspace: "claudews" },
+        });
+        assert.ok(!claude.isError, JSON.stringify(claude.content));
+        assert.equal(claude.structuredContent.hooks, "written");
+        assert.ok(fs.existsSync(path.join(root, "claudews", ".claude", "settings.json")));
+
+        const mcp = await client.callTool({ name: "hooks", arguments: { workspace: "mcpws" } });
+        assert.ok(!mcp.isError, JSON.stringify(mcp.content));
+        assert.match(mcp.structuredContent.hooks, /^unavailable: /);
+        assert.match(mcp.content[0].text, /unavailable/);
+        assert.ok(!fs.existsSync(path.join(root, "mcpws", ".claude")));
+      },
+      { config: `paths:\n  workspaces_root: ${root}\n` },
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("notes: an icm workspace lists its stage-output decisions and graduates one", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-tools-root-"));
   const ws = path.join(root, "icmws");

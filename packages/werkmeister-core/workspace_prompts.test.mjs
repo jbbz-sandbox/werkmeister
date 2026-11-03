@@ -41,6 +41,7 @@ test("the spec carries the wizard prompts, with repos spliced after services", (
       "feature",
       "work_type",
       "context_strategy",
+      "harness",
       "autonomous",
       "model",
       "auto_stop",

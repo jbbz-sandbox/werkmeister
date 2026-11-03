@@ -33,6 +33,7 @@ import {
   writeFragment,
 } from "werkmeister-core/fragment_detect";
 import { graduateNote } from "werkmeister-core/graduate";
+import { harnessLayoutFor } from "werkmeister-core/harness_layout";
 import { connectK8s, up as infraUp } from "werkmeister-core/infra";
 import {
   down,
@@ -572,8 +573,9 @@ function registerAuthoringTools(server: McpServer): void {
       annotations: { readOnlyHint: false },
       description:
         "Refresh the workspace's context layer the way `werkmeister feature up` does: jit re-merges its " +
-        "SessionStart and PreToolUse hooks into .claude/settings.json; icm removes any " +
-        "werkmeister-managed hooks. Never touches hooks it does not own.",
+        "SessionStart and PreToolUse hooks into the harness's settings; icm removes any " +
+        "werkmeister-managed hooks. Never touches hooks it does not own. On a harness without " +
+        "hooks (`harness: mcp`) nothing is written and `hooks` says why.",
       inputSchema: { ...WORKSPACE_ARG },
     },
     async (args, extra): Promise<CallToolResult> =>
@@ -581,7 +583,11 @@ function registerAuthoringTools(server: McpServer): void {
         const workspace = resolveWorkspace(args.workspace, headersOf(extra)).dir;
         const strategy = strategyFor(workspace);
         strategy.refresh(workspace);
-        return { strategy: strategy.id };
+        const { hooks } = harnessLayoutFor(workspace);
+        return {
+          strategy: strategy.id,
+          hooks: hooks.available ? "written" : `unavailable: ${hooks.reason}`,
+        };
       }),
   );
 

@@ -1,7 +1,7 @@
 /**
  * Workspace skill projection — docs/jit-context-system.md §5.
  *
- * The w9r-* skills are projected into each workspace's `.claude/skills/`
+ * The w9r-* skills are projected into each workspace's skills dir (`.claude/skills/`, or the harness's)
  * at init-workspace, exactly like the generated agents — NOT shipped through
  * the user-scope werkmeister plugin. Projection scopes them to the sessions
  * they apply to and kills the plugin-refresh lag for the volatile skills:
@@ -28,6 +28,7 @@ import * as path from "node:path";
 
 import { infraRoot } from "./config.js";
 import { loadManifest } from "./gate.js";
+import { harnessLayoutFor } from "./harness/layout.js";
 import { info, success } from "./reporter.js";
 import { generateSkills, skillNameFor, validateModuleReferences } from "./skill_gen.js";
 import type { StandardsManifest } from "./standards.js";
@@ -40,7 +41,7 @@ import {
 } from "./standards.js";
 import { loadConfigFile, loadSandboxServiceConfigs, planFor } from "./workspace_prompts.js";
 
-// Skill dirs with these prefixes under a workspace's .claude/skills/ are managed by
+// Skill dirs with these prefixes under a workspace's skills dir are managed by
 // this module: written on init/sync, pruned when their source disappears. `sb-` is the
 // pre-SW-106 prefix: nothing renders it any more, so its dirs prune as orphans.
 const _MANAGED_PREFIXES = ["w9r-", "sb-"];
@@ -109,16 +110,15 @@ export function renderWorkspaceSkills(
         skills[name] = {
           "SKILL.md": fs.readFileSync(path.join(source, name, "SKILL.md"), "utf8"),
         };
-      } catch {
-        continue;
-      }
+      } catch {}
     }
   }
   return skills;
 }
 
+/** The harness's project skills dir: `.claude/skills` for Claude Code, `.agents/skills` for mcp. */
 export function workspaceSkillsDir(workspaceRoot: string): string {
-  return path.join(workspaceRoot, ".claude", "skills");
+  return path.join(workspaceRoot, harnessLayoutFor(workspaceRoot).skillsDir);
 }
 
 /**
