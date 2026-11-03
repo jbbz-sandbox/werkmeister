@@ -1,5 +1,17 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.66.0
+
+### Minor Changes
+
+- 2da3414: SW-341: `werkmeister feature up` (including `--service`) and `werkmeister infra proxy-reload` now resolve every routed hostname after regenerating the Caddyfile and warn about any that does not resolve to 127.0.0.1 on this machine, printing the exact `echo "127.0.0.1 <hosts>" | sudo tee -a /etc/hosts` line and pointing at `werkmeister machine setup`. The command still succeeds.
+
+### Patch Changes
+
+- 1f1894f: SW-357: `feature restart` help says a registry or `services.yaml` change needs `feature up`, not restart.
+- d543024: Machine config writes (`werkmeister machine config --write`, `machine setup`, `machine migrate`) refuse inside a workspace container with `INSIDE_CONTAINER`: the container's HOME is the host home and `~/.werkmeister` is bind-mounted, so a write there pinned the host's `werkmeister_root` and `env.sh` to the container's `/app/apps/cli` (SW-354). A config relocated with `WERKMEISTER_CONFIG_FILE` is still written. The `setup_run_pending` test, which did the writing from the PR gate's container, now stubs the writers.
+- a2a7db3: `werkmeister feature up` commits the `.claude/settings.json` and `.werkmeister/claude-permissions.json` it rewrites on the record branch (`chore: refresh Claude settings`), the way `workspace create` commits them, instead of leaving them uncommitted when a werkmeister upgrade added a permission rule since the workspace was inited.
+
 ## 0.65.0
 
 ### Minor Changes
