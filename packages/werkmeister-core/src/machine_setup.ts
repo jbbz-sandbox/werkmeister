@@ -1274,6 +1274,126 @@ export function syncClaudeStandardsDir(
   return [{ label, ok: true, optional: true, detail: `granted in ${settingsPath}` }];
 }
 
+export const LEGACY_INSTALL_CHECK = "werkmeister-install-check";
+
+export interface LegacyInstallCheckState {
+  /** Unparsable settings.json, or `hooks` that isn't an object. */
+  error?: string;
+  /** Hook events still running a command out of the hand-copied skill folder. */
+  hookEvents: string[];
+  /** `~/.claude/skills/werkmeister-install-check` still exists. */
+  folder: boolean;
+  /** Raw settings text the edit applies to. */
+  text: string;
+}
+
+function isLegacyInstallCheckHook(hook: unknown): boolean {
+  return (
+    typeof hook === "object" &&
+    hook !== null &&
+    String((hook as Record<string, unknown>)["command"] ?? "").includes(`${LEGACY_INSTALL_CHECK}/`)
+  );
+}
+
+/**
+ * The install-check hooks as they were before SW-377: command hooks in the user settings
+ * pointing into an untracked `~/.claude/skills/werkmeister-install-check/`. The plugin ships
+ * them now, so a copy left behind runs the check twice and refuses a prompt twice.
+ */
+export function legacyInstallCheckState(
+  settingsPath = claudeUserSettingsPath(),
+  skillsDir = path.join(os.homedir(), ".claude", "skills"),
+): LegacyInstallCheckState {
+  const state: LegacyInstallCheckState = {
+    hookEvents: [],
+    folder: fs.existsSync(path.join(skillsDir, LEGACY_INSTALL_CHECK)),
+    text: "{}",
+  };
+  if (fs.existsSync(settingsPath)) state.text = fs.readFileSync(settingsPath, "utf8");
+  const errors: ParseError[] = [];
+  const data = parseJsonc(state.text, errors, { allowTrailingComma: true });
+  if (errors.length) {
+    state.error = `parse error at offset ${errors[0].offset}`;
+    return state;
+  }
+  const hooks = data?.["hooks"];
+  if (hooks === undefined) return state;
+  if (typeof hooks !== "object" || hooks === null || Array.isArray(hooks)) {
+    state.error = "hooks is not an object";
+    return state;
+  }
+  for (const [event, groups] of Object.entries(hooks)) {
+    const legacy = (Array.isArray(groups) ? groups : []).some((g: any) =>
+      (Array.isArray(g?.hooks) ? g.hooks : []).some(isLegacyInstallCheckHook),
+    );
+    if (legacy) state.hookEvents.push(event);
+  }
+  return state;
+}
+
+/**
+ * Retire the hand-copied install-check hooks: drop their entries from the user settings
+ * (a group or event emptied by that goes too), and name the skill folder for the person to
+ * remove. Like `retireLegacyPlugin`, no step when there is nothing to retire.
+ */
+export function syncLegacyInstallCheck(
+  checkOnly: boolean,
+  settingsPath = claudeUserSettingsPath(),
+  skillsDir = path.join(os.homedir(), ".claude", "skills"),
+): Step[] {
+  const label = "install-check hooks";
+  const state = legacyInstallCheckState(settingsPath, skillsDir);
+  const steps: Step[] = [];
+  if (state.error) {
+    steps.push({
+      label,
+      ok: false,
+      optional: true,
+      detail: `${settingsPath}: ${state.error} — fix it and re-run`,
+    });
+  } else if (state.hookEvents.length) {
+    const events = state.hookEvents.join(", ");
+    if (checkOnly) {
+      steps.push({
+        label,
+        ok: false,
+        detail:
+          `hand-copied hooks still in ${settingsPath} (${events}); the plugin ships them now — ` +
+          "run `werkmeister machine setup`",
+      });
+    } else {
+      const hooks = parseJsonc(state.text, [], { allowTrailingComma: true })["hooks"];
+      const kept: Record<string, unknown[]> = {};
+      for (const [event, groups] of Object.entries(hooks as Record<string, any[]>)) {
+        const rest = groups
+          .map((g) =>
+            Array.isArray(g?.hooks)
+              ? { ...g, hooks: g.hooks.filter((h: unknown) => !isLegacyInstallCheckHook(h)) }
+              : g,
+          )
+          .filter((g) => !Array.isArray(g?.hooks) || g.hooks.length);
+        if (rest.length) kept[event] = rest;
+      }
+      // shortcut: one modify of the whole `hooks` value drops comments inside it; edit per entry if anyone keeps notes there.
+      const edits = modify(state.text, ["hooks"], Object.keys(kept).length ? kept : undefined, {
+        formattingOptions: { insertSpaces: true, tabSize: 2 },
+      });
+      fs.writeFileSync(settingsPath, applyEdits(state.text, edits));
+      steps.push({ label, ok: true, detail: `removed from ${settingsPath}: ${events}` });
+    }
+  }
+  if (state.folder) {
+    const folder = path.join(skillsDir, LEGACY_INSTALL_CHECK);
+    steps.push({
+      label,
+      ok: false,
+      optional: true,
+      detail: `${folder} is now the plugin's install-check skill — rm -rf ${folder}`,
+    });
+  }
+  return steps;
+}
+
 // ---------------------------------------------------------------------------
 // PR watch schedule (SW-14): terminal sessions get PR callbacks only if
 // something runs `pr watch` on a timer — desktop sessions have the mod's.
@@ -2120,6 +2240,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   steps.push(...syncPlaywright(runner, checkOnly, options.interactiveRunner));
   steps.push(...syncEditorSchemas(checkOnly, options.mapEditorSchemas ?? false));
   steps.push(...syncClaudeStandardsDir(checkOnly, options.grantStandardsDir ?? false));
+  steps.push(...syncLegacyInstallCheck(checkOnly));
   steps.push(
     ...syncVscodeExtension(
       checkOnly,

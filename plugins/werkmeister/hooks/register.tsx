@@ -191,6 +191,10 @@ const INTERCEPT = "intercept:";
 const PRS = { plugin: "werkmeister", key: "prs" } as const;
 const PRS_POLL = { plugin: "werkmeister", key: "prsPoll" } as const;
 const LEGEND = { plugin: "werkmeister", key: "legend" } as const;
+const RELINKED = { plugin: "werkmeister", key: "relinked" } as const;
+const INSTALL_CHECK = "skills/install-check/check.sh";
+const RESTART =
+  "Restart Claude Code (or run /mcp and /reload-plugins), then send your prompt again.";
 /** BUSY while `werkmeister infra connect` runs; no workspace name has parentheses. */
 const CONNECTING = "(connect)";
 
@@ -1645,6 +1649,29 @@ async function holdsWorkspaces($: EngineInterface, dir: string): Promise<boolean
   return false;
 }
 
+/**
+ * Runs the plugin's check.sh --fix at session start. Exit 2 means no repo checkout: not a dev
+ * machine, nothing to say. Only a repair arms the prompt gate: report-only drift (env.sh, a
+ * marketplace plugin) would otherwise refuse a prompt in every session.
+ */
+export async function runInstallCheck($: EngineInterface, isInteractive: boolean): Promise<void> {
+  // SW-319 (b): nobody can restart a headless session, so a refusal there only kills the turn.
+  if (!isInteractive) return;
+  const r = await $.process
+    .run(["bash", `${$.plugin.root}/${INSTALL_CHECK}`, "--fix"], { timeoutMs: 90_000 })
+    .catch((err: Error) => ({ exitCode: 1, stdout: "", stderr: err.message }));
+  if (r.exitCode === 0 || r.exitCode === 2) return;
+  $.ui.log(
+    `werkmeister-install-check ran --fix at session start:\n${(r.stdout + r.stderr).trim()}`,
+  );
+  if (!/^FIX /m.test(r.stdout)) return;
+  await $.state.set(RELINKED, true);
+  $.ui.toast(
+    `werkmeister install drift found and fixed, but this session still runs the old MCP server and skill list. ${RESTART}`,
+    { timeoutMs: 15_000 },
+  );
+}
+
 export const register: Register = (on) => {
   on("session.start", async ($, e, next) => {
     await $.command.register({
@@ -1686,7 +1713,23 @@ export const register: Register = (on) => {
     } else if (e.isInteractive && (await holdsWorkspaces($, e.cwd))) await openPane($);
     if (e.surface === "desktop" && (await inWorkspace($, e.cwd))) await fileInGroup($);
     if (e.surface === "desktop") startCallbacks($);
+    await runInstallCheck($, e.isInteractive).catch(() => undefined);
     return next(e);
+  });
+
+  // A relayed message, a background notification or a slash command is gone for good when refused,
+  // and its sender never learns (SW-348): only the person's own typed prompt is refused, once.
+  on("prompt.submit", async ($, e, next) => {
+    const typed = (e.origin.kind === "composer" || e.origin.kind === "bridge") && !e.command;
+    if (!typed) return next(e);
+    const { value } = await $.state.get(RELINKED);
+    if (!value) return next(e);
+    await $.state.set(RELINKED, false);
+    return {
+      drop:
+        "werkmeister was re-linked at session start, so this session still runs the old werkmeister " +
+        `MCP server and skill list. ${RESTART} This message shows once.`,
+    };
   });
 
   on("command.run", { command: "workspaces" }, async ($) => {

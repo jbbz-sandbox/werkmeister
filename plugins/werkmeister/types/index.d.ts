@@ -216,6 +216,8 @@ declare module "claude-code" {
       prsPoll: "ok" | "failed";
       /** The ? legend is shown. */
       legend: boolean;
+      /** check.sh --fix re-linked werkmeister this session; the next typed prompt is refused once (SW-377). */
+      relinked: boolean;
       /** The pane's open tab. */
       tab: "list" | "create";
       /** List only workspaces labelled `focus`. */
