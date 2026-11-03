@@ -113,7 +113,7 @@ server. Until that is widened, use:
 
 <!-- generated:mcp-tools -->
 
-56 tools (6 UI-only).
+57 tools (6 UI-only).
 
 | Tool | What it does |
 | --- | --- |
@@ -170,6 +170,7 @@ server. Until that is widened, use:
 | `kube-context` | Current Kube Context |
 | `kube-switch` | Switch Kube Context |
 | `claude-transcript` | Claude Code Session Transcript |
+| `relay-check` | Relay Check |
 | `claude-send` | Send to Claude Code Session |
 | `claude-turn-status` | Claude Turn Status (UI-only) |
 | `claude-resume` | Resume Claude Session in Terminal |

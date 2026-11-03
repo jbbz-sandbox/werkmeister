@@ -224,6 +224,7 @@ export function parseSessionLines(text: string): ClaudeMessage[] {
     let entry: {
       type?: string;
       isMeta?: boolean;
+      origin?: { kind?: string };
       timestamp?: string;
       message?: { role?: string; content?: unknown };
     };
@@ -232,7 +233,8 @@ export function parseSessionLines(text: string): ClaudeMessage[] {
     } catch {
       continue;
     }
-    if (entry.isMeta) continue;
+    // A message relayed from another session is a meta row; keep it so a relay can be checked (SW-348).
+    if (entry.isMeta && entry.origin?.kind !== "peer") continue;
     if (entry.type !== "user" && entry.type !== "assistant") continue;
     const role = entry.message?.role;
     const ts = entry.timestamp ?? null;
