@@ -55,6 +55,7 @@ const ARGS = {
   "workspace-usage": { workspace: "alpha" },
   "claude-transcript": { workspace: "alpha" },
   "claude-turn-status": { workspace: "alpha" },
+  "relay-check": { workspace: "alpha", sentAt: "2026-11-02T13:56:26Z", text: "continue" },
 };
 
 test("every tool says whether it is read-only", async () => {

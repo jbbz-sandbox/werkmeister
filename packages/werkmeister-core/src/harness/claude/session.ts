@@ -234,6 +234,25 @@ export function deniedIn(stdout: string): string[] {
   return [...new Set(calls)];
 }
 
+/**
+ * Whether a message relayed at `sentAt` ran in the target session: a user turn
+ * after the send that holds its text. SendMessage succeeding and an idle notice
+ * arriving prove nothing: a UserPromptSubmit hook can drop the prompt (SW-348).
+ */
+export function relayPickedUp(
+  messages: ClaudeMessage[],
+  relay: { sentAt: string; text: string },
+): boolean {
+  const sentAt = Date.parse(relay.sentAt);
+  return messages.some(
+    (m) =>
+      m.role === "user" &&
+      m.timestamp !== null &&
+      Date.parse(m.timestamp) > sentAt &&
+      m.text.includes(relay.text),
+  );
+}
+
 export interface ClaudeTurnState {
   pid: number | null;
   startedAt: string;

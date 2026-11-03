@@ -67,7 +67,13 @@ test("every verb has one name: the merged names are listed, the old ones are not
 
 test("the Claude harness tools keep their names and workspace argument (SW-187)", async () => {
   const { tools } = await (await connect()).listTools();
-  for (const n of ["claude-transcript", "claude-send", "claude-turn-status", "claude-resume"]) {
+  for (const n of [
+    "claude-transcript",
+    "claude-send",
+    "claude-turn-status",
+    "claude-resume",
+    "relay-check",
+  ]) {
     const t = tools.find((x) => x.name === n);
     assert.ok(t, `missing ${n}`);
     assert.ok(t.description, `${n} has a description`);

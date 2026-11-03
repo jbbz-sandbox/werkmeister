@@ -9,6 +9,7 @@ import {
   getClaudeTranscript,
   getClaudeTurnStatus,
   listSessions,
+  relayPickedUp,
   resumeClaudeInTerminal,
   sendToClaudeSession,
 } from "werkmeister-core";
@@ -93,6 +94,48 @@ export function registerClaudeTools(
         return {
           content: [{ type: "text", text }],
           structuredContent: { ...result, sessions } as unknown as Record<string, unknown>,
+        };
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  // --- Tool: did a relayed message run in the workspace's session? ----------
+  // A SendMessage success and an idle notice do not prove the turn ran: a
+  // UserPromptSubmit hook can drop the prompt and the session is idle at once
+  // (SW-348). The check-in skill's step 4 calls this after the idle notice.
+  server.registerTool(
+    "relay-check",
+    {
+      title: "Relay Check",
+      description:
+        "Whether a message relayed to a workspace's live Claude Code session was picked up: " +
+        "a user turn after `sentAt` holding `text` in the newest transcript. When it was not, " +
+        "`hint` is the line to report instead of a success: `not picked up: type <text> in <session>`.",
+      inputSchema: {
+        ...sessionArg,
+        sentAt: z.string().describe("ISO time the message was sent (just before SendMessage)."),
+        text: z.string().describe("The message text as sent, or a distinctive part of it."),
+      },
+      annotations: { readOnlyHint: true },
+      outputSchema: z.object({
+        pickedUp: z.boolean(),
+        sessionId: z.string().nullable(),
+        hint: z.string(),
+      }),
+    },
+    async (args, extra): Promise<CallToolResult> => {
+      try {
+        const name = sessionKey(args.workspace, extra);
+        const { sessionId, messages } = await getClaudeTranscript(name, 200);
+        const pickedUp = relayPickedUp(messages, { sentAt: args.sentAt, text: args.text });
+        const hint = pickedUp
+          ? `picked up: ${name} ran the relayed message`
+          : `not picked up: type ${JSON.stringify(args.text)} in ${name}`;
+        return {
+          content: [{ type: "text", text: hint }],
+          structuredContent: { pickedUp, sessionId, hint },
         };
       } catch (e) {
         return fail(e);

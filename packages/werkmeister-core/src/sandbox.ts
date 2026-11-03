@@ -37,6 +37,7 @@ export {
   type ClaudeTurnState,
   claudeResumeCommand,
   claudeSendArgs,
+  relayPickedUp,
   turnEvents,
 } from "./harness/claude/session.js";
 export {
