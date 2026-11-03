@@ -164,3 +164,42 @@ test("a baseline service's row shows its upstream URL (SW-102)", async () => {
     },
   );
 });
+
+test("local-only hosts are marked and the features.json line is added (SW-300)", async () => {
+  await withSandboxHome(
+    async () => {
+      const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend"], loadServices(), "/");
+      // Every SERVICES host is `feature_router: {}`: local-only, in both sections.
+      assert.match(
+        out,
+        /# frontend\.local\.werkmeister\.io answers only while a feature runs its service/,
+      );
+      assert.match(
+        out,
+        /- `https:\/\/dashboard\.local\.werkmeister\.io` — answers only while a feature runs its service/,
+      );
+      assert.match(
+        out,
+        /curl exit 35\) while `w9r-caddy` is healthy, check `~\/\.werkmeister\/infra\/proxy\/features\.json` first/,
+      );
+    },
+    { services: SERVICES },
+  );
+});
+
+test("a host with a remote upstream is not marked local-only (SW-300)", async () => {
+  await withSandboxHome(
+    async () => {
+      const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend"], loadServices(), "/");
+      assert.doesNotMatch(out, /frontend\.local\.werkmeister\.io`? (— )?answers only/);
+      assert.match(out, /dashboard\.local\.werkmeister\.io` — answers only/);
+    },
+    // Only frontend gets a remote upstream; backend and dashboard stay local-only.
+    {
+      services: SERVICES.replace(
+        "feature_router: {}",
+        "feature_router: {remote_upstream: k8s-fe:9051}",
+      ),
+    },
+  );
+});
