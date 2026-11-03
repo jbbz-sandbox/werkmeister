@@ -41,9 +41,14 @@ function must<T>(value: T | null | undefined): T {
 type McpStub = Record<string, (args: Record<string, unknown>) => McpAnswer | Promise<McpAnswer>>;
 
 /** Stubs every noun the module calls. `calls` records each mcp.call as `server/tool`. */
-function world(on: On, stubs: McpStub = {}) {
+/** What `check.sh --fix` answers at session start; clean unless a test says otherwise. */
+type CheckAnswer = { exitCode: number; stdout: string };
+const CLEAN: CheckAnswer = { exitCode: 0, stdout: "RESULT clean\n" };
+
+function world(on: On, stubs: McpStub = {}, check: CheckAnswer = CLEAN) {
   const calls: { key: string; args: Record<string, unknown>; via: "mcp" | "process" }[] = [];
   const toasts: string[] = [];
+  const logs: string[] = [];
   const clock = mock.clock(on);
   on("ui.open", () => ({ value: { isPlaced: true as const } }));
   on("ui.close", () => ({ value: undefined }));
@@ -51,6 +56,13 @@ function world(on: On, stubs: McpStub = {}) {
   // The workspace server's tools run in a node child (the auto-mode gate refuses a plugin's own MCP call):
   // the request rides on stdin as { op, ...args }; the same `stubs` map answers by `${WS}/${op}`.
   on("process.run", async (_$, e) => {
+    // The install check is the one bash child; everything else is the workspace server's node child.
+    if (e.argv[0] === "bash") {
+      calls.push({ key: "install-check", args: { argv: e.argv }, via: "process" });
+      return {
+        value: { ...check, stderr: "", isStdoutTruncated: false, isStderrTruncated: false },
+      };
+    }
     const { op, ...args } = JSON.parse(e.init?.stdin ?? "{}") as { op: string } & Record<
       string,
       unknown
@@ -74,7 +86,10 @@ function world(on: On, stubs: McpStub = {}) {
       },
     };
   });
-  on("ui.log", () => ({ value: undefined }));
+  on("ui.log", (_$, e) => {
+    logs.push(e.text);
+    return { value: undefined };
+  });
   on("ui.toast", (_$, e) => {
     toasts.push(e.text);
     return { value: undefined };
@@ -91,7 +106,7 @@ function world(on: On, stubs: McpStub = {}) {
       };
     return { value: await stub(e.args) };
   });
-  return { calls, toasts, clock };
+  return { calls, toasts, logs, clock };
 }
 
 function ok(structuredContent: unknown, text = "ok"): McpAnswer {
@@ -2923,4 +2938,119 @@ test("Hide closes the sheet, and a successful Submit closes it too (SW-309)", as
     await ui.find({ text: /Saved ab\/stages\/01_research\/output\/decisions\.md: 2 decided/ }),
   ).toBeDefined();
   await ui.unmount();
+});
+
+// --- install check at session start and the one-time prompt gate (SW-377) ---
+
+const REPAIRED: CheckAnswer = {
+  exitCode: 1,
+  stdout:
+    "DRIFT werkmeister -> /usr/local/bin/werkmeister (want /r/apps/cli/werkmeister)\n" +
+    "FIX   npm rm -g werkmeister && npm link (/r/apps/cli)\n" +
+    "RESULT drift found, fixes applied: rerun to confirm\n",
+};
+const START = { cwd: "/elsewhere", surface: "terminal" as const, isInteractive: true };
+
+/** A session with no workspaces around it, and a prompt chain whose bottom lets the text in. */
+function plainSession(on: On) {
+  on("session.start", (_$, e) => ({ cwd: e.cwd }));
+  on("prompt.submit", (_$, e) => ({ text: e.text }));
+  on("fs.list", () => ({ value: [] }));
+  on("fs.exists", () => ({ value: false }));
+}
+
+function typed(text: string) {
+  return { text, wait: false, origin: { kind: "composer" as const } };
+}
+
+test("a clean install is checked once at session start and refuses nothing", async ($, on) => {
+  const w = world(on, stubs());
+  plainSession(on);
+  await $.session.start(START);
+  const argv = w.calls.find((c) => c.key === "install-check")?.args.argv as string[];
+  expect(argv[0]).toBe("bash");
+  expect(argv[1]).toMatch(/\/skills\/install-check\/check\.sh$/);
+  expect(argv[2]).toBe("--fix");
+  expect(w.toasts).toEqual([]);
+  expect(w.logs).toEqual([]);
+  const r = await $.prompt.submit(typed("hi"));
+  expect(r.drop).toBeUndefined();
+  expect(r.text).toBe("hi");
+});
+
+test("a repaired install refuses the next typed prompt once, never a peer's", async ($, on) => {
+  const w = world(on, stubs(), REPAIRED);
+  plainSession(on);
+  await $.session.start(START);
+  expect(w.toasts).toHaveLength(1);
+  expect(w.toasts[0]).toMatch(/Restart Claude Code/);
+  expect(w.logs[0]).toMatch(/FIX {3}npm rm -g werkmeister/);
+  // SW-348: a relayed message passes and the gate stays armed for the person.
+  const peer = await $.prompt.submit({
+    text: "<cross-session-message>…",
+    wait: false,
+    origin: { kind: "peer" },
+  });
+  expect(peer.drop).toBeUndefined();
+  const sent = await $.prompt.submit({
+    text: "sent",
+    wait: false,
+    origin: { kind: "peer-send-message" },
+  });
+  expect(sent.drop).toBeUndefined();
+  const notice = await $.prompt.submit({
+    text: "done",
+    wait: false,
+    origin: { kind: "task-notification" },
+  });
+  expect(notice.drop).toBeUndefined();
+  const first = await $.prompt.submit(typed("do the thing"));
+  expect(first.drop).toMatch(/re-linked at session start.*Restart Claude Code/);
+  const second = await $.prompt.submit(typed("do the thing"));
+  expect(second.drop).toBeUndefined();
+  expect(second.text).toBe("do the thing");
+});
+
+test("a typed slash command is never refused: it may be the remedy", async ($, on) => {
+  world(on, stubs(), REPAIRED);
+  plainSession(on);
+  await $.session.start(START);
+  const r = await $.prompt.submit({
+    ...typed("/reload-plugins"),
+    command: { name: "reload-plugins", args: "" },
+  });
+  expect(r.drop).toBeUndefined();
+  const next = await $.prompt.submit(typed("now work"));
+  expect(next.drop).toMatch(/re-linked/);
+});
+
+test("report-only drift is logged and arms nothing", async ($, on) => {
+  const w = world(on, stubs(), {
+    exitCode: 1,
+    stdout: "DRIFT env.sh WERKMEISTER_ROOT=<unset> (want /r/apps/cli)\nRESULT drift found\n",
+  });
+  plainSession(on);
+  await $.session.start(START);
+  expect(w.toasts).toEqual([]);
+  expect(w.logs).toHaveLength(1);
+  expect(w.logs[0]).toMatch(/DRIFT env\.sh/);
+  expect((await $.prompt.submit(typed("hi"))).drop).toBeUndefined();
+});
+
+test("no checkout, and a headless session, are silent", async ($, on) => {
+  const w = world(on, stubs(), { exitCode: 2, stdout: "" });
+  plainSession(on);
+  await $.session.start(START);
+  expect(w.toasts).toEqual([]);
+  expect(w.logs).toEqual([]);
+  expect((await $.prompt.submit(typed("hi"))).drop).toBeUndefined();
+});
+
+test("a headless session never runs the check: nobody there can restart it", async ($, on) => {
+  const w = world(on, stubs(), REPAIRED);
+  plainSession(on);
+  await $.session.start({ cwd: "/elsewhere", surface: null, isInteractive: false });
+  expect(w.calls.filter((c) => c.key === "install-check")).toHaveLength(0);
+  expect(w.toasts).toEqual([]);
+  expect((await $.prompt.submit(typed("hi"))).drop).toBeUndefined();
 });
