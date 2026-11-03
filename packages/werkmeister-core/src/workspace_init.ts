@@ -49,6 +49,8 @@ import { SandboxError } from "./errors.js";
 import { workspaceUnder } from "./gate.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { candidateWorkspaceRoots, loadPaths, loadWorkspaceRepo } from "./global_config.js";
+import { parseHarnessId } from "./harness/layout.js";
+import { HARNESS_IDS } from "./harness/types.js";
 import {
   fetchIssueSnapshot,
   IssueFetchError,
@@ -676,6 +678,7 @@ export async function initWorkspace(
   const inputs = resolveInputs(args, workspaceRoot);
   // The layer this run writes, validated before 2a persists it.
   const strategy = strategyById(parseStrategyId(inputs["context_strategy"]));
+  parseHarnessId(inputs["harness"]);
   const hasConfig = hasWorkspaceConfig(
     workspaceRoot,
     (args["config_file"] as string | null) ?? null,
@@ -942,6 +945,7 @@ export async function provisionWorkspace(
   // Validate before creating the worktree or writing workspace.yml below — an
   // unknown value should fail fast rather than leave a half-made workspace.
   parseStrategyId(resolved.context_strategy);
+  parseHarnessId(resolved.harness);
 
   const featureSlug = feature.toLowerCase();
   try {
@@ -980,6 +984,7 @@ export async function provisionWorkspace(
     createWorkspaceRoot(workspaceDir, branch, Boolean(opts.force));
     // A new workspace.yml names its strategy: an absent key reads as jit (pre-field files).
     resolved.context_strategy ||= STRATEGY_IDS[0];
+    resolved.harness ||= HARNESS_IDS[0];
     writeWorkspaceConfig(workspaceDir, resolved);
   }
 

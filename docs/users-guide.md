@@ -669,6 +669,7 @@ Create a new workspace under $WERKMEISTER_WORKSPACES_ROOT (git worktrees on a \<
 - `--starting-prompt <text>`: First instruction for the agent; passed through to init-workspace.
 - `--work-type <type>`: Kind of work; seeds the first-phase handoff note. Passed through to init-workspace.
 - `--context-strategy <id>`: Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
+- `--harness <id>`: Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks) or mcp (AGENTS.md, .agents/skills, no hooks) (env: WERKMEISTER_HARNESS; config: harness).
 - `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
 - `--model <id>`: Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).
 - `--auto-stop`: Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).
@@ -738,6 +739,7 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 - `--starting-prompt <text>`: First instruction for the agent; persisted to .werkmeister/workspace.yml (env: WERKMEISTER_STARTING_PROMPT; config: starting_prompt).
 - `--work-type <type>`: Kind of work; seeds the first-phase handoff note (env: WERKMEISTER_WORK_TYPE; config: work_type).
 - `--context-strategy <id>`: Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
+- `--harness <id>`: Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks) or mcp (AGENTS.md, .agents/skills, no hooks) (env: WERKMEISTER_HARNESS; config: harness).
 - `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
 - `--model <id>`: Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).
 - `--auto-stop`: Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).

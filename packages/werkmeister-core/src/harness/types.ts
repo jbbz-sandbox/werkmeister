@@ -3,15 +3,33 @@
  * what werkmeister asks of the agent harness it runs under. Built like
  * strategies/types.ts: callers go through `harness()` and never name an adapter.
  *
- * Holds only what today's callers use. Hooks, skills, agents and MCP projection
- * still import harness/claude/ directly; SW-188 abstracts them for a second adapter.
+ * Holds only what today's callers use for sessions. Where a harness reads the
+ * context layer from is {@link HarnessLayout} (SW-188), dispatched by harness/layout.ts.
  * Type-only imports, so this file closes no import cycle.
  */
 import type { ClaudeSessionSignal, turnStatus } from "./claude/session.js";
 import type { ClaudeTranscript, sessionSourceIn } from "./claude/transcript.js";
 import type { WorkspaceUsage } from "./claude/usage.js";
 
-export type HarnessId = "claude";
+/** First entry is the default; a workspace.yml without `harness:` reads as claude. */
+export const HARNESS_IDS = ["claude", "mcp"] as const;
+export type HarnessId = (typeof HARNESS_IDS)[number];
+
+export type HooksSupport = { available: true } | { available: false; reason: string };
+
+/** Where one harness reads werkmeister's context layer (proposal § 4.3 projection rows). */
+export interface HarnessLayout {
+  readonly id: HarnessId;
+  /** The file the harness reads first. */
+  readonly instructionsFile: string;
+  /** Workspace-relative dir the harness loads project skills from. */
+  readonly skillsDir: string;
+  readonly hooks: HooksSupport;
+  /** Whether `.claude/agents`-style subagent definitions are projected. */
+  readonly agents: boolean;
+  /** Appended to the instructions file; "" when the harness needs no note. */
+  notice(): string;
+}
 
 export interface TurnOptions {
   /** Workspace root whose autonomous rules the turn gets, `autonomous` or not: nobody is there to approve (SW-313). */

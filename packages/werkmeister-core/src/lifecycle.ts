@@ -83,6 +83,7 @@ import {
 import { load as loadGlobalConfig } from "./global_config.js";
 import { reconcileGraduating } from "./graduate.js";
 import { writeAgentStateHooks } from "./harness/claude/hooks_gen.js";
+import { hooksAvailable } from "./harness/layout.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { latestHandoff, type Note } from "./notes.js";
 import { type RunResult, run } from "./proc.js";
@@ -1007,7 +1008,7 @@ export async function pause(feature: string): Promise<PauseResult> {
   const containers = dependencyOrder(live.filter((c) => c.state === "running")).map((c) => c.name);
 
   // A workspace from before SW-46 has no agent-state hook, and so no gate.
-  writeAgentStateHooks(workspace);
+  if (hooksAvailable(workspace)) writeAgentStateHooks(workspace);
   writePaused(workspace, {
     at: new Date().toISOString(),
     containers,

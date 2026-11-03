@@ -38,6 +38,7 @@
     "./global_config": "./dist/global_config.js",
     "./graduate": "./dist/graduate.js",
     "./harness": "./dist/harness/index.js",
+    "./harness_layout": "./dist/harness/layout.js",
     "./hooks_gen": "./dist/harness/claude/hooks_gen.js",
     "./infra": "./dist/infra.js",
     "./issue_snapshot": "./dist/issue_snapshot.js",

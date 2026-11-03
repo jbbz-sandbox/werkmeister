@@ -19,6 +19,7 @@ import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import { noteDecisions } from "../graduate.js";
 import { buildClaudeMd, buildStandardsRoutingSection } from "../harness/claude/claude_md.js";
 import { writeWorkspaceHooks, writeWorkspaceSettings } from "../harness/claude/hooks_gen.js";
+import { harnessLayoutFor, hooksAvailable } from "../harness/layout.js";
 import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import {
@@ -176,7 +177,8 @@ export function seedStartingHandoff(
 
 function init(ctx: InitContext): void {
   const { workspaceRoot, workspaceName, repos, task, meta, inputs, configOverride } = ctx;
-  const claudeMdPath = path.join(workspaceRoot, "CLAUDE.md");
+  const layout = harnessLayoutFor(workspaceRoot);
+  const instructionsPath = path.join(workspaceRoot, layout.instructionsFile);
 
   // 5b. Resolve the workspace's active standards (docs/jit-context-system.md §4.1).
   let standardsSection: string | null = null;
@@ -225,11 +227,11 @@ function init(ctx: InitContext): void {
     );
   }
 
-  // 6. Write CLAUDE.md. The notes directory is created; legacy free-text Handoff
+  // 6. Write the instructions file (CLAUDE.md, or the harness's). The notes directory is created; legacy free-text Handoff
   // Notes content is salvaged first, then the starting prompt / work type is
   // seeded as the first handoff note if the workspace has none yet.
   fs.mkdirSync(notesDir(workspaceRoot), { recursive: true });
-  salvageLegacyHandoffNotes(workspaceRoot, claudeMdPath);
+  salvageLegacyHandoffNotes(workspaceRoot, instructionsPath);
   // The issue alone seeds only at creation: a re-init or --refresh-issue on a run in progress must not open a new handoff.
   const prompt = inputs["starting_prompt"] ?? "";
   seedStartingHandoff(
@@ -247,8 +249,8 @@ function init(ctx: InitContext): void {
     standardsSection,
     ctx.issue ?? null,
   );
-  fs.writeFileSync(claudeMdPath, content);
-  success(`Wrote ${claudeMdPath}`);
+  fs.writeFileSync(instructionsPath, content + layout.notice());
+  success(`Wrote ${instructionsPath}`);
   // CLAUDE.md's "## Issues" section points here.
   const issuesReportPath = path.join(dotDir(workspaceRoot), "issues-report.md");
   fs.mkdirSync(path.dirname(issuesReportPath), { recursive: true });
@@ -265,7 +267,7 @@ function init(ctx: InitContext): void {
   fs.writeFileSync(prRulesPath, buildPrRulesMd(".werkmeister/notes/"));
   success(`Wrote ${prRulesPath}`);
 
-  // 6a. Projected w9r-* skills into .claude/skills/.
+  // 6a. Projected w9r-* skills into the harness's skills dir.
   for (const skillPath of writeWorkspaceSkills(workspaceRoot, null, null, activeStandards)) {
     success(`Wrote ${skillPath}`);
   }
@@ -273,6 +275,17 @@ function init(ctx: InitContext): void {
   // 6b. Generated subagents: w9r-researcher plus one w9r-tester-<archetype> per
   // archetype present. Routers feed the tester's proxy smoke check; a machine
   // with no ingress config gets testers without one, never a failed init.
+  if (layout.agents) writeAgents(ctx);
+
+  // 6c. SessionStart hook. Merges into settings.json, never clobbers.
+  if (hooksAvailable(workspaceRoot)) {
+    const hooksPath = writeWorkspaceHooks(workspaceRoot);
+    writeWorkspaceSettings(workspaceRoot);
+    success(`Wrote ${hooksPath}`);
+  }
+}
+
+function writeAgents({ workspaceRoot, repos, meta }: InitContext): void {
   const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
   const archetypes = loadArchetypes();
   const present = presentArchetypes(repos, meta, servicesConfig, reposConfig, archetypes);
@@ -293,11 +306,6 @@ function init(ctx: InitContext): void {
   for (const agentPath of writeWorkspaceAgents(workspaceRoot, testerSpecs)) {
     success(`Wrote ${agentPath}`);
   }
-
-  // 6c. SessionStart hook. Merges into settings.json, never clobbers.
-  const hooksPath = writeWorkspaceHooks(workspaceRoot);
-  writeWorkspaceSettings(workspaceRoot);
-  success(`Wrote ${hooksPath}`);
 }
 
 export const jit: ContextStrategy = {
@@ -307,6 +315,7 @@ export const jit: ContextStrategy = {
     // init-workspace is otherwise the only writer, so a workspace created before
     // a hook-template change kept the stale hook until someone re-ran it by hand.
     // The merge is idempotent and never clobbers a hand-added entry.
+    if (!hooksAvailable(workspaceRoot)) return;
     writeWorkspaceHooks(workspaceRoot);
     writeWorkspaceSettings(workspaceRoot);
   },
@@ -334,8 +343,10 @@ export const jit: ContextStrategy = {
   gate: gateMain,
   ownedPaths: () => [
     "CLAUDE.md",
+    "AGENTS.md",
     ".claude/settings.json",
     ".claude/skills/w9r-*",
+    ".agents/skills/w9r-*",
     ".claude/agents/w9r-*",
     ".claude/skills/sb-*",
     ".claude/agents/sb-*",

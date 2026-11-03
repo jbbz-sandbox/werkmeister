@@ -18,6 +18,7 @@ test("getFormSchema preselects work type and workflow, and nothing derived from 
   assert.deepEqual(formData, {
     work_type: "feature",
     context_strategy: "icm",
+    harness: "claude",
     autonomous: false,
     auto_stop: false,
   });

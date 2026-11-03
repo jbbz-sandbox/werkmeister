@@ -22,11 +22,12 @@ import { COMPOSE_FILE } from "werkmeister-core/compose_file";
 import { envVar } from "werkmeister-core/config";
 import { buildOf, expectDaemonBuild } from "werkmeister-core/daemon_client";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "werkmeister-core/errors";
-import { error, ttyReporter, withReporter } from "werkmeister-core/reporter";
 // `./strategies/types` isn't its own package export, and `./strategies`
 // pulls in the registry (fs/proc/reporter/jit/icm) — accepted here since
 // werkmeister-core is already this CLI's core dependency and every command
 // module loads far more of it on demand.
+import { HARNESS_IDS } from "werkmeister-core/harness";
+import { error, ttyReporter, withReporter } from "werkmeister-core/reporter";
 import { STRATEGY_IDS } from "werkmeister-core/strategies";
 import { appEntryPath, MCP } from "werkmeister-core/web_servers";
 import budgetHelp from "./commands/budget.help.md";
@@ -833,6 +834,13 @@ const SPECS: CommandSpec[] = [
               "(env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).",
           ).choices([...STRATEGY_IDS]),
         )
+        .addOption(
+          new Option(
+            "--harness <id>",
+            "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks) or " +
+              "mcp (AGENTS.md, .agents/skills, no hooks) (env: WERKMEISTER_HARNESS; config: harness).",
+          ).choices([...HARNESS_IDS]),
+        )
         .option(
           "--autonomous",
           "Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a " +
@@ -882,6 +890,7 @@ const SPECS: CommandSpec[] = [
       starting_prompt: o.startingPrompt ?? null,
       work_type: o.workType ?? null,
       context_strategy: o.contextStrategy ?? null,
+      harness: o.harness ?? null,
       autonomous: o.autonomous ?? null,
       model: o.model ?? null,
       auto_stop: o.autoStop ?? null,
@@ -1180,6 +1189,13 @@ const SPECS: CommandSpec[] = [
               "(env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).",
           ).choices([...STRATEGY_IDS]),
         )
+        .addOption(
+          new Option(
+            "--harness <id>",
+            "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks) or " +
+              "mcp (AGENTS.md, .agents/skills, no hooks) (env: WERKMEISTER_HARNESS; config: harness).",
+          ).choices([...HARNESS_IDS]),
+        )
         .option(
           "--autonomous",
           "Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a " +
@@ -1226,6 +1242,7 @@ const SPECS: CommandSpec[] = [
       starting_prompt: o.startingPrompt ?? null,
       work_type: o.workType ?? null,
       context_strategy: o.contextStrategy ?? null,
+      harness: o.harness ?? null,
       autonomous: o.autonomous ?? null,
       model: o.model ?? null,
       auto_stop: o.autoStop ?? null,

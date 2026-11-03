@@ -30,6 +30,7 @@ import {
 } from "./config.js";
 import type { PromptEntry, PromptSpecJson } from "./form_schema.js";
 import type { PromptSpec } from "./global_config.js";
+import { HARNESS_IDS } from "./harness/types.js";
 import { defaultProject, issueIdOf, issueTracker, trackerById } from "./issue_tracker.js";
 import { ProcError, run as procRun } from "./proc.js";
 import { loadProjects } from "./projects.js";
@@ -123,6 +124,7 @@ export const _INPUT_FIELDS: ReadonlyArray<[string, string | null, string]> = [
   ["feature", null, "feature"],
   ["work_type", "WORK_TYPE", "work_type"],
   ["context_strategy", "CONTEXT_STRATEGY", "context_strategy"],
+  ["harness", "HARNESS", "harness"],
   ["repos", "REPOS", "repos"],
   ["services", "SERVICES", "services"],
   ["issue_id", "ISSUE_ID", "issue_id"],
@@ -164,7 +166,8 @@ export function readModel(workspaceRoot: string): string | null {
   return typeof model === "string" && model.trim() ? model.trim() : null;
 }
 
-function readWorkspaceField(workspaceRoot: string, field: string): unknown {
+/** One key of the workspace's config, read without logging (`notes context` stdout is injected into the session); undefined when absent or unreadable. */
+export function readWorkspaceField(workspaceRoot: string, field: string): unknown {
   const envOverride = envVar("WORKSPACE_CONFIG");
   const candidates = [
     ...(envOverride ? [expandUserPath(envOverride)] : []),
@@ -506,6 +509,16 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     pattern: "^(" + STRATEGY_IDS.join("|") + ")$",
     default: STRATEGY_IDS[0],
     choicesFn: () => [...STRATEGY_IDS],
+  },
+  {
+    key: "harness",
+    label: "Harness",
+    help:
+      "Which agent harness reads this workspace: claude (Claude Code: CLAUDE.md, .claude/, hooks) " +
+      "or mcp (any harness with MCP and skills: AGENTS.md, .agents/skills, no hooks).",
+    pattern: "^(" + HARNESS_IDS.join("|") + ")$",
+    default: HARNESS_IDS[0],
+    choicesFn: () => [...HARNESS_IDS],
   },
   {
     key: "autonomous",

@@ -26,6 +26,7 @@ const GROUPS = [
       ["Topology", "docs/topology.md"],
       ["Architecture", "docs/werkmeister-architecture.md"],
       ["Claude Code plugin", "plugins/werkmeister/README.md"],
+      ["Other harnesses", "docs/harnesses.md"],
     ],
   ],
   [
