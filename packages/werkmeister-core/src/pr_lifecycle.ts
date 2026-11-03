@@ -839,9 +839,12 @@ async function gateChecks(
     (s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes),
   );
   // A sibling can differ in image, toolchain and node_modules, so each test gets its own container (SW-336).
-  const ownStarts = [
-    ...new Set(tested.map(toRendered).filter((s): s is string => Boolean(s))),
-  ].filter((s) => !running.has(containerOf(feature, s)));
+  const testedIds = [...new Set(tested.map(toRendered).filter((s): s is string => Boolean(s)))];
+  const ownStarts = testedIds.filter((s) => !running.has(containerOf(feature, s)));
+  // Services whose startService call is skipped because a container is up; a recreated one was restarted above.
+  const alreadyUp = testedIds
+    .filter((s) => running.has(containerOf(feature, s)) && !recreated.includes(s))
+    .map((s) => containerOf(feature, s));
   if (!(await portsFree(ownStarts))) return { ok: false, checks };
   for (const svc of ownStarts) {
     touchExecMarker(ws);
@@ -856,6 +859,17 @@ async function gateChecks(
 
   const repoServices = (repo["services"] ?? []) as string[];
   const needsContainer = releaseRuns || Boolean(repo["lint"]) || tested.some((s) => !toRendered(s));
+  const serving = needsContainer ? repoServices.map(containerFor).find(Boolean) : null;
+  // Not one this run started or recreated for the gate (SW-118): only a container left up counts.
+  if (
+    serving &&
+    !started.includes(serving) &&
+    !recreated.some((s) => containerOf(feature, s) === serving) &&
+    !alreadyUp.includes(serving)
+  )
+    alreadyUp.push(serving);
+  if (alreadyUp.length)
+    add("containers", true, `skipped (${alreadyUp.join(", ")} already running)`);
   if (needsContainer && !repoServices.some(containerFor)) {
     const candidates = [
       ...touched.map(toRendered).filter((s): s is string => Boolean(s)),

@@ -282,7 +282,7 @@ test("gate --tests: no PR file, an uncommitted api change runs only the api test
     assert.equal(g.ok, true, g.lines.join("\n"));
     assert.deepEqual(
       g.lines.filter((l) => /^ {2}[✓✗]/.test(l)).map((l) => l.split(":")[0].trim()),
-      ["✓ test api"],
+      ["✓ containers", "✓ test api"],
     );
     assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api"));
     assert.ok(!d.calls.some((c) => c.includes("...HEAD") || c.includes("changeset status")));
@@ -853,7 +853,11 @@ test("gate: starts and stops nothing when the repo's containers already run (SW-
     const g = await gate(ws, d);
     assert.deepEqual(d.started, []);
     assert.ok(!d.calls.some((c) => c.startsWith("docker stop")));
-    assert.ok(!g.checks.some((c) => c.name === "containers"));
+    // Only the skipped row (SW-355), never a started-and-stopped one.
+    assert.deepEqual(
+      g.checks.filter((c) => c.name === "containers").map((c) => c.detail),
+      ["skipped (feat-api already running)"],
+    );
   } finally {
     clean(ws);
   }
@@ -3723,4 +3727,32 @@ test("removalBlockers: every PR file of a worktree counts (SW-103)", async () =>
   assert.deepEqual(await blockers("draft"), [
     "app: 1 commit(s) not on origin/main and no merged PR",
   ]);
+});
+
+test("gate: prints a containers row when a running container means startService is skipped (SW-355)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const running = deps([DIFF_API]);
+    const g = await gate(ws, running);
+    assert.deepEqual(running.started, []);
+    const row = g.checks.find((c) => c.name === "containers");
+    assert.equal(row.ok, true);
+    assert.equal(row.detail, "skipped (feat-api already running)");
+
+    // Nothing running: the started-and-stopped row stays, and no skipped row.
+    const none = deps([DIFF_API]);
+    none.run = stubRun([[/^docker ps/, { stdout: "" }], DIFF_API]).run;
+    const g2 = await gate(ws, none);
+    const rows = g2.checks.filter((c) => c.name === "containers").map((c) => c.detail);
+    assert.ok(
+      rows.every((d) => !d.startsWith("skipped")),
+      rows.join("\n"),
+    );
+    assert.ok(
+      rows.some((d) => /^started feat-api.* for the gate, stopped again$/.test(d)),
+      rows.join("\n"),
+    );
+  } finally {
+    clean(ws);
+  }
 });
