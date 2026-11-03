@@ -677,3 +677,56 @@ test("registryChanges names added, removed and changed entries per section (SW-3
     changed: [],
   });
 });
+
+test("syncRegistry --from takes the worktree's fragment, writes --out and leaves ~/.werkmeister alone (SW-281)", () => {
+  writeFragment("app", "services:\n  api:\n    path: apps/api\n    test: old\n");
+  writeFragment("other", "services:\n  web:\n    path: apps/web\n");
+  const worktree = path.join(root, "features", "ws", "app");
+  mkdirSync(path.join(worktree, ".werkmeister"), { recursive: true });
+  writeFileSync(
+    path.join(worktree, ".werkmeister", "services.yaml"),
+    "services:\n  api:\n    path: apps/api\n    test: new\n",
+  );
+  const target = path.join(root, "proof", "services.yaml");
+  const [step] = syncRegistry({ reposRoot: repos, from: worktree, target });
+  assert.equal(step.ok, true, step.detail);
+  const text = readFileSync(target, "utf8");
+  const doc = parse(text);
+  assert.equal(doc.services.api.test, "new");
+  assert.equal(doc.services.web.repo, "other", "the other repos still come from repos_root");
+  assert.ok(
+    text.includes(path.join(worktree, ".werkmeister", "services.yaml")),
+    "Sources names the worktree",
+  );
+  assert.equal(existsSync(registryPath()), false, "the real registry is not written");
+  assert.equal(existsSync(path.join(home, "services.local.yaml")), false, "nothing seeded");
+  assert.equal(
+    syncRegistry({ reposRoot: repos, from: worktree, target, checkOnly: true })[0].ok,
+    true,
+  );
+  writeFileSync(
+    path.join(worktree, ".werkmeister", "services.yaml"),
+    "services:\n  api:\n    test: newer\n",
+  );
+  const drift = syncRegistry({ reposRoot: repos, from: worktree, target, checkOnly: true })[0];
+  assert.equal(drift.ok, false);
+  assert.match(drift.detail, /drift — would regenerate/);
+  assert.equal(
+    parse(readFileSync(target, "utf8")).services.api.test,
+    "new",
+    "--check wrote nothing",
+  );
+});
+
+test("syncRegistry --from fails loud for a checkout without a fragment (SW-281)", () => {
+  writeFragment("app", "services:\n  api: {}\n");
+  const nowhere = path.join(root, "nowhere");
+  const [step] = syncRegistry({
+    reposRoot: repos,
+    from: nowhere,
+    target: path.join(root, "out.yaml"),
+  });
+  assert.equal(step.ok, false);
+  assert.ok(step.detail.includes(nowhere), step.detail);
+  assert.equal(existsSync(path.join(root, "out.yaml")), false);
+});
