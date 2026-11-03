@@ -5,6 +5,13 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    // SW-361: esbuild.mjs bakes HEAD and the dirty flag into the CLI, and neither is
+    // an input, so a replay carries a stale stamp. The bundle takes under a second.
+    "werkmeister#build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "cache": false
+    },
     "typecheck": {
       "dependsOn": ["^build"]
     },

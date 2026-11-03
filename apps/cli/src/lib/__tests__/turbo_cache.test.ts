@@ -5,11 +5,12 @@
  * dir: a turbo upgrade that stops evicting fails here, not on a full disk.
  * SW-69: the cache is the built-in `turbo` entry, attached by turbo.json.
  */
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { applyCaches } from "werkmeister-core/build_caches";
 import { REGISTRY_DEFAULTS } from "werkmeister-core/scaffold";
@@ -17,6 +18,7 @@ import YAML from "yaml";
 
 const REPO = path.resolve(fileURLToPath(import.meta.url), "../../../../../..");
 const TURBO = path.join(REPO, "node_modules", ".bin", "turbo");
+const execFileAsync = promisify(execFile);
 const BUILT_IN = REGISTRY_DEFAULTS.caches.turbo;
 const MAX_AGE: string = BUILT_IN.env.TURBO_CACHE_MAX_AGE;
 
@@ -148,5 +150,22 @@ describe.skipIf(!fs.existsSync(TURBO))("turbo with the registry's cache settings
     expect(turbo()).toContain("0 cached, 1 total");
     expect(turbo()).toContain("1 cached, 1 total");
     expect(turbo("--force")).toContain("0 cached, 1 total");
+  });
+
+  // SW-361: esbuild.mjs bakes HEAD and the dirty flag into the CLI, and neither is
+  // a turbo input, so a bundle built before a commit of the same content replayed
+  // with a stale stamp and bins.test.ts failed on the notice. The bundle takes
+  // under a second: this repo never caches it.
+  it("never caches the CLI bundle, whose stamp is not an input", async () => {
+    const { stdout } = await execFileAsync(
+      TURBO,
+      ["run", "build", "--filter=werkmeister", "--dry-run=json"],
+      { cwd: REPO, env: { ...process.env, TURBO_TELEMETRY_DISABLED: "1" } },
+    );
+    const tasks: { taskId: string; resolvedTaskDefinition: { cache: boolean } }[] =
+      JSON.parse(stdout).tasks;
+    expect(tasks.find((t) => t.taskId === "werkmeister#build")?.resolvedTaskDefinition.cache).toBe(
+      false,
+    );
   });
 });
