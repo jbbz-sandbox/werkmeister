@@ -389,6 +389,7 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 5. Verifies k8s port-forwards are healthy (restarts if needed)
 6. Starts containers with `docker compose up -d --build --remove-orphans`
 7. Regenerates `~/.werkmeister/infra/proxy/Caddyfile` and reloads Caddy
+8. Warns about routed hostnames that do not resolve to 127.0.0.1 on this machine and prints the `/etc/hosts` line to add (the command still succeeds)
 
 **Output example:**
 
@@ -1054,6 +1055,7 @@ Regenerate Caddyfile and reload Caddy
 `werkmeister infra proxy-reload`
 
 Reads all active slot assignments, regenerates `~/.werkmeister/infra/proxy/Caddyfile`, and reloads (or starts) Caddy. Useful after manual config changes or if the proxy gets out of sync.
+Warns about routed hostnames that do not resolve to 127.0.0.1 on this machine and prints the `/etc/hosts` line to add.
 
 #### werkmeister infra up
 
@@ -1670,6 +1672,8 @@ the pieces that are not obvious from the demo services:
 - **New hostnames need `/etc/hosts` entries.** The wildcard certificate already covers
   `*.local.werkmeister.io`, but `werkmeister-dashboard.local.werkmeister.io` only resolves after
   `werkmeister machine setup` (run from the main checkout) reconciles `/etc/hosts`, which needs sudo.
+  `werkmeister feature up` and `werkmeister infra proxy-reload` warn about any routed host that does
+  not resolve to 127.0.0.1 and print the `/etc/hosts` line to add.
   Caddy emits its site block only once a running feature declares the service.
 - **Inside the container, `werkmeister feature status` shows every k8s forward as dead** and `kubectl`
   cannot reach OrbStack's API server: both probe `127.0.0.1`, which is the container's own

@@ -31,8 +31,10 @@
  * the registry.
  */
 
+import { promises as dns } from "node:dns";
 import { loadServices, type ServicesConfig } from "./config.js";
 import { type IngressSettings, loadIngress } from "./global_config.js";
+import { warn } from "./reporter.js";
 
 export interface FeatureRouter {
   /** Public host Caddy terminates for the local docker feature. */
@@ -128,4 +130,40 @@ export function featureUrl(urlPath: string): string | null {
   }
   if (!hosts.length) return null;
   return `https://${hosts[0]}${urlPath.startsWith("/") ? urlPath : `/${urlPath}`}`;
+}
+
+/** `dns.promises.lookup(host, { all: true })`, injectable so tests never touch the resolver. */
+export type HostLookup = (host: string) => Promise<{ address: string }[]>;
+const platformLookup: HostLookup = (host) => dns.lookup(host, { all: true });
+
+/**
+ * Warn once for every routed host this machine does not point at 127.0.0.1, with
+ * the exact fix (SW-341). Returns the offending hosts; `[]` when all resolve.
+ * Never edits `/etc/hosts` and never throws: `feature up` warns, it does not fail.
+ */
+export async function warnUnresolvedHosts(
+  hosts: string[],
+  lookup: HostLookup = platformLookup,
+): Promise<string[]> {
+  const resolved = await Promise.all(
+    hosts.map(async (host) => {
+      try {
+        return { host, addresses: (await lookup(host)).map((a) => a.address) };
+      } catch {
+        return { host, addresses: [] };
+      }
+    }),
+  );
+  // ::1 alone would reach Caddy (it binds every interface), but every writer of
+  // these entries — generate-certs.sh, the users guide — spells them 127.0.0.1.
+  const bad = resolved.filter(({ addresses }) => !addresses.includes("127.0.0.1"));
+  if (!bad.length) return [];
+  const names = bad.map(({ host }) => host);
+  warn(`${names.length} routed hostname(s) do not resolve to 127.0.0.1 on this machine:`);
+  for (const { host, addresses } of bad) {
+    warn(`  ${host}: ${addresses.length ? `resolves to ${addresses.join(", ")}` : "no address"}`);
+  }
+  warn(`Add them:  echo "127.0.0.1 ${names.join(" ")}" | sudo tee -a /etc/hosts`);
+  warn('or run `werkmeister machine setup` (users-guide: "New hostnames need /etc/hosts entries")');
+  return names;
 }

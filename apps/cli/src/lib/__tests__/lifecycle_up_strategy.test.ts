@@ -31,7 +31,11 @@ vi.mock("werkmeister-core/config", async (importOriginal) => ({
   loadPorts: () => ({}),
   loadServices: () => ({}),
 }));
-vi.mock("werkmeister-core/feature_routing", () => ({ loadFeatureRouters: () => ({}) }));
+vi.mock("werkmeister-core/feature_routing", () => ({
+  loadFeatureRouters: () => ({}),
+  ingressHostnames: () => [],
+  warnUnresolvedHosts: async () => [],
+}));
 vi.mock("werkmeister-core/generate", () => ({
   generateCaddyfile: async () => {},
   generateSupergraphConfig: () => null,

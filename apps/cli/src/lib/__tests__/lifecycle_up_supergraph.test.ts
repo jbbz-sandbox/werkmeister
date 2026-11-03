@@ -27,7 +27,11 @@ vi.mock("werkmeister-core/config", async (importOriginal) => ({
   loadPorts: () => ({ slots: { start: 11000, size: 20 } }),
   loadServices: () => registry.services,
 }));
-vi.mock("werkmeister-core/feature_routing", () => ({ loadFeatureRouters: () => ({}) }));
+vi.mock("werkmeister-core/feature_routing", () => ({
+  loadFeatureRouters: () => ({}),
+  ingressHostnames: () => [],
+  warnUnresolvedHosts: async () => [],
+}));
 vi.mock("werkmeister-core/generate", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   generateCaddyfile: async () => {},
