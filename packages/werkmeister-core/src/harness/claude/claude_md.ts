@@ -354,14 +354,28 @@ export function buildSandboxContextMd(
   // same source Caddy's site blocks are generated from — so this file can never
   // name a host the proxy doesn't actually terminate.
   let routedHosts: string[] = [];
+  // Hosts with no remote upstream: Caddy routes them only while a feature runs the
+  // service (what buildHostRouters skips otherwise), so they reset TLS when idle.
+  const localOnlyHosts = new Set<string>();
   try {
     routedHosts = ingressHostnames(servicesConfig);
+    for (const r of Object.values(loadFeatureRouters(servicesConfig))) {
+      if (r.hostname && !r.remoteUpstream) {
+        localOnlyHosts.add(r.hostname);
+      }
+    }
   } catch {
     routedHosts = [];
   }
+  const LOCAL_ONLY_NOTE = "answers only while a feature runs its service";
   const routingHostList = routedHosts.length
     ? `These hosts are routed through Caddy:\n\n` +
-      routedHosts.map((host) => `- \`https://${host}\``).join("\n")
+      routedHosts
+        .map(
+          (host) =>
+            `- \`https://${host}\`${localOnlyHosts.has(host) ? ` — ${LOCAL_ONLY_NOTE}` : ""}`,
+        )
+        .join("\n")
     : "No services declare a `feature_router:` block, so Caddy terminates no public hosts for this workspace.";
 
   // Health checks are per workspace: only the hosts of services this feature
@@ -515,6 +529,8 @@ ${svcs.map((s) => testCommandLine(feature, s, servicesConfig, archetypes ?? load
   // Quick health checks — direct-to-localhost line must hit a real local
   // service port, not `port_start` (the slot base) where nothing listens.
   let healthChecks: string;
+  const noteFor = (host: string) =>
+    localOnlyHosts.has(host) ? `# ${host} ${LOCAL_ONLY_NOTE}\n` : "";
   if (firstLocalHostPort !== null) {
     const directCheck =
       "# Direct to a local service (bypass Caddy — isolates routing vs app issues):\n" +
@@ -525,6 +541,7 @@ ${svcs.map((s) => testCommandLine(feature, s, servicesConfig, archetypes ?? load
         localHosts
           .map(
             (host) =>
+              noteFor(host) +
               `curl -sk -b "X-Feature=${feature}" -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ` +
               `"https://${host}/"\n`,
           )
@@ -545,6 +562,7 @@ ${svcs.map((s) => testCommandLine(feature, s, servicesConfig, archetypes ?? load
       urlHosts
         .map(
           (host) =>
+            noteFor(host) +
             'curl -sk -o /dev/null -w "HTTP %{http_code} | Size: %{size_download}\\n" ' +
             `"https://${host}/"\n`,
         )
@@ -625,11 +643,14 @@ ${servicesTable}
 
 `
       : "";
+  const resetNote = [...localHosts, ...urlHosts].some((h) => localOnlyHosts.has(h))
+    ? "If every host resets TLS (curl exit 35) while `w9r-caddy` is healthy, check `~/.werkmeister/infra/proxy/features.json` first: `[]` means nothing is routed and it is not an outage.\n\n"
+    : "";
   const healthBlock =
     hasUrl || hasLocal
       ? `## Quick Health Checks
 
-\`\`\`bash
+${resetNote}\`\`\`bash
 ${healthChecks}
 \`\`\`
 
