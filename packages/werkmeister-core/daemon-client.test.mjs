@@ -57,6 +57,8 @@ const daemon = http.createServer(async (req, res) => {
 let client;
 let home;
 before(async () => {
+  // SW-346: no pooled keep-alive socket for a loaded host to reset (ECONNRESET -> DAEMON_DOWN).
+  daemon.keepAliveTimeout = 0;
   await new Promise((resolve) => daemon.listen(0, "127.0.0.1", resolve));
   home = fs.mkdtempSync(path.join(os.tmpdir(), "daemon-client-"));
   process.env.HOME = home;
