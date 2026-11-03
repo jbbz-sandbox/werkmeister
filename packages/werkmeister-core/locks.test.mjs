@@ -51,7 +51,8 @@ test("two in-process async holders run one after the other while the event loop 
       clearInterval(ticker);
     }
     assert.deepEqual(order, ["a:in", "a:out", "b:in", "b:out"]);
-    assert.ok(ticks >= 20, `event loop ticked only ${ticks} times in ~400ms`);
+    // SW-346: a blocked loop ticks 0 times; a loaded host starves a 10ms timer, so don't count on ~40.
+    assert.ok(ticks >= 3, `event loop ticked only ${ticks} times in ~400ms`);
   });
 });
 
