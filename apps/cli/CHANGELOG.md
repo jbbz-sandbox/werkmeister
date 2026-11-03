@@ -1,5 +1,17 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.68.0
+
+### Minor Changes
+
+- 9368784: `werkmeister registry sync --from <worktree> --out <file>` merges that checkout's `.werkmeister/services.yaml` in place of its repo's fragment and writes the registry to `<file>`, so a fragment change can be proven inside the workspace before merge. `~/.werkmeister` is left untouched; `--check` works against `--out` too (SW-281).
+
+### Patch Changes
+
+- 2d51f5d: SW-361: the CLI bundle (`werkmeister#build`) is no longer turbo-cached. Its build stamp (HEAD plus the dirty flag) is not a turbo input, so a build cached from an uncommitted tree replayed after the commit with a stale stamp, and the PR gate's `bins.test.ts` failed on the stale-build notice. The bundle rebuilds in under a second on every run.
+- 8b10ce8: SW-363: a branch-built CLI run on the host (a test without `with-temp-home`, a worktree's `machine config` or `machine setup`) no longer writes its own worktree into `~/.werkmeister/config.yaml` and `env.sh` as `werkmeister_root`. The writers keep the stored value and warn unless the running checkout is the `werkmeister` on PATH; to move it by hand, edit `config.yaml` and run `werkmeister machine config --write`.
+- ab6d40a: `workspace close` passes a clean code worktree left on a detached HEAD after the merge (its branch deleted, no untracked files, nothing missing from origin's default branch) with "nothing to hand off" instead of refusing with "no branch to push (detached HEAD)" (SW-372). A detached worktree that is dirty or holds a commit not on origin still refuses, and the message now says why.
+
 ## 0.67.0
 
 ### Minor Changes
