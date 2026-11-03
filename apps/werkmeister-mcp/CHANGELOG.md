@@ -1,5 +1,14 @@
 # sandbox-mcp
 
+## 0.8.26
+
+### Patch Changes
+
+- 8efb3ce: A message relayed from another Claude Code session now shows in `claude-transcript` as a user turn, and the new `relay-check` MCP tool says whether a relay sent at a given time was picked up by the workspace's session. When it was not, it returns `not picked up: type <text> in <session>` for the check-in skill to report instead of a success (SW-348).
+- Updated dependencies [8efb3ce]
+  - werkmeister-core@0.66.3
+  - werkmeister-ui@0.5.72
+
 ## 0.8.25
 
 ### Patch Changes
