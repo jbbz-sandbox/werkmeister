@@ -12,7 +12,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { run } from "./proc.js";
-import { info } from "./reporter.js";
+import { info, warn } from "./reporter.js";
 
 // ---------------------------------------------------------------------------
 // Workspace .gitignore (managed section)
@@ -374,4 +374,27 @@ export function removeWorktree(src: string, dest: string, branch: string): [bool
     return [true, `worktree removed but branch ${branch} lingered: ${branchResult.stderr.trim()}`];
   }
   return [true, ""];
+}
+
+/**
+ * Commit *paths* in the workspace at *dir* (every change when empty), on the record
+ * branch. True when a commit was made. A plain-directory workspace (no `.git`) and a
+ * git failure both commit nothing; the failure is warned, never thrown, because the
+ * caller's own job (init, up) has already succeeded.
+ */
+export function commitRecord(dir: string, message: string, paths: string[] = []): boolean {
+  if (!fs.existsSync(path.join(dir, ".git"))) return false;
+  const only = paths.length ? ["--", ...paths] : [];
+  try {
+    run(["git", "-C", dir, "add", "-A", ...only], { capture: true, check: true });
+    const staged = run(["git", "-C", dir, "diff", "--cached", "--quiet", ...only], {
+      capture: true,
+    });
+    if (staged.status === 0) return false;
+    run(["git", "-C", dir, "commit", "-q", "-m", message, ...only], { capture: true, check: true });
+    return true;
+  } catch (exc) {
+    warn(`Could not commit ${message}: ${(exc as Error).message}`);
+    return false;
+  }
 }

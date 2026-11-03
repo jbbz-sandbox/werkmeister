@@ -9,6 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import { refreshWorkspaceSettings } from "./dist/lifecycle.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { strategyById } from "./dist/strategies/index.js";
 import { initWorkspace } from "./dist/workspace_init.js";
@@ -97,5 +98,36 @@ test("up's settings refresh is a no-op after a fresh init", async () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(std, { recursive: true, force: true });
+  }
+});
+
+// SW-356: the rule set can grow between init and up (SW-231 added the built-CLI
+// rule), so up's refresh is not always a no-op. What it rewrites must be
+// committed, the way init commits, or the record branch is left dirty.
+test("rules added since init are committed on up, not left dirty", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "record-up-"));
+  const git = (...a) => execFileSync("git", ["-C", root, ...a], { encoding: "utf8" });
+  try {
+    git("init", "-q");
+    git("config", "user.email", "t@t");
+    git("config", "user.name", "t");
+    fs.mkdirSync(path.join(root, ".werkmeister"));
+    fs.mkdirSync(path.join(root, ".claude"));
+    fs.writeFileSync(
+      path.join(root, ".werkmeister", "workspace.yml"),
+      "task: Record test\nwork_type: bug\nfeature: rec\ncontext_strategy: icm\n",
+    );
+    // What an init before SW-231 left: no built-CLI rule and no record of one.
+    fs.writeFileSync(path.join(root, ".claude", "settings.json"), "{}\n");
+    git("add", "-A");
+    git("commit", "-qm", "old init");
+    withReporter(collectingReporter(), () => refreshWorkspaceSettings(root));
+    assert.equal(git("status", "--porcelain"), "");
+    assert.equal(
+      git("show", "--name-only", "--format=", "HEAD"),
+      ".claude/settings.json\n.werkmeister/claude-permissions.json\n",
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });

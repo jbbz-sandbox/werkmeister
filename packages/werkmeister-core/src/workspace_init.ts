@@ -92,6 +92,7 @@ import {
 } from "./workspace_prompts.js";
 import { mintWorkspaceToken, workspaceTokenFile } from "./workspace_token.js";
 import {
+  commitRecord,
   createWorktree,
   removeWorktree,
   resolveRepos,
@@ -383,32 +384,8 @@ function createWorkspaceRoot(workspaceDir: string, branch: string, force: boolea
 }
 
 function commitWorkspaceState(workspaceDir: string, workspaceName: string): void {
-  if (!fs.existsSync(path.join(workspaceDir, ".git"))) {
-    return;
-  }
-  try {
-    procRun(["git", "-C", workspaceDir, "add", "-A"], { capture: true, check: true });
-    const staged = procRun(["git", "-C", workspaceDir, "diff", "--cached", "--quiet"], {
-      capture: true,
-    });
-    if (staged.status === 0) {
-      return; // nothing to commit
-    }
-    procRun(
-      [
-        "git",
-        "-C",
-        workspaceDir,
-        "commit",
-        "-q",
-        "-m",
-        `chore: initialize workspace ${workspaceName}`,
-      ],
-      { capture: true, check: true },
-    );
+  if (commitRecord(workspaceDir, `chore: initialize workspace ${workspaceName}`)) {
     success("Committed initial workspace state (branch not pushed — push when ready).");
-  } catch (exc) {
-    warn(`Could not commit initial workspace state: ${(exc as Error).message}`);
   }
 }
 /** SW-196: render from the fragments on disk, not whatever the last manual `registry sync` left. */
