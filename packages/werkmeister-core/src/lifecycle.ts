@@ -111,6 +111,27 @@ import {
 } from "./slots.js";
 import { strategyFor } from "./strategies/index.js";
 import { readAutonomous } from "./workspace_prompts.js";
+import { commitRecord } from "./worktrees.js";
+
+/**
+ * The Claude layer's repair on every `up`. Each strategy repairs its own layer: jit
+ * re-merges its hooks (a workspace created before a hook-template change otherwise
+ * keeps the stale one), icm strips any a pre-strategy `up` installed. Both rewrite
+ * `.claude/settings.json` and its record when the rule set grew since init (SW-172
+ * added one), and both files are tracked on the record branch, so what changed is
+ * committed as `workspace create` commits, or the branch is left dirty (SW-356).
+ */
+export function refreshWorkspaceSettings(workspace: string): void {
+  strategyFor(workspace).refresh(workspace);
+  if (
+    commitRecord(workspace, "chore: refresh Claude settings", [
+      ".claude/settings.json",
+      ".werkmeister/claude-permissions.json",
+    ])
+  ) {
+    info("Committed the refreshed .claude/settings.json on the record branch");
+  }
+}
 
 /** Everything `werkmeister feature up` computed, separated from how the CLI renders it. */
 export interface UpResult {
@@ -181,10 +202,7 @@ export async function up(
   // `up` loses no hand-edits and picks up a rotated secret without init-workspace.
   writeServiceSecretEnvs(workspace, localServices, servicesConfig);
 
-  // Each strategy repairs its own layer: jit re-merges its hooks (a workspace
-  // created before a hook-template change otherwise keeps the stale one), icm
-  // strips any a pre-strategy `up` installed.
-  strategyFor(workspace).refresh(workspace);
+  refreshWorkspaceSettings(workspace);
 
   const { slot, regenerated, staleCompose } = await prepareSlot(
     feature,
