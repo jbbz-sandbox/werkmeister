@@ -1462,7 +1462,11 @@ The registry is `~/.werkmeister/services.yaml`, and it is **generated**: `werkme
 under `paths.repos_root`, then applies `~/.werkmeister/services.local.yaml` on top.
 Edit a repo's fragment or the local file, never the generated one.
 `werkmeister workspace new` and `init-workspace` regenerate it first, so a new workspace
-renders the fragments as they are on disk; a hand-written registry is left alone with a warning. The demo
+renders the fragments as they are on disk; a hand-written registry is left alone with a warning.
+A workspace's `compose.yml` then takes each of its own repos' services from the fragment in that
+repo's worktree, merged over the registry, so a branch that changes a service's `command:`, image, setup or
+volumes runs that change in its feature containers before merge; other repos' services, and the registry
+file, stay as they are (SW-337). The demo
 registry comes from the `demo-services` repo's own fragment (our private example app;
 see [Local Kubernetes bootstrap](../README.md#local-kubernetes-bootstrap)):
 
