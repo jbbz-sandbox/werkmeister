@@ -5,6 +5,6 @@ werkmeister\-feature\-restart \- Restart containers (\fBinfra <verb>\fR for shar
 \fBwerkmeister feature restart\fR [feature]
 .SH DESCRIPTION
 .PP
-Useful after making code changes that hot\-reload doesn't pick up. If the feature doesn't have a slot, prints an error suggesting \fBwerkmeister feature up\fR instead.
+Useful after making code changes that hot\-reload doesn't pick up. If the feature doesn't have a slot, prints an error suggesting \fBwerkmeister feature up\fR instead. A changed registry or \fBservices.yaml\fR definition (e.g. a new \fBcommand:\fR) is not applied by restart, which keeps the existing \fBcompose.yml\fR; run \fBwerkmeister feature up <feature>\fR instead.
 .SH SEE ALSO
 \fBwerkmeister\fR(1)
