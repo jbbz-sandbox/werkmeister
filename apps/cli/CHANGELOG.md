@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.67.0
+
+### Minor Changes
+
+- b0496a9: SW-188: a generic MCP adapter. `werkmeister workspace new --harness mcp` (config `harness`, env `WERKMEISTER_HARNESS`) generates a workspace for any agent harness with MCP and skills: `AGENTS.md` instead of `CLAUDE.md`, skills in `.agents/skills`, no subagents, and hooks reported as unavailable (`hooks: unavailable on mcp …` at init and `up`, the `hooks` MCP tool's new `hooks` field, a note in `AGENTS.md`) rather than silently missing. The harness connects to the host daemon at `http://127.0.0.1:3002/mcp`; `docs/harnesses.md` says how for Codex CLI, Cursor and Copilot CLI.
+- 06a3f28: SW-195: `claude-resume` and `pr-reconcile` open a VS Code integrated terminal when the caller runs in VS Code (`TERM_PROGRAM=vscode`, or `WERKMEISTER_LAUNCHER=vscode|terminal` to force either), through the extension's new `vscode://jbbz.werkmeister-vscode/claude?workspace=…&mode=…&session=…&prompt=…` URI handler; Terminal.app elsewhere, as before. `claude-resume` takes an optional `prompt` sent as the session's first message, and both tools report which `launcher` opened.
+
 ## 0.66.3
 
 ## 0.66.2
