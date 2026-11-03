@@ -16,7 +16,8 @@
   ],
   "main": "./dist/extension.cjs",
   "activationEvents": [
-    "onView:sandboxWorkspaces"
+    "onView:sandboxWorkspaces",
+    "onUri"
   ],
   "contributes": {
     "viewsContainers": {

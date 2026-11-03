@@ -157,6 +157,12 @@ test("claude-resume passes a quoted --model only when the workspace has one", ()
   assert.equal(claudeResumeCommand("s1", null), "claude --resume s1");
   assert.equal(claudeResumeCommand("s1", "sonnet"), "claude --model 'sonnet' --resume s1");
   assert.equal(claudeResumeCommand(null, "sonnet[1m]"), "claude --model 'sonnet[1m]'");
+  assert.equal(
+    claudeResumeCommand("s1", null, "start the run"),
+    "claude --resume s1 'start the run'",
+  );
+  assert.equal(claudeResumeCommand(null, null, "it's"), "claude 'it'\\''s'");
+  assert.equal(claudeResumeCommand(null, null, ""), "claude");
 });
 
 test("workspace.yml persists the model and readModel reads it back", async () => {

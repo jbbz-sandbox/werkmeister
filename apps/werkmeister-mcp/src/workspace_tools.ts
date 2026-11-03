@@ -837,8 +837,8 @@ export function registerWorkspaceTools(server: McpServer): void {
       title: "Reconcile PR with Issue",
       description:
         "Gather a PR's issue, description, and diff, then launch a headless, tool-restricted " +
-        "`claude -p` session (context handed off at spawn) in a background Terminal window to " +
-        "reconcile the two. Returns " +
+        "`claude -p` session (context handed off at spawn) in a background Terminal window (or a " +
+        "VS Code terminal when `WERKMEISTER_LAUNCHER=vscode`) to reconcile the two. Returns " +
         "the `sessionKey` the dashboard chat panel streams from (a `reconcile:<repo>-<number>` key).",
       inputSchema: {
         url: z.string().describe("The pull request URL to reconcile."),
@@ -852,6 +852,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         sessionKey: z.string(),
         slug: z.string(),
         issue: issueSchema,
+        launcher: z.enum(["terminal", "vscode"]),
       }),
     },
     async (args): Promise<CallToolResult> => {
@@ -861,7 +862,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           content: [
             {
               type: "text",
-              text: `Launched reconcile session ${result.sessionKey} for ${args.url}.`,
+              text: `Launched reconcile session ${result.sessionKey} for ${args.url} in ${result.launcher === "vscode" ? "a VS Code terminal" : "Terminal"}.`,
             },
           ],
           structuredContent: result as unknown as Record<string, unknown>,

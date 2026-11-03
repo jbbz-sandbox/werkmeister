@@ -296,10 +296,15 @@ export function turnStatus(name: string): {
 }
 
 /** The shell command that reopens a workspace session in a terminal. */
-export function claudeResumeCommand(sessionId: string | null, model: string | null): string {
+export function claudeResumeCommand(
+  sessionId: string | null,
+  model: string | null,
+  prompt?: string,
+): string {
   return [
     "claude",
     ...(model ? ["--model", shellQuote(model)] : []),
     ...(sessionId ? ["--resume", sessionId] : []),
+    ...(prompt ? [shellQuote(prompt)] : []),
   ].join(" ");
 }

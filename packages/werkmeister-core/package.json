@@ -41,6 +41,7 @@
     "./hooks_gen": "./dist/harness/claude/hooks_gen.js",
     "./infra": "./dist/infra.js",
     "./issue_snapshot": "./dist/issue_snapshot.js",
+    "./launcher": "./dist/launcher.js",
     "./issue_status": "./dist/issue_status.js",
     "./issue_tracker": "./dist/issue_tracker.js",
     "./projects": "./dist/projects.js",

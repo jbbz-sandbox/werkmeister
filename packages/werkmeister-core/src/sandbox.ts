@@ -28,6 +28,7 @@ import type { ClaudeTranscript } from "./harness/claude/transcript.js";
 import type { WorkspaceUsage } from "./harness/claude/usage.js";
 import { type HarnessAdapter, harness } from "./harness/index.js";
 import type { TurnOptions, TurnResult } from "./harness/types.js";
+import { claudeLauncher, claudeLaunchUri, type Launcher, reconcileLaunchUri } from "./launcher.js";
 import { buildStartArgs, deferMachineSteps, type StartArgs } from "./run_start.js";
 import { isExecutable, isFile, runCapture, shellQuote, stripAnsi } from "./tool_bins.js";
 
@@ -3033,18 +3034,43 @@ async function openTerminalRunning(script: string, bringToFront = true): Promise
   }
 }
 
+/**
+ * Run `script` in the launcher {@link claudeLauncher} picks: Terminal.app, or
+ * VS Code via `uri` (the extension's URI handler rebuilds the command from the
+ * URI's fields, so no shell text travels through the URI). Returns which one ran.
+ */
+async function openClaudeSession(
+  script: string,
+  uri: string,
+  bringToFront = true,
+): Promise<Launcher> {
+  const launcher = claudeLauncher();
+  if (launcher === "terminal") {
+    await openTerminalRunning(script, bringToFront);
+    return launcher;
+  }
+  try {
+    await execFileAsync("open", [uri]);
+  } catch (e) {
+    throw new WorkspaceError(`Could not open VS Code: ${(e as Error).message}`);
+  }
+  return launcher;
+}
+
 export async function resumeClaudeInTerminal(
   name: string,
   sessionId?: string,
   fresh = false,
-): Promise<{ path: string; sessionId: string | null }> {
+  prompt?: string,
+): Promise<{ path: string; sessionId: string | null; launcher: Launcher }> {
   const target = await resolveSessionDir(name);
   const resumeId = fresh ? null : (await getClaudeTranscript(name, 1, sessionId)).sessionId;
   const { model } = await readWorkspaceConfig(target);
-  await openTerminalRunning(
-    `cd ${shellQuote(target)} && ${harness().resumeCommand(resumeId, model)}`,
+  const launcher = await openClaudeSession(
+    `cd ${shellQuote(target)} && ${harness().resumeCommand(resumeId, model, prompt)}`,
+    claudeLaunchUri({ workspace: path.basename(target), sessionId: resumeId, prompt }),
   );
-  return { path: target, sessionId: resumeId };
+  return { path: target, sessionId: resumeId, launcher };
 }
 
 /** Opens a Terminal window following the workspace's container logs, for the pane's Logs (SW-105). */
@@ -3114,6 +3140,7 @@ export function buildReconcileContext(issue: Issue, pr: ViewResult, diff: string
   return lines.join("\n");
 }
 
+const RECONCILE_CONTEXT_FILE = "reconcile-context.md";
 const RECONCILE_PROMPT =
   "Reconcile this pull request against its issue. Your appended context has the " +
   "ticket, the PR description, and the full PR diff. Report whether the PR delivers what the " +
@@ -3139,7 +3166,7 @@ const RECONCILE_PROMPT =
 export async function launchPrReconcile(
   url: string,
   issueRef?: string,
-): Promise<{ sessionKey: string; slug: string; issue: Issue }> {
+): Promise<{ sessionKey: string; slug: string; issue: Issue; launcher: Launcher }> {
   if (!isValidPrUrl(url)) {
     throw new WorkspaceError(`Refusing to reconcile a non-GitHub-PR URL: ${url}`);
   }
@@ -3157,12 +3184,29 @@ export async function launchPrReconcile(
   ]);
   const diff = diffRes && diffRes.code === 0 ? stripAnsi(diffRes.stdout) : "";
 
-  const ctxFile = path.join(dir, "reconcile-context.md");
-  await fs.writeFile(ctxFile, buildReconcileContext(issue, pr, diff), "utf-8");
+  await fs.writeFile(
+    path.join(dir, RECONCILE_CONTEXT_FILE),
+    buildReconcileContext(issue, pr, diff),
+    "utf-8",
+  );
 
-  await openTerminalRunning(
-    harness().reconcileCommand(dir, ctxFile, RECONCILE_PROMPT),
+  const launcher = await openClaudeSession(
+    reconcileLaunch(slug).command,
+    reconcileLaunchUri(slug),
     false, // background: watched from the browser chat panel, don't steal focus
   );
-  return { sessionKey: `${RECONCILE_PREFIX}${slug}`, slug, issue };
+  return { sessionKey: `${RECONCILE_PREFIX}${slug}`, slug, issue, launcher };
+}
+
+/** The reconcile session dir and command line for *slug*; exported so the VS Code extension runs the same one. */
+export function reconcileLaunch(slug: string): { dir: string; command: string } {
+  const dir = reconcileDirForKey(`${RECONCILE_PREFIX}${slug}`);
+  return {
+    dir,
+    command: harness().reconcileCommand(
+      dir,
+      path.join(dir, RECONCILE_CONTEXT_FILE),
+      RECONCILE_PROMPT,
+    ),
+  };
 }
