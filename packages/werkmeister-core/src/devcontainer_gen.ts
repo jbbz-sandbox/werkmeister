@@ -52,6 +52,9 @@ export function buildDevcontainer(opts: DevcontainerOptions): Record<string, unk
     // Docker creates HOME root-owned as the parent of the bind mounts.
     `sudo chown node:node "$HOME" "$HOME/.claude"`,
     "npm install -g @anthropic-ai/claude-code",
+    // The shared ~/.claude volume keeps the install, so a reused one already has the marketplace.
+    "(claude plugin marketplace add DietrichGebert/ponytail >/dev/null 2>&1 || true)",
+    "claude plugin install ponytail@ponytail",
     // `mcp add-json` refuses an existing name, which a reused config keeps.
     "(claude mcp remove --scope user werkmeister >/dev/null 2>&1 || true)",
     // No feature header: the per-workspace token names the workspace (SW-184).

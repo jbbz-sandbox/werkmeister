@@ -54,6 +54,11 @@ test("registers werkmeister per workspace, reading its token file at every conne
     headersHelper:
       'printf \'{"Authorization":"Bearer %s"}\' "$(cat "/Users/u/features/ws-1/.werkmeister/token")"',
   });
+  // Ponytail lands in the shared ~/.claude volume, so every devcontainer session gets it.
+  assert.ok(cmd.includes("claude plugin install ponytail@ponytail"));
+  assert.ok(
+    cmd.indexOf("claude plugin marketplace add DietrichGebert/ponytail") < cmd.indexOf("claude plugin install"),
+  );
   // A reused config keeps the entry, where a bare `mcp add-json` would refuse the name.
   assert.ok(
     cmd.indexOf("claude mcp remove --scope user werkmeister") < cmd.indexOf("claude mcp add-json"),
