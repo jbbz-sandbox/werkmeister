@@ -106,9 +106,9 @@ test("two concurrent `up` calls through the HTTP MCP server both complete", asyn
     docker.close();
     fs.rmSync(tmp, { recursive: true, force: true });
   });
-  // Importing every tool takes several seconds on a cold filesystem.
+  // Importing every tool takes ~1-3 s cold (SW-220); 20 s covers a loaded CI box.
   for (let i = 0; !stderr.includes("listening"); i++) {
-    assert.ok(i < 600, `server never listened:\n${stderr}`);
+    assert.ok(i < 200, `server never listened:\n${stderr}`);
     await sleep(100);
   }
 
