@@ -1138,7 +1138,7 @@ test("gate: a dirty worktree stops before lint and tests start containers (SW-36
 });
 
 const NO_PUSH = [
-  /push --dry-run origin me\/ws$/,
+  /push --dry-run --no-verify origin me\/ws$/,
   { code: 128, stderr: "git@github.com: Permission denied (publickey).\n" },
 ];
 

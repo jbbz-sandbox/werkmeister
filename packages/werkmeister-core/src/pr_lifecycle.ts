@@ -759,8 +759,17 @@ async function gateChecks(
       );
     }
     // Push auth fails only after the whole gate otherwise (SW-408); a dry run writes nothing.
+    // --no-verify: a dry run still fires the pre-push hook, a test run on the host in a quick row.
     const branch = String(file.fm["branch"] ?? "") || "HEAD";
-    const push = await deps.run("git", ["-C", dir, "push", "--dry-run", "origin", branch]);
+    const push = await deps.run("git", [
+      "-C",
+      dir,
+      "push",
+      "--dry-run",
+      "--no-verify",
+      "origin",
+      branch,
+    ]);
     add(
       "push",
       push.code === 0,
