@@ -21,7 +21,7 @@ Run the check first and show the person its output. If it finds drift, run `--fi
 | Check | `--fix` does |
 |---|---|
 | `werkmeister`, `w9r` on PATH resolve into `apps/cli` | `npm rm -g werkmeister && npm link` in `apps/cli` |
-| `dist/main.js` is newer than `apps/cli/src` and `packages/*/src` | `pnpm --filter werkmeister build` |
+| `dist/main.js` is newer than `apps/cli/src` and `packages/*/src` | `corepack pnpm install --frozen-lockfile && corepack pnpm turbo run build --filter=werkmeister` (turbo builds core first); prints `FIX` only when it succeeds, `ERROR` otherwise |
 | `~/.werkmeister/env.sh` `WERKMEISTER_ROOT` is `apps/cli` | reports only: fix `werkmeister_root` in `~/.werkmeister/config.yaml`, then run `werkmeister machine config --write` |
 | `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json` includes `plugins/werkmeister` | adds it, and sets `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` |
 | No marketplace `werkmeister@…` plugin installed | reports only: `claude plugin uninstall werkmeister` (ask the person first) |

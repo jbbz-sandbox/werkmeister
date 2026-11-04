@@ -32,7 +32,15 @@ fi
 newer="$(find "$CLI/src" "$REPO"/packages/*/src -type f -newer "$CLI/dist/main.js" 2>/dev/null | head -1)"
 if [ ! -f "$CLI/dist/main.js" ] || [ -n "$newer" ]; then
   bad "dist is stale (${newer:-dist/main.js missing})"
-  if [ $FIX = 1 ]; then echo "FIX   pnpm --filter werkmeister build"; (cd "$REPO" && pnpm --filter werkmeister build &>/dev/null) || echo "ERROR build failed"; fi
+  if [ $FIX = 1 ]; then
+    # A pull can add deps, and the CLI bundles core's dist: install, then let turbo build core first (SW-319).
+    # FIX only after success: a FIX line asks for a restart, which can't help a failed build.
+    if out="$(cd "$REPO" && corepack pnpm install --frozen-lockfile 2>&1 && corepack pnpm turbo run build --filter=werkmeister 2>&1)"; then
+      echo "FIX   corepack pnpm install --frozen-lockfile && corepack pnpm turbo run build --filter=werkmeister"
+    else
+      echo "ERROR rebuild failed: $(grep -m3 -iE 'error' <<<"$out" | tr '\n' ' ')"
+    fi
+  fi
 else ok "dist is up to date"; fi
 
 # 3. WERKMEISTER_ROOT in env.sh points at the repo
