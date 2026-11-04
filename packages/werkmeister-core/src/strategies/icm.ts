@@ -203,9 +203,14 @@ const WRITE_BRIEF =
   // SW-374: "regenerate this workspace's file" cannot run mid-run: init rewrites the contracts and the installed CLI predates the change.
   "For a change to generated text (a context file, `CLAUDE.md`, a stage contract), the criterion is a fixture run of the built generator showing the new text; regenerating this workspace's own copy is a post-release check, not a criterion.";
 
+// SW-275: SW-257's brief said "test-only" but the cause was in production code; with no rule the run stopped to ask.
+const OUT_OF_SCOPE =
+  "If this stage finds the root cause, or the change the issue needs, outside the brief's stated scope: record it in this stage's output, carry on with the smallest change that reaches it, and list it first under `## Recommendations for reviewer`. Do not stop to ask.";
+
 /** Step 0 of the first stage: start the issue when there is one, then fill the brief. */
 function firstStep(hasIssue: boolean): string {
-  return hasIssue ? `${START_ISSUE} Then: ${WRITE_BRIEF}` : WRITE_BRIEF;
+  const brief = `${WRITE_BRIEF} ${OUT_OF_SCOPE}`;
+  return hasIssue ? `${START_ISSUE} Then: ${brief}` : brief;
 }
 
 function renderContract(dir: string, stage: Stage, v: IcmVars, step0 = ""): string {
