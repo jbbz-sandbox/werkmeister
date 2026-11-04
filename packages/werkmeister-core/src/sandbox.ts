@@ -39,7 +39,6 @@ export {
   claudeResumeCommand,
   claudeSendArgs,
   relayPickedUp,
-  turnEvents,
 } from "./harness/claude/session.js";
 export {
   type ClaudeMessage,
@@ -61,6 +60,7 @@ export {
   type WorkspaceUsage,
 } from "./harness/claude/usage.js";
 export { type HarnessAdapter, type HarnessId, harness } from "./harness/index.js";
+export { turnEvents } from "./harness/turn.js";
 export * from "./run_start.js";
 export { childEnv } from "./tool_bins.js";
 

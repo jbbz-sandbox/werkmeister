@@ -15,25 +15,10 @@ import path from "node:path";
 import readline from "node:readline";
 import { WorkspaceError } from "../../errors.js";
 import { isFile } from "../../tool_bins.js";
+import type { SessionMessage, SessionSource, SessionTranscript } from "../types.js";
 
-export interface ClaudeMessage {
-  /** "tool" entries are compact activity rows ("Bash: npm test") from tool_use blocks. */
-  role: "user" | "assistant" | "tool";
-  text: string;
-  timestamp: string | null;
-}
-
-export interface ClaudeTranscript {
-  /** Session ID (JSONL filename stem) of the newest session, or null if none. */
-  sessionId: string | null;
-  workspacePath: string;
-  /** Last N user/assistant text messages, oldest first. */
-  messages: ClaudeMessage[];
-  /** Total sessions found for this workspace. */
-  sessionCount: number;
-  /** mtime of the newest session file (ISO), or null. */
-  updatedAt: string | null;
-}
+export type ClaudeMessage = SessionMessage;
+export type ClaudeTranscript = SessionTranscript;
 
 /**
  * Normalize a path the way Claude Code encodes project dirs: every character
@@ -283,14 +268,7 @@ export async function sessionSourceIn(
   target: string,
   sessionId?: string,
   startDir?: string,
-): Promise<{
-  workspacePath: string;
-  projectDir: string | null;
-  sessionFile: string | null;
-  sessionId: string | null;
-  sessionCount: number;
-  updatedAt: string | null;
-}> {
+): Promise<SessionSource> {
   // Claude Code files sessions by the folder they started in, which may be below the workspace.
   const projectDir = await findClaudeProjectDir(startDir ?? target);
   const none = {

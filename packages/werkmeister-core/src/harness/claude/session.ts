@@ -4,26 +4,16 @@
  * workspace list's agent signal and the terminal resume command. Callers pass
  * resolved folders; sandbox.ts maps session keys to them.
  */
-import { spawn } from "node:child_process";
-import { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
 import { type AgentState, asksQuestion, questionOf, readAgentState } from "../../agent_state.js";
-import { WorkspaceError } from "../../errors.js";
-import { childEnv, shellQuote, stripAnsi } from "../../tool_bins.js";
-import type { TurnOptions, TurnResult } from "../types.js";
+import { shellQuote } from "../../tool_bins.js";
+import { runTurn, turnStatus } from "../turn.js";
+import type { SessionSignal, TurnOptions, TurnResult, TurnState } from "../types.js";
 import { resolveClaudeBin } from "./cli.js";
 import { type ClaudeMessage, parseSessionLines } from "./transcript.js";
 
-export interface ClaudeSessionSignal {
-  /** Most recent claude-send turn state this server tracked (idle = none / after restart). */
-  state: "running" | "done" | "failed" | "idle";
-  /** Working, needs you (a question or permission prompt), done or idle (SW-46). */
-  agent: AgentState;
-  /** When `agent` began, or the transcript's mtime when it is inferred from the tail; null with no session. */
-  at: string | null;
-  /** What `needs-you` is waiting on, when known. */
-  question: string | null;
-}
+export type ClaudeSessionSignal = SessionSignal;
+export type ClaudeTurnState = TurnState;
 
 /** Past this, a turn whose transcript ends mid-turn has died rather than gone quiet on a long tool call. */
 const LIVE_TURN_MS = 10 * 60 * 1000;
@@ -62,7 +52,7 @@ export async function sessionSignal(
   src: { sessionFile: string | null; updatedAt: string | null } | null,
 ): Promise<{ signal: ClaudeSessionSignal; lastActivity: string | null }> {
   const lastActivity = src?.updatedAt ?? null;
-  const state: ClaudeSessionSignal["state"] = claudeTurns.get(name)?.state ?? "idle";
+  const state = turnStatus(name).state;
   const signal = (agent: AgentState, at = lastActivity, question: string | null = null) => ({
     signal: { state, agent, at, question },
     lastActivity,
@@ -114,11 +104,9 @@ export function claudeSendArgs(
  * null. `--resume` finds a session only from the folder it started in, so
  * *cwd* is that folder. *name* keys the turn registry.
  *
- * FIRE-AND-FORGET: agentic turns routinely exceed the caller's MCP request
- * timeout (~60s), so this does NOT wait for the reply. The child is held for a
- * short grace period to surface immediate failures (missing CLI, bad session),
- * then detached; callers poll `claude-transcript` to watch the reply appear
- * (Claude Code appends messages to the session JSONL as the turn progresses).
+ * FIRE-AND-FORGET unless `wait`: {@link runTurn} detaches the child after a grace
+ * period; callers poll `claude-transcript` to watch the reply appear (Claude Code
+ * appends messages to the session JSONL as the turn progresses).
  *
  * Headless mode can't prompt for tool permissions; `acceptEdits` lets it edit
  * files in the workspace without stalling. `unattended` also grants the
@@ -146,75 +134,8 @@ export async function startTurn(
     json: opts.wait,
   });
 
-  const child = spawn(bin, args, {
-    cwd,
-    env: childEnv(),
-    detached: true,
-    stdio: ["ignore", opts.wait ? "pipe" : "ignore", "pipe"],
-  });
-  let stdout = "";
-  child.stdout?.on("data", (d) => {
-    stdout += d.toString();
-  });
-  const exited = new Promise<void>((resolve) => {
-    child.on("exit", () => resolve());
-    child.on("error", () => resolve());
-  });
-
-  // Register the turn so `claude-turn-status` can report exactly when it
-  // finishes (vibe-kanban-style process tracking, instead of guessing from
-  // transcript quiescence).
-  const turn: ClaudeTurnState = {
-    pid: child.pid ?? null,
-    startedAt: new Date().toISOString(),
-    state: "running",
-    exitCode: null,
-    error: null,
-  };
-  claudeTurns.set(name, turn);
-  turnEvents.emit(name, { state: "running", error: null });
-
-  let stderr = "";
-  child.stderr?.on("data", (d) => {
-    if (stderr.length < 8192) stderr += d.toString();
-  });
-  child.on("error", (e) => {
-    turn.state = "failed";
-    turn.error = e.message;
-    turnEvents.emit(name, { state: "failed", error: turn.error });
-  });
-  child.on("exit", (code) => {
-    turn.exitCode = code;
-    if (code === 0) {
-      turn.state = "done";
-    } else {
-      turn.state = "failed";
-      const detail = stripAnsi(stderr).trim().split("\n").slice(-2).join(" ");
-      turn.error = `claude exited with code ${code}${detail ? `: ${detail}` : ""}`;
-    }
-    turnEvents.emit(name, { state: turn.state, error: turn.error });
-  });
-
-  // Grace period: catch spawn errors / immediate non-zero exits, then detach.
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, 2500);
-    const settle = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    child.on("error", settle);
-    child.on("exit", settle);
-  });
-  if (turn.state === "failed") {
-    throw new WorkspaceError(`Could not start the turn — ${turn.error}`);
-  }
-  if (!opts.wait) {
-    child.unref();
-    return null;
-  }
-  await exited;
-  if (turn.error) throw new WorkspaceError(`The turn failed — ${turn.error}`);
-  return { denied: deniedIn(stdout) };
+  const stdout = await runTurn(name, bin, args, cwd, Boolean(opts.wait));
+  return stdout === null ? null : { denied: deniedIn(stdout) };
 }
 
 /** `tool: command` for each call in a `--output-format json` result's `permission_denials`. */
@@ -251,48 +172,6 @@ export function relayPickedUp(
       Date.parse(m.timestamp) > sentAt &&
       m.text.includes(relay.text),
   );
-}
-
-export interface ClaudeTurnState {
-  pid: number | null;
-  startedAt: string;
-  state: "running" | "done" | "failed";
-  exitCode: number | null;
-  error: string | null;
-}
-
-/** In-process registry of the most recent claude-send turn per workspace. */
-const claudeTurns = new Map<string, ClaudeTurnState>();
-
-/**
- * Turn-transition bus: emits `(workspaceName, {state, error})` whenever a
- * claude-send turn flips running/done/failed. The live tailer
- * (lib/session-stream.ts) subscribes so the browser typing indicator ends the
- * instant the child exits, without polling `claude-turn-status`. Event name is
- * the workspace name; one listener per active tailer, so raise the cap.
- */
-export const turnEvents = new EventEmitter();
-turnEvents.setMaxListeners(0);
-
-/**
- * Report the state of the most recent `claude-send` turn for a workspace.
- * "idle" means no turn has been started by this server process (including
- * after a server restart — callers should fall back to transcript polling).
- */
-export function turnStatus(name: string): {
-  state: "idle" | "running" | "done" | "failed";
-  startedAt: string | null;
-  exitCode: number | null;
-  error: string | null;
-} {
-  const turn = claudeTurns.get(name);
-  if (!turn) return { state: "idle", startedAt: null, exitCode: null, error: null };
-  return {
-    state: turn.state,
-    startedAt: turn.startedAt,
-    exitCode: turn.exitCode,
-    error: turn.error,
-  };
 }
 
 /** The shell command that reopens a workspace session in a terminal. */
