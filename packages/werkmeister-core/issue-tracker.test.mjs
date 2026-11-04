@@ -114,6 +114,9 @@ test("the issues guide maps each type to a label, the tracker's type and a templ
     /^\| task \| .*`--label task`.*`gh label create task -R <owner>\/<repo> --color ededed --force`.* \| Task \|$/m,
   );
   assert.match(md, /- \*\*Type:\*\* bug\n/);
+  // SW-400: observations and inferences go in separate sections.
+  assert.match(md, /\*\*Actual\*\* \(observed only; mark anything inferred\)/);
+  assert.match(md, /\*\*Suspected cause[^\n]*inferences go here/);
   assert.match(
     md,
     /- \*\*Type:\*\* feature \| task\n[\s\S]*\*\*Ask\*\*[\s\S]*\*\*Why\*\*[\s\S]*\*\*Where to change\*\*[\s\S]*\*\*Done when\*\*/,
