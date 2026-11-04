@@ -106,6 +106,23 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /A library or CLI has no service to restart/, `${wt}/${d}`);
           assert.match(c, /as its Validation text in `werkmeister-context\.md`/, `${wt}/${d}`);
         }
+        // SW-388: each build stage ends with the review step and lists review.md; spike has none.
+        const build = { feature: "03_implement", refactor: "02_implement" }[wt] ?? "03_exercise";
+        if (wt !== "spike" && d === build) {
+          assert.match(c, /`ponytail:ponytail-review`/, `${wt}/${d}`);
+          assert.match(c, /## Outputs[\s\S]*^- `output\/review\.md`$/m, `${wt}/${d}`);
+          assert.ok(
+            c.indexOf("Review the diff") > c.indexOf("Write `output/exercise.md`"),
+            `${wt}/${d}: review before exercise.md`,
+          );
+          assert.match(
+            c,
+            /Reference \(every run\): `\.\.\/\.\.\/_shared\/standards\.md`/,
+            `${wt}/${d}`,
+          );
+        } else {
+          assert.doesNotMatch(c, /review\.md/, `${wt}/${d}`);
+        }
         assert.doesNotMatch(c, /WERKMEISTER_CONFIG_FILE|skills check/, `${wt}/${d}`);
         // SW-286: every exercise.md writer states the exact-cell rule the gate enforces.
         if (c.includes("Write `output/exercise.md`")) {

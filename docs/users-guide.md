@@ -1596,6 +1596,7 @@ The shipped archetypes give `node-tool` (libraries) and `mcp-client` (editor ext
    - The **test step** runs each touched service's test command exactly as `werkmeister-context.md` states it.
    - The **exercise step** reloads the running code, then checks the change the way the service's validation text says. It records the result in `output/exercise.md` as a `| check | result |` table.
    - `test:` catches regressions; `validate:` shows the new behaviour works. Passing tests are not a substitute for the exercise.
+   - The **review step** (ICM feature and refactor implement, bugfix/incident exercise) has a fresh subagent run `ponytail:ponytail-review` over the uncommitted diff. It fixes every Must fix and writes `output/review.md`, which the PR gate checks like `exercise.md`.
 3. **PR gate** (`werkmeister pr gate`, re-run by `werkmeister pr open`):
    - It re-runs `test:` for every service the branch touches, inside a running container of that repo. When none runs, it starts one and stops it afterwards, so a workspace with no services listed still passes. compose.yml carries the repo's other services behind the `on-demand` profile for this.
    - It doesn't read `validate:` itself. It checks the exercise evidence: the exercise table must have at least one PASS row and no FAIL row. An ICM workspace keeps it in `stages/*/output/exercise.md` (`verify.md` in workspaces made before the rename); JIT keeps it in `.werkmeister/notes/exercise.md`.

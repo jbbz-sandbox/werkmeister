@@ -460,13 +460,31 @@ function exerciseFile(ws: string): string | null {
     return fs.existsSync(p) ? p : null;
   }
   // `verify.md` is the name before decision 11.
-  for (const name of ["exercise.md", "verify.md"]) {
+  return stageOutput(ws, ["exercise.md", "verify.md"]);
+}
+
+/** The first stage output named one of *names* (tried in order), in stage order. */
+function stageOutput(ws: string, names: string[]): string | null {
+  for (const name of names) {
     for (const d of fs.readdirSync(path.join(ws, "stages")).sort()) {
       const p = path.join(ws, "stages", d, "output", name);
       if (fs.existsSync(p)) return p;
     }
   }
   return null;
+}
+
+/** A workspace opts in to the review check when init wrote the SW-388 review step into a stage contract. */
+function reviewRequired(ws: string): boolean {
+  const stages = path.join(ws, "stages");
+  if (!fs.existsSync(stages)) return false;
+  return fs.readdirSync(stages).some((d) => {
+    try {
+      return fs.readFileSync(path.join(stages, d, "CONTEXT.md"), "utf8").includes("review.md");
+    } catch {
+      return false;
+    }
+  });
 }
 
 /**
@@ -674,6 +692,19 @@ async function gateChecks(
         evidence
           ? `${path.relative(ws, evidence)} ${evidenceProblem ?? "all PASS"}`
           : "no exercise.md — record the exercise checks first",
+      );
+    }
+    const skipReview = reason(file.fm["skip_review"]);
+    if (skipReview) add("review", true, `skipped: ${skipReview}`);
+    else if (reviewRequired(ws)) {
+      const review = stageOutput(ws, ["review.md"]);
+      const problem = review ? passTable(fs.readFileSync(review, "utf8")) : null;
+      add(
+        "review",
+        review !== null && problem === null,
+        review
+          ? `${path.relative(ws, review)} ${problem ?? "all PASS"}`
+          : "no review.md — run the build stage's review step first",
       );
     }
     // The PR-file checks are instant; the test commands can take ten minutes cold (SW-150).

@@ -74,6 +74,16 @@ const TEST_STEP =
   "A subagent you brief to run tests or the CLI gets that wrapped command verbatim in its brief. " +
   "Redirect output to a file, trust the exit code, read back only the failing slice.";
 
+// SW-388: in sw-386 a must-fix passed the tests, the exercise and the gate; only a separate review caught it.
+const reviewStep = (rerun: string) =>
+  "Review the diff: for each code worktree you touched, start a fresh subagent and brief it with only the worktree path and " +
+  '"run the `ponytail:ponytail-review` skill over this worktree\'s uncommitted changes, untracked files included" — not how you built it, so the review is not anchored on your reasoning. ' +
+  `Fix every **Must fix** finding in place, then ${rerun}. Leave **Should fix** and **Nice to have** findings as they are. ` +
+  "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
+  "a `| check | result | evidence |` table with one row per worktree whose result cell is exactly `PASS` (no Must fix left open) or `FAIL` — nothing else in the cell. " +
+  "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`.";
+const IMPLEMENT_REVIEW = reviewStep("rerun the test step above and update `exercise.md`");
+
 // SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
 const NAME_HISTORY_STEP =
   "For each decision that renames, keeps or removes a name, a fallback or an alias, record its definition site (file and line) and the commit that introduced it (`git log -S <name>`, in the repo that defines it). " +
@@ -181,8 +191,8 @@ const feature: Stage[] = [
   {
     name: "implement",
     job: "build it and prove it",
-    writes: "code diff, `output/exercise.md`",
-    check: "read the diff; tests green",
+    writes: "code diff, `output/exercise.md`, `output/review.md`",
+    check: "read the diff and `review.md`; tests green",
     standards: "all",
     contract: (v) => ({
       oneJob:
@@ -200,10 +210,12 @@ const feature: Stage[] = [
         TEST_STEP,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
+        IMPLEMENT_REVIEW,
       ],
       outputs: [
         "Code changes, uncommitted — the next stage commits after the person reads the diff",
         "`output/exercise.md`",
+        "`output/review.md`",
       ],
       humanCheck:
         "Read the diff. Run the tests yourself. Edit the code in place if something is off — the next stage commits what is on disk.",
@@ -273,27 +285,33 @@ const bugfix: Stage[] = [
   {
     name: "exercise",
     job: "prove it against the running service or the built CLI",
-    writes: "`output/exercise.md`",
+    writes: "`output/exercise.md`, `output/review.md`",
     check: "the original reproduction no longer fails",
-    standards: "none",
+    standards: "all",
     contract: (v) => ({
       oneJob:
-        "One job: show the original failure is gone in the running service or the built binary, not just in the test.",
+        "One job: show the original failure is gone in the running service or the built binary, not just in the test. Then review the diff and fix what must be fixed.",
       inputs: [
         `Working (this run): \`${v.at("reproduce")}/output/repro.md\` — the reproduction steps`,
         `Working (this run): \`${v.at("fix")}/output/fix.md\``,
-        "Reference (every run): `../../.werkmeister/werkmeister-context.md` — container names, published ports",
+        "Reference (every run): `../../.werkmeister/werkmeister-context.md` — container names, published ports, test command",
       ],
-      doNotLoad:
-        "`_shared/standards.md` (no code is written here), source files, `.werkmeister/*.yml`.",
+      doNotLoad: "`BRIEF.md` (`repro.md` carries the settled scope), `.werkmeister/*.yml`.",
       process: [
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
         "Exercise one neighbouring path through each caller `repro.md` listed. Capture the output.",
         `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
+        reviewStep(
+          "rerun the test command exactly as `../../.werkmeister/werkmeister-context.md` states it (through `.werkmeister/bin/with-temp-home`), rerun steps 2–3 and update `exercise.md`",
+        ),
       ],
-      outputs: ["`output/exercise.md`"],
-      humanCheck: "Read `exercise.md`. A FAIL sends the run back to the fix stage.",
+      outputs: [
+        "`output/exercise.md`",
+        "`output/review.md`",
+        "Code changes from Must fix findings, uncommitted",
+      ],
+      humanCheck: "Read `exercise.md` and `review.md`. A FAIL sends the run back to the fix stage.",
     }),
   },
   propose,
@@ -328,8 +346,8 @@ const refactor: Stage[] = [
   {
     name: "implement",
     job: "refactor in green steps",
-    writes: "code diff, `output/exercise.md`",
-    check: "read the diff; tests green at every step",
+    writes: "code diff, `output/exercise.md`, `output/review.md`",
+    check: "read the diff and `review.md`; tests green at every step",
     enter:
       "`stages/01_scope/output/scope.md` reads `status: decided` — the flip *is* the approval, do not ask again",
     standards: "all",
@@ -349,8 +367,9 @@ const refactor: Stage[] = [
         `Take the steps in order. After each one: ${TEST_STEP}`,
         `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, and the final exercise checks as ${exerciseFormat("evidence")}.`,
+        IMPLEMENT_REVIEW,
       ],
-      outputs: ["Code changes, uncommitted", "`output/exercise.md`"],
+      outputs: ["Code changes, uncommitted", "`output/exercise.md`", "`output/review.md`"],
       humanCheck: "Read the diff against `scope.md`. Anything outside scope goes back.",
     }),
   },
