@@ -528,6 +528,59 @@ test("gate: an exercise result cell of `FAIL — why`, or neither PASS nor FAIL,
   }
 });
 
+/** An ICM workspace inited with the SW-388 review step; *review* is its review.md, null for none. */
+function reviewWorkspace(review, opts = {}) {
+  const ws = icmWorkspace(opts);
+  const stage = path.join(ws, "stages", "02_implement");
+  fs.writeFileSync(path.join(stage, "CONTEXT.md"), "Write `output/review.md`: …\n");
+  if (review !== null) fs.writeFileSync(path.join(stage, "output", "review.md"), review);
+  return ws;
+}
+
+test("gate: the review check (SW-388)", async (t) => {
+  const review = (cell) => `| check | result | evidence |\n|---|---|---|\n| app | ${cell} | ok |\n`;
+  const cases = [
+    [
+      "missing review.md fails before the tests",
+      reviewWorkspace(null),
+      ["review", "tests"],
+      /no review\.md/,
+    ],
+    [
+      "all PASS passes",
+      reviewWorkspace(review("PASS")),
+      [],
+      /02_implement\/output\/review\.md all PASS$/,
+    ],
+    ["a FAIL row fails", reviewWorkspace(review("FAIL")), ["review", "tests"], /has a FAIL row/],
+    [
+      "skip_review skips it",
+      reviewWorkspace(null, { files: { app: prFile({ extra: "skip_review: docs only\n" }) } }),
+      [],
+      /^skipped: docs only$/,
+    ],
+  ];
+  for (const [name, ws, fails, detail] of cases)
+    await t.test(name, async () => {
+      try {
+        const g = await gate(ws, deps([DIFF_API]));
+        assert.deepEqual(failed(g), fails);
+        assert.match(g.checks.find((c) => c.name === "review").detail, detail);
+      } finally {
+        clean(ws);
+      }
+    });
+  await t.test("a workspace inited before SW-388 has no review check", async () => {
+    const ws = icmWorkspace();
+    try {
+      const g = await gate(ws, deps([DIFF_API]));
+      assert.ok(!g.checks.some((c) => c.name === "review"));
+    } finally {
+      clean(ws);
+    }
+  });
+});
+
 test("gate: a malformed acceptance row fails before any test command runs, naming the cell format (SW-150)", async () => {
   const ws = icmWorkspace({
     files: { app: prFile({ body: "| works | PASS: repro.md section 1 |\n" }) },
