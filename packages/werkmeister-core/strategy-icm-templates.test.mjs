@@ -113,6 +113,9 @@ test("each template renders with no undefined and a route per stage", async () =
             /^4\. Load every `_shared\/standards\.md` row whose Applies-when matches a file `spec\.md` changes.*`## Conflicts`/m,
             `${wt}/${d}`,
           );
+        // SW-111: spec asks how an existing user turns the change on.
+        if (d.endsWith("_spec"))
+          assert.match(c, /^5\. .*how does an existing user turn this on\?/m, `${wt}/${d}`);
         // SW-392: a repro is judged by exit code, not an output grep.
         if (d.endsWith("_reproduce"))
           assert.match(c, /^1\. Reproduce .*Judge each run by its exit code/m, `${wt}/${d}`);

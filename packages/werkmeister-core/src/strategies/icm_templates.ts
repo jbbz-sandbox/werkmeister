@@ -198,6 +198,8 @@ const feature: Stage[] = [
         "Map each acceptance criterion in `BRIEF.md` to the step or test in `spec.md` that satisfies it. A criterion with no mapping is a defect in this stage.",
         // SW-288: a ticket-vs-standard conflict surfaced only in implement, after the code was written.
         "Load every `_shared/standards.md` row whose Applies-when matches a file `spec.md` changes, not only the universal ones. Under `## Conflicts` in `spec.md`, write one line per place the ticket's proposed shape breaks a loaded standard (the rule, and the shape that would satisfy it), or `none`.",
+        // SW-111: SW-104's spec defined a config shape but not how a machine that already had one adds a second.
+        "In `spec.md`, answer: how does an existing user turn this on? Name the setup or config path (a setup command, a config key or file) and the doc that describes it, or say none is needed. Map the answer to a criterion as in step 3; a missing answer is a defect in this stage.",
       ],
       outputs: ["`output/spec.md`", "Any artifact from step 2, in the repo"],
       humanCheck:
