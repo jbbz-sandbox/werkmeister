@@ -5,13 +5,13 @@
  * dir: a turbo upgrade that stops evicting fails here, not on a full disk.
  * SW-69: the cache is the built-in `turbo` entry, attached by turbo.json.
  */
-import { execFile, spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyCaches } from "werkmeister-core/build_caches";
 import { REGISTRY_DEFAULTS } from "werkmeister-core/scaffold";
 import YAML from "yaml";
@@ -21,6 +21,9 @@ const TURBO = path.join(REPO, "node_modules", ".bin", "turbo");
 const execFileAsync = promisify(execFile);
 const BUILT_IN = REGISTRY_DEFAULTS.caches.turbo;
 const MAX_AGE: string = BUILT_IN.env.TURBO_CACHE_MAX_AGE;
+
+// SW-402: a case runs turbo up to three times, ~1 s each when idle and 10-50x that on a loaded host.
+vi.setConfig({ testTimeout: 180_000 });
 
 // biome-ignore lint/suspicious/noExplicitAny: the registry is untyped YAML.
 const registry: any = YAML.parse(
@@ -72,7 +75,7 @@ function writeJson(file: string, value: unknown): void {
   fs.writeFileSync(file, `${JSON.stringify(value)}\n`);
 }
 
-function turbo(...args: string[]) {
+async function turbo(...args: string[]): Promise<string> {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     HOME: tmp,
@@ -81,9 +84,9 @@ function turbo(...args: string[]) {
     TURBO_TELEMETRY_DISABLED: "1",
   };
   delete env.TURBO_FORCE;
-  const res = spawnSync(TURBO, ["run", "build", ...args], { cwd: fixture, env, encoding: "utf8" });
-  expect(res.status, res.stdout + res.stderr).toBe(0);
-  return res.stdout;
+  // SW-402: async, so a starved turbo run never blocks the vitest worker past its 60 s RPC timeout.
+  const { stdout } = await execFileAsync(TURBO, ["run", "build", ...args], { cwd: fixture, env });
+  return stdout;
 }
 
 /** A cache entry as turbo writes one: archive plus metadata sidecar. */
@@ -132,12 +135,12 @@ afterEach(() => {
 });
 
 describe.skipIf(!fs.existsSync(TURBO))("turbo with the registry's cache settings", () => {
-  it("evicts entries older than TURBO_CACHE_MAX_AGE and keeps newer ones", () => {
+  it("evicts entries older than TURBO_CACHE_MAX_AGE and keeps newer ones", async () => {
     const maxDays = Number.parseInt(MAX_AGE, 10);
     const stale = seedEntry("aaaaaaaaaaaaaaaa", maxDays + 6);
     const fresh = seedEntry("bbbbbbbbbbbbbbbb", maxDays - 1);
 
-    turbo();
+    await turbo();
 
     for (const f of stale) expect(fs.existsSync(f), f).toBe(false);
     for (const f of fresh) expect(fs.existsSync(f), f).toBe(true);
@@ -146,10 +149,10 @@ describe.skipIf(!fs.existsSync(TURBO))("turbo with the registry's cache settings
     expect(fs.existsSync(path.join(fixture, ".turbo", "cache"))).toBe(false);
   });
 
-  it("hits on unchanged inputs, and --force still bypasses the cache", () => {
-    expect(turbo()).toContain("0 cached, 1 total");
-    expect(turbo()).toContain("1 cached, 1 total");
-    expect(turbo("--force")).toContain("0 cached, 1 total");
+  it("hits on unchanged inputs, and --force still bypasses the cache", async () => {
+    expect(await turbo()).toContain("0 cached, 1 total");
+    expect(await turbo()).toContain("1 cached, 1 total");
+    expect(await turbo("--force")).toContain("0 cached, 1 total");
   });
 
   // SW-361: esbuild.mjs bakes HEAD and the dirty flag into the CLI, and neither is
