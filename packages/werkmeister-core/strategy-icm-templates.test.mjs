@@ -99,6 +99,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^1\. List what exists.*whole-module mocks.*fixture the change must update/m,
             `${wt}/${d}`,
           );
+        // SW-242: research greps tests and fixtures for the exact value being changed.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^1\. List what exists.*grep tests and fixtures for that exact value and list the hits/m,
+            `${wt}/${d}`,
+          );
         // SW-392: a repro is judged by exit code, not an output grep.
         if (d.endsWith("_reproduce"))
           assert.match(c, /^1\. Reproduce .*Judge each run by its exit code/m, `${wt}/${d}`);
