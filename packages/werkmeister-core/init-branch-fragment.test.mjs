@@ -60,3 +60,12 @@ test("init renders the worktree fragment's command over the registry's, leaves o
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// SW-370: a feature name that already starts with the issue slug is not prefixed twice.
+test("buildWorkspaceName: a feature carrying the issue slug is used as is (SW-370)", async () => {
+  const { buildWorkspaceName } = await import("./dist/workspace_init.js");
+  assert.equal(buildWorkspaceName("sw-356-up-dirty", "sw-356"), "sw-356-up-dirty");
+  assert.equal(buildWorkspaceName("up-dirty", "sw-356"), "sw-356-up-dirty");
+  assert.equal(buildWorkspaceName("sw-3560-x", "sw-356"), "sw-356-sw-3560-x");
+  assert.equal(buildWorkspaceName("x", null), "x");
+});
