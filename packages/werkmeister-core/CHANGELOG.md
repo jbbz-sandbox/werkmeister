@@ -1,5 +1,12 @@
 # sandbox-core
 
+## 0.70.2
+
+### Patch Changes
+
+- d99e9ea: SW-237: `werkmeister machine setup` leaves the werkmeister plugin alone when `CLAUDE_CODE_PLUGIN_DIRS` (the shell's, or `env` in `~/.claude/settings.json`) already loads it from a checkout: no marketplace add or install, reported as `loaded from <dir> (dev mode)`. `--check` no longer reports such a machine as missing the plugin, and flags a marketplace copy that overrides the checkout, with the uninstall commands.
+- 924600e: `werkmeister pr status` says why a merged PR in a `ship: tag` repo is not shipped yet: `not shipped yet: no release tag contains <sha>; latest tag <tag> (<date>) predates the merge (<date>)`, or `no tag matches <pattern> yet` when the repo has none. With `skip_release` set it also names the `release: none` fix (SW-389).
+
 ## 0.70.1
 
 ## 0.70.0

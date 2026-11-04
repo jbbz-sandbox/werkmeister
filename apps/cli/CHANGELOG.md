@@ -1,5 +1,16 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.70.2
+
+### Patch Changes
+
+- d99e9ea: SW-319: the plugin's install check (`skills/install-check/check.sh --fix`) brings a stale `dist` up to date after a `main` pull. It runs `corepack pnpm install --frozen-lockfile`, then `corepack pnpm turbo run build --filter=werkmeister`, so core is rebuilt before the CLI bundles it. It prints `FIX` only when the rebuild succeeds; a failed rebuild prints the first error lines and no longer refuses the next prompt of every session.
+- beeaab4: `workspace create` no longer doubles the issue slug when the feature name already starts with it (SW-370).
+- 924600e: `werkmeister workspace close`, refusing a workspace with a merged PR, now says that a PR which ships no release needs `release: none` in its PR file. The PR rules and docs say a change that ships nothing sets `release: none` beside `skip_release`; `skip_release` alone still waits for a release tag in a `ship: tag` repo (SW-393).
+- d9ef46e: `werkmeister workspace close` names the `release: none` fix only for a merged PR that set `skip_release`, so a PR waiting for its release tag is no longer told to skip it. `werkmeister pr status` says `merge commit unknown` when a merged PR file has no `merge_sha`, instead of a garbled line (SW-393).
+- beeaab4: Generated allow rules now cover the stage test commands run through `with-temp-home` (each `&&` segment, for every service of the workspace's repos) and the `env WERKMEISTER_ROOT=… node --test` fixture form, and werkmeister-context.md names those rules; headless sessions are no longer refused (SW-398).
+- beeaab4: The workspace record keeps the gate and pr-open logs: `.gitignore` no longer ignores `gate-*.log` and `pr open` commits them with `pr-open.log` (SW-401). Existing workspaces keep their old ignore line.
+
 ## 0.70.1
 
 ### Patch Changes
