@@ -102,6 +102,7 @@ services:
       After editing a `*.help.md` or a command's option text (`main.ts`), run `pnpm run docs:gen` (man pages and the users-guide CLI reference) and commit the regenerated files before the lint chain; `docs:check` fails otherwise.
       A new or changed CLI flag or command namespace also needs `pnpm exec vitest run src/__tests__/spellings.test.ts -u` in `apps/cli` (the snapshot holds every namespace key; a new spelling must carry every key of the deprecated one it replaces).
       A `pr_rules.ts` change needs `UPDATE_SNAPSHOT=1 node --test strategy-jit-snapshot.test.mjs` in `packages/werkmeister-core`, run through `with-temp-home`.
+      The same regeneration applies to any generated-text change (a skill or a stage contract): the file is `packages/werkmeister-core/strategy-jit.snapshot.json`. Format only the changed files (`pnpm exec biome check --write <files>`), never a whole directory.
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
