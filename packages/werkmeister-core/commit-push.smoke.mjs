@@ -95,10 +95,10 @@ const r4 = await commitAndPush(feat, "chore: record opened PR(s)", [
   ".werkmeister/gate-app-lint.log",
 ]);
 assert.equal(r4.ok, true, `record with an ignored log must succeed, got: ${r4.message}`);
-assert.deepEqual(
-  git(feat, "show", "--name-only", "--format=", "HEAD").trim().split("\n").sort(),
-  [".werkmeister/gate-app-lint.log", "pr-app.md"],
-);
+assert.deepEqual(git(feat, "show", "--name-only", "--format=", "HEAD").trim().split("\n").sort(), [
+  ".werkmeister/gate-app-lint.log",
+  "pr-app.md",
+]);
 console.log("✓ record commit force-adds a named log the .gitignore ignores");
 
 fs.rmSync(tmp, { recursive: true, force: true });

@@ -2288,9 +2288,12 @@ export async function commitAndPush(
   // `-f`: a pre-SW-401 .gitignore still ignores the named gate logs, and git refuses the whole add (SW-407).
   // Commit only if something is staged (`diff --cached --quiet` exits 1 when there is).
   const only = paths.length ? ["--", ...paths] : [];
-  await runCapture("git", ["-C", dir, "add", ...(paths.length ? ["-A", "-f", ...only] : ["-u"])]).catch(
-    () => {},
-  );
+  await runCapture("git", [
+    "-C",
+    dir,
+    "add",
+    ...(paths.length ? ["-A", "-f", ...only] : ["-u"]),
+  ]).catch(() => {});
   const staged = await runCapture("git", ["-C", dir, "diff", "--cached", "--quiet", ...only]).catch(
     () => null,
   );
