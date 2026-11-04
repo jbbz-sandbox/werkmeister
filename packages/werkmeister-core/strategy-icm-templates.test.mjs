@@ -192,6 +192,13 @@ test("each template renders with no undefined and a route per stage", async () =
             `${wt}/${d}`,
           );
       }
+      // SW-331: a stage that reads `BRIEF.md` § Acceptance criteria has a first stage that writes it.
+      const first = fs.readFileSync(path.join(root, "stages", dirs[0], "CONTEXT.md"), "utf8");
+      assert.match(
+        first,
+        /^0\. If `\.\.\/\.\.\/BRIEF\.md` has no `## Acceptance criteria` section, write/m,
+        wt,
+      );
       if (EXPECTED[wt].includes("exercise")) {
         const ex = fs.readFileSync(path.join(root, "stages", "03_exercise", "CONTEXT.md"), "utf8");
         assert.match(ex, /A library or CLI has no service to restart/, `${wt}/03_exercise`);
