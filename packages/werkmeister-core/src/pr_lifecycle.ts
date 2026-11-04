@@ -1397,28 +1397,31 @@ export async function refreshPrStatus(
 
 /** Why a merged `ship: tag` PR has no tag yet: the latest matching tag against the merge date (SW-389). */
 async function notShippedWhy(dir: string, f: PrFile, pattern: string, deps: Deps): Promise<string> {
-  const sha = String(f.fm["merge_sha"]);
-  const latest = (
-    await deps.run("git", [
-      "-C",
-      dir,
-      "for-each-ref",
-      "--sort=-creatordate",
-      "--count=1",
-      "--format=%(refname:short) %(creatordate:iso-strict)",
-      `refs/tags/${pattern}`,
-    ])
-  ).stdout.trim();
-  let why = `no release tag contains ${sha.slice(0, 7)}; `;
-  if (!latest) why += `no tag matches ${pattern} yet`;
-  else {
-    const [tag, tagDate = ""] = latest.split(" ");
-    const merged = (
-      await deps.run("git", ["-C", dir, "log", "-1", "--format=%cI", sha])
+  const sha = f.fm["merge_sha"] ? String(f.fm["merge_sha"]) : "";
+  let why = "merge commit unknown";
+  if (sha) {
+    const latest = (
+      await deps.run("git", [
+        "-C",
+        dir,
+        "for-each-ref",
+        "--sort=-creatordate",
+        "--count=1",
+        "--format=%(refname:short) %(creatordate:iso-strict)",
+        `refs/tags/${pattern}`,
+      ])
     ).stdout.trim();
-    why += `latest tag ${tag} (${tagDate})`;
-    if (merged)
-      why += ` ${Date.parse(tagDate) < Date.parse(merged) ? "predates" : "does not contain"} the merge (${merged})`;
+    why = `no release tag contains ${sha.slice(0, 7)}; `;
+    if (!latest) why += `no tag matches ${pattern} yet`;
+    else {
+      const [tag, tagDate = ""] = latest.split(" ");
+      const merged = (
+        await deps.run("git", ["-C", dir, "log", "-1", "--format=%cI", sha])
+      ).stdout.trim();
+      why += `latest tag ${tag} (${tagDate})`;
+      if (merged)
+        why += ` ${Date.parse(tagDate) < Date.parse(merged) ? "predates" : "does not contain"} the merge (${merged})`;
+    }
   }
   // skip_release can't tell a change that ships nothing from one checked on the host (#145, SW-393).
   if (reason(f.fm["skip_release"]))
@@ -2160,6 +2163,7 @@ export function lifecycleOf(ws: string): {
     status: string;
     url: string | null;
     release: string | null;
+    skip_release: boolean;
   }>;
 } {
   let files: PrFile[] = [];
@@ -2174,6 +2178,7 @@ export function lifecycleOf(ws: string): {
     status: statusOf(f),
     url: f.fm["url"] ? String(f.fm["url"]) : null,
     release: f.fm["release"] ? String(f.fm["release"]) : null,
+    skip_release: Boolean(reason(f.fm["skip_release"])),
   }));
   const all = (set: Set<string>) => prs.every((p) => set.has(p.status));
   let state: Lifecycle;
@@ -2428,9 +2433,9 @@ async function closeOutLocked(
     throw new WorkspaceError(
       `'${name}' is ${life.state} (${detail}). Close-out needs every PR shipped, closed or abandoned — run \`werkmeister pr status\` after the release, ` +
         `or give up with \`werkmeister workspace abandon "<reason>" ${name}\`.` +
-        // A merged change that ships nothing (no changeset) never gets a tag (SW-393).
-        (life.prs.some((p) => p.status === "merged")
-          ? " A merged PR that ships no release waits forever: set `release: none` in its PR file, then run `werkmeister pr status`."
+        // Only skip_release reaches merged with nothing to release; a PR with a changeset must wait (#145, SW-393).
+        (life.prs.some((p) => p.status === "merged" && p.skip_release)
+          ? " A merged PR with skip_release that ships nothing never gets a tag: if so, set `release: none` in its PR file, then run `werkmeister pr status`."
           : "") +
         (life.prs.length
           ? ""

@@ -1706,6 +1706,45 @@ test("refreshPrStatus: a merged PR with no containing tag says why, naming the l
   }
 });
 
+test("refreshPrStatus: a newer tag that doesn't contain the merge says so (SW-389)", async () => {
+  const ws = icmWorkspace({ files: { app: MERGED_SKIP } });
+  try {
+    const r = await refreshPrStatus(
+      ws,
+      deps([
+        [/tag --contains abc1234/, { stdout: "" }],
+        [/for-each-ref/, { stdout: "v1.4.1 2026-11-03T18:00:00Z\n" }],
+        [/log -1 --format=%cI abc1234/, { stdout: "2026-11-03T17:27:00Z\n" }],
+      ]),
+    );
+    assert.match(
+      r.lines.join("\n"),
+      /latest tag v1\.4\.1 \(2026-11-03T18:00:00Z\) does not contain the merge \(2026-11-03T17:27:00Z\)/,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: an empty merge_sha says the merge commit is unknown (SW-389)", async () => {
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({ status: "merged", extra: 'merge_sha: ""\nskip_release: tests only\n' }),
+    },
+  });
+  try {
+    const d = deps([[/tag --contains/, { code: 1, stderr: "malformed object name" }]]);
+    const out = (await refreshPrStatus(ws, d)).lines.join("\n");
+    assert.match(
+      out,
+      /not shipped yet: merge commit unknown; if it ships nothing, set `release: none`/,
+    );
+    assert.ok(!d.calls.some((c) => /for-each-ref/.test(c)), "no tag lookup without a sha");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("refreshPrStatus: a merged PR whose tag exists ships and prints no reason line (SW-389)", async () => {
   const ws = icmWorkspace({ files: { app: MERGED_SKIP } });
   try {
@@ -1821,9 +1860,25 @@ test("closeOut refuses before ship", async () => {
       ),
     );
     assert.match(String(err), /is merged \(app: merged\)/);
-    // A merged PR that ships nothing never gets a tag: the error names the fix (SW-393).
-    assert.match(String(err), /`release: none` in its PR file/);
+    // No skip_release: it has a release entry, so it must wait for its tag (#145).
+    assert.doesNotMatch(String(err), /release: none/);
     assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut: a merged skip_release PR names the release: none fix (SW-393)", async () => {
+  const ws = icmWorkspace({ files: { app: MERGED_SKIP } });
+  try {
+    const err = await inWorkspacesRoot(ws, (name) =>
+      closeOut(name, {}, deps([])).then(
+        () => null,
+        (e) => e,
+      ),
+    );
+    assert.match(String(err), /is merged \(app: merged\)/);
+    assert.match(String(err), /skip_release that ships nothing .*`release: none` in its PR file/);
   } finally {
     clean(ws);
   }
