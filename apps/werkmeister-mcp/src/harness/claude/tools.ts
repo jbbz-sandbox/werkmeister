@@ -242,7 +242,8 @@ export function registerClaudeTools(
         "Open a terminal in the workspace directory resuming its newest Claude " +
         "Code session (`claude --resume <id>`), fully interactive. Starts a fresh session " +
         "when the workspace has none, or when `new` is set. A VS Code integrated terminal " +
-        "when the caller runs in VS Code (`TERM_PROGRAM=vscode`, or `WERKMEISTER_LAUNCHER=vscode`), " +
+        "when the caller runs in VS Code (`TERM_PROGRAM=vscode`, `CLAUDE_CODE_ENTRYPOINT=claude-vscode`, " +
+        "or `WERKMEISTER_LAUNCHER=vscode`), " +
         "else a macOS Terminal window; the reply says which.",
       inputSchema: {
         ...sessionArg,

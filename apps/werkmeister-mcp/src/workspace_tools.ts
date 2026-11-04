@@ -838,7 +838,8 @@ export function registerWorkspaceTools(server: McpServer): void {
       description:
         "Gather a PR's issue, description, and diff, then launch a headless, tool-restricted " +
         "`claude -p` session (context handed off at spawn) in a background Terminal window (or a " +
-        "VS Code terminal when `WERKMEISTER_LAUNCHER=vscode`) to reconcile the two. Returns " +
+        "VS Code terminal when the caller runs in VS Code: `TERM_PROGRAM=vscode`, " +
+        "`CLAUDE_CODE_ENTRYPOINT=claude-vscode`, or `WERKMEISTER_LAUNCHER=vscode`) to reconcile the two. Returns " +
         "the `sessionKey` the dashboard chat panel streams from (a `reconcile:<repo>-<number>` key).",
       inputSchema: {
         url: z.string().describe("The pull request URL to reconcile."),

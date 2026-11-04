@@ -17,6 +17,15 @@ test("launcher: WERKMEISTER_LAUNCHER wins, then TERM_PROGRAM=vscode, else Termin
   assert.equal(claudeLauncher({ WERKMEISTER_LAUNCHER: "junk", TERM_PROGRAM: "vscode" }), "vscode");
 });
 
+test("launcher: the Claude Code VS Code extension (SW-409)", () => {
+  assert.equal(claudeLauncher({ CLAUDE_CODE_ENTRYPOINT: "claude-vscode" }), "vscode");
+  assert.equal(
+    claudeLauncher({ WERKMEISTER_LAUNCHER: "terminal", CLAUDE_CODE_ENTRYPOINT: "claude-vscode" }),
+    "terminal",
+  );
+  assert.equal(claudeLauncher({ CLAUDE_CODE_ENTRYPOINT: "cli" }), "terminal");
+});
+
 test("claude URI: mode from the session, prompt only when given, query-encoded", () => {
   assert.equal(
     claudeLaunchUri({ workspace: "ws-1", sessionId: null }),
