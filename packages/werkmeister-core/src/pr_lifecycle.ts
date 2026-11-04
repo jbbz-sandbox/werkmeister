@@ -648,10 +648,11 @@ async function gateChecks(
   const checks: GateCheck[] = testsOnly ? [] : [stagesCheck(ws)];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
   const loadBudget = { leftMs: LOAD_WAIT_MS };
+  let loadWait = wait;
   // A failure ends with the host load, so a timeout under load reads as load (SW-209).
   const execCheck = async (name: string, container: string, cmd: string, tail: number) => {
     touchExecMarker(ws);
-    const waited = await waitForHostLoad(deps, wait, name, "--no-wait", loadBudget);
+    const waited = await waitForHostLoad(deps, loadWait, name, "--no-wait", loadBudget);
     touchExecMarker(ws);
     // `docker ps` lists paused containers, and exec into one fails: that is no lint/test verdict (SW-391).
     const state = await deps.run("docker", ["inspect", "-f", "{{.State.Paused}}", container]);
@@ -812,6 +813,8 @@ async function gateChecks(
   }
   const files = diff.code === 0 ? diff.stdout.split("\n").filter(Boolean) : [];
   const touched = mapTouched(files, repo);
+  // The wait keeps slow test suites from timing out under load; a diff that touches no service runs none (SW-303).
+  loadWait = wait && touched.length > 0;
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
   // Nothing touched yet files outside no_service_paths: the repo has no services to map to
   // (no `repos:` entry), so zero tests would run unannounced (SW-278).

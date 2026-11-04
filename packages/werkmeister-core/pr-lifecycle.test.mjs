@@ -1423,6 +1423,21 @@ test("runGate: one 10 min wait budget is shared across checks, then it runs anyw
   }
 });
 
+test("runGate: a docs-only diff under load runs lint and release without waiting (SW-303)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const host = loaded([90]);
+    const d = deps([[DIFF_API[0], { stdout: "README.md\ndocs/x.md\n" }]], host);
+    const g = await gate(ws, d);
+    assert.deepEqual(host.slept, []);
+    const release = g.checks.find((c) => c.name === "release");
+    assert.equal(release.ok, true, release.detail);
+    assert.doesNotMatch(release.detail, /wait/);
+  } finally {
+    clean(ws);
+  }
+});
+
 test("runGate: --no-wait and host_load: 0 never sleep (SW-209)", async () => {
   const ws = icmWorkspace();
   try {
