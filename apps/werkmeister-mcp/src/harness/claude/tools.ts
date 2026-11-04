@@ -14,6 +14,8 @@ import {
   sendToClaudeSession,
 } from "werkmeister-core";
 import { z } from "zod";
+import { launcherOf } from "../../lib/feature.js";
+import { headersOf } from "../../tools.js";
 
 /** The workspace_tools.ts helpers these tools share with the rest. */
 export interface SessionToolHelpers {
@@ -242,7 +244,7 @@ export function registerClaudeTools(
         "Open a terminal in the workspace directory resuming its newest Claude " +
         "Code session (`claude --resume <id>`), fully interactive. Starts a fresh session " +
         "when the workspace has none, or when `new` is set. A VS Code integrated terminal " +
-        "when the caller runs in VS Code (`TERM_PROGRAM=vscode`, `CLAUDE_CODE_ENTRYPOINT=claude-vscode`, " +
+        "when the calling session runs in VS Code (`TERM_PROGRAM=vscode`, `CLAUDE_CODE_ENTRYPOINT=claude-vscode`, " +
         "or `WERKMEISTER_LAUNCHER=vscode`), " +
         "else a macOS Terminal window; the reply says which.",
       inputSchema: {
@@ -275,6 +277,7 @@ export function registerClaudeTools(
           args.sessionId,
           args.new === true,
           args.prompt,
+          launcherOf(headersOf(extra)),
         );
         const where = result.launcher === "vscode" ? "a VS Code terminal" : "Terminal";
         const text = result.sessionId

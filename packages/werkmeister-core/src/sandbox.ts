@@ -2992,8 +2992,8 @@ async function openClaudeSession(
   script: string,
   uri: string,
   bringToFront = true,
+  launcher: Launcher = claudeLauncher(),
 ): Promise<Launcher> {
-  const launcher = claudeLauncher();
   if (launcher === "terminal") {
     await openTerminalRunning(script, bringToFront);
     return launcher;
@@ -3011,15 +3011,18 @@ export async function resumeClaudeInTerminal(
   sessionId?: string,
   fresh = false,
   prompt?: string,
+  launcher?: Launcher,
 ): Promise<{ path: string; sessionId: string | null; launcher: Launcher }> {
   const target = await resolveSessionDir(name);
   const resumeId = fresh ? null : (await getClaudeTranscript(name, 1, sessionId)).sessionId;
   const { model } = await readWorkspaceConfig(target);
-  const launcher = await openClaudeSession(
+  const opened = await openClaudeSession(
     `cd ${shellQuote(target)} && ${harness().resumeCommand(resumeId, model, prompt)}`,
     claudeLaunchUri({ workspace: path.basename(target), sessionId: resumeId, prompt }),
+    true,
+    launcher,
   );
-  return { path: target, sessionId: resumeId, launcher };
+  return { path: target, sessionId: resumeId, launcher: opened };
 }
 
 /** Opens a Terminal window following the workspace's container logs, for the pane's Logs (SW-105). */
@@ -3115,6 +3118,7 @@ const RECONCILE_PROMPT =
 export async function launchPrReconcile(
   url: string,
   issueRef?: string,
+  launcher?: Launcher,
 ): Promise<{ sessionKey: string; slug: string; issue: Issue; launcher: Launcher }> {
   if (!isValidPrUrl(url)) {
     throw new WorkspaceError(`Refusing to reconcile a non-GitHub-PR URL: ${url}`);
@@ -3139,12 +3143,13 @@ export async function launchPrReconcile(
     "utf-8",
   );
 
-  const launcher = await openClaudeSession(
+  const opened = await openClaudeSession(
     reconcileLaunch(slug).command,
     reconcileLaunchUri(slug),
     false, // background: watched from the browser chat panel, don't steal focus
+    launcher,
   );
-  return { sessionKey: `${RECONCILE_PREFIX}${slug}`, slug, issue, launcher };
+  return { sessionKey: `${RECONCILE_PREFIX}${slug}`, slug, issue, launcher: opened };
 }
 
 /** The reconcile session dir and command line for *slug*; exported so the VS Code extension runs the same one. */

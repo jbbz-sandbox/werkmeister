@@ -79,7 +79,7 @@ export const headersOf = (extra: unknown): ReqHeaders => (extra as Extra).reques
  * do not interleave and no correlation id is needed.
  *
  * `passthrough` is false on this reporter (collectingReporter's default) and
- * must stay false: on `--stdio` this process's stdout is the JSON-RPC channel.
+ * must stay false: a tool's output belongs in its result, never on this process's stdout.
  */
 export async function adapt(fn: () => Promise<Record<string, unknown>>): Promise<CallToolResult> {
   const reporter = collectingReporter();

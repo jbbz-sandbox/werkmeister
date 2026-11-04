@@ -1835,7 +1835,7 @@ export async function main(): Promise<void> {
     ],
     [
       "mcp",
-      "Launch the werkmeister MCP server over stdio (Claude Desktop, the werkmeister plugin; no token needed)",
+      "Launch the stdio proxy to the werkmeister daemon (Claude Desktop, the werkmeister plugin)",
       mcpHelp,
     ],
   ] as const) {

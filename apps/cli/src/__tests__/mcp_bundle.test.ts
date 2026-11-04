@@ -1,6 +1,7 @@
 /**
- * The bundled MCP server (`dist/mcp.js`, built from `../werkmeister-mcp/src/main.ts` by
- * esbuild.mjs) answers `initialize` over stdio.
+ * The bundled MCP entries (esbuild.mjs, from `../werkmeister-mcp/src/`) boot: the stdio
+ * proxy (`dist/mcp-proxy.js`, proxy.ts) answers `initialize`, which needs no daemon, and
+ * the daemon (`dist/mcp.js`, main.ts) refuses the `--stdio` it no longer serves (SW-344).
  *
  * This is the one thing an `npm i -g` install relies on that no other test
  * covers: that apps/werkmeister-mcp and its deps (express, the MCP SDK, zod, werkmeister-core)
@@ -14,11 +15,11 @@ import { expect, it, onTestFinished } from "vitest";
 
 const CLI_ROOT = path.resolve(import.meta.dirname, "../..");
 
-it("dist/mcp.js answers initialize over stdio", async () => {
-  const entry = path.join(CLI_ROOT, "dist", "mcp.js");
+it("dist/mcp-proxy.js answers initialize over stdio", async () => {
+  const entry = path.join(CLI_ROOT, "dist", "mcp-proxy.js");
   expect(fs.existsSync(entry), `${entry} missing — run pnpm run build`).toBe(true);
 
-  const child = spawn(process.execPath, [entry, "--stdio"], {
+  const child = spawn(process.execPath, [entry], {
     stdio: ["pipe", "pipe", "pipe"],
     env: { ...process.env, WERKMEISTER_ROOT: CLI_ROOT },
   });
@@ -53,4 +54,16 @@ it("dist/mcp.js answers initialize over stdio", async () => {
 
   const reply = JSON.parse(await firstLine);
   expect(reply.result.serverInfo.name).toBe("werkmeister");
+});
+
+it("dist/mcp.js --stdio exits 1 and points at the proxy", async () => {
+  const child = spawn(process.execPath, [path.join(CLI_ROOT, "dist", "mcp.js"), "--stdio"], {
+    stdio: ["ignore", "ignore", "pipe"],
+    env: { ...process.env, WERKMEISTER_ROOT: CLI_ROOT },
+  });
+  let stderr = "";
+  child.stderr.on("data", (d) => (stderr += d));
+  const code = await new Promise((resolve) => child.on("exit", resolve));
+  expect(code).toBe(1);
+  expect(stderr).toContain("werkmeister internal mcp");
 });

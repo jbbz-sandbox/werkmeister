@@ -21,7 +21,7 @@ Docs: <https://werkmeister.io/>
 | `werkmeister` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI tool |
 | `docs-site` | [apps/docs-site](apps/docs-site) | The public docs site: VitePress over the repo's docs, in place. |
 | `werkmeister-dashboard` | [apps/werkmeister-dashboard](apps/werkmeister-dashboard) | The localhost workspaces dashboard and the --browser-form page. |
-| `werkmeister-mcp` | [apps/werkmeister-mcp](apps/werkmeister-mcp) | The werkmeister MCP server: every tool, over stdio and authenticated HTTP, including the MCP App UI tools and the App pages they serve. Bundled into the CLI. |
+| `werkmeister-mcp` | [apps/werkmeister-mcp](apps/werkmeister-mcp) | The werkmeister MCP server: every tool over authenticated HTTP (the host daemon), including the MCP App UI tools and the App pages they serve, plus dist/proxy.js, the stdio proxy each session runs. Bundled into the CLI. |
 
 | Package | Path | What |
 | --- | --- | --- |
