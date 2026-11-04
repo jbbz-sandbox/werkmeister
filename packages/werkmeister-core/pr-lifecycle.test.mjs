@@ -1095,6 +1095,42 @@ test("gate: a dirty worktree stops before lint and tests start containers (SW-36
   }
 });
 
+const NO_PUSH = [
+  /push --dry-run origin me\/ws$/,
+  { code: 128, stderr: "git@github.com: Permission denied (publickey).\n" },
+];
+
+test("gate: no push access fails in the quick rows, before lint and tests (SW-408)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, NO_PUSH]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["push", "tests"]);
+    assert.match(g.checks.find((c) => c.name === "push").detail, /publickey.*ssh-add/);
+    assert.deepEqual(
+      d.calls.filter((c) => /^docker exec/.test(c)),
+      [],
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openPrs: no push access pushes and opens nothing (SW-408)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, NO_PUSH]);
+    const r = await open(ws, d);
+    assert.equal(r.ok, false);
+    assert.deepEqual(
+      d.calls.filter((c) => /push -u origin|^gh pr create/.test(c)),
+      [],
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
 test("openPrs: refuses a failed gate, opens an approved one and records it", async () => {
   const ws = icmWorkspace();
   try {

@@ -718,6 +718,16 @@ async function gateChecks(
           : "no review.md — run the build stage's review step first",
       );
     }
+    // Push auth fails only after the whole gate otherwise (SW-408); a dry run writes nothing.
+    const branch = String(file.fm["branch"] ?? "") || "HEAD";
+    const push = await deps.run("git", ["-C", dir, "push", "--dry-run", "origin", branch]);
+    add(
+      "push",
+      push.code === 0,
+      push.code
+        ? `${(push.stderr || push.stdout).trim()} — load a key (\`ssh-add\`) or fix origin's credentials, then rerun`
+        : `can push ${branch} to origin`,
+    );
     const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
     add(
       "clean",
