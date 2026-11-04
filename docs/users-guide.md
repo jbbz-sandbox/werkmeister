@@ -1,6 +1,6 @@
 # Werkmeister — User's Guide
 
-> Multi-feature concurrent development environment (formerly `sandbox`; the CLI is `werkmeister`, or `w9r` for short; the old `sandbox` command is gone). <!-- name-check: ignore -->
+> Multi-feature concurrent development environment (the CLI is `werkmeister`, or `w9r` for short).
 > Each feature runs only the services it changes; everything else comes from k8s. So the number of features you can run at once depends on how many services you run locally and how much RAM you have. The default is 12 slots (`feature_slots.count`), and you can raise it.
 
 ---
