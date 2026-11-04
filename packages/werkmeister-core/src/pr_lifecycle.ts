@@ -46,7 +46,6 @@ import {
   stopIdle,
 } from "./lifecycle.js";
 import { originSlug, type Step } from "./machine_setup.js";
-import { isQuestionFile } from "./md_form.js";
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import {
@@ -443,7 +442,7 @@ function stagesCheck(ws: string): GateCheck {
       try {
         return !fs
           .readdirSync(path.join(ws, "stages", d, "output"))
-          .some((f) => !f.startsWith(".") && !isQuestionFile(f));
+          .some((f) => !f.startsWith("."));
       } catch {
         return true;
       }
