@@ -7,14 +7,15 @@
  * are bundled in rather than declared as runtime dependencies. That is what
  * makes the tarball installable from a checkout-free machine.
  *
- * Three entry points, because the wrapper has three: `hooks gate` execs
- * `dist/lib/gate.js` directly to skip the commander/yaml import chain (<200ms
- * budget — see gate.ts). Bundling would otherwise collapse them into one file
+ * One entry per thing the wrapper or `infra connect` execs: the hook entries
+ * (`dist/lib/gate.js` etc.) skip the commander/yaml import chain (<200ms
+ * budget — see gate.ts); bundling would otherwise collapse them into one file
  * and hand the gate the whole CLI's import cost on every Edit/Write. `mcp`
- * execs `dist/mcp.js`: the headless MCP server lives in the sibling
- * `apps/werkmeister-mcp` workspace, which is private and not published, so it is bundled
- * here from source — the same reason werkmeister-core is. Without it, `werkmeister
- * mcp` and the `werkmeister` plugin's MCP entry have no target on an
+ * (`dist/mcp.js`) is the daemon and `mcp-proxy` (`dist/mcp-proxy.js`) the stdio
+ * proxy `werkmeister internal mcp` runs (SW-344): both live in the sibling
+ * `apps/werkmeister-mcp` workspace, which is private and not published, so they are
+ * bundled here from source — the same reason werkmeister-core is. Without them the
+ * daemon and the `werkmeister` plugin's MCP entry have no target on an
  * `npm i -g` install.
  *
  * `dockerode` and `@anthropic-ai/claude-agent-sdk` are the exceptions, left
@@ -57,6 +58,7 @@ const options = {
     { in: "src/lib/pr_guard.ts", out: "lib/pr_guard" },
     { in: "src/lib/agent_state.ts", out: "lib/agent_state" },
     { in: "../werkmeister-mcp/src/main.ts", out: "mcp" },
+    { in: "../werkmeister-mcp/src/proxy.ts", out: "mcp-proxy" },
   ],
   bundle: true,
   outdir: "dist",

@@ -55,7 +55,14 @@ import { interceptsSnapshot, statusSnapshot } from "werkmeister-core/status";
 import { DASHBOARD, start as startWebApp } from "werkmeister-core/web_servers";
 import { z } from "zod";
 import { registerClaudeTools } from "./harness/claude/tools.js";
-import { resolveWorkspace, scopeOfHeaders, workspaceId } from "./lib/feature.js";
+import {
+  clientUiOf,
+  launcherOf,
+  type ReqHeaders,
+  resolveWorkspace,
+  scopeOfHeaders,
+  workspaceId,
+} from "./lib/feature.js";
 import { headersOf, WORKSPACE_ARG } from "./tools.js";
 
 const RESOURCE_URI = "ui://workspace/mcp-app.html";
@@ -81,11 +88,12 @@ function appFile(app: "werkmeister-mcp" | "werkmeister-dashboard", name: string)
  * during initialize — Claude Desktop — and the HTML exists to serve. Claude
  * Code CLI and the VS Code extension advertise nothing and get the fallback.
  */
-function rendersUi(server: McpServer, html: string): boolean {
-  const uiCap = getUiCapability(server.server.getClientCapabilities());
+function rendersUi(server: McpServer, html: string, headers: ReqHeaders): boolean {
+  // Behind the stdio proxy the daemon's stateless /mcp never sees the client's initialize.
+  const mimeTypes =
+    clientUiOf(headers) ?? getUiCapability(server.server.getClientCapabilities())?.mimeTypes;
   return (
-    Boolean(uiCap?.mimeTypes?.includes(RESOURCE_MIME_TYPE)) &&
-    appFile("werkmeister-mcp", html) !== null
+    Boolean(mimeTypes?.includes(RESOURCE_MIME_TYPE)) && appFile("werkmeister-mcp", html) !== null
   );
 }
 
@@ -237,10 +245,10 @@ export function registerWorkspaceTools(server: McpServer): void {
       },
       _meta: { ui: { resourceUri: RESOURCE_URI } },
     },
-    async (args): Promise<CallToolResult> => {
+    async (args, extra): Promise<CallToolResult> => {
       try {
         const issueRef = typeof args?.issue === "string" ? args.issue.trim() : "";
-        if (rendersUi(server, "mcp-app.html")) {
+        if (rendersUi(server, "mcp-app.html", headersOf(extra))) {
           const bundle = await getFormSchema();
           let note = "";
           if (issueRef) {
@@ -510,12 +518,12 @@ export function registerWorkspaceTools(server: McpServer): void {
       }),
       _meta: { ui: { resourceUri: RESOURCE_URI_LIST } },
     },
-    async (): Promise<CallToolResult> => {
+    async (_args, extra): Promise<CallToolResult> => {
       try {
         const result = await listWorkspaces();
         // Inline-UI hosts (Desktop): the `ui://` table reads structuredContent;
         // keep the text terse. Others get the full markdown table.
-        const text = rendersUi(server, "mcp-list.html")
+        const text = rendersUi(server, "mcp-list.html", headersOf(extra))
           ? `${result.workspaces.length} workspace(s) in ${result.root}.`
           : renderWorkspaceTable(result);
         return {
@@ -838,7 +846,8 @@ export function registerWorkspaceTools(server: McpServer): void {
       description:
         "Gather a PR's issue, description, and diff, then launch a headless, tool-restricted " +
         "`claude -p` session (context handed off at spawn) in a background Terminal window (or a " +
-        "VS Code terminal when `WERKMEISTER_LAUNCHER=vscode`) to reconcile the two. Returns " +
+        "VS Code terminal when the calling session runs in VS Code: `TERM_PROGRAM=vscode`, " +
+        "`CLAUDE_CODE_ENTRYPOINT=claude-vscode`, or `WERKMEISTER_LAUNCHER=vscode`) to reconcile the two. Returns " +
         "the `sessionKey` the dashboard chat panel streams from (a `reconcile:<repo>-<number>` key).",
       inputSchema: {
         url: z.string().describe("The pull request URL to reconcile."),
@@ -855,9 +864,13 @@ export function registerWorkspaceTools(server: McpServer): void {
         launcher: z.enum(["terminal", "vscode"]),
       }),
     },
-    async (args): Promise<CallToolResult> => {
+    async (args, extra): Promise<CallToolResult> => {
       try {
-        const result = await launchPrReconcile(args.url, args.issueRef);
+        const result = await launchPrReconcile(
+          args.url,
+          args.issueRef,
+          launcherOf(headersOf(extra)),
+        );
         return {
           content: [
             {

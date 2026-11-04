@@ -20,9 +20,15 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { mintWorkspaceToken } from "werkmeister-core/workspace_token";
 
-import { fetchFresh, useDockerEngine } from "../../packages/werkmeister-core/fixtures.mjs";
+import {
+  fetchFresh,
+  pinWerkmeisterRoot,
+  useDockerEngine,
+} from "../../packages/werkmeister-core/fixtures.mjs";
 
 useDockerEngine();
+// The spawned server finds the built ui:// pages through this worktree's apps/cli.
+pinWerkmeisterRoot();
 
 /** One Engine multiplex frame: stream type, three zero bytes, big-endian length, payload. */
 function frame(type, text) {
@@ -155,12 +161,12 @@ after(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
-async function mcp(token) {
+async function mcp(token, headers = {}) {
   const client = new Client({ name: "daemon-http.test", version: "0" });
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
       fetch: fetchFresh,
-      requestInit: { headers: { Authorization: `Bearer ${token}` } },
+      requestInit: { headers: { Authorization: `Bearer ${token}`, ...headers } },
     }),
   );
   return client;
@@ -208,6 +214,37 @@ test("a workspace token's status shows its own workspace only", async () => {
       r.structuredContent.statuses.map((s) => s.name),
       ["a"],
     );
+  } finally {
+    await client.close();
+  }
+});
+
+test("the UI capability the session proxy relays picks the inline-UI reply (SW-344)", async () => {
+  const text = async (headers) => {
+    const client = await mcp(machineToken, headers);
+    try {
+      return (await client.callTool({ name: "list-workspaces", arguments: {} })).content[0].text;
+    } finally {
+      await client.close();
+    }
+  };
+  // Stateless /mcp never sees a client's initialize, so without the header it is the table.
+  assert.match(await text({}), /\|/);
+  assert.match(
+    await text({ "x-werkmeister-client-ui": "text/html;profile=mcp-app" }),
+    /^\d+ workspace\(s\) in /,
+  );
+});
+
+test("a connected MCP client holds nothing open, so the build-restart guard can go idle (SW-344)", async () => {
+  const client = await mcp(machineToken);
+  try {
+    await client.listTools();
+    await sleep(300);
+    const res = await fetchFresh(`${base}/api/status`, {
+      headers: { Authorization: `Bearer ${machineToken}` },
+    });
+    assert.equal((await res.json()).inFlight, 0);
   } finally {
     await client.close();
   }

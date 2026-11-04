@@ -9,6 +9,8 @@ The host daemon is the werkmeister MCP server on port 3002 (`overrides.mcp_port`
 
 Under launchd the daemon restarts itself on a new build: once its entry changes and no call or queued feature is in flight, it exits and launchd starts it on the new code. A PID-file daemon only reports `stale`; run `restart`. The CLI warns once per run when it reaches a daemon on another build.
 
+Claude Code and Claude Desktop sessions reach it through `werkmeister internal mcp`, a stdio proxy, so a running session gets the new build's tools without a `/mcp` reconnect. Only a change to the proxy itself needs a reconnect or a session restart; the release notes say when.
+
 ## Examples
 
 ```sh

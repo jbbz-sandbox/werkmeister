@@ -4,14 +4,14 @@
   "license": "Apache-2.0",
   "type": "module",
   "private": true,
-  "description": "The werkmeister MCP server: every tool, over stdio and authenticated HTTP, including the MCP App UI tools and the App pages they serve. Bundled into the CLI.",
+  "description": "The werkmeister MCP server: every tool over authenticated HTTP (the host daemon), including the MCP App UI tools and the App pages they serve, plus dist/proxy.js, the stdio proxy each session runs. Bundled into the CLI.",
   "main": "dist/main.js",
   "types": "dist/main.d.ts",
   "scripts": {
     "build": "tsc && tsc -p tsconfig.ui.json && pnpm run build:ui",
     "build:ui": "cross-env INPUT=mcp-app.html vite build && cross-env INPUT=mcp-list.html vite build",
     "typecheck": "tsc --noEmit",
-    "serve:stdio": "node dist/main.js --stdio",
+    "serve:stdio": "node dist/proxy.js",
     "serve:http": "node dist/main.js",
     "test": "node --test *.test.mjs"
   },
