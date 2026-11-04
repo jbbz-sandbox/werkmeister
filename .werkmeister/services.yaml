@@ -68,6 +68,7 @@ services:
       `--gate` adds an approved PR file, `origin/main` and a committed one-file change in `packages/lib`, and the fake docker reports `demo-lib` running, so the gate execs `lib`'s test and logs it.
       Pass `workspace init --context-strategy icm` for a fixture with `stages/`: without it a bare fixture gets the jit strategy.
       A change to `pr gate`, `pr open` or `runGate` is exercised that way: `with-fixture-workspace --gate workspace init --no-build --then pr gate` (the gate needs init's compose.yml); `pr open` there pushes to the local origin and opens through the fake gh.
+      To read the werkmeister-context.md a services.yaml renders, without the real registry: `with-fixture-workspace --services <file> --print .werkmeister/werkmeister-context.md workspace init --services <svc> --no-build`.
       A core test gets the same fixture in-process from `withFixtureWorkspace(fn, { gate, bare, services })` in `packages/werkmeister-core/fixtures.mjs`.
       Record one passing and one failing case in exercise.md (e.g. `lint: pnpm exec biome ci .` → exit 0, and exit 1 with an over-width line left uncommitted).
       `werkmeister pr open` runs the globally installed CLI, built from main, so it would check the PR with the old gate.
