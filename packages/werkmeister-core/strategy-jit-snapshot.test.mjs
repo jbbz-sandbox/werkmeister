@@ -75,7 +75,11 @@ test("jit init writes the same files, byte for byte", async () => {
     if (process.env.UPDATE_SNAPSHOT) {
       fs.writeFileSync(SNAPSHOT, JSON.stringify(files, null, 2) + "\n");
     }
-    assert.deepEqual(files, JSON.parse(fs.readFileSync(SNAPSHOT, "utf8")));
+    assert.deepEqual(
+      files,
+      JSON.parse(fs.readFileSync(SNAPSHOT, "utf8")),
+      "generated output differs from strategy-jit.snapshot.json: intended change? regenerate with UPDATE_SNAPSHOT=1 node --test strategy-jit-snapshot.test.mjs",
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(std, { recursive: true, force: true });
