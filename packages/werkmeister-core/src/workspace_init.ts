@@ -323,7 +323,9 @@ const _SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 export function buildWorkspaceName(feature: string, issueSlug: string | null): string {
   const featureSlug = (feature || "").trim().toLowerCase();
   const prefix = (issueSlug || "").trim().toLowerCase();
-  return prefix ? `${prefix}-${featureSlug}` : featureSlug;
+  // SW-370: a feature that already carries the slug is used as is, not doubled.
+  const carriesPrefix = featureSlug === prefix || featureSlug.startsWith(`${prefix}-`);
+  return prefix && !carriesPrefix ? `${prefix}-${featureSlug}` : featureSlug;
 }
 
 export function buildBranchName(username: string, workspaceName: string): string {

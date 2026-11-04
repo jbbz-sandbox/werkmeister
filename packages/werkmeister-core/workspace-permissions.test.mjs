@@ -166,10 +166,15 @@ test("workspaceAllowRules: a werkmeister worktree gets the wrapped built-CLI rul
   fs.writeFileSync(path.join(root, "werkmeister", ".git"), "gitdir: x\n");
   fs.writeFileSync(cli, "#!/bin/bash\n");
   const wrapper = path.join(root, ".werkmeister", "bin", "with-temp-home");
-  assert.deepEqual(workspaceAllowRules(root, false), [
+  // includes, not deepEqual: a machine registry (the gate's container has one) adds the repo's test rules (SW-398).
+  const rules = workspaceAllowRules(root, false);
+  for (const r of [
     `Bash(${wrapper} ${cli}:*)`,
+    `Bash(${wrapper} env WERKMEISTER_ROOT=* node --test:*)`,
     ...READ_ONLY_GIT_RULES,
-  ]);
+  ])
+    assert.ok(rules.includes(r), r);
+  assert.ok(!rules.includes(`Bash(${wrapper}:*)`));
 });
 
 test("jit refresh writes its hooks and the same allow rules", async () => {
@@ -358,4 +363,57 @@ test("a refresh replaces the old broad autonomous rules recorded earlier", async
   for (const rule of old) assert.ok(!allow.includes(rule), rule);
   assert.ok(allow.includes("mine"));
   assert.deepEqual(deny, AUTONOMOUS_DENY);
+});
+
+// SW-398: werkmeister-context.md names the allow rules that cover the stage test command and the
+// fixture form; each must be a rule the workspace is given, or a headless run is refused.
+test("SW-398: every allow rule werkmeister-context.md names is generated", async () => {
+  const { buildSandboxContextMd } = await import("./dist/harness/claude/claude_md.js");
+  const { loadServices } = await import("./dist/config.js");
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  await withSandboxHome(
+    async () => {
+      const wrapper = "/ws/w/.werkmeister/bin/with-temp-home";
+      const doc = buildSandboxContextMd(
+        "t",
+        1,
+        11100,
+        11119,
+        [],
+        loadServices(),
+        "",
+        null,
+        ["cli"],
+        false,
+        wrapper,
+      );
+      const named = [...doc.matchAll(/`(Bash\([^`]+\))`/g)].map((m) => m[1]);
+      assert.ok(named.length, "the doc names an allow rule");
+      const rules = buildAllowRules("", [], loadServices(), {}, wrapper, [], ["cli"]);
+      const generic = named.map((r) => r.replace("<test command>", "pnpm test"));
+      for (const r of generic)
+        assert.ok(rules.includes(r), `${r} missing from:\n${rules.join("\n")}`);
+      assert.ok(!rules.includes(`Bash(${wrapper}:*)`), "never the wrapper alone");
+    },
+    {
+      services:
+        "services:\n  cli:\n    type: cli\n    repo: demo\n    path: apps/cli\n    test: pnpm test\n",
+    },
+  );
+});
+
+test("SW-398: a chained stage test command gets the wrapped first segment and a rule per later one", () => {
+  const w = "/ws/w/.werkmeister/bin/with-temp-home";
+  const rules = buildAllowRules(
+    "",
+    [],
+    { cli: { test: "pnpm turbo run test && pnpm --filter x run docs:links" } },
+    {},
+    w,
+    [],
+    ["cli"],
+  );
+  assert.ok(rules.includes(`Bash(${w} pnpm turbo run test:*)`));
+  assert.ok(rules.includes("Bash(pnpm --filter x run docs:links:*)"));
+  assert.ok(!rules.some((r) => r.includes("docker exec")), "host-only service: no container rule");
 });

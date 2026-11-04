@@ -39,9 +39,13 @@ test("compose and runtime state are ignored; the record's own files are not", ()
       ".werkmeister/agent-state.json",
       ".werkmeister/last-exec",
       ".werkmeister/starts.json",
-      ".werkmeister/gate-app-test-api.log",
     ];
     assert.deepEqual(ignored(generated), generated);
+    // SW-401: the gate and pr-open logs belong on the record.
+    assert.deepEqual(
+      ignored([".werkmeister/gate-app-test-api.log", ".werkmeister/pr-open.log"]),
+      [],
+    );
     assert.deepEqual(
       ignored([
         ".claude/settings.json",
