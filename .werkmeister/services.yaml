@@ -58,6 +58,7 @@ services:
       Then build, run the built werkmeister binary from a temp folder against a fixture workspace in it.
       Make the temp folder with `T=$(cd "$(mktemp -d)" && pwd -P)`: on macOS `mktemp -d` gives `/var/…` but the CLI's cwd is `/private/var/…`, so use the real path everywhere you write `$T`.
       Export `WERKMEISTER_ROOT=<worktree>/apps/cli` for the run (or `env -u WERKMEISTER_ROOT`): the shell may export the main checkout's, and `with-temp-home` only swaps HOME, so templates and infra would come from main, not the branch under test.
+      `with-temp-home` also unsets `CLAUDECODE` and `CLAUDE_CODE_*` (keeps `CLAUDE_BIN`), so a `claude` run under it sees what CI sees; outside the wrapper use `env -i PATH=… HOME=…`.
       The fixture workspace must be a git repo (`git init` plus an empty commit); otherwise `init-workspace` fails with `Not inside a workspace … and no parent .git directory found`.
       Seed the temp folder with `services.yaml`, `ports.yaml` and a `config.yaml` that sets `paths.workspaces_root` (holding the fixture workspace), `overrides.services_yaml` and `overrides.ports_yaml` (the seeded files; the temp HOME has no `~/.werkmeister/services.yaml`, so otherwise you get `Required config file not found: services.yaml`), e.g.
       `paths.workspaces_root: <tmp>/ws`, `overrides.services_yaml: <tmp>/services.yaml`, `overrides.ports_yaml: <tmp>/ports.yaml`,

@@ -29,6 +29,9 @@ export COREPACK_HOME="\${COREPACK_HOME:-$HOME/.cache/node/corepack}"
 export DOCKER_CONFIG="\${DOCKER_CONFIG:-$HOME/.docker}"
 # A temp HOME isolates files, not the daemon: unreachable unless the caller sets it (SW-264).
 export WERKMEISTER_HOST="\${WERKMEISTER_HOST:-http://127.0.0.1:1}"
+# An agent's shell inherits its Claude Code session's variables; CI has none (SW-332). CLAUDE_BIN stays.
+unset CLAUDECODE
+for v in $(env | sed -n '/^CLAUDE_CODE_[A-Za-z0-9_]*=/s/=.*//p'); do unset "$v"; done
 HOME=$tmp "$@"
 status=$?
 # A failure under load reads as load (SW-209).

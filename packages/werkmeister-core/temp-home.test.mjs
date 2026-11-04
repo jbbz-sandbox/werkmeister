@@ -167,6 +167,25 @@ test("--no-wait first runs at once, without wait-load, and is not passed on (SW-
   }
 });
 
+test("the Claude Code session's CLAUDECODE and CLAUDE_CODE_* are dropped, CLAUDE_BIN kept (SW-332)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const env = {
+      ...process.env,
+      CLAUDECODE: "1",
+      CLAUDE_CODE_PLUGIN_DIR_WATCH: "1",
+      CLAUDE_CODE_ENTRYPOINT: "cli",
+      CLAUDE_BIN: "/x/claude",
+    };
+    const r = spawnSync(bin, ["env"], { encoding: "utf8", env });
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stdout, /^CLAUDECODE=|^CLAUDE_CODE_/m);
+    assert.match(r.stdout, /^CLAUDE_BIN=\/x\/claude$/m);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("no werkmeister on PATH, or a failing wait-load, still runs the command (SW-224)", () => {
   const { root, bin } = wrapper();
   try {
