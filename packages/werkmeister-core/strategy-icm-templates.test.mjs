@@ -92,6 +92,13 @@ test("each template renders with no undefined and a route per stage", async () =
         } else {
           assert.doesNotMatch(c, /git log -S/, `${wt}/${d}`);
         }
+        // SW-365: research lists whole-module mocks of a module that gains an export.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^1\. List what exists.*whole-module mocks.*fixture the change must update/m,
+            `${wt}/${d}`,
+          );
         // SW-392: a repro is judged by exit code, not an output grep.
         if (d.endsWith("_reproduce"))
           assert.match(c, /^1\. Reproduce .*Judge each run by its exit code/m, `${wt}/${d}`);

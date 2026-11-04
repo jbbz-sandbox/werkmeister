@@ -158,7 +158,9 @@ const feature: Stage[] = [
       ],
       doNotLoad: `\`_shared/standards.md\` (nothing is written here), other stages' contracts, \`.werkmeister/*.yml\`, \`${COMPOSE_FILE}\`.`,
       process: [
-        "List what exists that the brief touches: entry points, routes or exports, data shapes, and the tests that cover them.",
+        // SW-365: a whole-module mock breaks on every new export of that module (8 failures in sw-341).
+        "List what exists that the brief touches: entry points, routes or exports, data shapes, and the tests that cover them. " +
+          'For each module the change adds an export to, grep the tests for whole-module mocks of it (e.g. `vi.mock("<module>"`, `mock.module`) and list every hit as a fixture the change must update.',
         "Find the test command in `../../.werkmeister/werkmeister-context.md` and copy it verbatim — do not restate it from memory.",
         "Check what is already installed that could do the job before recommending anything new.",
         "Write `output/inventory.md`: steps 1–3.",
