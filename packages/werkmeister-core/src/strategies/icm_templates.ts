@@ -128,7 +128,9 @@ const propose: Stage = {
     doNotLoad: "`_shared/standards.md` (no code is written here), source files, `.werkmeister/`.",
     process: [
       "Walk every acceptance criterion in `BRIEF.md`. For each, write a row whose result cell is exactly PASS or FAIL, with the file and line in a prior `output/` that proves it in a separate evidence column. A FAIL routes back to the owning stage — do not fix it here.",
-      "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit.",
+      "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit. " +
+        // SW-399: a changeset written after the last lint run failed the gate only at `pr open`.
+        "Before committing, run the repo's lint command (the `&& <lint>` tail of the test command in `werkmeister-context.md`, which the PR gate's lint row runs) and fix what it fails, release entry included.",
       "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value). Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs (every table with a `result` column — the gate reads them all — has a result cell of exactly `PASS` or `FAIL` and the output in its own column), the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
       "Commit and push this folder's branch — the record. Never open a PR for it.",
     ],

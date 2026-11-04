@@ -178,6 +178,13 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /every table in `exercise\.md`/, `${wt}/${d}`);
           assert.match(c, /superseded run in prose, not as a `FAIL` row/, `${wt}/${d}`);
         }
+        // SW-399: lint runs after the release entry is added, before the commit.
+        if (d.endsWith("_propose"))
+          assert.match(
+            c,
+            /^2\. .*add the release entry.*Before committing, run the repo's lint command/m,
+            `${wt}/${d}`,
+          );
         if (d.endsWith("_propose"))
           assert.match(
             c,
