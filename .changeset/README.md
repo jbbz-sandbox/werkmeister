@@ -15,5 +15,9 @@ one gets a bare version heading.
 automatically. That mirrors the build: esbuild bundles core *into* the CLI, so
 the two are one shipped artifact and a core change is a CLI release.
 
+`changeset status` only sees tracked files: `git add .changeset/<file>.md`
+before running it, or it fails with "Some packages have been changed but no
+changesets were found" even though the changeset exists.
+
 The other three workspaces are `ignore`d — they never publish and carry no
 changelog. A changeset naming one of them is an error, deliberately.

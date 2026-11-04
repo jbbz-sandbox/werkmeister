@@ -37,6 +37,26 @@ test("mcpTools reads name, title and UI-only from each registration", () => {
   ]);
 });
 
+// SW-315: a shared constant defined between tools must not tag the tool before it.
+test("mcpTools marks UI-only per registration, not by a constant nearby", () => {
+  const src = `
+    const HIDDEN = { ui: { visibility: ["app"] } };
+    server.registerTool("a", { title: "A" });
+    const APP_ONLY = { ui: { visibility: ["app"] } };
+    server.registerTool("b", { title: "B", _meta: HIDDEN });
+    server.registerTool("c", { title: "C", _meta: { ui: { resourceUri: "x" } } });
+    server.registerTool("d", { title: "D", _meta: { ui: { visibility: ["app"] } } });`;
+  assert.deepEqual(
+    mcpTools(src).map((t) => [t.name, t.app]),
+    [
+      ["a", false],
+      ["b", true],
+      ["c", false],
+      ["d", true],
+    ],
+  );
+});
+
 // SW-180: one help.md feeds --help, the guide and the man pages.
 const cmd = (name, group, help) => ({
   name,

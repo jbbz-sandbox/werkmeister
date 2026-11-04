@@ -59,6 +59,12 @@ function md(s, cell = false) {
 
 /** The MCP server's tools in registration order: name, title, and whether only the App UI sees it. */
 export function mcpTools(src) {
+  const appMeta = String.raw`\{\s*ui:\s*\{\s*visibility:\s*\["app"\]`;
+  // A chunk runs to the next registration, so a constant defined between tools sits in the
+  // wrong chunk: match the registration's own `_meta:` value, resolving constants by name.
+  const consts = [...src.matchAll(new RegExp(String.raw`const (\w+)\s*=\s*${appMeta}`, "g"))];
+  const names = ["APP_ONLY", ...consts.map((c) => c[1])].map((n) => `${n}\\b`);
+  const isApp = new RegExp(String.raw`_meta:\s*(?:${[...names, appMeta].join("|")})`);
   return src
     .split(/(?=\bregister(?:App)?Tool\()/)
     .slice(1)
@@ -66,9 +72,7 @@ export function mcpTools(src) {
       const m = call.match(
         /^register(?:App)?Tool\(\s*(?:server,\s*)?"([^"]+)",\s*\{\s*title:\s*"([^"]+)"/,
       );
-      return m
-        ? [{ name: m[1], title: m[2], app: /APP_ONLY|visibility:\s*\["app"\]/.test(call) }]
-        : [];
+      return m ? [{ name: m[1], title: m[2], app: isApp.test(call) }] : [];
     });
 }
 

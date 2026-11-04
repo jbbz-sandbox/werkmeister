@@ -1,6 +1,6 @@
 # Werkmeister
 
-Werkmeister (formerly `sandbox`) is a multi-feature concurrent development orchestrator. <!-- name-check: ignore -->
+Werkmeister is a multi-feature concurrent development orchestrator.
 Its CLI is `werkmeister`, or `w9r` for short.
 
 Turborepo monorepo ([pnpm](https://pnpm.io) workspaces + [Turbo](https://turbo.build)).
@@ -186,8 +186,7 @@ apps/cli/werkmeister machine setup            # guided wizard
 The wizard walks through your repo/workspace paths, the ingress base domains,
 and the service registry (generated from each repo's `.werkmeister/services.yaml`),
 then converges the rest: the `werkmeister` and
-`ponytail` plugins (an old `sandbox-tools` install is swapped out; see <!-- name-check: ignore -->
-[Migrating from `sandbox-tools`](plugins/werkmeister/README.md#migrating-from-sandbox-tools)), the companion `sandbox-workspace` checkout, a TLS <!-- name-check: ignore -->
+`ponytail` plugins, the companion `sandbox-workspace` checkout, a TLS <!-- name-check: ignore -->
 certificate covering every routed hostname, and the issue-tracker and
 Telepresence prerequisites. It is safe to re-run — nothing already configured
 is overwritten.

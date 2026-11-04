@@ -113,7 +113,7 @@ server. Until that is widened, use:
 
 <!-- generated:mcp-tools -->
 
-57 tools (6 UI-only).
+57 tools (5 UI-only).
 
 | Tool | What it does |
 | --- | --- |
@@ -145,7 +145,7 @@ server. Until that is widened, use:
 | `notes` | Read or graduate a workspace's notes |
 | `connect` | Start shared infrastructure |
 | `open-feature` | Open a feature-tagged browser window |
-| `intercept` | Start or leave a k8s traffic intercept (UI-only) |
+| `intercept` | Start or leave a k8s traffic intercept |
 | `create-workspace-form` | New Werkmeister Workspace |
 | `create-workspace` | Create Workspace |
 | `workspace-form-schema` | Workspace Form Schema (UI-only) |
