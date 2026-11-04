@@ -45,7 +45,7 @@ export interface Stage {
   /** CLAUDE.md route-table "If" cell; default "`<previous dir>` output approved". */
   enter?: string;
   /** Which _shared/standards.md rows the contract names. */
-  standards: "none" | "universal" | "all";
+  standards: "none" | "all";
   contract(v: IcmVars): Contract;
 }
 
@@ -180,7 +180,8 @@ const feature: Stage[] = [
     check: "the spec covers every acceptance criterion",
     enter:
       "every question in `stages/01_research/output/decisions.md` reads `status: decided` — the flip *is* the approval, do not ask again",
-    standards: "universal",
+    // SW-288: every active row, so step 4 can load the ones whose files the spec changes.
+    standards: "all",
     contract: (v) => ({
       oneJob:
         "One job: turn the settled decisions into a spec precise enough that the next stage needs no judgment calls, and prove any machine-checkable part of it.",
@@ -195,6 +196,8 @@ const feature: Stage[] = [
         "Write `output/spec.md`: what changes, file by file; the interfaces or schemas added; the tests that will prove it; what is explicitly out of scope.",
         "If the change has a machine-checkable artifact (a schema, an API document, a migration), write it in the repo and validate it with a command that needs no new dependency. Record the exact command in `spec.md`.",
         "Map each acceptance criterion in `BRIEF.md` to the step or test in `spec.md` that satisfies it. A criterion with no mapping is a defect in this stage.",
+        // SW-288: a ticket-vs-standard conflict surfaced only in implement, after the code was written.
+        "Load every `_shared/standards.md` row whose Applies-when matches a file `spec.md` changes, not only the universal ones. Under `## Conflicts` in `spec.md`, write one line per place the ticket's proposed shape breaks a loaded standard (the rule, and the shape that would satisfy it), or `none`.",
       ],
       outputs: ["`output/spec.md`", "Any artifact from step 2, in the repo"],
       humanCheck:

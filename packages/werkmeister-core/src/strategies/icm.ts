@@ -24,12 +24,7 @@ import { buildIssuesReportMd } from "../issues_report.js";
 import { buildPrRulesMd, CHAT_APPROVAL } from "../pr_rules.js";
 import { info, success, warn } from "../reporter.js";
 import { deferMachineSteps, RUN_LIMITS } from "../run_start.js";
-import {
-  loadStandardsModules,
-  repoDirs,
-  resolveActiveStandards,
-  universalStandards,
-} from "../standards.js";
+import { loadStandardsModules, repoDirs, resolveActiveStandards } from "../standards.js";
 import {
   _INPUT_FIELDS,
   isTrue,
@@ -195,9 +190,7 @@ function renderStandards(r: Resolved): string {
 
 function standardsRef(tier: Stage["standards"], r: Resolved): string {
   if (tier === "none") return "";
-  const universal = universalStandards(r.modules);
-  const rows = tier === "all" ? r.active : r.active.filter((d) => universal.includes(d));
-  return `- Reference (every run): \`../../_shared/standards.md\` — rows ${[...rows, "ponytail"].map((d) => `\`${d}\``).join(", ")}`;
+  return `- Reference (every run): \`../../_shared/standards.md\` — rows ${[...r.active, "ponytail"].map((d) => `\`${d}\``).join(", ")}`;
 }
 
 // The first stage's start is the one point no code observes, so its contract runs the move (SW-27).

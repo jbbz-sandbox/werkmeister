@@ -106,6 +106,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^1\. List what exists.*grep tests and fixtures for that exact value and list the hits/m,
             `${wt}/${d}`,
           );
+        // SW-288: spec loads the standards its files hit and lists ticket-vs-standard conflicts.
+        if (d.endsWith("_spec"))
+          assert.match(
+            c,
+            /^4\. Load every `_shared\/standards\.md` row whose Applies-when matches a file `spec\.md` changes.*`## Conflicts`/m,
+            `${wt}/${d}`,
+          );
         // SW-392: a repro is judged by exit code, not an output grep.
         if (d.endsWith("_reproduce"))
           assert.match(c, /^1\. Reproduce .*Judge each run by its exit code/m, `${wt}/${d}`);
