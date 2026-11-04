@@ -5,6 +5,7 @@
  */
 
 import { loadJira, loadSandboxIssuesProject } from "../global_config.js";
+// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { harness } from "../harness/index.js";
 import {
   boardColumnRest,

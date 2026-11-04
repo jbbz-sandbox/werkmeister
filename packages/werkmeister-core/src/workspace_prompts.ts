@@ -31,6 +31,7 @@ import {
 import type { PromptEntry, PromptSpecJson } from "./form_schema.js";
 import type { PromptSpec } from "./global_config.js";
 import { HARNESS_IDS } from "./harness/types.js";
+// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { defaultProject, issueIdOf, issueTracker, trackerById } from "./issue_tracker.js";
 import { ProcError, run as procRun } from "./proc.js";
 import { loadProjects } from "./projects.js";

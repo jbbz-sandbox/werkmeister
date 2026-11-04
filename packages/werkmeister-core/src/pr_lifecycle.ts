@@ -67,11 +67,13 @@ import {
   sessionStartDir,
   WorkspaceError,
   worktreeSources,
+  // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 } from "./sandbox.js";
 import { hostLoadLimit, portHolders } from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
 import { repoDirs } from "./standards.js";
 import { childEnv, toolBin } from "./tool_bins.js";
+// biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 import { writeUsageSnapshot } from "./usage_snapshot.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 

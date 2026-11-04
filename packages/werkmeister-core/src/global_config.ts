@@ -42,6 +42,7 @@ import {
   servicesYamlPath,
 } from "./config.js";
 import { SandboxError } from "./errors.js";
+// biome-ignore lint/suspicious/noImportCycles: global_config↔projects; SW-411
 import { projectProblems } from "./projects.js";
 import { warn } from "./reporter.js";
 

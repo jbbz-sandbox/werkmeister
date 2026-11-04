@@ -35,6 +35,7 @@ import {
 } from "./config.js";
 import { standardsDirPath, standardsDirProblem } from "./global_config.js";
 import { run } from "./proc.js";
+// biome-ignore lint/suspicious/noImportCycles: skill_gen↔standards; SW-411
 import { validateModuleReferences } from "./skill_gen.js";
 import type { PhaseGate } from "./workspace_prompts.js";
 

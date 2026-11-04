@@ -59,6 +59,7 @@ import {
 } from "../../config.js";
 import { repoDirs } from "../../standards.js";
 import { tempHomeWrapper } from "../../temp_home.js";
+// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { readAutonomous, readAutoStop, readModel } from "../../workspace_prompts.js";
 
 // Markers doubling as the payload: entries containing them are werkmeister-managed.

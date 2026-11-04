@@ -23,6 +23,7 @@ import * as path from "node:path";
 
 import { loadGithubOrg, standardsDirPath } from "./global_config.js";
 import { run } from "./proc.js";
+// biome-ignore lint/suspicious/noImportCycles: skill_gen↔standards; SW-411
 import { loadStandardsModules, parseFrontmatter } from "./standards.js";
 
 const _GIT_TIMEOUT = 5; // seconds; never hang `werkmeister workspace init` on a git hiccup

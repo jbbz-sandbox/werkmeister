@@ -24,6 +24,7 @@
 
 import { load } from "./global_config.js";
 import { github, githubTracker } from "./issue_trackers/github.js";
+// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { jira, jiraTracker } from "./issue_trackers/jira.js";
 import {
   type Issue,
@@ -40,6 +41,7 @@ export {
   githubIssueRepos,
   normalizeGithubIssue,
 } from "./issue_trackers/github.js";
+// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 export { jiraSitePhrase, jiraSiteRef } from "./issue_trackers/jira.js";
 export type {
   Issue,

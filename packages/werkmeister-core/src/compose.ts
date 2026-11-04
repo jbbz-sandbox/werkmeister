@@ -18,6 +18,7 @@ import { resolveWorkspace } from "./config.js";
 import { containerLogs, docker, type ProjectContainer, projectContainers } from "./docker.js";
 import { ProcError, type RunResult, run, runAsync } from "./proc.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
+// biome-ignore lint/suspicious/noImportCycles: compose↔slots; SW-411
 import { getSlot, LABEL_FEATURE, LEGACY_LABEL_FEATURE, labelOf } from "./slots.js";
 
 export interface ContainerStatus {

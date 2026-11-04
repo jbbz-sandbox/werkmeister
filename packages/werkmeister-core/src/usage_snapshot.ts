@@ -13,6 +13,7 @@ import {
   type UsageTotals,
   usageForDir,
   type WorkspaceUsage,
+  // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 } from "./sandbox.js";
 import { runCapture } from "./tool_bins.js";
 import { isTrue } from "./workspace_prompts.js";
