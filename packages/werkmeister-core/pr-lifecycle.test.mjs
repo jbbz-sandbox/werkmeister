@@ -1071,8 +1071,12 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     );
     assert.deepEqual(
       recorded,
-      ["stages/03_propose/output/pr-app.md"],
-      "the record commit names only the PR file",
+      [
+        "stages/03_propose/output/pr-app.md",
+        ".werkmeister/gate-app-release.log",
+        ".werkmeister/gate-app-test-api.log",
+      ],
+      "the record commit names the PR file and the gate logs (SW-401)",
     );
     assert.ok(d.calls.some((c) => c.startsWith("git -C") && c.endsWith("push -u origin me/ws")));
     assert.deepEqual(d.stopped, [ws], "containers stop once the PR is open (SW-39)");
@@ -2591,7 +2595,10 @@ test("spike: a doc PR file in 02_findings passes the gate with skip_exercise and
     const r = await open(ws, d);
     assert.ok(r.ok, r.lines.join("\n"));
     assert.equal(readPrFiles(ws)[0].fm.url, "https://github.com/o/app/pull/9");
-    assert.deepEqual(recorded, ["stages/02_findings/output/pr-app.md"]);
+    assert.deepEqual(recorded, [
+      "stages/02_findings/output/pr-app.md",
+      ".werkmeister/gate-app-release.log",
+    ]);
   } finally {
     clean(ws);
   }

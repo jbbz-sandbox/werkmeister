@@ -1262,8 +1262,17 @@ export async function openPrs(
       if (moved) lines.push(`  issue ${moved}`);
     }
   }
-  if (opened.length)
-    lines.push((await deps.commitRecord(ws, "chore: record opened PR(s)", opened)).message);
+  if (opened.length) {
+    // SW-401: the gate and pr-open logs are the evidence behind the PR file; keep them on the record.
+    // Only logs that exist: `git add` fails the whole call on a pathspec that matches nothing.
+    const logs = fs
+      .readdirSync(dotDir(ws), { withFileTypes: true })
+      .filter((e) => e.isFile() && (/^gate-.*\.log$/.test(e.name) || e.name === "pr-open.log"))
+      .map((e) => path.join(".werkmeister", e.name));
+    lines.push(
+      (await deps.commitRecord(ws, "chore: record opened PR(s)", [...opened, ...logs])).message,
+    );
+  }
   // A failed file still needs the containers to be fixed and re-gated.
   if (ok && opened.length) lines.push(await deps.stop(ws));
   return { ok, lines };
