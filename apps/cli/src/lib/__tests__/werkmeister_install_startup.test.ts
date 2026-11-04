@@ -2,7 +2,8 @@
  * werkmeister-install-startup.sh `install` mode (SW-33): skip npm ci while the
  * lockfile and Node major match the stamp in node_modules, and queue installs
  * host-wide through flock'd slot files. SW-35: builds run one at a time.
- * SW-31: a pnpm lockfile installs with pnpm, from corepack's shim.
+ * SW-31: a pnpm lockfile installs with pnpm, from corepack's shim; SW-362: pnpm
+ * never skips, its own up-to-date check repairs the volume.
  * SW-85: the stamp has a second copy in the worktree, and both must match.
  *
  * Drives the real script: stub `npm`, `node` and `corepack` on PATH, and stub
@@ -182,16 +183,25 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     expect(npmCalls()).toEqual(["ci", "run build"]);
   });
 
-  it("installs with pnpm when the app has a pnpm lockfile, with the same skip (SW-31)", () => {
+  it("installs with pnpm when the app has a pnpm lockfile (SW-31)", () => {
     const app = makeApp("app");
     fs.rmSync(path.join(app, "package-lock.json"));
     fs.writeFileSync(path.join(app, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
     expect(run(app).status).toBe(0);
     expect(npmCalls()).toEqual(["pnpm install --frozen-lockfile", "pnpm run build"]);
+    expect(fs.existsSync(stamp(app))).toBe(true);
+  });
 
-    const second = run(app);
-    expect(second.stdout).toContain("skipping pnpm install");
-    expect(npmCalls()).toEqual(["pnpm run build"]);
+  it("pnpm installs on every run, so a package missing from the volume is repaired (SW-362)", () => {
+    const app = makeApp("app");
+    fs.rmSync(path.join(app, "package-lock.json"));
+    fs.writeFileSync(path.join(app, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+    run(app);
+    npmCalls();
+    // Same lockfile, same Node: pnpm's own up-to-date check is the skip (2-5 s), and it
+    // restores a package deleted under it; the stamp would have skipped the install.
+    expect(run(app).status).toBe(0);
+    expect(npmCalls()).toEqual(["pnpm install --frozen-lockfile", "pnpm run build"]);
   });
 
   it("adds corepack's pnpm shim to the tools volume once, in either mode", () => {
