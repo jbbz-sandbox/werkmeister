@@ -103,6 +103,7 @@ services:
       A new or changed CLI flag or command namespace also needs `pnpm exec vitest run src/__tests__/spellings.test.ts -u` in `apps/cli` (the snapshot holds every namespace key; a new spelling must carry every key of the deprecated one it replaces).
       A `pr_rules.ts` change needs `UPDATE_SNAPSHOT=1 node --test strategy-jit-snapshot.test.mjs` in `packages/werkmeister-core`, run through `with-temp-home`.
       The same regeneration applies to any generated-text change (a skill or a stage contract): the file is `packages/werkmeister-core/strategy-jit.snapshot.json`. Format only the changed files (`pnpm exec biome check --write <files>`), never a whole directory.
+      On a rebase conflict in `strategy-jit.snapshot.json` (it embeds all of `pr-rules.md` on one line, so any two PRs touching `pr_rules.ts` conflict), take main's copy (`git checkout --ours` during a rebase), rebuild, regenerate with `UPDATE_SNAPSHOT=1`; never hand-merge the JSON line.
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
