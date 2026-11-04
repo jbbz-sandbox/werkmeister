@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
@@ -11,6 +12,7 @@ import { jiraCreds } from "./dist/jira-rest.js";
 import { gatePrs } from "./dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { initWorkspace } from "./dist/workspace_init.js";
+import { tokensDir } from "./dist/workspace_token.js";
 import { pinWerkmeisterRoot, withFixtureWorkspace } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
@@ -105,4 +107,42 @@ test("caller-exported Jira credentials don't reach a fixture run", async () => {
     for (const k of ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"]) delete process.env[k];
     if (prev !== undefined) process.env.JIRA_API_TOKEN = prev;
   }
+});
+
+test("in-process, HOME is the fixture's, so anything written under ~ stays in it", async () => {
+  const real = os.homedir();
+  await withFixtureWorkspace(async (fx) => {
+    assert.equal(os.homedir(), path.join(fx.root, "home"));
+    assert.ok(tokensDir().startsWith(`${fx.root}/`), tokensDir());
+  });
+  assert.equal(os.homedir(), real, "restored after");
+});
+
+test("the fake docker shows the gate's containers only to the gate's ps", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const docker = (...args) =>
+        execFileSync(fx.env.WERKMEISTER_DOCKER_BIN, args, { encoding: "utf8" });
+      assert.equal(docker("ps", "--format", "{{.Names}}\t{{.State}}"), "demo-lib\trunning\n");
+      // A pre-rename project probe (compose.ts takeDownProject) must find nothing to take down.
+      assert.equal(
+        docker("ps", "-aq", "--filter", "label=com.docker.compose.project=sandbox-demo"),
+        "",
+      ); // name-check: ignore
+      assert.equal(docker("ps", "-q", "--filter", "label=werkmeister.feature"), "");
+    },
+    { gate: true },
+  );
+});
+
+test("the workspace folder is a git repo with a local origin, its code clone ignored", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    assert.equal(git(fx.workspace, "branch", "--show-current"), "me/demo");
+    assert.equal(git(fx.workspace, "status", "--porcelain"), "");
+    assert.equal(git(fx.workspace, "rev-parse", "@{u}"), git(fx.workspace, "rev-parse", "HEAD"));
+    assert.equal(
+      git(fx.workspace, "remote", "get-url", "origin"),
+      path.join(fx.root, "remotes/o/ws.git"),
+    );
+  });
 });

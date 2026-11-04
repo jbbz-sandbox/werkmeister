@@ -30,7 +30,7 @@ export interface Fixture {
   repo: string;
   ghLog: string;
   dockerLog: string;
-  /** What a process needs to run against the fixture; HOME is the caller's to set. */
+  /** What a process needs to run against the fixture, HOME (`<root>/home`, empty) included. */
   env: Record<string, string>;
 }
 
@@ -81,11 +81,13 @@ case "$1 $2" in
 esac
 `;
 
-// Answers `ps` with the fixture's containers as running, so the gate execs its tests here (and logs them).
+// Only the gate's `ps --format {{.Names}}\t{{.State}}` sees the fixture's containers (so it execs its tests
+// here and logs them); every other `ps` (-q/-aq by label, a label --format) finds none, so no teardown
+// of a pre-rename project runs on a fake hit.
 const fakeDocker = (log: string, running: string[]) => `#!/bin/sh
 printf '%s\\n' "$(printf '%s' "$*" | tr '\\n' ' ')" >> '${log}'
 case "$1" in
-  ps) printf '${running.map((c) => `${c}\\trunning\\n`).join("")}';;
+  ps) case "$*" in *"{{.Names}}"*) printf '${running.map((c) => `${c}\\trunning\\n`).join("")}';; esac;;
   inspect) echo false;;
   exec|stop|compose|network) ;;
   *) echo "fake docker: unhandled: $*" >&2; exit 1;;
@@ -157,6 +159,20 @@ overrides:
     write(path.join(notes, "exercise.md"), PASS);
   }
 
+  // The workspace folder is a git repo with its own local origin, like a real one, so `pr open`
+  // commits and pushes the record (its code clone is ignored).
+  const record = path.join(root, "remotes", "o", "ws.git");
+  fs.mkdirSync(record, { recursive: true });
+  git(record, "init", "-q", "--bare", "-b", "main");
+  write(path.join(workspace, ".gitignore"), "/app/\n");
+  git(workspace, "init", "-q", "-b", FIXTURE_BRANCH);
+  git(workspace, "add", "-A");
+  git(workspace, "commit", "-q", "-m", "record");
+  git(workspace, "remote", "add", "origin", record);
+  git(workspace, "push", "-q", "-u", "origin", FIXTURE_BRANCH);
+
+  const home = path.join(root, "home");
+  fs.mkdirSync(home);
   const ghLog = path.join(root, "gh.log");
   const dockerLog = path.join(root, "docker.log");
   const running = opts.gate ? [containerOf(FIXTURE_FEATURE, "lib")] : [];
@@ -172,6 +188,8 @@ overrides:
     dockerLog,
     env: {
       ...GIT_ENV,
+      // os.homedir() reads HOME, so tokens, locks and anything else under ~ stay in the fixture.
+      HOME: home,
       WERKMEISTER_CONFIG_FILE: configFile,
       WERKMEISTER_FIXTURE: "1",
       WERKMEISTER_GH_BIN: path.join(root, "bin", "gh"),

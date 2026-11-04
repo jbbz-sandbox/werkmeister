@@ -17,6 +17,18 @@ import { seedFixture } from "werkmeister-core/fixture_workspace";
 const USAGE =
   "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--services <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...";
 
+/**
+ * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
+ * The wrapper is pre-approved, so it must not read or print files outside the fixture (or, for
+ * --services, outside the caller's folder).
+ */
+export function inside(base: string, p: string): string | null {
+  const b = fs.realpathSync(base);
+  let r = path.resolve(b, p);
+  if (fs.existsSync(r)) r = fs.realpathSync(r);
+  return r.startsWith(b + path.sep) ? r : null;
+}
+
 function parse(argv: string[]) {
   const opts = { gate: false, bare: false, services: undefined as string | undefined };
   const print: string[] = [];
@@ -28,7 +40,11 @@ function parse(argv: string[]) {
     else if ((a === "--services" || a === "--print") && argv[i + 1] !== undefined) {
       const v = argv[++i] as string;
       if (a === "--print") print.push(v);
-      else opts.services = fs.readFileSync(v, "utf8");
+      else {
+        const file = inside(process.cwd(), v);
+        if (!file || !fs.existsSync(file)) return null;
+        opts.services = fs.readFileSync(file, "utf8");
+      }
     } else break;
   }
   const steps: string[][] = [[]];
@@ -57,21 +73,20 @@ function show(label: string, file: string): void {
 }
 
 export async function run(argv: string[]): Promise<void> {
-  const { opts, print, steps } = parse(argv);
-  if (steps.some((s) => s.length === 0)) {
+  const parsed = parse(argv);
+  if (!parsed || parsed.steps.some((s) => s.length === 0)) {
+    if (!parsed) console.error("--services: a file under the current folder");
     console.error(USAGE);
     process.exitCode = 2;
     return;
   }
+  const { opts, print, steps } = parsed;
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-fixture-")));
   try {
     const fx = seedFixture(root, opts);
-    const home = path.join(root, "home");
-    fs.mkdirSync(home);
     const env = {
       ...process.env,
       ...fx.env,
-      HOME: home,
       // This build's own root, never one the shell exported (the main checkout's, say).
       WERKMEISTER_ROOT: path.resolve(path.dirname(process.argv[1] as string), ".."),
     };
@@ -80,7 +95,11 @@ export async function run(argv: string[]): Promise<void> {
       code = await runStep(step, fx.workspace, env);
       if (code !== 0) break;
     }
-    for (const p of print) show(p, path.resolve(fx.workspace, p));
+    for (const p of print) {
+      const file = inside(fx.workspace, p);
+      if (file) show(p, file);
+      else process.stdout.write(`--- ${p}\n(outside the fixture workspace; not printed)\n`);
+    }
     show("gh calls", fx.ghLog);
     show("docker calls", fx.dockerLog);
     process.exitCode = code;
