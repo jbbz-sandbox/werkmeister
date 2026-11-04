@@ -53,6 +53,25 @@ test("a bare fixture has no feature, so close-out skips teardown (SW-114)", asyn
   );
 });
 
+// SW-218: init cost ~10 s per call while slots.ts's container query waited out its 10 s
+// timeout on the host engine; SW-259's dead socket in tests fails it at once.
+test("init under the fixture writes the context and wrappers well inside the 10 s query timeout", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const t0 = performance.now();
+    await withReporter(collectingReporter(), () =>
+      initWorkspace({}, fx.workspace, { build: false }),
+    );
+    const ms = performance.now() - t0;
+    assert.ok(ms < 5000, `init took ${Math.round(ms)} ms`);
+    const bin = path.join(fx.workspace, ".werkmeister", "bin");
+    assert.ok(fs.statSync(path.join(bin, "with-fixture-workspace")).mode & 0o100);
+    assert.match(
+      fs.readFileSync(path.join(fx.workspace, ".werkmeister", "werkmeister-context.md"), "utf8"),
+      /`lib`/,
+    );
+  });
+});
+
 test("the gate fixture's one-file change runs lib's test in its container, logged by the fake docker", async () => {
   await withFixtureWorkspace(
     async (fx) => {
