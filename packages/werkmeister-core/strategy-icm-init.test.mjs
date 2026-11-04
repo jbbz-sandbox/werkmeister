@@ -663,6 +663,8 @@ test("the first stage contract, and only it, starts the issue when there is one 
     assert.doesNotMatch(first, start);
     // SW-345: with no issue, step 0 is the brief step alone.
     assert.match(first, /^0\. If `\.\.\/\.\.\/BRIEF\.md` has no `## Acceptance criteria`/m);
+    // SW-374: generated-text criteria use a fixture run; regenerating this workspace is post-release.
+    assert.match(first, /^0\. .*a fixture run of the built generator.*post-release check/m);
   });
 });
 

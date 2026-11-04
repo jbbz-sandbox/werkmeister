@@ -199,7 +199,9 @@ const START_ISSUE =
 
 // SW-345: BRIEF.md held only its placeholder until stage 04, so every self-check had nothing to check against.
 const WRITE_BRIEF =
-  "If `../../BRIEF.md` has no `## Acceptance criteria` section, write `## Goal`, `## Acceptance criteria` (a `- [ ]` list, each with how it is checked) and `## Open questions` into it now, from the issue (`werkmeister issue view`) or else the starting prompt, before step 1: every later stage and self-check walks that list.";
+  "If `../../BRIEF.md` has no `## Acceptance criteria` section, write `## Goal`, `## Acceptance criteria` (a `- [ ]` list, each with how it is checked) and `## Open questions` into it now, from the issue (`werkmeister issue view`) or else the starting prompt, before step 1: every later stage and self-check walks that list. " +
+  // SW-374: "regenerate this workspace's file" cannot run mid-run: init rewrites the contracts and the installed CLI predates the change.
+  "For a change to generated text (a context file, `CLAUDE.md`, a stage contract), the criterion is a fixture run of the built generator showing the new text; regenerating this workspace's own copy is a post-release check, not a criterion.";
 
 /** Step 0 of the first stage: start the issue when there is one, then fill the brief. */
 function firstStep(hasIssue: boolean): string {
