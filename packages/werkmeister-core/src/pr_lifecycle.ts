@@ -400,25 +400,50 @@ const cellsOf = (row: string): string[] =>
     .split(/(?<!\\)\|/)
     .map((c) => c.trim());
 
+interface TableRow {
+  cell: string;
+  row: string;
+  /** The nearest markdown heading above the row, or "" (SW-390). */
+  heading: string;
+}
+
+const HEADING = /^#{1,6}\s/;
+
 /** The result cell of every row in a table whose header names a `result` column (SW-247). */
-function resultCells(text: string): string[] {
+function resultCells(text: string): TableRow[] {
   const lines = text.split("\n").map((l) => l.trim());
-  const cells: string[] = [];
+  const rows: TableRow[] = [];
+  let heading = "";
   for (let i = 0; i + 1 < lines.length; i++) {
+    if (HEADING.test(lines[i])) heading = lines[i];
     if (!lines[i].startsWith("|") || !/^\|[\s:|-]+\|$/.test(lines[i + 1])) continue;
     const col = cellsOf(lines[i]).findIndex((c) => c.toLowerCase() === "result");
     for (i += 2; lines[i]?.startsWith("|"); i++)
-      if (col >= 0) cells.push(cellsOf(lines[i])[col] ?? "");
+      if (col >= 0) rows.push({ cell: cellsOf(lines[i])[col] ?? "", row: lines[i], heading });
   }
-  return cells;
+  return rows;
 }
+
+/** The first line with a `| FAIL |` cell, in any table, and its heading. */
+function failCellRow(text: string): TableRow | null {
+  let heading = "";
+  for (const line of text.split("\n").map((l) => l.trim())) {
+    if (HEADING.test(line)) heading = line;
+    else if (FAIL_CELL.test(line)) return { cell: "FAIL", row: line, heading };
+  }
+  return null;
+}
+
+/** Where a row is, so the first failed run names the table to fix (SW-390). */
+const rowAt = (r: TableRow) => `${r.heading ? ` under "${r.heading}"` : ""}: ${r.row}`;
 
 function passTable(text: string): string | null {
   const results = resultCells(text);
-  if (FAIL_CELL.test(text) || results.some((c) => c.startsWith("FAIL"))) return "has a FAIL row";
-  const other = results.find((c) => c !== "PASS");
+  const fail = failCellRow(text) ?? results.find((r) => r.cell.startsWith("FAIL"));
+  if (fail) return `has a FAIL row${rowAt(fail)}`;
+  const other = results.find((r) => r.cell !== "PASS");
   if (other !== undefined)
-    return `has a result \`${other}\` that is neither PASS nor FAIL — ${CELL_FORMAT}`;
+    return `has a result \`${other.cell}\` that is neither PASS nor FAIL${rowAt(other)} — ${CELL_FORMAT}`;
   if (!PASS_CELL.test(text)) return `has no PASS row — ${CELL_FORMAT}`;
   return null;
 }

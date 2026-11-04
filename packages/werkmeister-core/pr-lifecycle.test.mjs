@@ -505,6 +505,23 @@ test("gate: a malformed exercise.md fails before any test command runs (SW-286)"
   }
 });
 
+test("gate: a FAIL row in the PR file's Tests table is named with its heading (SW-390)", async () => {
+  const body =
+    `${PASS_BODY}\n## Tests\n| test | result | output |\n|---|---|---|\n` +
+    "| x.test.ts before the fix | FAIL | AssertionError |\n";
+  const ws = icmWorkspace({ files: { app: prFile({ body }) } });
+  try {
+    const g = await gate(ws, deps([DIFF_API]));
+    assert.deepEqual(failed(g), ["acceptance", "tests"]);
+    assert.match(
+      g.checks.find((c) => c.name === "acceptance").detail,
+      /^PR file has a FAIL row under "## Tests": \| x\.test\.ts before the fix \| FAIL \|/,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gate: an exercise result cell of `FAIL — why`, or neither PASS nor FAIL, fails the exercise check (SW-247)", async () => {
   const table = (cell) => `| check | result |\n|---|---|\n| smoke | PASS |\n| x | ${cell} |\n`;
   for (const [cell, detail] of [
