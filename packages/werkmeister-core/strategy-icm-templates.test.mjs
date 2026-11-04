@@ -101,6 +101,13 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /run `werkmeister pr gate --tests`/, `${wt}/${d}`);
           // SW-334: the redirect wraps the whole && chain, not its last command.
           assert.ok(c.includes('`{ <test command>; } > <log> 2>&1; echo "exit $?"`'), `${wt}/${d}`);
+          // SW-125: skips are named in the test step and in the file that records the run.
+          assert.match(c, /A skipped test is not a pass: name each one/, `${wt}/${d}`);
+          assert.match(
+            c,
+            /Write `output\/(fix|exercise)\.md`:[^\n]*every skipped test by name with its skip reason and where it ran instead/,
+            `${wt}/${d}`,
+          );
         }
         // SW-143: every exercise step defers a library/CLI to its Validation text, and the
         // templates stay app-agnostic — the werkmeister recipe lives in its services.yaml.

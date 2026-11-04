@@ -72,8 +72,12 @@ const TEST_STEP =
   "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. " +
   "Once it passes, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record both exit codes. " +
   "A subagent you brief to run tests or the CLI gets that wrapped command verbatim in its brief. " +
+  // SW-125: a host-skipped test still asserted removed behaviour; only the gate's container run found it.
+  "A skipped test is not a pass: name each one with its skip reason, and run it where it can run (the workspace container) or say where it will (the gate, CI). " +
   // SW-334: `cmd1 && cmd2 > log` redirects only cmd2; the group sends the whole chain to the log.
   'Redirect output to a file as one group, so every command in an `&&` chain lands there: `{ <test command>; } > <log> 2>&1; echo "exit $?"`. Trust the exit code, read back only the failing slice.';
+
+const SKIPPED = "every skipped test by name with its skip reason and where it ran instead";
 
 // SW-388: in sw-386 a must-fix passed the tests, the exercise and the gate; only a separate review caught it.
 const reviewStep = (rerun: string) =>
@@ -210,7 +214,7 @@ const feature: Stage[] = [
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         TEST_STEP,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
-        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
+        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
         IMPLEMENT_REVIEW,
       ],
       outputs: [
@@ -276,7 +280,7 @@ const bugfix: Stage[] = [
         ...IMPLEMENT_STEPS,
         "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
         TEST_STEP,
-        "Write `output/fix.md`: `git diff --stat` per repo, the failing test's name, and the test exit code and summary line.",
+        `Write \`output/fix.md\`: \`git diff --stat\` per repo, the failing test's name, the test exit code and summary line, and ${SKIPPED}.`,
       ],
       outputs: ["Code changes plus the test, uncommitted", "`output/fix.md`"],
       humanCheck:
@@ -367,7 +371,7 @@ const refactor: Stage[] = [
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
         `Take the steps in order. After each one: ${TEST_STEP}`,
         `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
-        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, and the final exercise checks as ${exerciseFormat("evidence")}.`,
+        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
         IMPLEMENT_REVIEW,
       ],
       outputs: ["Code changes, uncommitted", "`output/exercise.md`", "`output/review.md`"],
