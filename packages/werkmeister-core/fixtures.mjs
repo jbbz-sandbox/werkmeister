@@ -197,3 +197,25 @@ export async function withAgentState(hooks) {
     out[event] = [...(out[event] ?? []), buildAgentStateEntry()];
   return out;
 }
+
+/**
+ * Run *fn* inside the seeded fixture `with-fixture-workspace` uses (SW-292): its registry, a
+ * workspace whose code repo has a local bare origin, and logging fake gh and docker in the env.
+ * `opts` is `seedFixture`'s (`gate`, `bare`, `services`). Restores the env and removes the dir.
+ */
+export async function withFixtureWorkspace(fn, opts = {}) {
+  const { seedFixture } = await import("./dist/fixture_workspace.js");
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-fixture-")));
+  const fx = seedFixture(root, opts);
+  const prev = Object.fromEntries(Object.keys(fx.env).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, fx.env);
+  try {
+    return await fn(fx);
+  } finally {
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}

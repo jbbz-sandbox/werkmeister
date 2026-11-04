@@ -1906,6 +1906,12 @@ export async function main(): Promise<void> {
     expectDaemonBuild(() => buildOf(appEntryPath(MCP)));
   }
 
+  // SW-292: raw argv, so the werkmeister args it runs (`--services`, `--then`…) never meet commander.
+  if (process.argv[2] === "internal" && process.argv[3] === "fixture") {
+    await (await import("./commands/fixture.js")).run(process.argv.slice(4));
+    return;
+  }
+
   if (process.argv.length <= 2) {
     program.outputHelp();
     process.exit(0);

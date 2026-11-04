@@ -350,6 +350,11 @@ test("SW-186: rewrites pre-rename hooks, rules, wrapper, secrets and Desktop arg
   assert.deepEqual(after.permissions.allow.toSorted(), fresh.permissions.allow.toSorted());
   assert.deepEqual(after.permissions.deny, fresh.permissions.deny);
   assert.match(fs.readFileSync(wrapper, "utf8"), /werkmeister internal wait-load/);
+  // SW-292: a migrated workspace gets the fixture wrapper beside with-temp-home.
+  assert.match(
+    fs.readFileSync(path.join(path.dirname(wrapper), "with-fixture-workspace"), "utf8"),
+    /internal fixture/,
+  );
   assert.equal(
     fs.readFileSync(path.join(target, "secrets.env"), "utf8"),
     "OTHER=1\nWERKMEISTER_MCP_TOKEN=fresh\n",
