@@ -40,10 +40,10 @@ base: main
 status: draft            # draft | approved | open | merged | shipped | closed | abandoned
 url:                     # written by werkmeister pr open
 merge_sha:               # written by werkmeister pr status
-release:                 # release tag that shipped it, written by werkmeister pr status
+release:                 # release tag that shipped it, written by werkmeister pr status; set \`none\` yourself for a change that ships nothing (no changeset)
 reason:                  # required for closed / abandoned
 skip_tests: {}           # <service>: <reason> — for a service with no test command or no running container; tests: <reason> when no service maps to the changed files
-skip_release:            # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag
+skip_release:            # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag unless release: none
 skip_exercise:           # <reason> — skips the gate's exercise check, e.g. a doc deliverable with nothing to run
 ---
 # <PR title>

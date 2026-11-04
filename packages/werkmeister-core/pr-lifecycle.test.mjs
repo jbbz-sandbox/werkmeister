@@ -1671,6 +1671,70 @@ test("lifecycleOf: merged + release: none reads shipped after pr status, so clos
   }
 });
 
+const MERGED_SKIP = prFile({
+  status: "merged",
+  extra: "merge_sha: abc1234\nskip_release: tests only\n",
+});
+
+test("refreshPrStatus: a merged PR with no containing tag says why, naming the latest tag (SW-389)", async () => {
+  const ws = icmWorkspace({ files: { app: MERGED_SKIP } });
+  try {
+    const d = deps([
+      [/tag --contains abc1234/, { stdout: "" }],
+      [/for-each-ref/, { stdout: "v1.4.0 2026-11-03T16:26:00Z\n" }],
+      [/log -1 --format=%cI abc1234/, { stdout: "2026-11-03T17:27:00Z\n" }],
+    ]);
+    const r = await refreshPrStatus(ws, d);
+    assert.equal(readPrFiles(ws)[0].fm.status, "merged");
+    const out = r.lines.join("\n");
+    assert.match(
+      out,
+      /not shipped yet: no release tag contains abc1234; latest tag v1\.4\.0 \(2026-11-03T16:26:00Z\) predates the merge \(2026-11-03T17:27:00Z\)/,
+    );
+    // skip_release is set, so the line also names the fix for a PR that ships nothing (SW-393).
+    assert.match(out, /release: none/);
+    assert.ok(
+      d.calls.some((c) => /fetch -q --tags origin/.test(c)),
+      "tags fetched first",
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: a merged PR whose tag exists ships and prints no reason line (SW-389)", async () => {
+  const ws = icmWorkspace({ files: { app: MERGED_SKIP } });
+  try {
+    const r = await refreshPrStatus(ws, deps([[/tag --contains abc1234/, { stdout: "v1.5.0\n" }]]));
+    assert.equal(readPrFiles(ws)[0].fm.status, "shipped");
+    assert.equal(readPrFiles(ws)[0].fm.release, "v1.5.0");
+    assert.doesNotMatch(r.lines.join("\n"), /not shipped yet/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: a repo with no release tags says so instead of naming one (SW-389)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "merged", extra: "merge_sha: abc1234\n" }) },
+  });
+  try {
+    const r = await refreshPrStatus(
+      ws,
+      deps([
+        [/tag --contains abc1234/, { stdout: "" }],
+        [/for-each-ref/, { stdout: "" }],
+      ]),
+    );
+    const out = r.lines.join("\n");
+    assert.match(out, /not shipped yet: no release tag contains abc1234; no tag matches v\* yet/);
+    assert.doesNotMatch(out, /latest tag/);
+    assert.doesNotMatch(out, /release: none/, "no skip_release, so no hint");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("removalBlockers: an open PR, unmerged commits; merged and closed-out are fine", async () => {
   const ws = icmWorkspace({
     files: {
@@ -1753,6 +1817,8 @@ test("closeOut refuses before ship", async () => {
       ),
     );
     assert.match(String(err), /is merged \(app: merged\)/);
+    // A merged PR that ships nothing never gets a tag: the error names the fix (SW-393).
+    assert.match(String(err), /`release: none` in its PR file/);
     assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
   } finally {
     clean(ws);
@@ -2499,7 +2565,8 @@ const callbackFile = (extra = "") =>
 const lockIn = (ws) => path.join(ws, "watch.lock");
 const claim = (ws, d, desktop = false) => claimCallbacks([ws], { desktop }, d, lockIn(ws));
 // Reading GitHub and tags only: never a merge, a close-out or a push.
-const onlyReads = (calls) => calls.every((c) => /^(gh pr view|git -C \S+ (fetch|tag) )/.test(c));
+const onlyReads = (calls) =>
+  calls.every((c) => /^(gh pr view|git -C \S+ (fetch|tag|for-each-ref|log) )/.test(c));
 
 /**
  * A temp HOME whose `~/.claude/projects` holds one transcript per `{ id: cwd }`, filed the
