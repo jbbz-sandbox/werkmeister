@@ -683,6 +683,7 @@ async function gateChecks(
     return res;
   };
 
+  const dir = path.join(ws, file.dir);
   if (!testsOnly) {
     const table = passTable(file.body);
     add("acceptance", table === null, table ? `PR file ${table}` : "all PASS");
@@ -717,15 +718,6 @@ async function gateChecks(
           : "no review.md — run the build stage's review step first",
       );
     }
-    // The PR-file checks are instant; the test commands can take ten minutes cold (SW-150).
-    if (checks.some((c) => !c.ok)) {
-      add("tests", false, "not run — fix the PR-file checks above first");
-      return { ok: false, checks };
-    }
-  }
-
-  const dir = path.join(ws, file.dir);
-  if (!testsOnly) {
     const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
     add(
       "clean",
@@ -736,6 +728,11 @@ async function gateChecks(
           ? `uncommitted:\n${status.stdout.trimEnd()}`
           : "clean",
     );
+    // These rows take seconds; lint and the tests can take ten minutes cold (SW-150, SW-364).
+    if (checks.some((c) => !c.ok)) {
+      add("tests", false, "not run — fix the rows above first");
+      return { ok: false, checks };
+    }
   }
 
   // The shared registry holds main's fragment; a branch that renames packages

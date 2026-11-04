@@ -1067,20 +1067,29 @@ test("gate: a broken branch fragment fails the gate with its error, not a crash"
   }
 });
 
-test("gate: dirty worktree, failing test, down health endpoint", async () => {
+test("gate: failing test, down health endpoint", async () => {
   const ws = icmWorkspace();
   try {
-    const d = deps(
-      [
-        DIFF_API,
-        [/status --porcelain/, { stdout: " M x.ts\n" }],
-        [/npm test -w api/, { code: 1, stdout: "1 failing" }],
-      ],
-      {
-        httpStatus: async () => 502,
-      },
+    const d = deps([DIFF_API, [/npm test -w api/, { code: 1, stdout: "1 failing" }]], {
+      httpStatus: async () => 502,
+    });
+    assert.deepEqual(failed(await gate(ws, d)), ["test api", "baseline api"]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a dirty worktree stops before lint and tests start containers (SW-364)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, [/status --porcelain/, { stdout: " M x.ts\n" }]]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["clean", "tests"]);
+    assert.match(g.checks.find((c) => c.name === "clean").detail, /M x\.ts/);
+    assert.deepEqual(
+      d.calls.filter((c) => /^docker (ps|exec)/.test(c)),
+      [],
     );
-    assert.deepEqual(failed(await gate(ws, d)), ["clean", "test api", "baseline api"]);
   } finally {
     clean(ws);
   }
