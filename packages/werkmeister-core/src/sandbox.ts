@@ -134,6 +134,7 @@ import {
   originBase,
   removalBlockers,
   shipMerged,
+  // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 } from "./pr_lifecycle.js";
 import { collectingReporter, info, warn, withReporter } from "./reporter.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
@@ -159,6 +160,7 @@ export {
   waitForHostLoad,
   waitForHostLoadNow,
   watchPrs,
+  // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 } from "./pr_lifecycle.js";
 export { listRepoWorktrees };
 

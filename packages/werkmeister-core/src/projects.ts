@@ -16,6 +16,7 @@
  */
 
 import type { GlobalConfig } from "./config.js";
+// biome-ignore lint/suspicious/noImportCycles: global_config↔projects; SW-411
 import { load } from "./global_config.js";
 import {
   type Board,

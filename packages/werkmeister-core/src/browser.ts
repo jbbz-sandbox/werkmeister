@@ -630,6 +630,7 @@ export async function launchFeatureWindow(
   opts: { size?: string; position?: string | null } = {},
 ): Promise<FeatureWindow | null> {
   if (wantsSafari()) {
+    // biome-ignore lint/suspicious/noImportCycles: browser↔safari, safari side lazy; SW-411
     const { launchSafariWindow } = await import("./safari.js");
     return launchSafariWindow(feature, url, opts);
   }

@@ -23,6 +23,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+// biome-ignore lint/suspicious/noImportCycles: compose↔slots; SW-411
 import { workspaceForFeature } from "./compose.js";
 import { baselineUpstream, dotDir, loadPorts, loadServices, slotPortRange } from "./config.js";
 import { docker } from "./docker.js";

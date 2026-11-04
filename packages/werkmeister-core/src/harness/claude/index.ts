@@ -2,6 +2,7 @@
 import { turnStatus } from "../turn.js";
 import type { HarnessAdapter } from "../types.js";
 import { askClaude, askClaudeJson, askClaudeStrict, reconcileCommand } from "./cli.js";
+// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { claudeResumeCommand, sessionSignal, startTurn } from "./session.js";
 import { listSessionsIn, sessionSourceIn, transcriptIn } from "./transcript.js";
 import { usageForDir } from "./usage.js";

@@ -26,6 +26,7 @@ import {
   featureColor,
   findFreePort,
   sleep,
+  // biome-ignore lint/suspicious/noImportCycles: browser↔safari, safari side lazy; SW-411
 } from "./browser.js";
 import { error, info, raw } from "./reporter.js";
 

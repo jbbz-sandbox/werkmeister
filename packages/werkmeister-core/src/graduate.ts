@@ -21,6 +21,7 @@ import * as YAML from "yaml";
 import { dotDir } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { standardsDirPath } from "./global_config.js";
+// biome-ignore lint/suspicious/noImportCycles: graduate↔notes; SW-411
 import { type Note, openDecisions } from "./notes.js";
 import { run } from "./proc.js";
 import { fnmatch, loadStandardsModules } from "./standards.js";

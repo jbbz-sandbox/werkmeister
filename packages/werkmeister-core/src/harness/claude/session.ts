@@ -125,6 +125,7 @@ export async function startTurn(
   const bin = await resolveClaudeBin();
   const root = opts.unattended;
   // Loaded here: a static import closes a cycle that reaches issue_tracker before it is initialised.
+  // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
   const rules = root && (await import("./hooks_gen.js"));
   const args = claudeSendArgs(body, sessionId, model, {
     ...(root &&

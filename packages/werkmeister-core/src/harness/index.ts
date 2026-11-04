@@ -1,3 +1,4 @@
+// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { claudeAdapter } from "./claude/index.js";
 import type { HarnessAdapter } from "./types.js";
 

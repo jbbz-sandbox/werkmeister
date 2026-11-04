@@ -19,6 +19,7 @@ import * as path from "node:path";
 import * as YAML from "yaml";
 
 import { dotDir } from "./config.js";
+// biome-ignore lint/suspicious/noImportCycles: graduate↔notes; SW-411
 import { reconcileGraduating } from "./graduate.js";
 import { skillNameFor } from "./skill_gen.js";
 import { standardsMatchingDiff } from "./standards.js";
