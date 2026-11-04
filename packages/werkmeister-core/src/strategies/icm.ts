@@ -197,7 +197,16 @@ function standardsRef(tier: Stage["standards"], r: Resolved): string {
 const START_ISSUE =
   "Run `werkmeister issue start`: it moves the issue to In Progress, and does nothing when the issue is already past that or the tracker refuses. It also fetches each code worktree's base and fast-forwards a branch with no commits of its own; read its `Worktree:` lines. Also read its `CLI:` line: if the installed werkmeister is stale, stop and apply the fix it prints before step 1; if it could not check, say so and continue.";
 
-function renderContract(dir: string, stage: Stage, v: IcmVars, startsIssue = false): string {
+// SW-345: BRIEF.md held only its placeholder until stage 04, so every self-check had nothing to check against.
+const WRITE_BRIEF =
+  "If `../../BRIEF.md` has no `## Acceptance criteria` section, write `## Goal`, `## Acceptance criteria` (a `- [ ]` list, each with how it is checked) and `## Open questions` into it now, from the issue (`werkmeister issue view`) or else the starting prompt, before step 1: every later stage and self-check walks that list.";
+
+/** Step 0 of the first stage: start the issue when there is one, then fill the brief. */
+function firstStep(hasIssue: boolean): string {
+  return hasIssue ? `${START_ISSUE} Then: ${WRITE_BRIEF}` : WRITE_BRIEF;
+}
+
+function renderContract(dir: string, stage: Stage, v: IcmVars, step0 = ""): string {
   const c = stage.contract(v);
   return [
     `# ${dir} — ${stage.job}`,
@@ -212,7 +221,7 @@ function renderContract(dir: string, stage: Stage, v: IcmVars, startsIssue = fal
     "",
     "## Process",
     // Step 0, so the contracts' own "steps 1–3" references keep their numbers.
-    ...(startsIssue ? [`0. ${START_ISSUE}`] : []),
+    ...(step0 ? [`0. ${step0}`] : []),
     ...c.process.map((p, i) => `${i + 1}. ${p}`),
     "",
     "## Outputs",
@@ -404,7 +413,7 @@ function render(ctx: InitContext): Record<string, string> {
       dirs[i],
       stage,
       { ...base, standards: standardsRef(stage.standards, r) },
-      i === 0 && Boolean(issueIdOfMeta(ctx.meta)),
+      i === 0 ? firstStep(Boolean(issueIdOfMeta(ctx.meta))) : "",
     );
   });
   return files;

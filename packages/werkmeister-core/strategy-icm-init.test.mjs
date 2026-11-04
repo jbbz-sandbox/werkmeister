@@ -648,15 +648,21 @@ test("the first stage contract, and only it, starts the issue when there is one 
       assert.match(contract("01_research"), /`CLI:` line.*stale, stop and apply the fix/);
       assert.doesNotMatch(contract("02_spec"), /`CLI:` line/);
       assert.doesNotMatch(contract("02_spec"), start);
+      // SW-345: after starting the issue, step 0 fills the brief's goal and criteria.
+      assert.match(
+        contract("01_research"),
+        /^0\. Run .*Then: If `\.\.\/\.\.\/BRIEF\.md` has no `## Acceptance criteria`/m,
+      );
+      assert.doesNotMatch(contract("02_spec"), /has no `## Acceptance criteria`/);
     },
     { meta: { FEATURE: "demo", SERVICES: "backend", ISSUE_ID: "o/r#5" } },
   );
   await withIcmWorkspace(async (root, ctx) => {
     icm.init(ctx);
-    assert.doesNotMatch(
-      fs.readFileSync(path.join(root, "stages", "01_research", "CONTEXT.md"), "utf8"),
-      start,
-    );
+    const first = fs.readFileSync(path.join(root, "stages", "01_research", "CONTEXT.md"), "utf8");
+    assert.doesNotMatch(first, start);
+    // SW-345: with no issue, step 0 is the brief step alone.
+    assert.match(first, /^0\. If `\.\.\/\.\.\/BRIEF\.md` has no `## Acceptance criteria`/m);
   });
 });
 
