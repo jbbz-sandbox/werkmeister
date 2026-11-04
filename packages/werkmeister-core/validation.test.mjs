@@ -110,6 +110,24 @@ test("only non-URL services: how to validate, and none of the routing sections",
   );
 });
 
+test("How to validate names --service for candidates that are not local (SW-342)", async () => {
+  await withSandboxHome(
+    async () => {
+      const off = buildSandboxContextMd("t", 1, 11100, 11119, [], loadServices(), "", null, [
+        "core",
+        "cli",
+      ]);
+      assert.match(off, /`werkmeister feature up --service <name>`/);
+      assert.match(off, /on-demand[^\n]*`cli`, `core`/);
+      const on = buildSandboxContextMd("t", 1, 11100, 11119, ["core"], loadServices(), "", null, [
+        "core",
+      ]);
+      assert.doesNotMatch(on, /--service/, "nothing on-demand, no hint");
+    },
+    { services: SERVICES },
+  );
+});
+
 test("a URL-addressed candidate brings back health checks and routing, scoped to it", async () => {
   await withSandboxHome(
     async () => {

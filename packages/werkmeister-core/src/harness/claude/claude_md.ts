@@ -587,9 +587,14 @@ or visit https://${proxy.host}/__werkmeister and select \`${feature}\` — the s
 `
     : "";
 
+  const onDemand = candidates.filter((s) => !localServices.includes(s)).sort();
   const validateBlock = `## How to validate
 
 How to exercise a change to each service in this workspace.${
+    onDemand.length
+      ? ` A plain \`werkmeister feature up\` skips the on-demand ones, ${onDemand.map((s) => `\`${s}\``).join(", ")}: start one with \`werkmeister feature up --service <name>\`.`
+      : ""
+  }${
     tempHome
       ? ` Each test command runs through \`.werkmeister/bin/with-temp-home\`, which gives it a fresh temporary HOME and deletes it on exit: never hand-roll \`HOME=…\`. Start every exercise command with the script itself, never with env assignments or a \`cd\`, so one permission rule matches it: \`${tempHome} env WERKMEISTER_ROOT=… <cmd>\`. The allow rules that cover them are \`Bash(${tempHome} <test command>:*)\` for each test command below and \`Bash(${tempHome} env WERKMEISTER_ROOT=* node --test:*)\` for this form (use \`*\` for the workspace folder to cover every workspace); the wrapper alone is never allowed, since it would run anything.`
       : ""
