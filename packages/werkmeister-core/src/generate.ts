@@ -558,6 +558,28 @@ export function loadWorkspaceEnvVars(workspaceRoot: string): Record<string, stri
 }
 
 /**
+ * SW-34: the rest of the checked-out repos' services, which compose.yml puts
+ * behind the `on-demand` profile so the PR gate (or `feature up --service`) can
+ * start one for a repo with no container running.
+ */
+export function onDemandServices(
+  servicesConfig: Record<string, unknown>,
+  localServices: string[],
+  workspaceRoot: string,
+): string[] {
+  return Object.entries(servicesConfig)
+    .filter(
+      ([name, def]) =>
+        !localServices.includes(name) &&
+        isDict(def) &&
+        Boolean(def["repo"]) &&
+        fs.existsSync(path.join(workspaceRoot, String(def["repo"]))),
+    )
+    .map(([name]) => name)
+    .sort();
+}
+
+/**
  * Render the compose file for *feature* without writing it.
  *
  * Split out from `generateFeatureCompose` so a caller can compare the current
@@ -590,18 +612,7 @@ function renderFeatureCompose(
   const template = getTemplateOrNull(jinjaEnv, "docker-compose.feature.yml.njk");
   if (template) {
     const [portStart] = getPortRange(slot);
-    // SW-34: the rest of the checked-out repos' services, behind a compose profile,
-    // so the PR gate can start one for a repo with no container running.
-    const onDemand = Object.entries(servicesConfig)
-      .filter(
-        ([name, def]) =>
-          !localServices.includes(name) &&
-          isDict(def) &&
-          Boolean(def["repo"]) &&
-          fs.existsSync(path.join(workspaceRoot, String(def["repo"]))),
-      )
-      .map(([name]) => name)
-      .sort();
+    const onDemand = onDemandServices(servicesConfig, localServices, workspaceRoot);
     // Build rich service objects for the template
     const svcObjects: ServiceEntry[] = [];
     for (const svcName of [...[...localServices].sort(), ...onDemand]) {

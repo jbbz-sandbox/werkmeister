@@ -37,6 +37,7 @@ vi.mock("werkmeister-core/generate", () => ({
   generateSupergraphConfig: () => null,
   isFeatureComposeStale: () => false,
   loadWorkspaceEnvVars: () => ({}),
+  onDemandServices: () => [],
   writeServiceSecretEnvs: () => {},
 }));
 vi.mock("werkmeister-core/k8s", () => ({ ensurePortForwardsHealthy: () => "healthy" }));

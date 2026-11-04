@@ -82,6 +82,32 @@ test("an unattended create takes only description and starting_prompt from the m
   );
 });
 
+test("an unattended create takes services the issue names verbatim, in its repos (SW-342)", async () => {
+  await withSandboxHome(
+    async () => {
+      const body = "Service: {{frontend}}. Not apps/backend or backend-old.";
+      await withFakeGh({ issue: { ...ISSUE, body } }, async () => {
+        const { resolved } = await quiet(() =>
+          prepareCreate({ issue_id: "o/r#5", repos: "demo-repo" }, { cwd: cwd(), distill: false }),
+        );
+        assert.equal(resolved.services, "frontend");
+        const other = await quiet(() =>
+          prepareCreate({ issue_id: "o/r#5", repos: "other" }, { cwd: cwd(), distill: false }),
+        );
+        assert.equal(other.resolved.services, undefined, "a service outside the chosen repos");
+        const mine = await quiet(() =>
+          prepareCreate(
+            { issue_id: "o/r#5", repos: "demo-repo", services: "backend" },
+            { cwd: cwd(), distill: false },
+          ),
+        );
+        assert.equal(mine.resolved.services, "backend", "a chosen services list is kept");
+      });
+    },
+    { config: GH },
+  );
+});
+
 test("the extractor asks for a service whose container the issue measures (SW-280)", async () => {
   await withSandboxHome(
     async () => {
