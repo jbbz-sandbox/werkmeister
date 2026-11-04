@@ -1,5 +1,11 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.70.1
+
+### Patch Changes
+
+- a44dd23: Harness interface: `HarnessAdapter`'s session types are harness-neutral and the detached turn runner is shared across harnesses (SW-383). No user-visible change.
+
 ## 0.70.0
 
 ### Minor Changes
