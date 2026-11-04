@@ -32,7 +32,15 @@ fi
 newer="$(find "$CLI/src" "$REPO"/packages/*/src -type f -newer "$CLI/dist/main.js" 2>/dev/null | head -1)"
 if [ ! -f "$CLI/dist/main.js" ] || [ -n "$newer" ]; then
   bad "dist is stale (${newer:-dist/main.js missing})"
-  if [ $FIX = 1 ]; then echo "FIX   pnpm --filter werkmeister build"; (cd "$REPO" && pnpm --filter werkmeister build &>/dev/null) || echo "ERROR build failed"; fi
+  if [ $FIX = 1 ]; then
+    # A pull can add deps, and the CLI bundles core's dist: install, then let turbo build core first (SW-319).
+    # FIX only after success: a FIX line asks for a restart, which can't help a failed build.
+    if out="$(cd "$REPO" && corepack pnpm install --frozen-lockfile 2>&1 && corepack pnpm turbo run build --filter=werkmeister 2>&1)"; then
+      echo "FIX   corepack pnpm install --frozen-lockfile && corepack pnpm turbo run build --filter=werkmeister"
+    else
+      echo "ERROR rebuild failed: $(grep -m3 -iE 'error' <<<"$out" | tr '\n' ' ')"
+    fi
+  fi
 else ok "dist is up to date"; fi
 
 # 3. WERKMEISTER_ROOT in env.sh points at the repo
@@ -72,6 +80,14 @@ else ok "no marketplace werkmeister plugin installed"; fi
 # 5. Plugin MCP server is launched through the PATH binary checked above
 cmd="$(node -e 'console.log(require(process.argv[1]).mcpServers.werkmeister.command)' "$PLUGIN/.mcp.json" 2>/dev/null)"
 [ "$cmd" = werkmeister ] && ok "plugin MCP runs '$cmd mcp' from PATH" || bad "plugin MCP command is '$cmd' (expected werkmeister)"
+
+# 6. VS Code extension is not older than its source (report only: installing needs the person's yes)
+ext="$(ls -td "$HOME"/.vscode/extensions/jbbz.werkmeister-vscode-* 2>/dev/null | head -1)"
+if [ -n "$ext" ]; then
+  newer="$(find "$REPO/packages/werkmeister-vscode/src" -type f -newer "$ext" 2>/dev/null | head -1)"
+  if [ -n "$newer" ]; then bad "VS Code extension ${ext##*/} is older than $newer (run: pnpm --filter werkmeister-vscode install:local)"
+  else ok "VS Code extension ${ext##*/} is up to date"; fi
+fi
 
 [ $drift = 0 ] && echo "RESULT clean" || echo "RESULT drift found$([ $FIX = 1 ] && echo ', fixes applied: rerun to confirm')"
 exit $drift
