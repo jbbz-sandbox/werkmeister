@@ -442,6 +442,24 @@ export function installedVersion(claudePluginsDir: string, spec: PluginSpec): st
 }
 
 /**
+ * The `CLAUDE_CODE_PLUGIN_DIRS` entry that loads plugin *name* from a checkout, or null.
+ * Reads the process env, then `env` in ~/.claude/settings.json: setup runs in a plain
+ * terminal, which never sees the settings env Claude Code applies (SW-237).
+ */
+export function pluginDirHolding(name: string): string | null {
+  const dirs = [
+    process.env.CLAUDE_CODE_PLUGIN_DIRS,
+    readJson(claudeUserSettingsPath())?.env?.CLAUDE_CODE_PLUGIN_DIRS,
+  ]
+    .filter((v): v is string => typeof v === "string")
+    .flatMap((v) => v.split(":"));
+  return (
+    dirs.find((d) => d && readJson(path.join(d, ".claude-plugin", "plugin.json"))?.name === name) ??
+    null
+  );
+}
+
+/**
  * Converge one plugin: marketplace add/update, then install/update.
  *
  * *driftProbe* (werkmeister only) returns plugin_check warnings; after a
@@ -458,6 +476,26 @@ export function syncPlugin(
   const label = `plugin ${spec.name}`;
   const version = installedVersion(claudePluginsDir, spec);
   const marketplaceKnown = spec.marketplace in knownMarketplaces(claudePluginsDir);
+
+  const devDir = pluginDirHolding(spec.name);
+  if (devDir) {
+    if (version === null) {
+      return [
+        {
+          label,
+          ok: true,
+          detail: `loaded from ${devDir} (dev mode), marketplace install skipped`,
+        },
+      ];
+    }
+    return [
+      {
+        label,
+        ok: false,
+        detail: `installed copy overrides ${devDir}; claude plugin uninstall ${spec.name}@${spec.marketplace} && claude plugin marketplace remove ${spec.marketplace}`,
+      },
+    ];
+  }
 
   if (checkOnly) {
     if (!marketplaceKnown) {

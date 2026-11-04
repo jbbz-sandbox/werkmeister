@@ -22,6 +22,7 @@ import {
   LEGACY_PLUGIN,
   OPTIONAL_PLUGINS,
   originSlug,
+  type PluginSpec,
   REQUIRED_PLUGINS,
   type Runner,
   resolveCertScript,
@@ -34,6 +35,7 @@ import {
   syncOptionalPlugin,
   syncPathDirs,
   syncPlaywright,
+  syncPlugin,
   syncRegistryConfigs,
   syncRepo,
   syncTelepresence,
@@ -394,6 +396,86 @@ describe("retireLegacyPlugin", () => {
 
   it("is not triggered by the new plugin's own name", () => {
     expect(REQUIRED_PLUGINS.some((p) => p.name === LEGACY_PLUGIN.name)).toBe(false);
+  });
+});
+
+describe("syncPlugin with the plugin loaded from a checkout (SW-237)", () => {
+  const SPEC = REQUIRED_PLUGINS.find((p) => p.name === "werkmeister") as PluginSpec;
+  let t: string;
+  const saved = { dirs: process.env.CLAUDE_CODE_PLUGIN_DIRS, home: process.env.HOME };
+  beforeEach(() => {
+    t = fs.mkdtempSync(path.join(os.tmpdir(), "plugin-dirs-"));
+    fs.writeFileSync(path.join(t, "known_marketplaces.json"), "{}");
+    fs.writeFileSync(path.join(t, "installed_plugins.json"), JSON.stringify({ plugins: {} }));
+    // setup also reads ~/.claude/settings.json: keep the real one out of the test.
+    process.env.HOME = t;
+  });
+  afterEach(() => {
+    if (saved.dirs === undefined) delete process.env.CLAUDE_CODE_PLUGIN_DIRS;
+    else process.env.CLAUDE_CODE_PLUGIN_DIRS = saved.dirs;
+    process.env.HOME = saved.home;
+    fs.rmSync(t, { recursive: true, force: true });
+  });
+
+  it("skips the marketplace add and install when a plugin dir already holds werkmeister", () => {
+    const dev = path.join(t, "checkout/plugins/werkmeister");
+    fs.mkdirSync(path.join(dev, ".claude-plugin"), { recursive: true });
+    fs.writeFileSync(
+      path.join(dev, ".claude-plugin/plugin.json"),
+      JSON.stringify({ name: "werkmeister" }),
+    );
+    process.env.CLAUDE_CODE_PLUGIN_DIRS = `/nowhere:${dev}`;
+    const runner = fakeRunner({ claude: [0, ""] });
+    const steps = syncPlugin(SPEC, t, runner, false);
+    expect(runner.calls).toEqual([]);
+    expect(steps).toHaveLength(1);
+    expect(steps[0].ok).toBe(true);
+    expect(steps[0].detail).toContain(dev);
+  });
+
+  it("adds the marketplace and installs, as before, with no plugin dir", () => {
+    delete process.env.CLAUDE_CODE_PLUGIN_DIRS;
+    const runner = fakeRunner({ claude: [0, ""] });
+    syncPlugin(SPEC, t, runner, false);
+    expect(runner.calls).toContainEqual(["claude", "plugin", "marketplace", "add", SPEC.source]);
+    expect(runner.calls).toContainEqual(["claude", "plugin", "install", "werkmeister@werkmeister"]);
+  });
+
+  it("reads the plugin dir from ~/.claude/settings.json when the shell has none", () => {
+    delete process.env.CLAUDE_CODE_PLUGIN_DIRS;
+    const dev = path.join(t, "checkout/plugins/werkmeister");
+    fs.mkdirSync(path.join(dev, ".claude-plugin"), { recursive: true });
+    fs.writeFileSync(
+      path.join(dev, ".claude-plugin/plugin.json"),
+      JSON.stringify({ name: "werkmeister" }),
+    );
+    fs.mkdirSync(path.join(t, ".claude"));
+    fs.writeFileSync(
+      path.join(t, ".claude/settings.json"),
+      JSON.stringify({ env: { CLAUDE_CODE_PLUGIN_DIRS: dev } }),
+    );
+    const runner = fakeRunner({ claude: [0, ""] });
+    expect(syncPlugin(SPEC, t, runner, true)[0]).toMatchObject({ ok: true });
+    expect(runner.calls).toEqual([]);
+  });
+
+  it("flags an installed marketplace copy that overrides the plugin dir", () => {
+    const dev = path.join(t, "checkout/plugins/werkmeister");
+    fs.mkdirSync(path.join(dev, ".claude-plugin"), { recursive: true });
+    fs.writeFileSync(
+      path.join(dev, ".claude-plugin/plugin.json"),
+      JSON.stringify({ name: "werkmeister" }),
+    );
+    process.env.CLAUDE_CODE_PLUGIN_DIRS = dev;
+    fs.writeFileSync(
+      path.join(t, "installed_plugins.json"),
+      JSON.stringify({
+        plugins: { "werkmeister@werkmeister": [{ version: "0.70.1", installPath: t }] },
+      }),
+    );
+    const steps = syncPlugin(SPEC, t, fakeRunner({}), true);
+    expect(steps[0].ok).toBe(false);
+    expect(steps[0].detail).toContain("claude plugin uninstall werkmeister@werkmeister");
   });
 });
 
