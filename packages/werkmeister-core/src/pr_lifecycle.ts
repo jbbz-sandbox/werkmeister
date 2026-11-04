@@ -71,6 +71,7 @@ import {
 import { hostLoadLimit, portHolders } from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
 import { repoDirs } from "./standards.js";
+import { TEMP_HOME_SCRIPT } from "./temp_home.js";
 import { childEnv, toolBin } from "./tool_bins.js";
 import { writeUsageSnapshot } from "./usage_snapshot.js";
 import { loadConfigFile } from "./workspace_prompts.js";
@@ -689,7 +690,20 @@ async function gateChecks(
       );
       return { code: 1, stdout: "", stderr: "" };
     }
-    const res = await deps.run("docker", ["exec", container, "sh", "-c", cmd]);
+    // The container's HOME is the real one, ~/.werkmeister mounted (SW-329). Inline, not the workspace's
+    // copy: docs-site doesn't mount the workspace; --no-wait: the gate has already waited.
+    const res = await deps.run("docker", [
+      "exec",
+      container,
+      "sh",
+      "-c",
+      TEMP_HOME_SCRIPT,
+      "with-temp-home",
+      "--no-wait",
+      "sh",
+      "-c",
+      cmd,
+    ]);
     const lines = [`${cmd} → exit ${res.code}`];
     // Written on a pass too, so a fixed row never leaves its old failing log behind (SW-317).
     const log = path.join(dotDir(ws), `gate-${file.dir}-${name.replace(/\s+/g, "-")}.log`);

@@ -44,6 +44,7 @@ import {
 import { syncRegistry } from "./dist/registry_sync.js";
 import { withReporter } from "./dist/reporter.js";
 import { removeWorkspace, WorkspaceError } from "./dist/sandbox.js";
+import { TEMP_HOME_SCRIPT } from "./dist/temp_home.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
 const PASS_BODY = "## Acceptance\n| criterion | result |\n|---|---|\n| works | PASS |\n";
@@ -80,8 +81,10 @@ function icmWorkspace({
 /** Stub `run`: the first [pattern, result] whose pattern matches `bin args…` wins; records every call. */
 function stubRun(table) {
   const calls = [];
+  const raw = [];
   const run = async (bin, args) => {
-    const line = [bin, ...args].join(" ");
+    raw.push([bin, ...args].join(" "));
+    const line = [bin, ...bare(args)].join(" ");
     calls.push(line);
     for (const [re, res] of table)
       if (re.test(line)) return { stdout: "", stderr: "", code: 0, ...res };
@@ -89,7 +92,13 @@ function stubRun(table) {
     const origin = /remote get-url origin$/.test(line) ? "git@github.com:o/app.git\n" : "";
     return { stdout: origin, stderr: "", code: 0 };
   };
-  return { run, calls };
+  return { run, calls, raw };
+}
+
+// SW-329 wraps each gate exec in the inline temp-HOME script; matchers read the bare `sh -c <cmd>`.
+function bare(args) {
+  const i = args.indexOf(TEMP_HOME_SCRIPT);
+  return i < 0 ? args : [...args.slice(0, i - 2), ...args.slice(i + 3)];
 }
 
 const REGISTRY = {
@@ -115,6 +124,7 @@ function deps(table, over = {}) {
   const started = [];
   return {
     calls: r.calls,
+    raw: r.raw,
     stopped,
     started,
     run: r.run,
@@ -1079,6 +1089,21 @@ test("gate: a broken branch fragment fails the gate with its error, not a crash"
     );
     assert.deepEqual(failed(g), ["registry"]);
     assert.match(g.checks.find((c) => c.name === "registry").detail, /services\.api must be a map/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: test, lint and release commands run through the temp-HOME wrapper in the container (SW-329)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API]);
+    assert.deepEqual(failed(await gate(ws, d)), []);
+    const execs = d.raw.filter((c) => c.startsWith("docker exec "));
+    assert.ok(execs.length >= 2, d.raw.join("\n"));
+    const wrapped = `sh -c ${TEMP_HOME_SCRIPT} with-temp-home --no-wait sh -c `;
+    for (const c of execs) assert.ok(c.includes(wrapped), c);
+    assert.ok(execs.includes(`docker exec feat-api ${wrapped}npm test -w api`));
   } finally {
     clean(ws);
   }
