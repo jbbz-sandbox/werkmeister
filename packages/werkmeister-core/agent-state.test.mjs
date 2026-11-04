@@ -239,6 +239,50 @@ test("hooks: each session id gets a busy/idle record beside the state; SessionEn
   assert.deepEqual(Object.keys(readSessions(dir)), ["a"], "no session id: no record");
 });
 
+// SW-397: `claude -p --resume <id>` (claude-send, Resume's headless nudge, a pr-watch wake)
+// shares the open session's id, so its SessionEnd must not erase that session's record.
+test("hooks: a headless turn ending on an open session's id keeps that session live", () => {
+  const dir = workspace("i-shared-id", null);
+  const fire = (event, id = "s") => record({ hook_event_name: event, cwd: dir, session_id: id });
+  fire("SessionStart");
+  fire("UserPromptSubmit");
+  fire("Stop");
+  const was = process.env.CLAUDE_CODE_ENTRYPOINT;
+  process.env.CLAUDE_CODE_ENTRYPOINT = "sdk-cli";
+  try {
+    fire("SessionStart");
+    fire("UserPromptSubmit");
+    assert.equal(
+      readSessions(dir).s.status,
+      "busy",
+      "a headless turn still marks the session busy",
+    );
+    fire("Stop");
+    fire("SessionEnd");
+    fire("SessionStart", "h");
+    assert.equal(readSessions(dir).h.status, "idle", "a headless-only turn is live while it runs");
+    fire("SessionEnd", "h");
+    fire("SessionStart", "x");
+    process.env.CLAUDE_CODE_ENTRYPOINT = "cli";
+    fire("SessionStart", "x");
+    process.env.CLAUDE_CODE_ENTRYPOINT = "sdk-cli";
+    fire("SessionEnd", "x");
+    assert.ok(
+      readSessions(dir).x,
+      "an interactive session on a headless-made id is no longer headless",
+    );
+  } finally {
+    if (was === undefined) delete process.env.CLAUDE_CODE_ENTRYPOINT;
+    else process.env.CLAUDE_CODE_ENTRYPOINT = was;
+  }
+  assert.equal(readSessions(dir).s?.headless, undefined, "the interactive session is still open");
+  assert.deepEqual(
+    Object.keys(readSessions(dir)).sort(),
+    ["s", "x"],
+    "the headless turn ended its own record",
+  );
+});
+
 // SW-70: while `paused.json` exists the same hook holds the session.
 const { pauseGate, PAUSED_REASON, writePaused, writeNudge } = await import("./dist/agent_state.js");
 

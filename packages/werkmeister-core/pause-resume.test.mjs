@@ -4,6 +4,7 @@
 // lookups and a `claude` stub for claude-send: nothing touches a real container.
 
 import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import http from "node:http";
 import { tmpdir } from "node:os";
@@ -247,6 +248,25 @@ test("resumeAndNudge: with no live session, continue goes headless", async () =>
   for (const end = Date.now() + 30_000; !readLog() && Date.now() < end; ) await sleep(50);
   assert.match(readLog(), new RegExp(RESUME_NUDGE));
   assert.equal(fs.existsSync(nudgeFile), false);
+});
+
+// SW-397: the hooks' record can miss an open terminal session; a `claude` process in the
+// workspace still means no headless `--resume` beside it.
+// The gate's container has neither `ps` nor `lsof`; the host the CLI runs on has both.
+const noProcTools = ["ps", "lsof"].some(
+  (b) => spawnSync("sh", ["-c", `command -v ${b}`]).status !== 0,
+);
+test("resumeAndNudge: an open claude process with no record gets a pending nudge", {
+  skip: noProcTools && "no ps/lsof",
+}, async (t) => {
+  paused(true);
+  const procDir = fs.mkdtempSync(path.join(dir, "proc-"));
+  fs.symlinkSync("/bin/sleep", path.join(procDir, "claude"));
+  const child = spawn(path.join(procDir, "claude"), ["30"], { cwd: path.join(ws, ".werkmeister") });
+  t.after(() => child.kill());
+  assert.equal((await resumeAndNudge("demo-ws", ws, "demo")).nudge, "pending");
+  assert.equal(readLog(), "", "no second claude on a live transcript");
+  assert.equal(await claimResumeNudge("demo-ws"), RESUME_NUDGE);
 });
 
 test("resumeAndNudge: a live session gets a pending nudge, claimed once", async () => {

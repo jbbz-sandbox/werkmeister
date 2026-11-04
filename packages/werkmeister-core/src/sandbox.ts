@@ -23,7 +23,7 @@ import { parse as parseYaml } from "yaml";
 import { claimNudge, nudgePath, RESUME_NUDGE, readPaused, writeNudge } from "./agent_state.js";
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
 import { extractJson, extractResult } from "./harness/claude/cli.js";
-import type { ClaudeSessionSignal } from "./harness/claude/session.js";
+import { type ClaudeSessionSignal, claudeOpenIn } from "./harness/claude/session.js";
 import type { ClaudeTranscript } from "./harness/claude/transcript.js";
 import type { WorkspaceUsage } from "./harness/claude/usage.js";
 import { type HarnessAdapter, harness } from "./harness/index.js";
@@ -2713,7 +2713,7 @@ export async function resumeAndNudge(
     info("Session: it was not mid-turn, so nothing to continue");
     return { ...result, nudge: "none" };
   }
-  if (liveSessions(ws).length) {
+  if (liveSessions(ws).length || (await claudeOpenIn(ws))) {
     writeNudge(ws, RESUME_NUDGE);
     info(
       'Session: a live session will get "continue" (Desktop via the pane; in a terminal, say it)',

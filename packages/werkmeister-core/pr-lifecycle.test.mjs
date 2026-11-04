@@ -1311,6 +1311,33 @@ test("runGate: a failed test row ends with the host load (SW-209)", async () => 
   }
 });
 
+test("runGate: a paused container fails as paused, with no exec and no test verdict (SW-391)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const paused = [/^docker inspect -f \{\{\.State\.Paused\}\} feat-api$/, { stdout: "true\n" }];
+    const r = stubRun([
+      [/^docker ps/, { stdout: "feat-api\tpaused\nfeat-lib\trunning\n" }],
+      DIFF_API,
+      paused,
+    ]);
+    const d = { ...deps([]), run: r.run, calls: r.calls };
+    const g = await gate(ws, d);
+    assert.equal(g.ok, false);
+    assert.equal(testRow(g), undefined);
+    assert.ok(!d.calls.some((c) => c.startsWith("docker exec")), d.calls.join("\n"));
+    assert.ok(
+      g.checks.some((c) => c.name === "containers" && !c.ok && /feat-api is paused/.test(c.detail)),
+    );
+    assert.ok(
+      !g.checks.some((c) => c.name === "containers" && c.ok),
+      "no ✓ for a paused container",
+    );
+    assert.deepEqual(d.started, [], "no setup one-shot re-run into a paused container");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("runGate: over the load limit it waits, then runs and says how long (SW-209)", async () => {
   const ws = icmWorkspace();
   try {
