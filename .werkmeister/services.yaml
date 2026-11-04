@@ -166,7 +166,7 @@ services:
     type: extension
     archetype: mcp-client
     test: "pnpm turbo run typecheck test --continue --filter=werkmeister-vscode"
-    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-vscode` before the first test. Then build, run npm run test:integration (Extension Development Host via @vscode/test-cli), and walk the open items in MANUAL-CHECKLIST.md for anything visual."
+    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-vscode` before the first test. Then build, run npm run test:integration (Extension Development Host via @vscode/test-cli), and walk the open items in MANUAL-CHECKLIST.md for anything visual. To try a dev build without installing it: `pnpm --filter werkmeister-vscode run build`, then `code --new-window --extensionDevelopmentPath=packages/werkmeister-vscode` with no folder argument (a folder already open in another window makes the dev host close itself), then drive it, e.g. for a URI handler `open 'vscode://jbbz.werkmeister-vscode/…'` (VS Code asks to allow the URI the first time). `vsce package` builds the installable .vsix; the installed extension is replaced only by `code --install-extension`."
     internal_port: 3997
     port_offset: 4
     health_endpoint: /
