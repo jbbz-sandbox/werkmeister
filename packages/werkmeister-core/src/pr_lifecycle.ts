@@ -20,6 +20,7 @@ import {
   containerOf,
   dotDir,
   IDLE_SERVICE_TYPES,
+  isFixture,
   loadArchetypes,
   loadReposConfig,
   loadServices,
@@ -594,6 +595,13 @@ export async function runGate(
 }
 
 /** The PR file's `repo:` must be the code worktree's origin; `gh pr create` fails obscurely otherwise (SW-194). */
+/** SW-381: a fixture pushes, even a dry run, only to a local origin (its bare repo), never to GitHub. */
+async function fixtureSkipsPush(dir: string, deps: Deps): Promise<boolean> {
+  if (!isFixture()) return false;
+  const origin = (await deps.run("git", ["-C", dir, "remote", "get-url", "origin"])).stdout.trim();
+  return !/^(\/|\.|file:)/.test(origin);
+}
+
 async function repoCheck(dir: string, file: PrFile, deps: Deps): Promise<[boolean, string]> {
   const got = String(file.fm["repo"] ?? "");
   const r = await deps.run("git", ["-C", dir, "remote", "get-url", "origin"]);
@@ -763,22 +771,18 @@ async function gateChecks(
     // Push auth fails only after the whole gate otherwise (SW-408); a dry run writes nothing.
     // --no-verify: a dry run still fires the pre-push hook, a test run on the host in a quick row.
     const branch = String(file.fm["branch"] ?? "") || "HEAD";
-    const push = await deps.run("git", [
-      "-C",
-      dir,
-      "push",
-      "--dry-run",
-      "--no-verify",
-      "origin",
-      branch,
-    ]);
-    add(
-      "push",
-      push.code === 0,
-      push.code
-        ? `${(push.stderr || push.stdout).trim()} — load a key (\`ssh-add\`) or fix origin's credentials, then rerun`
-        : `can push ${branch} to origin`,
-    );
+    const push = (await fixtureSkipsPush(dir, deps))
+      ? null
+      : await deps.run("git", ["-C", dir, "push", "--dry-run", "--no-verify", "origin", branch]);
+    if (!push) add("push", true, "skipped (fixture, origin is not local)");
+    else
+      add(
+        "push",
+        push.code === 0,
+        push.code
+          ? `${(push.stderr || push.stdout).trim()} — load a key (\`ssh-add\`) or fix origin's credentials, then rerun`
+          : `can push ${branch} to origin`,
+      );
     const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
     add(
       "clean",
@@ -1272,8 +1276,11 @@ export async function openPrs(
       continue;
     }
     const dir = path.join(ws, f.dir);
-    const push = await deps.run("git", ["-C", dir, "push", "-u", "origin", branch]);
-    if (push.code !== 0) {
+    const push = (await fixtureSkipsPush(dir, deps))
+      ? null
+      : await deps.run("git", ["-C", dir, "push", "-u", "origin", branch]);
+    if (!push) lines.push(`${f.stem}: push skipped (fixture)`);
+    else if (push.code !== 0) {
       ok = false;
       lines.push(`${f.stem}: push failed — ${push.stderr.trim()}`);
       continue;
