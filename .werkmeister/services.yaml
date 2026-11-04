@@ -55,7 +55,7 @@ services:
       Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION),
       then `pnpm turbo run build --filter=werkmeister` before the first test.
       Format only the files you touched (`pnpm exec biome check --write <files>`), never a folder: a folder-wide write rewrites files the change does not own. Judge `biome ci` by its exit code, not its diagnostic count.
-      Fast route for a core-only change: `cd packages/werkmeister-core && HOME=$(mktemp -d) node --test <file>.test.mjs`;
+      Fast route for a core-only change, once the install and build above have run (a fresh worktree fails ERR_MODULE_NOT_FOUND for dist/config.js without them): `cd packages/werkmeister-core && HOME=$(mktemp -d) node --test <file>.test.mjs`;
       set HOME on that call only, never for the whole shell (it breaks `pnpm build`).
       Then build, run the built werkmeister binary from a temp folder against a fixture workspace in it.
       Make the temp folder with `T=$(cd "$(mktemp -d)" && pwd -P)`: on macOS `mktemp -d` gives `/var/…` but the CLI's cwd is `/private/var/…`, so use the real path everywhere you write `$T`.
