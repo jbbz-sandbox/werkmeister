@@ -101,6 +101,16 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /run `werkmeister pr gate --tests`/, `${wt}/${d}`);
           // SW-334: the redirect wraps the whole && chain, not its last command.
           assert.ok(c.includes('`{ <test command>; } > <log> 2>&1; echo "exit $?"`'), `${wt}/${d}`);
+          // SW-351: the diff is read against the settled edits before the tests run.
+          assert.match(
+            c,
+            /read `git diff` in each repo you touched and tick off each edit `(spec|repro|scope)\.md` settled/,
+            `${wt}/${d}`,
+          );
+          assert.ok(
+            c.indexOf("tick off each edit") < c.indexOf("Run the test command"),
+            `${wt}/${d}: diff check before tests`,
+          );
           // SW-125: skips are named in the test step and in the file that records the run.
           assert.match(c, /A skipped test is not a pass: name each one/, `${wt}/${d}`);
           assert.match(
