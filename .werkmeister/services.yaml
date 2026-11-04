@@ -73,6 +73,7 @@ services:
       Record one passing and one failing case in exercise.md (e.g. `lint: pnpm exec biome ci .` → exit 0, and exit 1 with an over-width line left uncommitted).
       `werkmeister pr open` runs the globally installed CLI, built from main, so it would check the PR with the old gate.
       Assert on exit code, stdout/stderr and the printed files.
+      A real `feature up` needs the real docker and is no fixture run: `WERKMEISTER_REAL_DOCKER=1` runs `real-docker-cycle.test.mjs` in packages/werkmeister-core (init, up, HTTP 200, stop, down on nginx:alpine; SW-284). Ask the person before the first real run.
       `docker compose build exited non-zero` after `werkmeister-context.md` is written is expected in a fixture.
       `registry sync`: set `paths.repos_root` in `config.yaml` and put a real copy (a symlink is not found) of the fragment at `<repos_root>/<repo>/.werkmeister/services.yaml`; run it from the temp folder, then grep the generated `services.yaml` (`generated … from 1 fragment`).
       Set `WERKMEISTER_NO_WAIT=1`: `with-temp-home` otherwise waits for host load (180 s seen; `registry sync` ~195 s). Or run the exercise in the background.
