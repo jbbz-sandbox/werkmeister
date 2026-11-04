@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # SW-255: the merge queue re-tests each PR on top of the latest main before it merges.
+  merge_group:
 
 # A newer push to the same PR cancels the run in flight (changesets force-pushes
 # the version PR after every merge to main, so its stale runs piled up). Pushes
