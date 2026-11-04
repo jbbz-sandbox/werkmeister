@@ -72,6 +72,7 @@ import {
 import { hostLoadLimit, portHolders } from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
 import { repoDirs } from "./standards.js";
+import { TEMP_HOME_SCRIPT } from "./temp_home.js";
 import { childEnv, toolBin } from "./tool_bins.js";
 // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 import { writeUsageSnapshot } from "./usage_snapshot.js";
@@ -402,25 +403,50 @@ const cellsOf = (row: string): string[] =>
     .split(/(?<!\\)\|/)
     .map((c) => c.trim());
 
+interface TableRow {
+  cell: string;
+  row: string;
+  /** The nearest markdown heading above the row, or "" (SW-390). */
+  heading: string;
+}
+
+const HEADING = /^#{1,6}\s/;
+
 /** The result cell of every row in a table whose header names a `result` column (SW-247). */
-function resultCells(text: string): string[] {
+function resultCells(text: string): TableRow[] {
   const lines = text.split("\n").map((l) => l.trim());
-  const cells: string[] = [];
+  const rows: TableRow[] = [];
+  let heading = "";
   for (let i = 0; i + 1 < lines.length; i++) {
+    if (HEADING.test(lines[i])) heading = lines[i];
     if (!lines[i].startsWith("|") || !/^\|[\s:|-]+\|$/.test(lines[i + 1])) continue;
     const col = cellsOf(lines[i]).findIndex((c) => c.toLowerCase() === "result");
     for (i += 2; lines[i]?.startsWith("|"); i++)
-      if (col >= 0) cells.push(cellsOf(lines[i])[col] ?? "");
+      if (col >= 0) rows.push({ cell: cellsOf(lines[i])[col] ?? "", row: lines[i], heading });
   }
-  return cells;
+  return rows;
 }
+
+/** The first line with a `| FAIL |` cell, in any table, and its heading. */
+function failCellRow(text: string): TableRow | null {
+  let heading = "";
+  for (const line of text.split("\n").map((l) => l.trim())) {
+    if (HEADING.test(line)) heading = line;
+    else if (FAIL_CELL.test(line)) return { cell: "FAIL", row: line, heading };
+  }
+  return null;
+}
+
+/** Where a row is, so the first failed run names the table to fix (SW-390). */
+const rowAt = (r: TableRow) => `${r.heading ? ` under "${r.heading}"` : ""}: ${r.row}`;
 
 function passTable(text: string): string | null {
   const results = resultCells(text);
-  if (FAIL_CELL.test(text) || results.some((c) => c.startsWith("FAIL"))) return "has a FAIL row";
-  const other = results.find((c) => c !== "PASS");
+  const fail = failCellRow(text) ?? results.find((r) => r.cell.startsWith("FAIL"));
+  if (fail) return `has a FAIL row${rowAt(fail)}`;
+  const other = results.find((r) => r.cell !== "PASS");
   if (other !== undefined)
-    return `has a result \`${other}\` that is neither PASS nor FAIL — ${CELL_FORMAT}`;
+    return `has a result \`${other.cell}\` that is neither PASS nor FAIL${rowAt(other)} — ${CELL_FORMAT}`;
   if (!PASS_CELL.test(text)) return `has no PASS row — ${CELL_FORMAT}`;
   return null;
 }
@@ -633,7 +659,7 @@ export function waitForHostLoadNow(): Promise<string> {
     { hostLoad: readHostLoad, sleep: (ms) => delay(ms) },
     true,
     "with-temp-home",
-    "WERKMEISTER_NO_WAIT=1",
+    "--no-wait",
   );
 }
 
@@ -650,10 +676,11 @@ async function gateChecks(
   const checks: GateCheck[] = testsOnly ? [] : [stagesCheck(ws)];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
   const loadBudget = { leftMs: LOAD_WAIT_MS };
+  let loadWait = wait;
   // A failure ends with the host load, so a timeout under load reads as load (SW-209).
   const execCheck = async (name: string, container: string, cmd: string, tail: number) => {
     touchExecMarker(ws);
-    const waited = await waitForHostLoad(deps, wait, name, "--no-wait", loadBudget);
+    const waited = await waitForHostLoad(deps, loadWait, name, "--no-wait", loadBudget);
     touchExecMarker(ws);
     // `docker ps` lists paused containers, and exec into one fails: that is no lint/test verdict (SW-391).
     const state = await deps.run("docker", ["inspect", "-f", "{{.State.Paused}}", container]);
@@ -665,7 +692,20 @@ async function gateChecks(
       );
       return { code: 1, stdout: "", stderr: "" };
     }
-    const res = await deps.run("docker", ["exec", container, "sh", "-c", cmd]);
+    // The container's HOME is the real one, ~/.werkmeister mounted (SW-329). Inline, not the workspace's
+    // copy: docs-site doesn't mount the workspace; --no-wait: the gate has already waited.
+    const res = await deps.run("docker", [
+      "exec",
+      container,
+      "sh",
+      "-c",
+      TEMP_HOME_SCRIPT,
+      "with-temp-home",
+      "--no-wait",
+      "sh",
+      "-c",
+      cmd,
+    ]);
     const lines = [`${cmd} → exit ${res.code}`];
     // Written on a pass too, so a fixed row never leaves its old failing log behind (SW-317).
     const log = path.join(dotDir(ws), `gate-${file.dir}-${name.replace(/\s+/g, "-")}.log`);
@@ -685,6 +725,7 @@ async function gateChecks(
     return res;
   };
 
+  const dir = path.join(ws, file.dir);
   if (!testsOnly) {
     const table = passTable(file.body);
     add("acceptance", table === null, table ? `PR file ${table}` : "all PASS");
@@ -719,15 +760,25 @@ async function gateChecks(
           : "no review.md — run the build stage's review step first",
       );
     }
-    // The PR-file checks are instant; the test commands can take ten minutes cold (SW-150).
-    if (checks.some((c) => !c.ok)) {
-      add("tests", false, "not run — fix the PR-file checks above first");
-      return { ok: false, checks };
-    }
-  }
-
-  const dir = path.join(ws, file.dir);
-  if (!testsOnly) {
+    // Push auth fails only after the whole gate otherwise (SW-408); a dry run writes nothing.
+    // --no-verify: a dry run still fires the pre-push hook, a test run on the host in a quick row.
+    const branch = String(file.fm["branch"] ?? "") || "HEAD";
+    const push = await deps.run("git", [
+      "-C",
+      dir,
+      "push",
+      "--dry-run",
+      "--no-verify",
+      "origin",
+      branch,
+    ]);
+    add(
+      "push",
+      push.code === 0,
+      push.code
+        ? `${(push.stderr || push.stdout).trim()} — load a key (\`ssh-add\`) or fix origin's credentials, then rerun`
+        : `can push ${branch} to origin`,
+    );
     const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
     add(
       "clean",
@@ -738,6 +789,11 @@ async function gateChecks(
           ? `uncommitted:\n${status.stdout.trimEnd()}`
           : "clean",
     );
+    // These rows take seconds; lint and the tests can take ten minutes cold (SW-150, SW-364).
+    if (checks.some((c) => !c.ok)) {
+      add("tests", false, "not run — fix the rows above first");
+      return { ok: false, checks };
+    }
   }
 
   // The shared registry holds main's fragment; a branch that renames packages
@@ -807,6 +863,8 @@ async function gateChecks(
   }
   const files = diff.code === 0 ? diff.stdout.split("\n").filter(Boolean) : [];
   const touched = mapTouched(files, repo);
+  // The wait keeps slow test suites from timing out under load; a diff that touches no service runs none (SW-303).
+  loadWait = wait && touched.length > 0;
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
   // Nothing touched yet files outside no_service_paths: the repo has no services to map to
   // (no `repos:` entry), so zero tests would run unannounced (SW-278).

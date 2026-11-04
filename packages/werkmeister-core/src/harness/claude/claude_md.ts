@@ -596,7 +596,7 @@ How to exercise a change to each service in this workspace.${
       : ""
   }${
     tempHome
-      ? ` Each test command runs through \`.werkmeister/bin/with-temp-home\`, which gives it a fresh temporary HOME and deletes it on exit: never hand-roll \`HOME=…\`. Start every exercise command with the script itself, never with env assignments or a \`cd\`, so one permission rule matches it: \`${tempHome} env WERKMEISTER_ROOT=… <cmd>\`. The allow rules that cover them are \`Bash(${tempHome} <test command>:*)\` for each test command below and \`Bash(${tempHome} env WERKMEISTER_ROOT=* node --test:*)\` for this form (use \`*\` for the workspace folder to cover every workspace); the wrapper alone is never allowed, since it would run anything.`
+      ? ` Each test command runs through \`.werkmeister/bin/with-temp-home\`, which gives it a fresh temporary HOME and deletes it on exit: never hand-roll \`HOME=…\`. Start every exercise command with the script itself, never with env assignments or a \`cd\`, so one permission rule matches it: \`${tempHome} env WERKMEISTER_ROOT=… <cmd>\`. Put \`--no-wait\` first (\`${tempHome} --no-wait <cmd>\`) to skip its host-load wait; the allow rules below cover that form too. The allow rules that cover them are \`Bash(${tempHome} <test command>:*)\` for each test command below and \`Bash(${tempHome} env WERKMEISTER_ROOT=* node --test:*)\` for this form (use \`*\` for the workspace folder to cover every workspace); the wrapper alone is never allowed, since it would run anything.`
       : ""
   }${
     linted

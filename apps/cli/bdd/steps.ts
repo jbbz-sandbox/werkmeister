@@ -53,6 +53,10 @@ Given(
     write(path.join(app, "README.md"), "app\n");
     git(app, "init", "-q", "-b", "main");
     git(app, "remote", "add", "origin", "git@github.com:o/app.git");
+    // The gate's push row dry-runs a push (SW-408): point it at a local bare repo, not GitHub.
+    const bare = path.join(world.tmp, "origin.git");
+    git(world.tmp, "init", "-q", "--bare", bare);
+    git(app, "remote", "set-url", "--push", "origin", bare);
     git(app, "add", ".");
     git(app, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base");
     git(app, "update-ref", "refs/remotes/origin/main", "HEAD");

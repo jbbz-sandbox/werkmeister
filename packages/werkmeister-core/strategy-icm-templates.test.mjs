@@ -188,7 +188,7 @@ test("each template renders with no undefined and a route per stage", async () =
         if (d.endsWith("_propose"))
           assert.match(
             c,
-            /the gate reads them all — has a result cell of exactly `PASS` or `FAIL`/,
+            /the gate reads them all — has a result cell of exactly `PASS` and .*a FAIL cell anywhere in the PR file stops the PR/,
             `${wt}/${d}`,
           );
       }

@@ -142,6 +142,14 @@ test("buildAllowRules: a built CLI runs through the temp-HOME wrapper, never the
   assert.ok(!buildAllowRules("feat", [], {}, {}, "", [cli]).some((r) => r.includes(cli)));
 });
 
+test("buildAllowRules: each wrapped rule also has the --no-wait form, never the wrapper alone (SW-367)", () => {
+  const w = "/ws/w/.werkmeister/bin/with-temp-home";
+  const rules = buildAllowRules("", [], { cli: { test: "pnpm test" } }, {}, w, [], ["cli"]);
+  assert.ok(rules.includes(`Bash(${w} --no-wait pnpm test:*)`), rules.join("\n"));
+  assert.ok(rules.includes(`Bash(${w} --no-wait env WERKMEISTER_ROOT=* node --test:*)`));
+  assert.ok(!rules.includes(`Bash(${w} --no-wait:*)`));
+});
+
 test("buildAllowRules: an archetype's {service} template is expanded", () => {
   const rules = buildAllowRules(
     "feat",

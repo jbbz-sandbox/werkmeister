@@ -44,6 +44,7 @@ import {
 import { syncRegistry } from "./dist/registry_sync.js";
 import { withReporter } from "./dist/reporter.js";
 import { removeWorkspace, WorkspaceError } from "./dist/sandbox.js";
+import { TEMP_HOME_SCRIPT } from "./dist/temp_home.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
 const PASS_BODY = "## Acceptance\n| criterion | result |\n|---|---|\n| works | PASS |\n";
@@ -80,8 +81,10 @@ function icmWorkspace({
 /** Stub `run`: the first [pattern, result] whose pattern matches `bin args…` wins; records every call. */
 function stubRun(table) {
   const calls = [];
+  const raw = [];
   const run = async (bin, args) => {
-    const line = [bin, ...args].join(" ");
+    raw.push([bin, ...args].join(" "));
+    const line = [bin, ...bare(args)].join(" ");
     calls.push(line);
     for (const [re, res] of table)
       if (re.test(line)) return { stdout: "", stderr: "", code: 0, ...res };
@@ -89,7 +92,13 @@ function stubRun(table) {
     const origin = /remote get-url origin$/.test(line) ? "git@github.com:o/app.git\n" : "";
     return { stdout: origin, stderr: "", code: 0 };
   };
-  return { run, calls };
+  return { run, calls, raw };
+}
+
+// SW-329 wraps each gate exec in the inline temp-HOME script; matchers read the bare `sh -c <cmd>`.
+function bare(args) {
+  const i = args.indexOf(TEMP_HOME_SCRIPT);
+  return i < 0 ? args : [...args.slice(0, i - 2), ...args.slice(i + 3)];
 }
 
 const REGISTRY = {
@@ -115,6 +124,7 @@ function deps(table, over = {}) {
   const started = [];
   return {
     calls: r.calls,
+    raw: r.raw,
     stopped,
     started,
     run: r.run,
@@ -502,6 +512,23 @@ test("gate: a malformed exercise.md fails before any test command runs (SW-286)"
     } finally {
       clean(ws);
     }
+  }
+});
+
+test("gate: a FAIL row in the PR file's Tests table is named with its heading (SW-390)", async () => {
+  const body =
+    `${PASS_BODY}\n## Tests\n| test | result | output |\n|---|---|---|\n` +
+    "| x.test.ts before the fix | FAIL | AssertionError |\n";
+  const ws = icmWorkspace({ files: { app: prFile({ body }) } });
+  try {
+    const g = await gate(ws, deps([DIFF_API]));
+    assert.deepEqual(failed(g), ["acceptance", "tests"]);
+    assert.match(
+      g.checks.find((c) => c.name === "acceptance").detail,
+      /^PR file has a FAIL row under "## Tests": \| x\.test\.ts before the fix \| FAIL \|/,
+    );
+  } finally {
+    clean(ws);
   }
 });
 
@@ -1067,20 +1094,80 @@ test("gate: a broken branch fragment fails the gate with its error, not a crash"
   }
 });
 
-test("gate: dirty worktree, failing test, down health endpoint", async () => {
+test("gate: test, lint and release commands run through the temp-HOME wrapper in the container (SW-329)", async () => {
   const ws = icmWorkspace();
   try {
-    const d = deps(
-      [
-        DIFF_API,
-        [/status --porcelain/, { stdout: " M x.ts\n" }],
-        [/npm test -w api/, { code: 1, stdout: "1 failing" }],
-      ],
-      {
-        httpStatus: async () => 502,
-      },
+    const d = deps([DIFF_API]);
+    assert.deepEqual(failed(await gate(ws, d)), []);
+    const execs = d.raw.filter((c) => c.startsWith("docker exec "));
+    assert.ok(execs.length >= 2, d.raw.join("\n"));
+    const wrapped = `sh -c ${TEMP_HOME_SCRIPT} with-temp-home --no-wait sh -c `;
+    for (const c of execs) assert.ok(c.includes(wrapped), c);
+    assert.ok(execs.includes(`docker exec feat-api ${wrapped}npm test -w api`));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: failing test, down health endpoint", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, [/npm test -w api/, { code: 1, stdout: "1 failing" }]], {
+      httpStatus: async () => 502,
+    });
+    assert.deepEqual(failed(await gate(ws, d)), ["test api", "baseline api"]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a dirty worktree stops before lint and tests start containers (SW-364)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, [/status --porcelain/, { stdout: " M x.ts\n" }]]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["clean", "tests"]);
+    assert.match(g.checks.find((c) => c.name === "clean").detail, /M x\.ts/);
+    assert.deepEqual(
+      d.calls.filter((c) => /^docker (ps|exec)/.test(c)),
+      [],
     );
-    assert.deepEqual(failed(await gate(ws, d)), ["clean", "test api", "baseline api"]);
+  } finally {
+    clean(ws);
+  }
+});
+
+const NO_PUSH = [
+  /push --dry-run --no-verify origin me\/ws$/,
+  { code: 128, stderr: "git@github.com: Permission denied (publickey).\n" },
+];
+
+test("gate: no push access fails in the quick rows, before lint and tests (SW-408)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, NO_PUSH]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["push", "tests"]);
+    assert.match(g.checks.find((c) => c.name === "push").detail, /publickey.*ssh-add/);
+    assert.deepEqual(
+      d.calls.filter((c) => /^docker exec/.test(c)),
+      [],
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openPrs: no push access pushes and opens nothing (SW-408)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, NO_PUSH]);
+    const r = await open(ws, d);
+    assert.equal(r.ok, false);
+    assert.deepEqual(
+      d.calls.filter((c) => /push -u origin|^gh pr create/.test(c)),
+      [],
+    );
   } finally {
     clean(ws);
   }
@@ -1373,6 +1460,21 @@ test("runGate: one 10 min wait budget is shared across checks, then it runs anyw
     const spent = /ran with host load 90\.0 over 8; the 10 min host-load wait is spent/;
     assert.match(testRow(g).detail, spent);
     assert.match(g.checks.find((c) => c.name === "release").detail, spent);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("runGate: a docs-only diff under load runs lint and release without waiting (SW-303)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const host = loaded([90]);
+    const d = deps([[DIFF_API[0], { stdout: "README.md\ndocs/x.md\n" }]], host);
+    const g = await gate(ws, d);
+    assert.deepEqual(host.slept, []);
+    const release = g.checks.find((c) => c.name === "release");
+    assert.equal(release.ok, true, release.detail);
+    assert.doesNotMatch(release.detail, /wait/);
   } finally {
     clean(ws);
   }

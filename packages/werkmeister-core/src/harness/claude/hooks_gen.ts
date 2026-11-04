@@ -563,6 +563,14 @@ export function buildAllowRules(
   // The fixture form werkmeister-context.md recommends; never `Bash(${tempHome}:*)`, which runs anything.
   if (tempHome && rules.length)
     rules.push(`Bash(${tempHome} env WERKMEISTER_ROOT=* node --test:*)`);
+  // SW-367: each wrapped form again with the wrapper's --no-wait flag first.
+  const wrapped = `Bash(${tempHome} `;
+  if (tempHome)
+    rules.push(
+      ...rules
+        .filter((r) => r.startsWith(wrapped))
+        .map((r) => `${wrapped}--no-wait ${r.slice(wrapped.length)}`),
+    );
   return [...new Set([...rules, ...READ_ONLY_GIT_RULES])];
 }
 
