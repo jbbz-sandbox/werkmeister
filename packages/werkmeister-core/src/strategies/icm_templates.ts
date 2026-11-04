@@ -252,7 +252,8 @@ const bugfix: Stage[] = [
       doNotLoad:
         "`_shared/standards.md` (nothing is written here), other stages' contracts, `.werkmeister/*.yml`.",
       process: [
-        "Reproduce the failure against the running service or with a test. Record the exact command and its output.",
+        // SW-392: a grep for a line the reporter never prints read "0/25 failures" for a flake nobody reproduced.
+        "Reproduce the failure against the running service or with a test. Record the exact command and its output. Judge each run by its exit code, or by a check you have shown fails on a known-bad run — never by grepping the output for a line that may not be printed.",
         "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet.",
         "Trace to the root cause: the first place the code does something other than intended. A symptom site is not a root cause.",
         "List every other caller of the function at the root cause — a fix there reaches them too.",
