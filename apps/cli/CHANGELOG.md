@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.71.1
+
+### Patch Changes
+
+- ed5e14c: `pr gate` with a paused container now fails with a clear ✗ "paused: press ▶ Resume on its card, then rerun" row instead of a lint/test failure from `docker exec`, and no longer ticks the paused container as running (SW-391).
+- ed5e14c: Resume no longer runs a headless `claude -p --resume` beside an open interactive session: a headless turn's `SessionEnd` can't erase the open session's live record, and Resume checks for an interactive `claude` running in the workspace before it goes headless, leaving the "continue" nudge for it instead (SW-397).
+
 ## 0.71.0
 
 ### Minor Changes
