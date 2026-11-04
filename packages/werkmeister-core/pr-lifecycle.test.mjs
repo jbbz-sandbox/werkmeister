@@ -1753,6 +1753,8 @@ test("closeOut refuses before ship", async () => {
       ),
     );
     assert.match(String(err), /is merged \(app: merged\)/);
+    // A merged PR that ships nothing never gets a tag: the error names the fix (SW-393).
+    assert.match(String(err), /`release: none` in its PR file/);
     assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
   } finally {
     clean(ws);

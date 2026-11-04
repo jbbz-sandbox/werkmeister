@@ -43,7 +43,8 @@ workspace — don't reach for them.
 
    - A repo whose registry entry has `ship: tag` and a `release_check` needs its
      release entry (e.g. a changeset) committed on the branch, or `skip_release`
-     with a reason.
+     with a reason. A change that ships nothing (tests only) sets `release: none`
+     beside `skip_release`, or it never reaches shipped.
 3. **Approval is the person's.** Ask them to read the PR file and set
    `status: approved`. A direct chat reply from them ("approved", "proceed")
    counts too: set it yourself and note it there, e.g. `(approved in chat YYYY-MM-DD)`.

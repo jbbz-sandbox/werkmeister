@@ -2385,6 +2385,10 @@ async function closeOutLocked(
     throw new WorkspaceError(
       `'${name}' is ${life.state} (${detail}). Close-out needs every PR shipped, closed or abandoned — run \`werkmeister pr status\` after the release, ` +
         `or give up with \`werkmeister workspace abandon "<reason>" ${name}\`.` +
+        // A merged change that ships nothing (no changeset) never gets a tag (SW-393).
+        (life.prs.some((p) => p.status === "merged")
+          ? " A merged PR that ships no release waits forever: set `release: none` in its PR file, then run `werkmeister pr status`."
+          : "") +
         (life.prs.length
           ? ""
           : ` If the work changed no repo, close it as done: \`werkmeister workspace close ${name} --no-pr "<reason>"\`.`),
