@@ -635,6 +635,16 @@ async function gateChecks(
     touchExecMarker(ws);
     const waited = await waitForHostLoad(deps, wait, name, "--no-wait", loadBudget);
     touchExecMarker(ws);
+    // `docker ps` lists paused containers, and exec into one fails: that is no lint/test verdict (SW-391).
+    const state = await deps.run("docker", ["inspect", "-f", "{{.State.Paused}}", container]);
+    if (state.stdout.trim() === "true") {
+      add(
+        "containers",
+        false,
+        `${container} is paused: press ▶ Resume on its card, then rerun (${name} not run)`,
+      );
+      return { code: 1, stdout: "", stderr: "" };
+    }
     const res = await deps.run("docker", ["exec", container, "sh", "-c", cmd]);
     const lines = [`${cmd} → exit ${res.code}`];
     // Written on a pass too, so a fixed row never leaves its old failing log behind (SW-317).
@@ -720,13 +730,14 @@ async function gateChecks(
       .map((s) => s.trim())
       .filter(Boolean),
   );
-  const ps = await deps.run("docker", ["ps", "--format", "{{.Names}}"]);
-  const running = new Set(
-    ps.stdout
-      .split("\n")
-      .map((s) => s.trim())
-      .filter(Boolean),
-  );
+  const ps = await deps.run("docker", ["ps", "--format", "{{.Names}}\t{{.State}}"]);
+  const listed = ps.stdout
+    .split("\n")
+    .map((l) => l.trim().split("\t"))
+    .filter(([name]) => name);
+  // `docker ps` lists paused containers too: they stay in `running` (their ports are held) but are no ✓ (SW-391).
+  const running = new Set(listed.map(([name]) => name));
+  const paused = new Set(listed.filter(([, state]) => state === "paused").map(([name]) => name));
   // compose.yml is rendered from the machine registry, which can still carry ids the
   // branch has renamed (SW-87); containers and on-demand starts use its ids.
   const machineRepo = deps.repos[file.dir] ?? {};
@@ -875,7 +886,8 @@ async function gateChecks(
       alreadyUp.includes(containerOf(feature, s)),
     );
     const upped = ownStarts.length || started.length || recreated.length;
-    const rerun = upped ? undefined : kept;
+    const frozen = alreadyUp.filter((c) => paused.has(c));
+    const rerun = upped || frozen.length ? undefined : kept;
     if (rerun) {
       touchExecMarker(ws);
       try {
@@ -886,8 +898,10 @@ async function gateChecks(
     }
     add(
       "containers",
-      true,
-      `kept (${alreadyUp.join(", ")} already running${rerun ? ", setup one-shot re-run" : ""})`,
+      !frozen.length,
+      frozen.length
+        ? `kept (${alreadyUp.join(", ")} already up; ${frozen.join(", ")} paused)`
+        : `kept (${alreadyUp.join(", ")} already running${rerun ? ", setup one-shot re-run" : ""})`,
     );
   }
   if (needsContainer && !repoServices.some(containerFor)) {
