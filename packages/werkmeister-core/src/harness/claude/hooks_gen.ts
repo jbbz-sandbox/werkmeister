@@ -44,11 +44,16 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { containerTestCommand, serviceTestCommand } from "../../archetypes.js";
+import {
+  candidateServiceNames,
+  containerTestCommand,
+  serviceTestCommand,
+} from "../../archetypes.js";
 import {
   type ArchetypeRegistry,
   dotDir,
   loadArchetypes,
+  loadReposConfig,
   loadServices,
   type ServicesConfig,
 } from "../../config.js";
@@ -535,14 +540,28 @@ export function buildAllowRules(
   archetypes: ArchetypeRegistry,
   tempHome = "",
   builtClis: string[] = [],
+  // Services whose tests run on the host only (no container): wrapped rules, no container form.
+  hostServices: string[] = [],
 ): string[] {
   const rules: string[] = [];
-  for (const svc of services) {
+  // SW-398: a Claude rule matches each `&&` segment on its own, so a chained test command
+  // needs one rule per segment; the first is the one the context file runs through tempHome.
+  const segments = (cmd: string) => cmd.split(/\s*&&\s*/).filter(Boolean);
+  for (const svc of [...services, ...hostServices]) {
     const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
-    if (cmd) rules.push(`Bash(${containerTestCommand(feature, svc, cmd)})`, `Bash(${cmd}:*)`);
-    if (cmd && tempHome) rules.push(`Bash(${tempHome} ${cmd}:*)`);
+    if (!cmd) continue;
+    const [first = cmd, ...rest] = segments(cmd);
+    if (services.includes(svc)) {
+      rules.push(`Bash(${containerTestCommand(feature, svc, cmd)})`);
+      rules.push(...segments(cmd).map((c) => `Bash(${c}:*)`));
+    }
+    if (tempHome) rules.push(`Bash(${tempHome} ${first}:*)`);
+    if (tempHome) rules.push(...rest.map((c) => `Bash(${c}:*)`));
   }
   if (tempHome) for (const cli of builtClis) rules.push(`Bash(${tempHome} ${cli}:*)`);
+  // The fixture form werkmeister-context.md recommends; never `Bash(${tempHome}:*)`, which runs anything.
+  if (tempHome && rules.length)
+    rules.push(`Bash(${tempHome} env WERKMEISTER_ROOT=* node --test:*)`);
   return [...new Set([...rules, ...READ_ONLY_GIT_RULES])];
 }
 
@@ -581,10 +600,26 @@ export function workspaceAllowRules(
   const builtClis = repoDirs(workspaceRoot)
     .map((d) => path.join(d, "apps", "cli", "werkmeister"))
     .filter((f) => fs.existsSync(f));
-  const rules =
-    feature && services.length
-      ? buildAllowRules(feature, services, loadServices(), loadArchetypes(), wrapper, builtClis)
-      : buildAllowRules("", [], {}, {}, wrapper, builtClis);
+  // SW-398: the context file lists every service of the workspace's repos, so their test commands are allowed too.
+  const repoNames = repoDirs(workspaceRoot).map((d) => path.basename(d));
+  let hostServices: string[] = [];
+  try {
+    // loadReposConfig warns when the machine has no registry; a workspace without repos never needs it.
+    if (repoNames.length) hostServices = candidateServiceNames(repoNames, loadReposConfig());
+  } catch {
+    // No machine registry (services.yaml): only the selected services get rules.
+  }
+  const extra = hostServices.filter((s) => !services.includes(s));
+  const any = services.length > 0 || extra.length > 0;
+  const rules = buildAllowRules(
+    any ? feature : "",
+    services,
+    any ? loadServices() : {},
+    any ? loadArchetypes() : {},
+    wrapper,
+    builtClis,
+    extra,
+  );
   return autonomous ? [...new Set([...rules, ...autonomousRules(feature, services)])] : rules;
 }
 
