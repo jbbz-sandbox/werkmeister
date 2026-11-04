@@ -1,6 +1,6 @@
 {
   "name": "werkmeister-core",
-  "version": "0.71.2",
+  "version": "0.71.3",
   "license": "Apache-2.0",
   "type": "module",
   "private": true,
