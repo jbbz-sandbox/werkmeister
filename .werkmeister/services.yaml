@@ -87,6 +87,9 @@ services:
       Redirect stdin (`</dev/null`) for `workspace init`: it reads fd 0 when it is not a TTY and hangs.
       Set `WERKMEISTER_NO_WAIT=1`: `with-temp-home` otherwise waits for host load (180 s seen; `registry sync` ~195 s). Or run the exercise in the background.
       A new CLI flag also needs its key in that command's `namespace` whitelist in `apps/cli/src/main.ts` and a `__parse` case in `apps/cli/src/__tests__/spellings.test.ts`; without it the flag parses but never reaches `run()`.
+      The fixture's source repo must be on a branch other than `main`, or the worktree checkout fails (`'main' is already used by worktree`).
+      `docker compose build exited non-zero` after `werkmeister-context.md` is written is expected in a fixture.
+      A gate fixture's app repo also needs `git update-ref refs/remotes/origin/main HEAD`, or the gate tests row fails `cannot diff against origin/main`.
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
