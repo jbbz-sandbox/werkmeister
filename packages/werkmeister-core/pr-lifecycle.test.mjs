@@ -846,17 +846,18 @@ test("gate: a docs-only diff starts a container only for the release check (SW-3
   }
 });
 
-test("gate: starts and stops nothing when the repo's containers already run (SW-34)", async () => {
+test("gate: stops nothing when the repo's containers already run; one `up` re-runs their setup (SW-34, SW-362)", async () => {
   const ws = icmWorkspace();
   try {
     const d = deps([DIFF_API]);
     const g = await gate(ws, d);
-    assert.deepEqual(d.started, []);
+    // `up` of the running service leaves it as is and re-runs the exited one-shot; once per gate.
+    assert.deepEqual(d.started, ["feat-api"]);
     assert.ok(!d.calls.some((c) => c.startsWith("docker stop")));
-    // Only the skipped row (SW-355), never a started-and-stopped one.
+    // Only the kept row (SW-355), never a started-and-stopped one.
     assert.deepEqual(
       g.checks.filter((c) => c.name === "containers").map((c) => c.detail),
-      ["skipped (feat-api already running)"],
+      ["kept (feat-api already running, setup one-shot re-run)"],
     );
   } finally {
     clean(ws);
@@ -906,7 +907,8 @@ test("gate starts a service compose.yml defines when the branch registry renamed
     ]);
     Object.assign(running, { run: r.run, calls: r.calls });
     assert.deepEqual(failed(await gate(ws, running)), []);
-    assert.deepEqual(running.started, []);
+    // Kept, not started: the one `up` re-runs its setup one-shot under the compose id (SW-362).
+    assert.deepEqual(running.started, ["feat-lib"]);
     assert.ok(running.calls.includes("docker exec feat-lib sh -c npm test -w lib"));
   } finally {
     clean(ws);
@@ -3729,23 +3731,23 @@ test("removalBlockers: every PR file of a worktree counts (SW-103)", async () =>
   ]);
 });
 
-test("gate: prints a containers row when a running container means startService is skipped (SW-355)", async () => {
+test("gate: prints a containers row when a running container is kept (SW-355, SW-362)", async () => {
   const ws = icmWorkspace();
   try {
     const running = deps([DIFF_API]);
     const g = await gate(ws, running);
-    assert.deepEqual(running.started, []);
+    assert.deepEqual(running.started, ["feat-api"]);
     const row = g.checks.find((c) => c.name === "containers");
     assert.equal(row.ok, true);
-    assert.equal(row.detail, "skipped (feat-api already running)");
+    assert.equal(row.detail, "kept (feat-api already running, setup one-shot re-run)");
 
-    // Nothing running: the started-and-stopped row stays, and no skipped row.
+    // Nothing running: the started-and-stopped row stays, and no kept row.
     const none = deps([DIFF_API]);
     none.run = stubRun([[/^docker ps/, { stdout: "" }], DIFF_API]).run;
     const g2 = await gate(ws, none);
     const rows = g2.checks.filter((c) => c.name === "containers").map((c) => c.detail);
     assert.ok(
-      rows.every((d) => !d.startsWith("skipped")),
+      rows.every((d) => !d.startsWith("kept")),
       rows.join("\n"),
     );
     assert.ok(

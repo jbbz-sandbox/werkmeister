@@ -868,8 +868,29 @@ async function gateChecks(
     !alreadyUp.includes(serving)
   )
     alreadyUp.push(serving);
-  if (alreadyUp.length)
-    add("containers", true, `skipped (${alreadyUp.join(", ")} already running)`);
+  if (alreadyUp.length) {
+    // A kept container's rows run only after its setup one-shot ran again: `up` of a running
+    // service leaves it as is and re-runs the exited one-shot, whose install re-checks the
+    // node_modules volume (SW-362). An `up` above, even a failed one, already covered it.
+    const kept = [...testedIds, ...repoServices].find((s) =>
+      alreadyUp.includes(containerOf(feature, s)),
+    );
+    const upped = ownStarts.length || started.length || recreated.length;
+    const rerun = upped ? undefined : kept;
+    if (rerun) {
+      touchExecMarker(ws);
+      try {
+        await deps.startService(ws, feature, rerun);
+      } catch (e) {
+        add(`start ${rerun}`, false, e instanceof Error ? e.message : String(e));
+      }
+    }
+    add(
+      "containers",
+      true,
+      `kept (${alreadyUp.join(", ")} already running${rerun ? ", setup one-shot re-run" : ""})`,
+    );
+  }
   if (needsContainer && !repoServices.some(containerFor)) {
     const candidates = [
       ...touched.map(toRendered).filter((s): s is string => Boolean(s)),

@@ -47,11 +47,13 @@ take_install_slot() {
   done
 }
 
-# SW-33: skip the install while the lockfile and Node major match the stamp in
-# the node_modules volume (npm ci wipes node_modules; pnpm still resolves). The
-# stamp is removed before and written only after a successful install, so a
-# failed one retries next up. The build always runs: turbo restores it from the
-# shared TURBO_CACHE_DIR, and dist/ may be stale after a pull.
+# SW-33: skip npm ci while the lockfile and Node major match the stamp in the
+# node_modules volume (npm ci wipes node_modules). The stamp is removed before
+# and written only after a successful install, so a failed one retries next up.
+# SW-362: pnpm never skips: its own up-to-date check takes seconds and restores
+# a package missing under the volume, which the stamps cannot see. The build
+# always runs: turbo restores it from the shared TURBO_CACHE_DIR, and dist/ may
+# be stale after a pull.
 # SW-85: each package's own node_modules is in the worktree, not the volume, so
 # a second stamp in the worktree (.turbo/ is git-ignored on every branch) must
 # match too: a worktree re-created on a kept volume has none, and reinstalls.
@@ -68,7 +70,7 @@ if [ "${1:-}" = install ]; then
   stamp=node_modules/.werkmeister-install-hash
   want="$(cat package-lock.json pnpm-lock.yaml 2>/dev/null | sha256sum | cut -d' ' -f1) $(node -v | cut -d. -f1)"
   wstamp=.turbo/.werkmeister-install-hash
-  if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ] && [ "$(cat "$wstamp" 2>/dev/null)" = "$want" ]; then
+  if [ "$pm" = npm ] && [ "$(cat "$stamp" 2>/dev/null)" = "$want" ] && [ "$(cat "$wstamp" 2>/dev/null)" = "$want" ]; then
     echo "werkmeister-install: lockfile and Node major unchanged, skipping $install"
   else
     take_install_slot
