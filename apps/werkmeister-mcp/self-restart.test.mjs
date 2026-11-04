@@ -12,6 +12,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { queuePath } from "werkmeister-core/scheduler_state";
 
+import { fetchFresh } from "../../packages/werkmeister-core/fixtures.mjs";
 import { restartGuard } from "./dist/lib/self_restart.js";
 
 function setup({ queued = 0, exit = true } = {}) {
@@ -143,7 +144,7 @@ test("the built daemon under launchd's label reports its build, holds for a queu
     }
     const token = fs.readFileSync(path.join(home, ".werkmeister", "mcp-token"), "utf8").trim();
     const status = (build) =>
-      fetch(`http://127.0.0.1:${port}/api/status`, {
+      fetchFresh(`http://127.0.0.1:${port}/api/status`, {
         headers: {
           Authorization: `Bearer ${token}`,
           ...(build ? { "x-werkmeister-build": build } : {}),

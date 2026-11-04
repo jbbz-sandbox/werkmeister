@@ -65,10 +65,10 @@ base: main
 status: draft                  # draft | approved | open | merged | shipped | closed | abandoned
 url:                           # written by werkmeister pr open
 merge_sha:                     # written by werkmeister pr status
-release:                       # the release tag that shipped it, written by werkmeister pr status; `none` when the gate's release check found nothing to bump, written by werkmeister pr open
+release:                       # the release tag that shipped it, written by werkmeister pr status; `none` when the gate's release check found nothing to bump, written by werkmeister pr open, or set by hand for a change that ships nothing
 reason:                        # required for closed / abandoned
 skip_tests: {}                 # <service>: <reason> — for a service with no test command or no running container; tests: <reason> when no service maps to the changed files
-skip_release:                  # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag
+skip_release:                  # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag unless release: none
 skip_exercise:                 # <reason> — skips the gate's exercise check, e.g. a doc deliverable with nothing to run
 skip_review:                   # <reason> — skips the gate's review check, e.g. a doc deliverable with no code to review
 session:                       # the Claude Code session that ran werkmeister pr open (PR callbacks, below)
@@ -111,9 +111,9 @@ Code written after a worktree's PR merged, e.g. a problem found while cutting or
 | exercise | `exercise.md` (ICM: any stage output; JIT: `.werkmeister/notes/`) has a `PASS` cell and no `FAIL`, unless `skip_exercise` gives a reason. In a table with a `result` column, every result cell is exactly `PASS`: `FAIL — reason` is a FAIL row, and any other text fails too (SW-247). The acceptance check applies the same rule. |
 | review | `review.md` (any ICM stage output) has a `PASS` cell and no `FAIL`, unless `skip_review` gives a reason. Checked only when a stage's `CONTEXT.md` names `review.md` (workspaces inited after SW-388); rerun `werkmeister workspace init` to opt an existing workspace in. |
 | baseline `<svc>` | for a touched local `api`/`web` service: its own container is running and its `health_endpoint` answers below 400 |
-| release | for a `ship: tag` repo with a `release_check`, that command exits 0, unless `skip_release` gives a reason. `skip_release` affects only this check; `werkmeister pr status` still waits for the release tag. When the check runs and reports nothing to bump (changesets' `NO packages to be bumped`), `werkmeister pr open` writes `release: none`. |
+| release | for a `ship: tag` repo with a `release_check`, that command exits 0, unless `skip_release` gives a reason. `skip_release` affects only this check; `werkmeister pr status` still waits for the release tag. When the check runs and reports nothing to bump (changesets' `NO packages to be bumped`), `werkmeister pr open` writes `release: none`. A change that ships nothing (tests only, no changeset) and sets `skip_release` must also set `release: none` itself; otherwise it stays `merged` and `werkmeister workspace close` refuses (SW-393). |
 
-A failed lint, test or release row shows the lines naming failing tests (`not ok`, `✖`, `×`, `FAIL`) from anywhere in its output, then its last 15 lines (5 for release), then `full log: <path>`. Each of these rows writes its whole output to `.werkmeister/gate-<repo dir>-<row>.log` in the workspace root (e.g. `gate-werkmeister-test-cli.log`), overwritten on every run and git-ignored, so finding a failing test never means re-running the gate by hand (SW-317).
+A failed lint, test or release row shows the lines naming failing tests (`not ok`, `✖`, `×`, `FAIL`) from anywhere in its output, then its last 15 lines (5 for release), then `full log: <path>`. Each of these rows writes its whole output to `.werkmeister/gate-<repo dir>-<row>.log` in the workspace root (e.g. `gate-werkmeister-test-cli.log`), overwritten on every run and committed on the record branch by `pr open` with `pr-open.log` (SW-401), so finding a failing test never means re-running the gate by hand (SW-317).
 | approved | `status: approved` |
 
 **Touched services** come from `git diff --name-only origin/<base>...HEAD`. Each file maps to a service through the registry's `repos.<repo>.path_mappings`, by longest prefix. A file under one of the repo's `no_service_paths` (registry `repo:`, below) touches no service, so a docs-only diff runs no service tests; the release check still runs. Any other file under no mapping marks every service in the repo as touched.

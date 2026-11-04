@@ -1124,8 +1124,12 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
     );
     assert.deepEqual(
       recorded,
-      ["stages/03_propose/output/pr-app.md"],
-      "the record commit names only the PR file",
+      [
+        "stages/03_propose/output/pr-app.md",
+        ".werkmeister/gate-app-release.log",
+        ".werkmeister/gate-app-test-api.log",
+      ],
+      "the record commit names the PR file and the gate logs (SW-401)",
     );
     assert.ok(d.calls.some((c) => c.startsWith("git -C") && c.endsWith("push -u origin me/ws")));
     assert.deepEqual(d.stopped, [ws], "containers stop once the PR is open (SW-39)");
@@ -1724,6 +1728,109 @@ test("lifecycleOf: merged + release: none reads shipped after pr status, so clos
   }
 });
 
+const MERGED_SKIP = prFile({
+  status: "merged",
+  extra: "merge_sha: abc1234\nskip_release: tests only\n",
+});
+
+test("refreshPrStatus: a merged PR with no containing tag says why, naming the latest tag (SW-389)", async () => {
+  const ws = icmWorkspace({ files: { app: MERGED_SKIP } });
+  try {
+    const d = deps([
+      [/tag --contains abc1234/, { stdout: "" }],
+      [/for-each-ref/, { stdout: "v1.4.0 2026-11-03T16:26:00Z\n" }],
+      [/log -1 --format=%cI abc1234/, { stdout: "2026-11-03T17:27:00Z\n" }],
+    ]);
+    const r = await refreshPrStatus(ws, d);
+    assert.equal(readPrFiles(ws)[0].fm.status, "merged");
+    const out = r.lines.join("\n");
+    assert.match(
+      out,
+      /not shipped yet: no release tag contains abc1234; latest tag v1\.4\.0 \(2026-11-03T16:26:00Z\) predates the merge \(2026-11-03T17:27:00Z\)/,
+    );
+    // skip_release is set, so the line also names the fix for a PR that ships nothing (SW-393).
+    assert.match(out, /release: none/);
+    assert.ok(
+      d.calls.some((c) => /fetch -q --tags origin/.test(c)),
+      "tags fetched first",
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: a newer tag that doesn't contain the merge says so (SW-389)", async () => {
+  const ws = icmWorkspace({ files: { app: MERGED_SKIP } });
+  try {
+    const r = await refreshPrStatus(
+      ws,
+      deps([
+        [/tag --contains abc1234/, { stdout: "" }],
+        [/for-each-ref/, { stdout: "v1.4.1 2026-11-03T18:00:00Z\n" }],
+        [/log -1 --format=%cI abc1234/, { stdout: "2026-11-03T17:27:00Z\n" }],
+      ]),
+    );
+    assert.match(
+      r.lines.join("\n"),
+      /latest tag v1\.4\.1 \(2026-11-03T18:00:00Z\) does not contain the merge \(2026-11-03T17:27:00Z\)/,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: an empty merge_sha says the merge commit is unknown (SW-389)", async () => {
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({ status: "merged", extra: 'merge_sha: ""\nskip_release: tests only\n' }),
+    },
+  });
+  try {
+    const d = deps([[/tag --contains/, { code: 1, stderr: "malformed object name" }]]);
+    const out = (await refreshPrStatus(ws, d)).lines.join("\n");
+    assert.match(
+      out,
+      /not shipped yet: merge commit unknown; if it ships nothing, set `release: none`/,
+    );
+    assert.ok(!d.calls.some((c) => /for-each-ref/.test(c)), "no tag lookup without a sha");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: a merged PR whose tag exists ships and prints no reason line (SW-389)", async () => {
+  const ws = icmWorkspace({ files: { app: MERGED_SKIP } });
+  try {
+    const r = await refreshPrStatus(ws, deps([[/tag --contains abc1234/, { stdout: "v1.5.0\n" }]]));
+    assert.equal(readPrFiles(ws)[0].fm.status, "shipped");
+    assert.equal(readPrFiles(ws)[0].fm.release, "v1.5.0");
+    assert.doesNotMatch(r.lines.join("\n"), /not shipped yet/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: a repo with no release tags says so instead of naming one (SW-389)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "merged", extra: "merge_sha: abc1234\n" }) },
+  });
+  try {
+    const r = await refreshPrStatus(
+      ws,
+      deps([
+        [/tag --contains abc1234/, { stdout: "" }],
+        [/for-each-ref/, { stdout: "" }],
+      ]),
+    );
+    const out = r.lines.join("\n");
+    assert.match(out, /not shipped yet: no release tag contains abc1234; no tag matches v\* yet/);
+    assert.doesNotMatch(out, /latest tag/);
+    assert.doesNotMatch(out, /release: none/, "no skip_release, so no hint");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("removalBlockers: an open PR, unmerged commits; merged and closed-out are fine", async () => {
   const ws = icmWorkspace({
     files: {
@@ -1806,7 +1913,25 @@ test("closeOut refuses before ship", async () => {
       ),
     );
     assert.match(String(err), /is merged \(app: merged\)/);
+    // No skip_release: it has a release entry, so it must wait for its tag (#145).
+    assert.doesNotMatch(String(err), /release: none/);
     assert.ok(!fs.existsSync(path.join(ws, "closeout.md")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut: a merged skip_release PR names the release: none fix (SW-393)", async () => {
+  const ws = icmWorkspace({ files: { app: MERGED_SKIP } });
+  try {
+    const err = await inWorkspacesRoot(ws, (name) =>
+      closeOut(name, {}, deps([])).then(
+        () => null,
+        (e) => e,
+      ),
+    );
+    assert.match(String(err), /is merged \(app: merged\)/);
+    assert.match(String(err), /skip_release that ships nothing .*`release: none` in its PR file/);
   } finally {
     clean(ws);
   }
@@ -2552,7 +2677,8 @@ const callbackFile = (extra = "") =>
 const lockIn = (ws) => path.join(ws, "watch.lock");
 const claim = (ws, d, desktop = false) => claimCallbacks([ws], { desktop }, d, lockIn(ws));
 // Reading GitHub and tags only: never a merge, a close-out or a push.
-const onlyReads = (calls) => calls.every((c) => /^(gh pr view|git -C \S+ (fetch|tag) )/.test(c));
+const onlyReads = (calls) =>
+  calls.every((c) => /^(gh pr view|git -C \S+ (fetch|tag|for-each-ref|log) )/.test(c));
 
 /**
  * A temp HOME whose `~/.claude/projects` holds one transcript per `{ id: cwd }`, filed the
@@ -2644,7 +2770,10 @@ test("spike: a doc PR file in 02_findings passes the gate with skip_exercise and
     const r = await open(ws, d);
     assert.ok(r.ok, r.lines.join("\n"));
     assert.equal(readPrFiles(ws)[0].fm.url, "https://github.com/o/app/pull/9");
-    assert.deepEqual(recorded, ["stages/02_findings/output/pr-app.md"]);
+    assert.deepEqual(recorded, [
+      "stages/02_findings/output/pr-app.md",
+      ".werkmeister/gate-app-release.log",
+    ]);
   } finally {
     clean(ws);
   }

@@ -442,6 +442,24 @@ export function installedVersion(claudePluginsDir: string, spec: PluginSpec): st
 }
 
 /**
+ * The `CLAUDE_CODE_PLUGIN_DIRS` entry that loads plugin *name* from a checkout, or null.
+ * Reads the process env, then `env` in ~/.claude/settings.json: setup runs in a plain
+ * terminal, which never sees the settings env Claude Code applies (SW-237).
+ */
+export function pluginDirHolding(name: string): string | null {
+  const dirs = [
+    process.env.CLAUDE_CODE_PLUGIN_DIRS,
+    readJson(claudeUserSettingsPath())?.env?.CLAUDE_CODE_PLUGIN_DIRS,
+  ]
+    .filter((v): v is string => typeof v === "string")
+    .flatMap((v) => v.split(":"));
+  return (
+    dirs.find((d) => d && readJson(path.join(d, ".claude-plugin", "plugin.json"))?.name === name) ??
+    null
+  );
+}
+
+/**
  * Converge one plugin: marketplace add/update, then install/update.
  *
  * *driftProbe* (werkmeister only) returns plugin_check warnings; after a
@@ -458,6 +476,26 @@ export function syncPlugin(
   const label = `plugin ${spec.name}`;
   const version = installedVersion(claudePluginsDir, spec);
   const marketplaceKnown = spec.marketplace in knownMarketplaces(claudePluginsDir);
+
+  const devDir = pluginDirHolding(spec.name);
+  if (devDir) {
+    if (version === null) {
+      return [
+        {
+          label,
+          ok: true,
+          detail: `loaded from ${devDir} (dev mode), marketplace install skipped`,
+        },
+      ];
+    }
+    return [
+      {
+        label,
+        ok: false,
+        detail: `installed copy overrides ${devDir}; claude plugin uninstall ${spec.name}@${spec.marketplace} && claude plugin marketplace remove ${spec.marketplace}`,
+      },
+    ];
+  }
 
   if (checkOnly) {
     if (!marketplaceKnown) {
@@ -1806,6 +1844,8 @@ export interface VscodeExtensionState {
    * only `prepack` builds it, so a dev's local build is never installed.
    */
   bundled: { path: string; version: string } | null;
+  /** The extension's version in this checkout (packages/werkmeister-vscode), or null when not a checkout. */
+  checkout: string | null;
 }
 
 export function vscodeExtensionState(
@@ -1823,6 +1863,9 @@ export function vscodeExtensionState(
     bundled: fs.existsSync(vsix)
       ? { path: vsix, version: readJson(path.join(root, "package.json"))?.version }
       : null,
+    checkout:
+      readJson(path.join(root, "..", "..", "packages", "werkmeister-vscode", "package.json"))
+        ?.version ?? null,
   };
 }
 
@@ -1848,6 +1891,17 @@ export function syncVscodeExtension(
     ];
   }
   if (!state.bundled) {
+    // SW-378: a checkout never installs on its own, but a stale install still shows as drift.
+    if (state.installed && state.checkout && state.installed !== state.checkout) {
+      return [
+        {
+          label,
+          ok: false,
+          optional: true,
+          detail: `${state.installed}, checkout has ${state.checkout} — pnpm --filter werkmeister-vscode install:local`,
+        },
+      ];
+    }
     return [
       {
         label,

@@ -125,7 +125,7 @@ test("the host test command is stated through the temp-HOME wrapper; the contain
         wrapped,
         /`\/ws\/\.werkmeister\/bin\/with-temp-home env WERKMEISTER_ROOT=… <cmd>`/,
       );
-      assert.match(wrapped, /`Bash\(\/ws\/\.werkmeister\/bin\/with-temp-home:\*\)`/);
+      assert.match(wrapped, /`Bash\(\/ws\/\.werkmeister\/bin\/with-temp-home <test command>:\*\)`/);
       assert.doesNotMatch(buildSandboxContextMd(...args), /with-temp-home/);
     },
     { services: SERVICES },

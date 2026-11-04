@@ -85,6 +85,13 @@ export function useDockerEngine() {
   });
 }
 
+// SW-387: a socket per request. The daemon drops idle sockets at 6 s; a starved client still sends on them (ECONNRESET).
+export function fetchFresh(url, init = {}) {
+  const headers = new Headers(init.headers);
+  headers.set("connection", "close");
+  return fetch(url, { ...init, headers });
+}
+
 /**
  * Run *fn* against a seeded temp werkmeister home.
  *

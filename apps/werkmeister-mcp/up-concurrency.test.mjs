@@ -19,7 +19,11 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { pinWerkmeisterRoot, useDockerEngine } from "../../packages/werkmeister-core/fixtures.mjs";
+import {
+  fetchFresh,
+  pinWerkmeisterRoot,
+  useDockerEngine,
+} from "../../packages/werkmeister-core/fixtures.mjs";
 
 pinWerkmeisterRoot();
 useDockerEngine();
@@ -111,7 +115,9 @@ test("two concurrent `up` calls through the HTTP MCP server both complete", asyn
   const callUp = async (ws) => {
     const client = new Client({ name: "up-concurrency.test", version: "0" });
     await client.connect(
-      new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`)),
+      new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), {
+        fetch: fetchFresh,
+      }),
     );
     try {
       return await client.callTool({ name: "up", arguments: { workspace: ws } }, undefined, {

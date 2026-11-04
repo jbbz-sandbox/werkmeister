@@ -386,7 +386,8 @@
     "typecheck": "tsc --noEmit",
     "test": "tsc && node --test src/*.test.mjs",
     "test:integration": "pnpm run build && vscode-test",
-    "package": "vsce package --no-dependencies"
+    "package": "vsce package --no-dependencies",
+    "install:local": "pnpm run build && pnpm run package --out dist/local.vsix && code --install-extension dist/local.vsix --force"
   },
   "dependencies": {
     "werkmeister-core": "workspace:*",
