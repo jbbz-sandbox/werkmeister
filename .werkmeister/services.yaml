@@ -81,6 +81,8 @@ services:
       then, only for a real run against docker, `werkmeister feature up <name>`, `werkmeister feature stop <name>`, `werkmeister feature down <name>`
       (without the name and with no workspace `.env` they fail `Feature name required: pass it as an argument or set FEATURE in a .env file.`).
       A real `feature up` needs the real docker: leave `WERKMEISTER_DOCKER_BIN` unset for it; `with-temp-home` keeps `DOCKER_CONFIG` at your `~/.docker`, where the compose plugin and context live.
+      Build the CLI, not only core: `pnpm turbo run build --filter=werkmeister`. `apps/cli/dist/main.js` bundles werkmeister-core, so building core alone leaves the CLI stale.
+      Minimal valid `ports.yaml`, next to `config.yaml`: `feature_slots: { base_port: 11100, ports_per_slot: 20 }` (`{}` is rejected: `Required config file is empty or invalid`).
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
