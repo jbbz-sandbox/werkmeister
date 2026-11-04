@@ -19,7 +19,8 @@ repo:
   # CI's `test` job checks that need no display: licences, format, typedoc links, generated docs, the old name; the gate runs
   # them so each fails before the PR opens (SW-133, SW-225, SW-252, SW-312). docs:check reads the built CLI and core.
   # Left out: vscode test:integration and package (need xvfb and a downloaded VS Code), typecheck/test (the services' `test:`).
-  lint: pnpm run licenses && pnpm exec biome ci . && pnpm --filter werkmeister-core run docs:links && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
+  # SW-226: --diagnostic-level=error keeps the exit code but prints only errors, so a format error is not buried under warnings.
+  lint: pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
   # Changes here touch no service, so the gate runs no service tests for them.
   # Anything else outside a service's `path` still touches every service.
   no_service_paths: [docs, .changeset, .gitignore, README.md]
@@ -53,6 +54,7 @@ services:
     validate: &cli_validate >-
       Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION),
       then `pnpm turbo run build --filter=werkmeister` before the first test.
+      Format only the files you touched (`pnpm exec biome check --write <files>`), never a folder: a folder-wide write rewrites files the change does not own. Judge `biome ci` by its exit code, not its diagnostic count.
       Fast route for a core-only change: `cd packages/werkmeister-core && HOME=$(mktemp -d) node --test <file>.test.mjs`;
       set HOME on that call only, never for the whole shell (it breaks `pnpm build`).
       Then build, run the built werkmeister binary from a temp folder against a fixture workspace in it.
