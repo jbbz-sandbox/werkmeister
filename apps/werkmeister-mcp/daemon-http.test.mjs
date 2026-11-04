@@ -20,7 +20,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { mintWorkspaceToken } from "werkmeister-core/workspace_token";
 
-import { useDockerEngine } from "../../packages/werkmeister-core/fixtures.mjs";
+import { fetchFresh, useDockerEngine } from "../../packages/werkmeister-core/fixtures.mjs";
 
 useDockerEngine();
 
@@ -159,6 +159,7 @@ async function mcp(token) {
   const client = new Client({ name: "daemon-http.test", version: "0" });
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
+      fetch: fetchFresh,
       requestInit: { headers: { Authorization: `Bearer ${token}` } },
     }),
   );
@@ -166,7 +167,7 @@ async function mcp(token) {
 }
 
 const apiTool = (token, name, args = {}, headers = {}) =>
-  fetch(`${base}/api/tool`, {
+  fetchFresh(`${base}/api/tool`, {
     method: "POST",
     headers: { "content-type": "application/json", Authorization: `Bearer ${token}`, ...headers },
     body: JSON.stringify({ name, arguments: args }),
@@ -238,7 +239,7 @@ test("/api/tool reports a tool error as 400 with its code", async () => {
 
 test("/api/logs/stream sends SSE chunks and closes the follow when the client leaves", async () => {
   const abort = new AbortController();
-  const res = await fetch(`${base}/api/logs/stream?feature=a`, {
+  const res = await fetchFresh(`${base}/api/logs/stream?feature=a`, {
     headers: { Authorization: `Bearer ${machineToken}` },
     signal: abort.signal,
   });
@@ -258,7 +259,7 @@ test("/api/logs/stream sends SSE chunks and closes the follow when the client le
 });
 
 test("/api/logs/stream refuses another workspace on a workspace token", async () => {
-  const res = await fetch(`${base}/api/logs/stream?feature=b`, {
+  const res = await fetchFresh(`${base}/api/logs/stream?feature=b`, {
     headers: { Authorization: `Bearer ${tokenA}` },
   });
   assert.equal(res.status, 403);
