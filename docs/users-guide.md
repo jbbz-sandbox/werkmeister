@@ -1,6 +1,6 @@
 # Werkmeister — User's Guide
 
-> Multi-feature concurrent development environment (formerly `sandbox`; the CLI is `werkmeister`, or `w9r` for short; the old `sandbox` command is gone). <!-- name-check: ignore -->
+> Multi-feature concurrent development environment (the CLI is `werkmeister`, or `w9r` for short).
 > Each feature runs only the services it changes; everything else comes from k8s. So the number of features you can run at once depends on how many services you run locally and how much RAM you have. The default is 12 slots (`feature_slots.count`), and you can raise it.
 
 ---
@@ -379,40 +379,61 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 
 **What it does:**
 
-1. Loads service registry and port configuration
-2. Resolves the workspace (default: `~/workspace/`) and reads its local services from the `SERVICES=` line `werkmeister workspace init` wrote to the workspace `.env`
+1. Loads the service registry and port configuration, and stops with a clear message if a secret one of the workspace's services needs is missing
+2. Resolves the workspace (`--workspace`, else `paths.workspaces_root` from the config, else the nearest enclosing repo's parent, else `~/workspace/`) and reads its local services from the `SERVICES=` line `werkmeister workspace init` wrote to the workspace `.env`
 3. Allocates a slot (1–12) if the feature doesn't already have one
-4. Generates per-feature files in the feature's workspace:
+4. When the workspace has local services, checks the host's memory and CPU budget (`werkmeister budget status`). If the feature doesn't fit it waits in a queue and starts when another feature stops; a feature a person starts may instead stop idle ones to make room (`budget.preempt: false` turns that off)
+5. Generates per-feature files in the feature's workspace:
    - `compose.yml` — Docker Compose stack definition (workspace root)
    - `.env` — Environment variables with resolved service URLs (workspace root)
    - `<workspace>/.werkmeister/supergraph-config.yml` — GraphQL federation config (only when a service has a GraphQL type: `graphql-subgraph`, `graphql`, `subgraph` or `federation`)
-5. Verifies k8s port-forwards are healthy (restarts if needed)
-6. Starts containers with `docker compose up -d --build --remove-orphans`
-7. Regenerates `~/.werkmeister/infra/proxy/Caddyfile` and reloads Caddy
-8. Warns about routed hostnames that do not resolve to 127.0.0.1 on this machine and prints the `/etc/hosts` line to add (the command still succeeds)
+6. Verifies k8s port-forwards are healthy (restarts if needed), only when a local service needs the cluster
+7. Starts containers with `docker compose up -d --build --remove-orphans`
+8. Regenerates `~/.werkmeister/infra/proxy/Caddyfile` and reloads Caddy (or starts it, when something here is routed)
+9. Warns about routed hostnames that do not resolve to 127.0.0.1 on this machine and prints the `/etc/hosts` line to add (the command still succeeds)
 
 **Output example:**
 
 ```
-[info] Scanning workspace for feature: my-feature
-[info] Detected 2 service(s): backend, frontend
-[ok]   Allocated slot 1 (ports 11100-11119)
-[info] Generating config files...
-[info] Starting containers...
-[ok]   Feature 'my-feature' is up!
+=== werkmeister up: my-feature ===
 
-  URL:       https://frontend.local.werkmeister.io
-  Header:    X-Feature: my-feature
-  Slot:      1
-  Ports:     11100-11119
-  Services:  backend (:11100), frontend (:11101)
+[info] Loading configuration...
+[ok]   Allocated slot 1 for 'my-feature'
+
+  Local services: backend, frontend
+
+[info] Checking k8s port-forwards...
+[info] Starting containers...
+[info] Configuring reverse proxy...
+
+=== Feature 'my-feature' is ready ===
+
+  URL:     https://frontend.local.werkmeister.io
+  Cookie:  X-Feature=my-feature
+  Slot:    1 (ports 11100-11119)
+
+  Local services:
+    * backend -> localhost:11100
+    * frontend -> localhost:11101
+
+  k8s services: (everything not listed above)
+
+  Useful commands:
+    werkmeister feature status            # view all features
+    werkmeister feature logs my-feature    # tail logs
+    werkmeister feature test my-feature    # run Playwright tests
+    werkmeister feature down my-feature    # tear down
 ```
 
 **If the workspace lists no services**, the command still proceeds — the feature is registered and routes entirely to k8s. To add services later, list them in `.werkmeister/workspace.yml`, rerun `werkmeister workspace init`, then `werkmeister feature up`.
 
+**If the feature has to wait for capacity**, the command exits successfully without starting containers and prints `=== Feature '<name>' is waiting for capacity (position N) ===`. `werkmeister feature status` shows the queue.
+
 **If every slot is taken** (12 by default, `feature_slots.count`), the command exits with an error. Free a slot by running `werkmeister feature down` on another feature.
 
-**Adding a service to a running feature.** `werkmeister feature up` takes no service list. To run another service locally, add it to the `services` field in the workspace's `.werkmeister/workspace.yml`, rerun `werkmeister workspace init` (this also adds the owning repo's worktree if it isn't there yet), then `werkmeister feature up`.
+**`--service <name>`** starts only that one service, the way the PR gate starts it, and prints `Started <feature>-<name>`.
+
+**Adding a service to a running feature.** To run another service locally, add it to the `services` field in the workspace's `.werkmeister/workspace.yml`, rerun `werkmeister workspace init` (this also adds the owning repo's worktree if it isn't there yet), then `werkmeister feature up`.
 
 #### werkmeister feature down
 
@@ -425,10 +446,12 @@ Stop containers, release slot, update proxy (`infra <verb>` for shared infra)
 
 **What it does:**
 
-1. Stops all Docker containers for the feature (`docker compose down --remove-orphans`)
-2. Releases the slot back to the pool
-3. Regenerates the Caddyfile (removing this feature's routing rules)
-4. Reloads Caddy if running
+1. Leaves any k8s intercepts the feature holds (best effort; teardown never waits on Telepresence)
+2. Stops all Docker containers for the feature (`docker compose down --remove-orphans`)
+3. Releases the slot back to the pool, and clears any pause or capacity wait
+4. Starts queued features that now fit in the freed budget
+5. Regenerates the Caddyfile (removing this feature's routing rules) and reloads Caddy if running
+
 The feature's generated files (`compose.yml`, `.env`, `.werkmeister/`) are left in place in its workspace — they're overwritten on the next `werkmeister feature up`.
 
 By default, per-feature Docker volumes (node_modules, build caches) are preserved so the next `werkmeister feature up` is faster. Use `--volumes` to remove them for a full cleanup.
@@ -478,14 +501,21 @@ List services and their endpoints for a feature
 
 `werkmeister feature services <feature>`
 
-Shows each service with its source (local container or k8s forward) and endpoint:
+Shows each service of a running feature with its source and endpoint:
 
 ```
-  Service                Source    Endpoint              Type
-  ────────────────────────────────────────────────────────────
-  backend             k8s      localhost:9052         api
-  frontend             local    localhost:11101        web
+=== Services for: my-feature ===
+
+  Service                    Source    Endpoint                        Type           
+  ──────────────────────────────────────────────────────────────────────────────────
+  backend                    k8s      localhost:9052                  api
+  frontend                   local    localhost:11101                 web
+  search                     baseline  localhost:11102                 api
+
+  local = running in Docker on this machine  |  baseline = services.yaml baseline_upstream  |  k8s = port-forwarded from k8s cluster
 ```
+
+`Source` is `local` for a container running on this machine, `baseline` for the `baseline_upstream` named in `services.yaml`, `k8s` for a port-forward from the cluster, and `N/A` when the service has no endpoint (`(not configured)`). If the feature isn't running, the command says so and prints `werkmeister feature up <feature>` instead of failing.
 
 #### werkmeister feature logs
 
@@ -531,7 +561,7 @@ Run Playwright tests against a feature's stack
 
 1. Looks for a `playwright.config.ts` (or `.js`/`.mjs`) in the workspace root, then in each repo worktree under it (`~/workspace/<feature>/<repo>/`). There is no fallback to the Werkmeister root.
 2. If none is found, runs nothing and exits non-zero. The message lists each workspace service's test command and `validate:` guidance. Libraries, CLIs and extensions are validated that way, not with Playwright; see [Test commands and validation guidance](#test-commands-and-validation-guidance).
-3. Otherwise sets `SANDBOX_FEATURE` and `WERKMEISTER_SLOT` for the Playwright process and runs `npx playwright test` from that directory with a 10-minute timeout
+3. Otherwise sets `WERKMEISTER_FEATURE` (and `SANDBOX_FEATURE`, until suites move) and, when the feature has a slot, `WERKMEISTER_SLOT` for the Playwright process and runs `npx playwright test` from that directory with a 10-minute timeout
 
 ```bash
 # Run all tests
@@ -545,6 +575,8 @@ werkmeister feature test my-feature -- --headed
 ```
 
 The feature doesn't need to have an active slot — if it doesn't, the command warns but proceeds with just the feature header routing.
+
+**`--scaffold`** writes a starter `playwright.config.ts` and spec into the workspace and installs the pinned Playwright, without running anything. It refuses a feature name that already has a slot.
 
 #### werkmeister feature open
 
@@ -601,39 +633,68 @@ Show all features, services, resource usage
 - `--intercepts`: Show Telepresence intercept state only (per feature service; cheap — skips docker and k8s probes).
 - `--json`: Output structured JSON (useful for agent-driven diagnosis)
 
+Shows shared infrastructure, every active feature and the k8s port-forwards in one view.
+
 **Output example:**
 
 ```
-  Slot  Feature         Services                          Ports          Status
-  ──────────────────────────────────────────────────────────────────────────────
-  1     my-feature      backend, frontend            11100-11119    up (2/2)
-  3     other-feature   frontend                        11300-11319    partial (0/1)
+=== Werkmeister Status ===
 
-  2 active feature(s), 10 slot(s) available
+  Infrastructure
+  Service                    Status
+  ────────────────────────────────────────
+  caddy                      healthy
+  k8s-forwards               healthy
+  mcp-web-server             healthy
+
+  Features
+  Host load 1.8 2.1 2.0 (10 cores)  |  feature containers 14% CPU
+  Slot  Feature                    Services                             Ports            Status
+  ───────────────────────────────────────────────────────────────────────────────────────────────
+     1  my-feature                 backend, frontend                    11100-11119      up (2/2)  12.3% CPU · 410 MiB · started 2 h ago by up
+     3  other-feature              frontend                             11300-11319      partial (0/1)
+
+  k8s Port-Forwards
+  Service                    Ports              Health check                  Status
+  ─────────────────────────────────────────────────────────────────────────────────────
+  redis                      :9050 → :6379      (tcp)                         alive
+  postgres                   :9051 → :5432      (tcp)                         alive
+  backend                    :9052 → :80        /health                       alive
+  frontend                   :9053 → :8080      /                             dead
+
+  2 active feature(s), 10 slot(s) available  |  k8s: 3/4 alive
+
+  To restart dead forwards: docker restart w9r-k8s-forwards
 ```
 
 **Status indicators:**
 - `up (N/M)` (green) — all containers running
 - `partial (N/M)` (yellow) — some containers running
+- `paused (0/M)` (cyan) — every container paused
 - `down (0/M)` (red) — no containers running
 - `no containers` (dim) — compose file exists but no containers found
 
-**`--k8s`** checks only the k8s port-forwards container. Checks the Docker container health of `w9r-k8s-forwards` and reports the status of each forwarded port:
+A feature's row ends with its CPU and memory and how long ago it started, when known. A container that keeps restarting adds a red `✗ <service> crash-looping (N restarts)` line under it; `--verbose` lists each container. Features waiting for a slot show as `Waiting for capacity: <feature> (#1)`.
+
+**`werkmeister infra status`** shows only the k8s port-forwards (`feature status --k8s` is deprecated). Each forward is one row: the listen port on this machine mapped to the remote port, the health check (`(tcp)` or an HTTP path) and `alive`, `dead` or `unknown`:
 
 ```
-  Container: w9r-k8s-forwards    Status: healthy
+=== k8s Port-Forward Status ===
 
-  Service                Port   k8s Target                            Status
-  ─────────────────────────────────────────────────────────────────────────────────
-  redis                  9050   default/redis:6379                    healthy
-  postgres               9051   default/postgres:5432                 healthy
-  backend             9052   default/backend:80                 healthy
-  redis                  9050   dev:6379                              healthy
-  frontend             9053   default/frontend:8080               down
+  k8s Port-Forwards
+  Service                    Ports              Health check                  Status
+  ─────────────────────────────────────────────────────────────────────────────────────
+  redis                      :9050 → :6379      (tcp)                         alive
+  postgres                   :9051 → :5432      (tcp)                         alive
+  backend                    :9052 → :80        /health                       alive
+  frontend                   :9053 → :8080      /                             dead
 
-  11/12 healthy, 1 down
-  Run 'werkmeister infra connect --k8s' to restart the k8s-forwards container
+  3/4 services alive
+
+  To restart dead forwards: docker restart w9r-k8s-forwards
 ```
+
+When the forwards container is not running, it says so instead of listing rows: `not running` (start it with `werkmeister infra connect`), `container w9r-k8s-forwards is down`, or `stopped — not needed by any running workspace`.
 
 ### Workspaces
 
@@ -1039,15 +1100,30 @@ Start all shared infrastructure (local + k8s port-forwards)
 
 - `--k8s`: Start/restart k8s port-forwards container only (replaces standalone k8s-connect command)
 
-**`--k8s`** starts or checks only the containerized k8s port-forwards. Starts the `k8s-forwards` Docker container (part of `infra/compose/shared-infra.yml`) which runs all 12 `kubectl port-forward` processes (9 application + 3 infrastructure) inside a single container. If the container is already running, the command checks its health status.
+**`--k8s`** starts or checks only the containerized k8s port-forwards. Starts the `k8s-forwards` Docker container (part of `infra/compose/shared-infra.yml`), which runs one `kubectl port-forward` process per entry in the generated forwards table, all inside a single container. If the container is already healthy, the command says so and does nothing.
 
 The container runs on the `werkmeister-shared` Docker network and is accessible to other containers via the DNS name `k8s-forwards`. Port-forward processes inside the container auto-restart if they disconnect, managed by the container's entrypoint script.
 
-After starting, it runs a health check and reports the status.
+```
+=== k8s Connect ===
+
+[info] Attempting to start/restart k8s-forwards container...
+[ok]   k8s port-forwards started
+```
+
+If the forwards can't be started, it prints `Failed to start k8s port-forwards.` and points at Docker and your kubeconfig. `werkmeister infra status` lists each forward and whether it is alive.
+
+Without `--k8s`, it starts all shared infrastructure, waits up to 90 seconds for it to settle, then prints a health summary (`caddy`, `k8s-forwards` and any opted-in tools), the issue-tracker check, and the developer-tool links:
 
 ```
-[info] Starting k8s-forwards container...
-[ok]   k8s-forwards container is healthy. 12/12 forwards active.
+=== Werkmeister Connect ===
+
+--- Health Summary ---
+
+  caddy                          healthy
+  k8s-forwards                   healthy
+
+  All 2 services healthy
 ```
 
 #### werkmeister infra proxy-reload
@@ -1379,6 +1455,8 @@ The host daemon is the werkmeister MCP server on port 3002 (`overrides.mcp_port`
 - `restart` restarts it, through launchd when launchd owns it.
 
 Under launchd the daemon restarts itself on a new build: once its entry changes and no call or queued feature is in flight, it exits and launchd starts it on the new code. A PID-file daemon only reports `stale`; run `restart`. The CLI warns once per run when it reaches a daemon on another build.
+
+Claude Code and Claude Desktop sessions reach it through `werkmeister internal mcp`, a stdio proxy, so a running session gets the new build's tools without a `/mcp` reconnect. Only a change to the proxy itself needs a reconnect or a session restart; the release notes say when.
 
 **Examples**
 

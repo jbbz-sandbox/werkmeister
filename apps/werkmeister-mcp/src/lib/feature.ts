@@ -17,7 +17,9 @@ import * as path from "node:path";
 import { workspaceForFeature } from "werkmeister-core/compose";
 import { COMPOSE_FILE } from "werkmeister-core/compose_file";
 import { workspacesRoot } from "werkmeister-core/config";
+import { CLIENT_UI_HEADER, LAUNCHER_HEADER } from "werkmeister-core/daemon_client";
 import { SandboxError } from "werkmeister-core/errors";
+import type { Launcher } from "werkmeister-core/launcher";
 
 /** Lower-cased: Node lower-cases incoming header names. */
 export const FEATURE_HEADER = "x-werkmeister-feature";
@@ -34,6 +36,19 @@ export const scopeOfHeaders = (headers: ReqHeaders): string | undefined =>
   first(headers?.[SCOPE_HEADER]);
 
 export type ReqHeaders = Record<string, string | string[] | undefined> | undefined;
+
+/** The session proxy's launcher (SW-344); undefined lets core read this process's env. */
+export function launcherOf(headers: ReqHeaders): Launcher | undefined {
+  const v = first(headers?.[LAUNCHER_HEADER]);
+  return v === "vscode" || v === "terminal" ? v : undefined;
+}
+
+/** The session client's UI mime types, as the proxy relayed them; undefined when not relayed. */
+export function clientUiOf(headers: ReqHeaders): string[] | undefined {
+  return first(headers?.[CLIENT_UI_HEADER])
+    ?.split(",")
+    .map((m) => m.trim());
+}
 
 export interface Workspace {
   /** Directory name under the workspaces root — the key the name-based core calls take. */

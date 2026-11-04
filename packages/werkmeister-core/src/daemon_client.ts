@@ -76,6 +76,12 @@ async function send(url: string, init: RequestInit): Promise<Response> {
 /** Request: the build the CLI would start. Response: the build the daemon loaded (SW-306). */
 export const BUILD_HEADER = "x-werkmeister-build";
 
+// Set by the session's stdio proxy (SW-344): facts only the session's own process can see.
+/** `claudeLauncher()` evaluated in the session's env, not the daemon's launchd env. */
+export const LAUNCHER_HEADER = "x-werkmeister-launcher";
+/** Comma-separated `io.modelcontextprotocol/ui` mime types the session's MCP client advertised. */
+export const CLIENT_UI_HEADER = "x-werkmeister-client-ui";
+
 /**
  * `<version> @ <mtime>` of a daemon entry, or null when unreadable. Both parts:
  * a dev-link rebuild moves only the mtime, while npm extracts every release with

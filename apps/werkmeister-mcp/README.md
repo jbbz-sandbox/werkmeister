@@ -1,7 +1,8 @@
 # werkmeister-mcp
 
 The one werkmeister MCP server (SW-48): every tool, one name per verb, over
-stdio (`werkmeister internal mcp`) and authenticated HTTP on :3002. Host-side: it holds
+authenticated HTTP on :3002, and to each session over stdio (`werkmeister internal mcp`)
+through `src/proxy.ts`, a thin proxy to that daemon (SW-344). Host-side: it holds
 the Docker privilege so a container agent does not have to. The dashboard
 (`apps/werkmeister-dashboard`) has no MCP server of its own; its browser page calls
 this one's `createServer()` in process.
@@ -27,10 +28,15 @@ in `packages/werkmeister-core/src/web_servers.ts` (stem `sandbox-mcp`, PID <!-- 
 and log under `~/.werkmeister`). The port is 3002, or `overrides.mcp_port`
 (`WERKMEISTER_MCP_PORT`). A host-local MCP client gets it over stdio instead:
 
-    werkmeister internal mcp                          # stdio -- no token, no port
+    werkmeister internal mcp                          # stdio proxy to the daemon
 
 There is no transport flag on that verb: stdio is the only thing a client
 launching a subprocess can use, and the HTTP mode is `werkmeister infra connect`'s job.
+The proxy runs no tool itself. It forwards `tools/*` and `resources/*` to the daemon's
+`/mcp` with the machine token, the session's workspace (`X-Werkmeister-Feature`), its
+launcher and its client's UI capability. It sends `tools/list_changed` when the daemon's
+build changes, so a rebuild reaches running sessions. A change to `proxy.ts` itself still
+needs a `/mcp` reconnect: say so in the release notes.
 `werkmeister internal dashboard` is the same arrangement for the other app. By hand:
 
     pnpm run build && pnpm run serve:http    # Streamable HTTP on :3002
@@ -113,7 +119,7 @@ server. Until that is widened, use:
 
 <!-- generated:mcp-tools -->
 
-57 tools (6 UI-only).
+57 tools (5 UI-only).
 
 | Tool | What it does |
 | --- | --- |
@@ -145,7 +151,7 @@ server. Until that is widened, use:
 | `notes` | Read or graduate a workspace's notes |
 | `connect` | Start shared infrastructure |
 | `open-feature` | Open a feature-tagged browser window |
-| `intercept` | Start or leave a k8s traffic intercept (UI-only) |
+| `intercept` | Start or leave a k8s traffic intercept |
 | `create-workspace-form` | New Werkmeister Workspace |
 | `create-workspace` | Create Workspace |
 | `workspace-form-schema` | Workspace Form Schema (UI-only) |

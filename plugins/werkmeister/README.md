@@ -173,5 +173,4 @@ loading the plugin: the plugins/sandbox-tools link was removed (SW-23). Point it
   prompts that say `/sandbox-diagnose`). <!-- name-check: ignore -->
 
 **Compatibility for one release:** the generated workspace permission rules allow both the old
-and the new `mcp__plugin_…` prefixes, so a machine that has not run `w9r machine setup` yet keeps working. The
-old `sandbox` entry in a workspace's `.mcp.json` is dropped at the next `init-workspace`. <!-- name-check: ignore -->
+and the new `mcp__plugin_…` prefixes, so a machine that has not run `w9r machine setup` yet keeps working.

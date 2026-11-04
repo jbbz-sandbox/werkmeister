@@ -19,7 +19,8 @@ repo:
   # CI's `test` job checks that need no display: licences, format, typedoc links, generated docs, the old name; the gate runs
   # them so each fails before the PR opens (SW-133, SW-225, SW-252, SW-312). docs:check reads the built CLI and core.
   # Left out: vscode test:integration and package (need xvfb and a downloaded VS Code), typecheck/test (the services' `test:`).
-  lint: pnpm run licenses && pnpm exec biome ci . && pnpm --filter werkmeister-core run docs:links && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
+  # SW-226: --diagnostic-level=error keeps the exit code but prints only errors, so a format error is not buried under warnings.
+  lint: pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
   # Changes here touch no service, so the gate runs no service tests for them.
   # Anything else outside a service's `path` still touches every service.
   no_service_paths: [docs, .changeset, .gitignore, README.md]
@@ -53,10 +54,13 @@ services:
     validate: &cli_validate >-
       Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION),
       then `pnpm turbo run build --filter=werkmeister` before the first test.
-      Fast route for a core-only change: `cd packages/werkmeister-core && HOME=$(mktemp -d) node --test <file>.test.mjs`;
+      Build the CLI, not only core: `pnpm turbo run build --filter=werkmeister`. `apps/cli/dist/main.js` bundles werkmeister-core, so building core alone leaves the CLI stale.
+      Run it as `node apps/cli/dist/main.js`, not `node apps/cli/werkmeister` (a bash wrapper: `SyntaxError: Invalid or unexpected token`).
+      Fast route for a core-only change, once the install and build above have run (a fresh worktree fails ERR_MODULE_NOT_FOUND for dist/config.js without them): `cd packages/werkmeister-core && HOME=$(mktemp -d) node --test <file>.test.mjs`;
       set HOME on that call only, never for the whole shell (it breaks `pnpm build`).
       Then build, run the built werkmeister binary from a temp folder against a fixture workspace in it.
       Make the temp folder with `T=$(cd "$(mktemp -d)" && pwd -P)`: on macOS `mktemp -d` gives `/var/…` but the CLI's cwd is `/private/var/…`, so use the real path everywhere you write `$T`.
+      Leave `$T` for the OS temp cleanup; never `rm -rf $T` (if `mktemp -d` returned nothing it resolves to the current directory, and the safety check refuses it).
       Export `WERKMEISTER_ROOT=<worktree>/apps/cli` for the run (or `env -u WERKMEISTER_ROOT`): the shell may export the main checkout's, and `with-temp-home` only swaps HOME, so templates and infra would come from main, not the branch under test.
       `with-temp-home` also unsets `CLAUDECODE` and `CLAUDE_CODE_*` (keeps `CLAUDE_BIN`), so a `claude` run under it sees what CI sees; outside the wrapper use `env -i PATH=… HOME=…`.
       The fixture workspace must be a git repo (`git init` plus an empty commit); otherwise `init-workspace` fails with `Not inside a workspace … and no parent .git directory found`.
@@ -64,22 +68,45 @@ services:
       `paths.workspaces_root: <tmp>/ws`, `overrides.services_yaml: <tmp>/services.yaml`, `overrides.ports_yaml: <tmp>/ports.yaml`,
       and run through `.werkmeister/bin/with-temp-home` with `WERKMEISTER_CONFIG_FILE` set to the absolute path of that `config.yaml` (the CLI runs from the fixture folder).
       Run from the temp folder, not only with a temp HOME: the CLI reads its workspace from the current folder.
-      Any command that can write (to the workspace, its issue or its PRs) runs against the fixture workspace;
-      only read-only commands (e.g. `werkmeister skills check`) may run from the real workspace.
-      Point every `gh` and `docker` call at fakes with `WERKMEISTER_GH_BIN` and `WERKMEISTER_DOCKER_BIN` (absolute paths); a fake first on PATH is not enough, because the CLI puts `/opt/homebrew/bin` and `/usr/local/bin` ahead of it.
-      A change to `pr gate`, `pr open` or `runGate` (`pr_lifecycle.ts` runGate/gatePrs, `pr gate`/`pr open` in apps/cli) is exercised by running this branch's built gate against the workspace: the built `apps/cli` binary run with `node`, never `npm link`.
-      A gate fixture needs, besides the fakes: an `origin` remote matching the PR file's `repo:` (else `✗ repo: cannot read app's origin`), with `origin/<base>` fetched;
-      a committed change in a path mapped to a service (an empty commit touches no service);
-      and a `repos:` entry for the worktree in the seeded `services.yaml`, e.g. `repos: { app: { services: [lib] } }` (without one the gate fails `tests: no service maps to …`).
-      Record one passing and one failing case in exercise.md (e.g. `lint: pnpm exec biome ci .` → exit 0, and exit 1 with an over-width line left uncommitted).
-      `werkmeister pr open` runs the globally installed CLI, built from main, so it would check the PR with the old gate.
-      Assert on exit code, stdout/stderr, and the files it writes.
+      Minimal valid `ports.yaml`, next to `config.yaml`: `feature_slots: { base_port: 11100, ports_per_slot: 20 }` (`{}` is rejected: `Required config file is empty or invalid`).
+      The fixture's source repo must be on a branch other than `main`, or the worktree checkout fails (`'main' is already used by worktree`).
       Exercise `workspace init` (old spelling `init-workspace`) with `--no-build`: it skips the image build, so the run makes no real docker call.
-      The exact sequence, from the fixture workspace `$T/ws/<name>`: `werkmeister workspace init --feature <name> --services <svc> --no-build`
+      The exact sequence, from the fixture workspace `$T/ws/<name>`: `werkmeister workspace init --feature <name> --services <svc> --context-strategy icm --no-build`
+      Pass `--context-strategy icm`: without it a bare fixture gets the jit strategy and `workspace init` writes no `stages/`.
+      Redirect stdin (`</dev/null`) for `workspace init`: it reads fd 0 when it is not a TTY and hangs.
       (a bare fixture has no `.werkmeister/workspace.yml`, so without `--feature` it fails `No .werkmeister/workspace.yml found and no --feature given.`),
       then, only for a real run against docker, `werkmeister feature up <name>`, `werkmeister feature stop <name>`, `werkmeister feature down <name>`
       (without the name and with no workspace `.env` they fail `Feature name required: pass it as an argument or set FEATURE in a .env file.`).
       A real `feature up` needs the real docker: leave `WERKMEISTER_DOCKER_BIN` unset for it; `with-temp-home` keeps `DOCKER_CONFIG` at your `~/.docker`, where the compose plugin and context live.
+      `docker compose build exited non-zero` after `werkmeister-context.md` is written is expected in a fixture.
+      `registry sync`: set `paths.repos_root` in `config.yaml` and put a real copy (a symlink is not found) of the fragment at `<repos_root>/<repo>/.werkmeister/services.yaml`; run it from the temp folder, then grep the generated `services.yaml` (`generated … from 1 fragment`).
+      Set `WERKMEISTER_NO_WAIT=1`: `with-temp-home` otherwise waits for host load (180 s seen; `registry sync` ~195 s). Or run the exercise in the background.
+      Any command that can write (to the workspace, its issue or its PRs) runs against the fixture workspace;
+      only read-only commands (e.g. `werkmeister skills check`) may run from the real workspace.
+      Point every `gh` and `docker` call at fakes with `WERKMEISTER_GH_BIN` and `WERKMEISTER_DOCKER_BIN` (absolute paths); a fake first on PATH is not enough, because the CLI puts `/opt/homebrew/bin` and `/usr/local/bin` ahead of it.
+      A path that spawns `claude` (e.g. a `pr watch` wake): set `CLAUDE_BIN` to a wrapper that runs the real `claude` with the real HOME (`HOME=<real home> exec <claude> "$@"`), since the temp HOME has no login; symlink `<real>/.claude/projects` to `$HOME/.claude/projects`; `touch -t` the fixture transcript back more than 5 minutes (a session changed within 5 minutes reads as busy and the wake is held); make the fixture session with `claude -p --model haiku --output-format json "Say ok."` in the fixture folder and set `model: haiku` in its `workspace.yml`.
+      A change to `pr gate`, `pr open` or `runGate` (`pr_lifecycle.ts` runGate/gatePrs, `pr gate`/`pr open` in apps/cli) is exercised by running this branch's built gate against the workspace: the built binary (`node apps/cli/dist/main.js`), never `npm link`.
+      A gate fixture needs, besides the fakes: an `origin` remote matching the PR file's `repo:` (else `✗ repo: cannot read app's origin`), with `origin/<base>` fetched;
+      a committed change in a path mapped to a service (an empty commit touches no service);
+      and a `repos:` entry for the worktree in the seeded `services.yaml`, e.g. `repos: { app: { services: [lib] } }` (without one the gate fails `tests: no service maps to …`).
+      A gate fixture's app repo also needs `git update-ref refs/remotes/origin/main HEAD`, or the gate tests row fails `cannot diff against origin/main`.
+      Record one passing and one failing case in exercise.md (e.g. `lint: pnpm exec biome ci .` → exit 0, and exit 1 with an over-width line left uncommitted).
+      `werkmeister pr open` runs the globally installed CLI, built from main, so it would check the PR with the old gate.
+      Assert on exit code, stdout/stderr, and the files it writes.
+      Whole `close-out` (record, handoff, removal): use a fixture workspace with no `FEATURE` in `.env` (teardown is skipped: no `down`, no proxy reload) and no `issue_id` in `workspace.yml` (no tracker call); its git repos need a local bare remote so the handoff can push; pass `--yes` (no TTY): `werkmeister close-out <ws> --yes [--abandon "<reason>"]`.
+      Reproduce a load flake by simulating the slow dependency, never by loading the shared host: a `docker` stub that sleeps plus `DOCKER_HOST` at a unix socket that accepts and never answers (path under 104 bytes, so `mktemp -d /tmp/…`). If a loaded run is still needed, wrap it in a hard timeout and keep the load self-ending.
+      CLI↔daemon change (`daemon_client.ts`, `scheduler_client.ts`, a daemon tool): use a foreground fake daemon on a temp HOME, never the real one and never a background process (`pkill` is blocked). One node script: call `ownScheduler()` from `packages/werkmeister-core/dist/scheduler_client.js` before importing the MCP server; serve `POST /api/tool` on port 0 from `connectInMemoryClient(createServer({ scheduler: true }))` of `apps/werkmeister-mcp/dist/main.js` (`createServer()` acts as a daemon without the scheduler tool); write `$HOME/.werkmeister/mcp-token`; run the built CLI with `WERKMEISTER_HOST` pointing at it; close the server.
+      Generated-devcontainer change (`devcontainer_gen.ts`): generate with this branch's `buildDevcontainer` (`packages/werkmeister-core/dist/devcontainer_gen.js`) into a temp folder, never by rerunning `workspace init` on a real workspace (it rewrites the stage contracts). To run it: `npx @devcontainers/cli@0.89.0 up --workspace-folder ~/features/<ws> --config <tmp>/devcontainer.json` (0.80.0 hangs on OrbStack). It needs a real workspace under the workspaces root, because the host daemon issues `.werkmeister/token` only there (check it still exists right before starting). Call the daemon as Claude would without a login: run the `headersHelper` from the container's `~/.claude.json` and POST JSON-RPC to `http://host.docker.internal:3002/mcp` (initialize, then tools/call; `status` ignores a workspace argument, `services` takes one, for a cross-workspace scope check). With a token: `devcontainer exec … claude -p "<call a werkmeister tool>" --allowedTools mcp__werkmeister__status`. Clean up: `docker rm -f` by the labels `devcontainer.local_folder=<ws>` and `devcontainer.config_file`, then any test volume.
+      Proxy or routing change: routes come from container labels over the Docker API, so `WERKMEISTER_DOCKER_BIN` cannot fake them and a temp-HOME fixture never touches the real Caddy. From the real workspace start an on-demand routable service with the branch build (`WERKMEISTER_ROOT=<worktree>/apps/cli node apps/cli/dist/main.js feature up --service <svc>`), assert the Caddyfile mtime and the `@feat<N>_<feature>` block, then `curl https://<host>` with the `X-Feature` cookie and compare with `localhost:<port>`. Clean up with `werkmeister feature stop`, not `docker rm -f` (that leaves a stale route until `infra proxy-reload`).
+      Before a throwaway commit (a dirty-tree or docs-only commit made only to exercise a build or the gate), record `BASE=$(git rev-parse HEAD)` and undo with `git reset --soft "$BASE"` and `git checkout "$BASE" -- <files>`. Never undo against `origin/main` or another remote ref: `issue start`, `feature up` and `pr gate` fetch origin, so it moves during the run.
+      After editing a `*.help.md` or a command's option text (`main.ts`), run `pnpm run docs:gen` (man pages and the users-guide CLI reference) and commit the regenerated files before the lint chain; `docs:check` fails otherwise.
+      A new or changed CLI flag or command namespace also needs `pnpm exec vitest run src/__tests__/spellings.test.ts -u` in `apps/cli` (the snapshot holds every namespace key; a new spelling must carry every key of the deprecated one it replaces).
+      A new CLI flag also needs its key in that command's `namespace` whitelist in `apps/cli/src/main.ts` and a `__parse` case in `apps/cli/src/__tests__/spellings.test.ts`; without it the flag parses but never reaches `run()`.
+      A `pr_rules.ts` change needs `UPDATE_SNAPSHOT=1 node --test strategy-jit-snapshot.test.mjs` in `packages/werkmeister-core`, run through `with-temp-home`.
+      The same regeneration applies to any generated-text change (a skill or a stage contract): the file is `packages/werkmeister-core/strategy-jit.snapshot.json`.
+      Format only the files you touched (`pnpm exec biome check --write <files>`), never a folder: a folder-wide write rewrites files the change does not own. Judge `biome ci` by its exit code, not its diagnostic count.
+      On a rebase conflict in `strategy-jit.snapshot.json` (it embeds all of `pr-rules.md` on one line, so any two PRs touching `pr_rules.ts` conflict), take main's copy (`git checkout --ours` during a rebase), rebuild, regenerate with `UPDATE_SNAPSHOT=1`; never hand-merge the JSON line.
+      `pnpm changeset status --since=origin/main` sees only committed files: a new `.changeset/*.md` reads as `no changesets were found` until it is committed. Check it after committing the changeset, or run `git add -N <file>` first (then `git reset <file>`).
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
@@ -141,7 +168,7 @@ services:
     type: extension
     archetype: mcp-client
     test: "pnpm turbo run typecheck test --continue --filter=werkmeister-vscode"
-    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-vscode` before the first test. Then build, run npm run test:integration (Extension Development Host via @vscode/test-cli), and walk the open items in MANUAL-CHECKLIST.md for anything visual."
+    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-vscode` before the first test. Then build, run npm run test:integration (Extension Development Host via @vscode/test-cli), and walk the open items in MANUAL-CHECKLIST.md for anything visual. To try a dev build without installing it: `pnpm --filter werkmeister-vscode run build`, then `code --new-window --extensionDevelopmentPath=packages/werkmeister-vscode` with no folder argument (a folder already open in another window makes the dev host close itself), then drive it, e.g. for a URI handler `open 'vscode://jbbz.werkmeister-vscode/…'` (VS Code asks to allow the URI the first time). `vsce package` builds the installable .vsix; the installed extension is replaced only by `code --install-extension`."
     internal_port: 3997
     port_offset: 4
     health_endpoint: /

@@ -88,10 +88,10 @@ ${appRow}
 **Expected**
 <what should have happened>
 
-**Actual**
-<what happened>
+**Actual** (observed only; mark anything inferred)
+<what happened — each statement marked (observed) or (inferred)>
 
-**Evidence**
+**Evidence** (observed only)
 \`\`\`text
 <error output, logs, file snippet — trimmed to the relevant part>
 \`\`\`
@@ -102,8 +102,8 @@ ${appRow}
 **Workaround** (if any)
 <what you did to get unblocked; note any files hand-edited and the state left behind>
 
-**Suspected cause / where to look** (optional)
-<file or module, if you have a guess>
+**Suspected cause / where to look** (optional; inferences go here, not in Actual)
+<file or module, if you have a guess, and what you checked and did not check>
 ~~~
 
 ## Body template: feature or task

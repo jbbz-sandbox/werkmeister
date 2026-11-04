@@ -11,7 +11,9 @@ import { test } from "node:test";
 import { SandboxError } from "werkmeister-core/errors";
 import { withSandboxHome } from "../../packages/werkmeister-core/fixtures.mjs";
 import {
+  clientUiOf,
   FEATURE_HEADER,
+  launcherOf,
   resolveFeature,
   resolveWorkspace,
   SCOPE_HEADER,
@@ -123,4 +125,13 @@ test("a scoped token resolves its own workspace and refuses any other (SW-184)",
       code: "SCOPE",
     });
   });
+});
+
+test("launcherOf and clientUiOf read only what the session proxy sends (SW-344)", () => {
+  assert.equal(launcherOf({ "x-werkmeister-launcher": "vscode" }), "vscode");
+  assert.equal(launcherOf({ "x-werkmeister-launcher": "terminal" }), "terminal");
+  assert.equal(launcherOf({ "x-werkmeister-launcher": "junk" }), undefined);
+  assert.equal(launcherOf(undefined), undefined);
+  assert.deepEqual(clientUiOf({ "x-werkmeister-client-ui": "a/b, c/d" }), ["a/b", "c/d"]);
+  assert.equal(clientUiOf({}), undefined);
 });

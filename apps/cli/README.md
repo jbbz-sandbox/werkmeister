@@ -50,8 +50,9 @@ feature name (`infra` plus the workspaces under the workspaces root).
 - CLI parsing is commander; templates in `infra/templates/*.njk` render through
   nunjucks with a small compat layer (`{% do %}`, dict truthiness,
   `map(attribute=…)`) so they stay shared verbatim with other consumers
-- `werkmeister internal mcp` runs the one MCP server over stdio. Its source is
-  `apps/werkmeister-mcp`, bundled into `dist/mcp.js` by `esbuild.mjs` so it ships in the npm
+- `werkmeister internal mcp` runs the stdio proxy to the MCP daemon. Its source is
+  `apps/werkmeister-mcp`, bundled into `dist/mcp-proxy.js` (proxy) and `dist/mcp.js`
+  (daemon) by `esbuild.mjs` so it ships in the npm
   package. `werkmeister internal dashboard` runs the localhost workspaces dashboard from
   `apps/werkmeister-dashboard`, which is checkout-only
 - interactive prompts and process-spawn edges are async (`run()` is

@@ -19,6 +19,7 @@ const registry: Record<string, Record<string, unknown>> = {
   "werkmeister-vscode": { type: "extension" },
   "werkmeister-dashboard": { type: "web", feature_router: { hostname: "dash.local.test" } },
   backend: { type: "api", k8s_deployment: "backend" },
+  "smart-app": { type: "web", repo: "fhir" },
 };
 const spawned: string[] = [];
 
@@ -137,6 +138,15 @@ describe("lifecycle.up starts shared infra only when needed", () => {
     expect(ensurePortForwardsHealthy).toHaveBeenCalledTimes(1);
     expect(waitForForwards).toHaveBeenCalledTimes(1);
     expect(result.caddy).toBe("started");
+  });
+
+  it("with nothing local, names the on-demand services and how to start one (SW-342)", async () => {
+    fs.mkdirSync(path.join(root, "fhir"));
+    const msgs: string[] = [];
+    await withReporter({ passthrough: false, emit: (e) => "msg" in e && msgs.push(e.msg) }, () =>
+      up("demo", workspace([])),
+    );
+    expect(msgs).toContain("start one with: werkmeister feature up --service <name> (smart-app)");
   });
 
   it("never spawns anything that starts jaeger or redisinsight", async () => {

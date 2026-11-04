@@ -10,6 +10,8 @@ export type Launcher = "terminal" | "vscode";
 export function claudeLauncher(env: NodeJS.ProcessEnv = process.env): Launcher {
   const forced = env.WERKMEISTER_LAUNCHER;
   if (forced === "vscode" || forced === "terminal") return forced;
+  // The Claude Code VS Code extension sets no TERM_PROGRAM, only this (SW-409).
+  if (env.CLAUDE_CODE_ENTRYPOINT === "claude-vscode") return "vscode";
   return env.TERM_PROGRAM === "vscode" ? "vscode" : "terminal";
 }
 

@@ -1,8 +1,8 @@
 /**
  * The one werkmeister MCP server (SW-48): every tool, on every transport.
  *
- *   node dist/main.js --stdio    # a host-local client (Claude Desktop, the plugin, host CLI)
- *   node dist/main.js            # Streamable HTTP on PORT (default 3002)
+ *   node dist/main.js            # Streamable HTTP on PORT (default 3002): the host daemon
+ *   node dist/proxy.js           # stdio, per session: a thin proxy to the daemon (SW-344)
  *
  * The dashboard imports {@link createServer} for its browser page's `/api/tool`,
  * so importing this module must not start a server.
@@ -21,7 +21,6 @@ import * as fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import express, { type NextFunction, type Request, type Response } from "express";
@@ -94,12 +93,6 @@ function textOf(result: CallToolResult): string {
     .join("\n");
 }
 
-async function startStdio(): Promise<void> {
-  await createServer().connect(new StdioServerTransport());
-  // stdout is the JSON-RPC channel on stdio — diagnostics must go to stderr.
-  console.error("[werkmeister-mcp] MCP server running on stdio");
-}
-
 async function startHttp(): Promise<void> {
   // This process is the host daemon: it runs the scheduler, every other process asks it (SW-185).
   ownScheduler();
@@ -162,6 +155,13 @@ async function startHttp(): Promise<void> {
 
   app.get("/api/status", (_req: Request, res: Response) => {
     res.json({ pid: process.pid, ...guard.status() });
+  });
+
+  // Stateless /mcp has nothing to push, and a client's standalone SSE GET would stay open for
+  // the whole session, counted in flight below, so no build restart could ever go idle (SW-344).
+  // 405 is the spec's "no stream here"; the SDK client then stops asking.
+  app.get("/mcp", (_req: Request, res: Response) => {
+    res.status(405).set("Allow", "POST").end();
   });
 
   // Calls the restart must wait for. Log follows are left out: one can stay open for hours.
@@ -269,8 +269,8 @@ async function startHttp(): Promise<void> {
 
   // Node's listening callback takes no arguments -- a bind failure
   // (EADDRINUSE, etc.) arrives as an "error" event on the server instead, so
-  // that's where the failure has to be handled. stdout is the JSON-RPC
-  // transport on --stdio, so diagnostics still go to stderr here too.
+  // that's where the failure has to be handled. Diagnostics go to stderr, as the
+  // daemon's launchd log collects it.
   const httpServer = app.listen(port, host, () => {
     const rssMb = (process.memoryUsage().rss / 1024 / 1024).toFixed(1);
     console.error(
@@ -288,11 +288,15 @@ async function startHttp(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // Without this an old `main.js --stdio` launch would try to bind the daemon's port.
   if (process.argv.includes("--stdio")) {
-    await startStdio();
-  } else {
-    await startHttp();
+    console.error(
+      "[werkmeister-mcp] --stdio moved to the session proxy (SW-344): run `werkmeister internal mcp` " +
+        "(dist/proxy.js).",
+    );
+    process.exit(1);
   }
+  await startHttp();
 }
 
 // realpath on both sides: a launcher may reach this file through a symlink.

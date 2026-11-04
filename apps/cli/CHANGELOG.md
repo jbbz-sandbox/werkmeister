@@ -1,5 +1,30 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.71.3
+
+### Patch Changes
+
+- 178fba3: Docs: fix stale sample output and "What it does" steps in the status, up, services, connect, test and down help pages and man pages; drop the "formerly sandbox" rename history from the READMEs; `docs:gen` marks UI-only MCP tools from each registration's own `_meta`; changeset README and `npm pack` prepack notes.
+
+## 0.71.2
+
+### Patch Changes
+
+- 86741d7: The ICM spec stage asks how an existing user turns the change on (the setup or config path and its doc, or none needed), and maps the answer to an acceptance criterion (SW-111).
+- 86741d7: ICM test steps and the `fix.md` / `exercise.md` they write name every skipped test with its skip reason and where it ran instead (workspace container, gate or CI) (SW-125).
+- 86741d7: The ICM research stage greps tests and fixtures for the exact value a change alters and lists the hits, instead of asserting that no test covers it (SW-242).
+- 86741d7: The first ICM stage says what to do when the root cause lies outside the brief's stated scope: record it, carry on with the smallest change that reaches it, and list it first under Recommendations for reviewer (SW-275).
+- 86741d7: The ICM spec stage names every active standards row, loads the ones whose Applies-when matches a file the spec changes, and lists each ticket-vs-standard conflict under `## Conflicts` in `spec.md` (SW-288).
+- 86741d7: The ICM test step shows the log redirect wrapping the whole `&&` test chain (`{ <test command>; } > <log> 2>&1; echo "exit $?"`), so the turbo output no longer spills into the tool result (SW-334).
+- c438582: SW-342: a workspace created from an issue now takes `services:` from the service names the issue spells out (within the chosen repos), so a plain `feature up` starts them. When nothing is local, `feature up` names the on-demand services and prints `start one with: werkmeister feature up --service <name>`, and the generated `werkmeister-context.md` How to validate says the same.
+- 86741d7: Every ICM template's first stage now starts by writing `## Goal`, `## Acceptance criteria` and `## Open questions` into `BRIEF.md` from the issue (or the starting prompt) when the brief has no criteria yet, so later stages and self-checks have a list to walk (SW-345).
+- 86741d7: ICM build stages (bugfix fix, feature and refactor implement) read `git diff` in each touched repo and tick off each settled edit before running the tests, so an edit that never reached the file is caught (SW-351).
+- 86741d7: The ICM research stage greps the tests for whole-module mocks (e.g. `vi.mock("<module>"`, `mock.module`) of each module the change adds an export to, and lists every hit as a fixture to update (SW-365).
+- 86741d7: When the first ICM stage writes the brief's acceptance criteria, a change to generated text is checked by a fixture run of the built generator; regenerating the workspace's own file is a post-release check (SW-374).
+- 86741d7: The ICM reproduce stage judges each repro run by its exit code, or by a check shown to fail on a known-bad run, never by grepping test output (SW-392).
+- 86741d7: The ICM propose stage runs the repo's lint command after adding the release entry and before committing, so a bad changeset fails there instead of at `werkmeister pr open` (SW-399).
+- 86741d7: The bug template in `_shared/issues-report.md` keeps **Actual** and **Evidence** for what was observed, with each statement marked observed or inferred, and sends inferred causes to **Suspected cause** (SW-400).
+
 ## 0.71.1
 
 ### Patch Changes

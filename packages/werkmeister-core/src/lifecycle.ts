@@ -77,6 +77,7 @@ import {
   generateSupergraphConfig,
   isFeatureComposeStale,
   loadWorkspaceEnvVars,
+  onDemandServices,
   type RegistryConfig,
   writeServiceSecretEnvs,
 } from "./generate.js";
@@ -291,6 +292,9 @@ export async function up(
     containersStarted = true;
   } else {
     info("No local services to start -- routing entirely to k8s");
+    const onDemand = onDemandServices(servicesConfig, localServices, workspace);
+    if (onDemand.length)
+      info(`start one with: werkmeister feature up --service <name> (${onDemand.join(", ")})`);
   }
 
   info("Configuring reverse proxy...");

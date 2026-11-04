@@ -36,11 +36,18 @@ test("repo: lint runs core's docs:links like CI's test job (SW-312)", () => {
   assert.match(fragment.repo.lint, /pnpm --filter werkmeister-core run docs:links/);
 });
 
+test("the fast route names its install-and-build prerequisite (SW-227)", () => {
+  assert.match(
+    fragment.services.cli.validate,
+    /Fast route for a core-only change, once the install and build above have run/,
+  );
+});
+
 test("repo: lint takes a command string (SW-133)", () => {
   assert.match(
     fragment.repo.lint,
-    /^pnpm run licenses && pnpm exec biome ci \. && .*pnpm run name:check$/,
-  ); // SW-225, SW-252
+    /^pnpm run licenses && pnpm exec biome ci --diagnostic-level=error \. && .*pnpm run name:check$/,
+  ); // SW-225, SW-252, SW-226
   assert.ok(validate({ ...withoutRepo, repo: { lint: "pnpm exec biome ci ." } }));
   assert.equal(validate({ ...withoutRepo, repo: { lint: 1 } }), false);
 });

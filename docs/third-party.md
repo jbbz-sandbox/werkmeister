@@ -20,7 +20,7 @@ Versions: `range` is what package.json declares, `→ x.y.z` is what pnpm-lock.y
 
 | Path | What it is |
 |---|---|
-| `dist/main.js`, `dist/lib/*.js`, `dist/mcp.js` | minified ESM bundles (esbuild, `apps/cli/esbuild.mjs`) of the CLI, the gate/hook entries and the MCP server. They inline `werkmeister-core`, `apps/werkmeister-mcp` and 115 npm packages |
+| `dist/main.js`, `dist/lib/*.js`, `dist/mcp.js`, `dist/mcp-proxy.js` | minified ESM bundles (esbuild, `apps/cli/esbuild.mjs`) of the CLI, the gate/hook entries, the MCP server and its stdio proxy. They inline `werkmeister-core`, `apps/werkmeister-mcp` and 115 npm packages |
 | `dist/THIRD-PARTY-LICENSES.txt` | the name, version, licence and full licence text of each package inlined above. The build writes it from esbuild's metafile (packages that contribute bytes to an output) and fails if a bundled package has no licence file |
 | `dist/LICENSE`, `dist/NOTICE` | copies of the repo's files, written by the same build |
 | `dist/werkmeister-workspaces.vsix` | the VS Code extension, built in `prepack` (see [vsix](#vs-code-extension-vsix)) |

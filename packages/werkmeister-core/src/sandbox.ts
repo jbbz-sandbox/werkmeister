@@ -71,6 +71,7 @@ import {
   dotDir,
   envVar,
   forwardSpecs,
+  loadServices,
   portsYamlPath,
   sandboxHome,
   servicesYamlPath,
@@ -1031,7 +1032,26 @@ export async function distillIssue(
     : { fields, warning: "the answer held no usable fields" };
 }
 
-/** Resolve inputs, fetch the issue (failing the create), then fill an empty task, description and starting_prompt from it. */
+/**
+ * The registered services in *repos* whose id the issue spells out as a whole
+ * word: matched, not model-picked, so an unattended create stays deterministic.
+ */
+function servicesNamedIn(issue: IssueSnapshot, repos: string[]): string[] {
+  const wanted = new Set(repos.map((r) => r.trim()).filter(Boolean));
+  // Jira wiki markup escapes hyphens (`smart\-app`).
+  const text = [issue.title, issue.body, ...issue.comments.map((c) => c.body)]
+    .join("\n")
+    .replace(/\\/g, "");
+  return Object.entries(loadServices())
+    .filter(([, def]) => wanted.has(String(def?.repo ?? "")))
+    .map(([id]) => id)
+    .filter((id) =>
+      new RegExp(`(?<![\\w./-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w/-])`).test(text),
+    )
+    .sort();
+}
+
+/** Resolve inputs, fetch the issue (failing the create), then fill an empty task, services, description and starting_prompt from it. */
 export async function prepareCreate(
   formData: Record<string, unknown>,
   opts: CreateOptions = {},
@@ -1069,6 +1089,11 @@ export async function prepareCreate(
     }
   }
   if (!resolved.task && issue.title) resolved.task = issue.title;
+  // SW-342: with no `services:` every service is on-demand and a plain `feature up` starts nothing.
+  if (!resolved.services && resolved.repos) {
+    const named = servicesNamedIn(issue, resolved.repos.split(","));
+    if (named.length) resolved.services = named.join(",");
+  }
 
   if (opts.distill !== false && (!resolved.description || !resolved.starting_prompt)) {
     const { fields, warning } = await distillIssue(
@@ -2996,8 +3021,8 @@ async function openClaudeSession(
   script: string,
   uri: string,
   bringToFront = true,
+  launcher: Launcher = claudeLauncher(),
 ): Promise<Launcher> {
-  const launcher = claudeLauncher();
   if (launcher === "terminal") {
     await openTerminalRunning(script, bringToFront);
     return launcher;
@@ -3015,15 +3040,18 @@ export async function resumeClaudeInTerminal(
   sessionId?: string,
   fresh = false,
   prompt?: string,
+  launcher?: Launcher,
 ): Promise<{ path: string; sessionId: string | null; launcher: Launcher }> {
   const target = await resolveSessionDir(name);
   const resumeId = fresh ? null : (await getClaudeTranscript(name, 1, sessionId)).sessionId;
   const { model } = await readWorkspaceConfig(target);
-  const launcher = await openClaudeSession(
+  const opened = await openClaudeSession(
     `cd ${shellQuote(target)} && ${harness().resumeCommand(resumeId, model, prompt)}`,
     claudeLaunchUri({ workspace: path.basename(target), sessionId: resumeId, prompt }),
+    true,
+    launcher,
   );
-  return { path: target, sessionId: resumeId, launcher };
+  return { path: target, sessionId: resumeId, launcher: opened };
 }
 
 /** Opens a Terminal window following the workspace's container logs, for the pane's Logs (SW-105). */
@@ -3119,6 +3147,7 @@ const RECONCILE_PROMPT =
 export async function launchPrReconcile(
   url: string,
   issueRef?: string,
+  launcher?: Launcher,
 ): Promise<{ sessionKey: string; slug: string; issue: Issue; launcher: Launcher }> {
   if (!isValidPrUrl(url)) {
     throw new WorkspaceError(`Refusing to reconcile a non-GitHub-PR URL: ${url}`);
@@ -3143,12 +3172,13 @@ export async function launchPrReconcile(
     "utf-8",
   );
 
-  const launcher = await openClaudeSession(
+  const opened = await openClaudeSession(
     reconcileLaunch(slug).command,
     reconcileLaunchUri(slug),
     false, // background: watched from the browser chat panel, don't steal focus
+    launcher,
   );
-  return { sessionKey: `${RECONCILE_PREFIX}${slug}`, slug, issue, launcher };
+  return { sessionKey: `${RECONCILE_PREFIX}${slug}`, slug, issue, launcher: opened };
 }
 
 /** The reconcile session dir and command line for *slug*; exported so the VS Code extension runs the same one. */

@@ -1,6 +1,6 @@
 {
   "name": "werkmeister",
-  "version": "0.71.1",
+  "version": "0.71.3",
   "license": "Apache-2.0",
   "description": "Multi-feature concurrent development orchestrator CLI tool",
   "type": "module",
@@ -105,7 +105,7 @@
     "test": "vitest run && vitest run -c bdd/vitest.config.ts",
     "prepack": "cd ../../packages/werkmeister-vscode && pnpm run build && pnpm run package --out ../../apps/cli/dist/werkmeister-workspaces.vsix"
   },
-  "//prepack": "Ships the VS Code extension in the tarball for `werkmeister machine setup` to install. Pack-time only, never `build`, so a checkout has no dist/*.vsix and setup never installs a dev's local build.",
+  "//prepack": "Ships the VS Code extension in the tarball for `werkmeister machine setup` to install. Pack-time only, never `build`, so a checkout has no dist/*.vsix and setup never installs a dev's local build. `npm pack` runs prepack even with `--dry-run`: inspect the tarball with `npm pack --ignore-scripts`, and delete dist/werkmeister-workspaces.vsix if a pack ran it.",
   "//dependencies": "Everything else is bundled by esbuild.mjs — see its docstring. dockerode stays external because its ssh2 -> cpu-features requires must be allowed to fail into a pure-JS fallback, and ESM output turns an unresolved require into a shim that throws instead. The Agent SDK is external too, because it locates its bundled Claude Code binary by its own package path. SW-73 made it optional; SW-386 made it required again: every `ask` helper (refine, distill, the Jira MCP fallback) runs through it.",
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.288",

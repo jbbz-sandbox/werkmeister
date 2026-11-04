@@ -24,12 +24,7 @@ import { buildIssuesReportMd } from "../issues_report.js";
 import { buildPrRulesMd, CHAT_APPROVAL } from "../pr_rules.js";
 import { info, success, warn } from "../reporter.js";
 import { deferMachineSteps, RUN_LIMITS } from "../run_start.js";
-import {
-  loadStandardsModules,
-  repoDirs,
-  resolveActiveStandards,
-  universalStandards,
-} from "../standards.js";
+import { loadStandardsModules, repoDirs, resolveActiveStandards } from "../standards.js";
 import {
   _INPUT_FIELDS,
   isTrue,
@@ -195,16 +190,30 @@ function renderStandards(r: Resolved): string {
 
 function standardsRef(tier: Stage["standards"], r: Resolved): string {
   if (tier === "none") return "";
-  const universal = universalStandards(r.modules);
-  const rows = tier === "all" ? r.active : r.active.filter((d) => universal.includes(d));
-  return `- Reference (every run): \`../../_shared/standards.md\` — rows ${[...rows, "ponytail"].map((d) => `\`${d}\``).join(", ")}`;
+  return `- Reference (every run): \`../../_shared/standards.md\` — rows ${[...r.active, "ponytail"].map((d) => `\`${d}\``).join(", ")}`;
 }
 
 // The first stage's start is the one point no code observes, so its contract runs the move (SW-27).
 const START_ISSUE =
   "Run `werkmeister issue start`: it moves the issue to In Progress, and does nothing when the issue is already past that or the tracker refuses. It also fetches each code worktree's base and fast-forwards a branch with no commits of its own; read its `Worktree:` lines. Also read its `CLI:` line: if the installed werkmeister is stale, stop and apply the fix it prints before step 1; if it could not check, say so and continue.";
 
-function renderContract(dir: string, stage: Stage, v: IcmVars, startsIssue = false): string {
+// SW-345: BRIEF.md held only its placeholder until stage 04, so every self-check had nothing to check against.
+const WRITE_BRIEF =
+  "If `../../BRIEF.md` has no `## Acceptance criteria` section, write `## Goal`, `## Acceptance criteria` (a `- [ ]` list, each with how it is checked) and `## Open questions` into it now, from the issue (`werkmeister issue view`) or else the starting prompt, before step 1: every later stage and self-check walks that list. " +
+  // SW-374: "regenerate this workspace's file" cannot run mid-run: init rewrites the contracts and the installed CLI predates the change.
+  "For a change to generated text (a context file, `CLAUDE.md`, a stage contract), the criterion is a fixture run of the built generator showing the new text; regenerating this workspace's own copy is a post-release check, not a criterion.";
+
+// SW-275: SW-257's brief said "test-only" but the cause was in production code; with no rule the run stopped to ask.
+const OUT_OF_SCOPE =
+  "If this stage finds the root cause, or the change the issue needs, outside the brief's stated scope: record it in this stage's output, carry on with the smallest change that reaches it, and list it first under `## Recommendations for reviewer`. Do not stop to ask.";
+
+/** Step 0 of the first stage: start the issue when there is one, then fill the brief. */
+function firstStep(hasIssue: boolean): string {
+  const brief = `${WRITE_BRIEF} ${OUT_OF_SCOPE}`;
+  return hasIssue ? `${START_ISSUE} Then: ${brief}` : brief;
+}
+
+function renderContract(dir: string, stage: Stage, v: IcmVars, step0 = ""): string {
   const c = stage.contract(v);
   return [
     `# ${dir} — ${stage.job}`,
@@ -219,7 +228,7 @@ function renderContract(dir: string, stage: Stage, v: IcmVars, startsIssue = fal
     "",
     "## Process",
     // Step 0, so the contracts' own "steps 1–3" references keep their numbers.
-    ...(startsIssue ? [`0. ${START_ISSUE}`] : []),
+    ...(step0 ? [`0. ${step0}`] : []),
     ...c.process.map((p, i) => `${i + 1}. ${p}`),
     "",
     "## Outputs",
@@ -411,7 +420,7 @@ function render(ctx: InitContext): Record<string, string> {
       dirs[i],
       stage,
       { ...base, standards: standardsRef(stage.standards, r) },
-      i === 0 && Boolean(issueIdOfMeta(ctx.meta)),
+      i === 0 ? firstStep(Boolean(issueIdOfMeta(ctx.meta))) : "",
     );
   });
   return files;

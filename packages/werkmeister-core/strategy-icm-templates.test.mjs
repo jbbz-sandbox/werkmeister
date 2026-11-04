@@ -92,6 +92,33 @@ test("each template renders with no undefined and a route per stage", async () =
         } else {
           assert.doesNotMatch(c, /git log -S/, `${wt}/${d}`);
         }
+        // SW-365: research lists whole-module mocks of a module that gains an export.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^1\. List what exists.*whole-module mocks.*fixture the change must update/m,
+            `${wt}/${d}`,
+          );
+        // SW-242: research greps tests and fixtures for the exact value being changed.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^1\. List what exists.*grep tests and fixtures for that exact value and list the hits/m,
+            `${wt}/${d}`,
+          );
+        // SW-288: spec loads the standards its files hit and lists ticket-vs-standard conflicts.
+        if (d.endsWith("_spec"))
+          assert.match(
+            c,
+            /^4\. Load every `_shared\/standards\.md` row whose Applies-when matches a file `spec\.md` changes.*`## Conflicts`/m,
+            `${wt}/${d}`,
+          );
+        // SW-111: spec asks how an existing user turns the change on.
+        if (d.endsWith("_spec"))
+          assert.match(c, /^5\. .*how does an existing user turn this on\?/m, `${wt}/${d}`);
+        // SW-392: a repro is judged by exit code, not an output grep.
+        if (d.endsWith("_reproduce"))
+          assert.match(c, /^1\. Reproduce .*Judge each run by its exit code/m, `${wt}/${d}`);
         // SW-124: every test step, and the subagents it briefs, go through the wrapper.
         if (c.includes("Run the test command")) {
           assert.match(c, /through `\.werkmeister\/bin\/with-temp-home`/, `${wt}/${d}`);
@@ -99,6 +126,25 @@ test("each template renders with no undefined and a route per stage", async () =
           // SW-316: the host run misses the container env; the tests-only gate runs where pr open will.
           assert.match(c, /without the container's env \(`HOST`, `WERKMEISTER_SLOT`/, `${wt}/${d}`);
           assert.match(c, /run `werkmeister pr gate --tests`/, `${wt}/${d}`);
+          // SW-334: the redirect wraps the whole && chain, not its last command.
+          assert.ok(c.includes('`{ <test command>; } > <log> 2>&1; echo "exit $?"`'), `${wt}/${d}`);
+          // SW-351: the diff is read against the settled edits before the tests run.
+          assert.match(
+            c,
+            /read `git diff` in each repo you touched and tick off each edit `(spec|repro|scope)\.md` settled/,
+            `${wt}/${d}`,
+          );
+          assert.ok(
+            c.indexOf("tick off each edit") < c.indexOf("Run the test command"),
+            `${wt}/${d}: diff check before tests`,
+          );
+          // SW-125: skips are named in the test step and in the file that records the run.
+          assert.match(c, /A skipped test is not a pass: name each one/, `${wt}/${d}`);
+          assert.match(
+            c,
+            /Write `output\/(fix|exercise)\.md`:[^\n]*every skipped test by name with its skip reason and where it ran instead/,
+            `${wt}/${d}`,
+          );
         }
         // SW-143: every exercise step defers a library/CLI to its Validation text, and the
         // templates stay app-agnostic — the werkmeister recipe lives in its services.yaml.
@@ -132,6 +178,13 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /every table in `exercise\.md`/, `${wt}/${d}`);
           assert.match(c, /superseded run in prose, not as a `FAIL` row/, `${wt}/${d}`);
         }
+        // SW-399: lint runs after the release entry is added, before the commit.
+        if (d.endsWith("_propose"))
+          assert.match(
+            c,
+            /^2\. .*add the release entry.*Before committing, run the repo's lint command/m,
+            `${wt}/${d}`,
+          );
         if (d.endsWith("_propose"))
           assert.match(
             c,
@@ -139,6 +192,13 @@ test("each template renders with no undefined and a route per stage", async () =
             `${wt}/${d}`,
           );
       }
+      // SW-331: a stage that reads `BRIEF.md` § Acceptance criteria has a first stage that writes it.
+      const first = fs.readFileSync(path.join(root, "stages", dirs[0], "CONTEXT.md"), "utf8");
+      assert.match(
+        first,
+        /^0\. If `\.\.\/\.\.\/BRIEF\.md` has no `## Acceptance criteria` section, write/m,
+        wt,
+      );
       if (EXPECTED[wt].includes("exercise")) {
         const ex = fs.readFileSync(path.join(root, "stages", "03_exercise", "CONTEXT.md"), "utf8");
         assert.match(ex, /A library or CLI has no service to restart/, `${wt}/03_exercise`);
