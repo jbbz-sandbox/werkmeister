@@ -147,6 +147,26 @@ test("WERKMEISTER_NO_WAIT=1 runs at once, without wait-load (SW-224)", () => {
   }
 });
 
+test("--no-wait first runs at once, without wait-load, and is not passed on (SW-367)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const env = { ...stubbedPath(root) };
+    delete env.WERKMEISTER_NO_WAIT;
+    const r = spawnSync(bin, ["--no-wait", "sh", "-c", 'printf "%s" "$0"', "first"], {
+      encoding: "utf8",
+      env,
+    });
+    assert.equal(r.status, 0, r.stderr);
+    assert.equal(calls(root), "");
+    assert.equal(r.stdout, "first");
+    const alone = spawnSync(bin, ["--no-wait"], { encoding: "utf8", env });
+    assert.equal(alone.status, 2);
+    assert.match(alone.stderr, /usage: with-temp-home \[--no-wait\] <cmd>/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("no werkmeister on PATH, or a failing wait-load, still runs the command (SW-224)", () => {
   const { root, bin } = wrapper();
   try {

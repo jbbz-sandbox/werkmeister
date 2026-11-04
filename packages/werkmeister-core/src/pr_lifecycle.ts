@@ -656,7 +656,7 @@ export function waitForHostLoadNow(): Promise<string> {
     { hostLoad: readHostLoad, sleep: (ms) => delay(ms) },
     true,
     "with-temp-home",
-    "WERKMEISTER_NO_WAIT=1",
+    "--no-wait",
   );
 }
 
