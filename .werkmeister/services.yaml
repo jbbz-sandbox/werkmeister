@@ -92,6 +92,7 @@ services:
       A gate fixture's app repo also needs `git update-ref refs/remotes/origin/main HEAD`, or the gate tests row fails `cannot diff against origin/main`.
       Pass `--context-strategy icm`: without it a bare fixture gets the jit strategy and `workspace init` writes no `stages/`.
       `registry sync`: set `paths.repos_root` in `config.yaml` and put a real copy (a symlink is not found) of the fragment at `<repos_root>/<repo>/.werkmeister/services.yaml`; run it from the temp folder, then grep the generated `services.yaml` (`generated … from 1 fragment`).
+      Leave `$T` for the OS temp cleanup; never `rm -rf $T` (if `mktemp -d` returned nothing it resolves to the current directory, and the safety check refuses it).
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
