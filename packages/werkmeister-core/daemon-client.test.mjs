@@ -13,8 +13,7 @@ import { collectingReporter, withReporter } from "./dist/reporter.js";
 const seen = [];
 let openStreams = 0;
 const daemon = http.createServer(async (req, res) => {
-  // SW-402: a socket per request, so the client pools none for a loaded host to reset
-  // (ECONNRESET -> DAEMON_DOWN). keepAliveTimeout = 0 (SW-346) kept them open instead.
+  // SW-402: a socket per request, so the client pools none for a loaded host to reset.
   res.setHeader("connection", "close");
   let body = "";
   for await (const chunk of req) body += chunk;
