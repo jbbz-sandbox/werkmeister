@@ -45,7 +45,7 @@ export interface Stage {
   /** CLAUDE.md route-table "If" cell; default "`<previous dir>` output approved". */
   enter?: string;
   /** Which _shared/standards.md rows the contract names. */
-  standards: "none" | "universal" | "all";
+  standards: "none" | "all";
   contract(v: IcmVars): Contract;
 }
 
@@ -72,7 +72,16 @@ const TEST_STEP =
   "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. " +
   "Once it passes, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record both exit codes. " +
   "A subagent you brief to run tests or the CLI gets that wrapped command verbatim in its brief. " +
-  "Redirect output to a file, trust the exit code, read back only the failing slice.";
+  // SW-125: a host-skipped test still asserted removed behaviour; only the gate's container run found it.
+  "A skipped test is not a pass: name each one with its skip reason, and run it where it can run (the workspace container) or say where it will (the gate, CI). " +
+  // SW-334: `cmd1 && cmd2 > log` redirects only cmd2; the group sends the whole chain to the log.
+  'Redirect output to a file as one group, so every command in an `&&` chain lands there: `{ <test command>; } > <log> 2>&1; echo "exit $?"`. Trust the exit code, read back only the failing slice.';
+
+// SW-351: one of five parallel Edits reported success but never reached the file; tests did not cover it.
+const diffCheck = (doc: string) =>
+  `Before running tests, read \`git diff\` in each repo you touched and tick off each edit \`${doc}\` settled against it: an edit reported as applied can be missing.`;
+
+const SKIPPED = "every skipped test by name with its skip reason and where it ran instead";
 
 // SW-388: in sw-386 a must-fix passed the tests, the exercise and the gate; only a separate review caught it.
 const reviewStep = (rerun: string) =>
@@ -119,7 +128,9 @@ const propose: Stage = {
     doNotLoad: "`_shared/standards.md` (no code is written here), source files, `.werkmeister/`.",
     process: [
       "Walk every acceptance criterion in `BRIEF.md`. For each, write a row whose result cell is exactly PASS or FAIL, with the file and line in a prior `output/` that proves it in a separate evidence column. A FAIL routes back to the owning stage — do not fix it here.",
-      "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit.",
+      "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit. " +
+        // SW-399: a changeset written after the last lint run failed the gate only at `pr open`.
+        "Before committing, run the repo's lint command (the `&& <lint>` tail of the test command in `werkmeister-context.md`, which the PR gate's lint row runs) and fix what it fails, release entry included.",
       "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value). Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs (every table with a `result` column — the gate reads them all — has a result cell of exactly `PASS` or `FAIL` and the output in its own column), the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
       "Commit and push this folder's branch — the record. Never open a PR for it.",
     ],
@@ -149,7 +160,11 @@ const feature: Stage[] = [
       ],
       doNotLoad: `\`_shared/standards.md\` (nothing is written here), other stages' contracts, \`.werkmeister/*.yml\`, \`${COMPOSE_FILE}\`.`,
       process: [
-        "List what exists that the brief touches: entry points, routes or exports, data shapes, and the tests that cover them.",
+        // SW-365: a whole-module mock breaks on every new export of that module (8 failures in sw-341).
+        "List what exists that the brief touches: entry points, routes or exports, data shapes, and the tests that cover them. " +
+          'For each module the change adds an export to, grep the tests for whole-module mocks of it (e.g. `vi.mock("<module>"`, `mock.module`) and list every hit as a fixture the change must update. ' +
+          // SW-242: "no test covers it" was written without a grep; a test pinned the exact old string.
+          "For each value the change alters (a string, a default, a command), grep tests and fixtures for that exact value and list the hits; never write that no test covers it without that grep.",
         "Find the test command in `../../.werkmeister/werkmeister-context.md` and copy it verbatim — do not restate it from memory.",
         "Check what is already installed that could do the job before recommending anything new.",
         "Write `output/inventory.md`: steps 1–3.",
@@ -167,7 +182,8 @@ const feature: Stage[] = [
     check: "the spec covers every acceptance criterion",
     enter:
       "every question in `stages/01_research/output/decisions.md` reads `status: decided` — the flip *is* the approval, do not ask again",
-    standards: "universal",
+    // SW-288: every active row, so step 4 can load the ones whose files the spec changes.
+    standards: "all",
     contract: (v) => ({
       oneJob:
         "One job: turn the settled decisions into a spec precise enough that the next stage needs no judgment calls, and prove any machine-checkable part of it.",
@@ -182,6 +198,10 @@ const feature: Stage[] = [
         "Write `output/spec.md`: what changes, file by file; the interfaces or schemas added; the tests that will prove it; what is explicitly out of scope.",
         "If the change has a machine-checkable artifact (a schema, an API document, a migration), write it in the repo and validate it with a command that needs no new dependency. Record the exact command in `spec.md`.",
         "Map each acceptance criterion in `BRIEF.md` to the step or test in `spec.md` that satisfies it. A criterion with no mapping is a defect in this stage.",
+        // SW-288: a ticket-vs-standard conflict surfaced only in implement, after the code was written.
+        "Load every `_shared/standards.md` row whose Applies-when matches a file `spec.md` changes, not only the universal ones. Under `## Conflicts` in `spec.md`, write one line per place the ticket's proposed shape breaks a loaded standard (the rule, and the shape that would satisfy it), or `none`.",
+        // SW-111: SW-104's spec defined a config shape but not how a machine that already had one adds a second.
+        "In `spec.md`, answer: how does an existing user turn this on? Name the setup or config path (a setup command, a config key or file) and the doc that describes it, or say none is needed. Map the answer to a criterion as in step 3; a missing answer is a defect in this stage.",
       ],
       outputs: ["`output/spec.md`", "Any artifact from step 2, in the repo"],
       humanCheck:
@@ -207,9 +227,10 @@ const feature: Stage[] = [
         ...IMPLEMENT_STEPS,
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
+        diffCheck("spec.md"),
         TEST_STEP,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
-        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
+        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
         IMPLEMENT_REVIEW,
       ],
       outputs: [
@@ -242,7 +263,8 @@ const bugfix: Stage[] = [
       doNotLoad:
         "`_shared/standards.md` (nothing is written here), other stages' contracts, `.werkmeister/*.yml`.",
       process: [
-        "Reproduce the failure against the running service or with a test. Record the exact command and its output.",
+        // SW-392: a grep for a line the reporter never prints read "0/25 failures" for a flake nobody reproduced.
+        "Reproduce the failure against the running service or with a test. Record the exact command and its output. Judge each run by its exit code, or by a check you have shown fails on a known-bad run — never by grepping the output for a line that may not be printed.",
         "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet.",
         "Trace to the root cause: the first place the code does something other than intended. A symptom site is not a root cause.",
         "List every other caller of the function at the root cause — a fix there reaches them too.",
@@ -274,8 +296,9 @@ const bugfix: Stage[] = [
       process: [
         ...IMPLEMENT_STEPS,
         "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
+        diffCheck("repro.md"),
         TEST_STEP,
-        "Write `output/fix.md`: `git diff --stat` per repo, the failing test's name, and the test exit code and summary line.",
+        `Write \`output/fix.md\`: \`git diff --stat\` per repo, the failing test's name, the test exit code and summary line, and ${SKIPPED}.`,
       ],
       outputs: ["Code changes plus the test, uncommitted", "`output/fix.md`"],
       humanCheck:
@@ -364,9 +387,9 @@ const refactor: Stage[] = [
       process: [
         ...IMPLEMENT_STEPS,
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
-        `Take the steps in order. After each one: ${TEST_STEP}`,
+        `Take the steps in order. After each one: ${diffCheck("scope.md")} ${TEST_STEP}`,
         `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
-        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, and the final exercise checks as ${exerciseFormat("evidence")}.`,
+        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
         IMPLEMENT_REVIEW,
       ],
       outputs: ["Code changes, uncommitted", "`output/exercise.md`", "`output/review.md`"],

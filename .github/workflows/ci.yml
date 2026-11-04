@@ -40,7 +40,7 @@ jobs:
       # SW-63: a new dependency under a licence outside the allowlist fails here.
       - run: pnpm run licenses
       # Before turbo so a lint or format failure surfaces in seconds, not after the build.
-      - run: pnpm exec biome ci .
+      - run: pnpm exec biome ci --diagnostic-level=error .
       # SW-82: a broken `{@link}` in core's comments fails here; it needs no build.
       - run: pnpm --filter werkmeister-core run docs:links
       # One invocation so typecheck runs alongside build instead of before it.
