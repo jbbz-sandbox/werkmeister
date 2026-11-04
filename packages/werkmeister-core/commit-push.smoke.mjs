@@ -84,6 +84,23 @@ assert.match(
 );
 console.log("✓ record commit with paths → only those paths committed + pushed");
 
+// Case 4 (SW-407): a pre-SW-401 workspace's .gitignore still ignores the gate logs it names.
+fs.mkdirSync(path.join(feat, ".werkmeister"), { recursive: true });
+fs.writeFileSync(path.join(feat, ".gitignore"), "/.werkmeister/gate-*.log\nunrelated.txt\n");
+commit(feat, ".gitignore", "ignore");
+fs.writeFileSync(path.join(feat, ".werkmeister", "gate-app-lint.log"), "lint ok");
+fs.writeFileSync(path.join(feat, "pr-app.md"), "status: open\nurl: x");
+const r4 = await commitAndPush(feat, "chore: record opened PR(s)", [
+  "pr-app.md",
+  ".werkmeister/gate-app-lint.log",
+]);
+assert.equal(r4.ok, true, `record with an ignored log must succeed, got: ${r4.message}`);
+assert.deepEqual(
+  git(feat, "show", "--name-only", "--format=", "HEAD").trim().split("\n").sort(),
+  [".werkmeister/gate-app-lint.log", "pr-app.md"],
+);
+console.log("✓ record commit force-adds a named log the .gitignore ignores");
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("ALL PASS");
 process.exit(0);
