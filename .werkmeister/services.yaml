@@ -95,6 +95,7 @@ services:
       Leave `$T` for the OS temp cleanup; never `rm -rf $T` (if `mktemp -d` returned nothing it resolves to the current directory, and the safety check refuses it).
       Before a throwaway commit (a dirty-tree or docs-only commit made only to exercise a build or the gate), record `BASE=$(git rev-parse HEAD)` and undo with `git reset --soft "$BASE"` and `git checkout "$BASE" -- <files>`. Never undo against `origin/main` or another remote ref: `issue start`, `feature up` and `pr gate` fetch origin, so it moves during the run.
       A path that spawns `claude` (e.g. a `pr watch` wake): set `CLAUDE_BIN` to a wrapper that runs the real `claude` with the real HOME (`HOME=<real home> exec <claude> "$@"`), since the temp HOME has no login; symlink `<real>/.claude/projects` to `$HOME/.claude/projects`; `touch -t` the fixture transcript back more than 5 minutes (a session changed within 5 minutes reads as busy and the wake is held); make the fixture session with `claude -p --model haiku --output-format json "Say ok."` in the fixture folder and set `model: haiku` in its `workspace.yml`.
+      Whole `close-out` (record, handoff, removal): use a fixture workspace with no `FEATURE` in `.env` (teardown is skipped: no `down`, no proxy reload) and no `issue_id` in `workspace.yml` (no tracker call); its git repos need a local bare remote so the handoff can push; pass `--yes` (no TTY): `werkmeister close-out <ws> --yes [--abandon "<reason>"]`.
     internal_port: 3998
     port_offset: 3
     health_endpoint: /
