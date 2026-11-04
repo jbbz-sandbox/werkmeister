@@ -7,45 +7,17 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { modelPricingYamlPath } from "../../config.js";
 import { isFile } from "../../tool_bins.js";
+import type { ModelUsage, SessionUsage, UsageTotals, WorkspaceUsage } from "../types.js";
 import { findClaudeProjectDir, listSessionFiles, readSessionTitle } from "./transcript.js";
 
-export interface UsageTotals {
-  input: number;
-  output: number;
-  cacheCreation: number;
-  cacheRead: number;
-}
+export type { ModelUsage, SessionUsage, UsageTotals, WorkspaceUsage } from "../types.js";
+
 export interface ModelRate {
   input: number;
   output: number;
   cacheWrite: number;
   cacheRead: number;
 }
-export interface ModelUsage {
-  model: string;
-  totals: UsageTotals;
-  estUsd: number | null;
-}
-export interface SessionUsage {
-  sessionId: string;
-  title: string;
-  updatedAt: string;
-  firstTurn: string | null;
-  lastTurn: string | null;
-  /** Assistant lines with usage: the lines the token totals count. */
-  turns: number;
-  models: string[];
-  totals: UsageTotals;
-  estUsd: number | null;
-}
-export interface WorkspaceUsage {
-  name: string;
-  totals: UsageTotals;
-  estUsd: number | null;
-  byModel: ModelUsage[];
-  sessions: SessionUsage[];
-}
-
 const zeroTotals = (): UsageTotals => ({ input: 0, output: 0, cacheCreation: 0, cacheRead: 0 });
 function addTotals(into: UsageTotals, t: UsageTotals): void {
   into.input += t.input;

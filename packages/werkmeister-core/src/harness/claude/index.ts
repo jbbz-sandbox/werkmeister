@@ -1,7 +1,8 @@
 /** The Claude Code adapter: today's behaviour behind {@link HarnessAdapter} (SW-187). */
+import { turnStatus } from "../turn.js";
 import type { HarnessAdapter } from "../types.js";
 import { askClaude, askClaudeJson, askClaudeStrict, reconcileCommand } from "./cli.js";
-import { claudeResumeCommand, sessionSignal, startTurn, turnStatus } from "./session.js";
+import { claudeResumeCommand, sessionSignal, startTurn } from "./session.js";
 import { listSessionsIn, sessionSourceIn, transcriptIn } from "./transcript.js";
 import { usageForDir } from "./usage.js";
 
