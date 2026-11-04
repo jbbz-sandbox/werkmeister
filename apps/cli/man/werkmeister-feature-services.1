@@ -5,15 +5,22 @@ werkmeister\-feature\-services \- List services and their endpoints for a featur
 \fBwerkmeister feature services\fR <feature>
 .SH DESCRIPTION
 .PP
-Shows each service with its source (local container or k8s forward) and endpoint:
+Shows each service of a running feature with its source and endpoint:
 .PP
 .nf
 .RS 4
-  Service                Source    Endpoint              Type
-  ────────────────────────────────────────────────────────────
-  backend             k8s      localhost:9052         api
-  frontend             local    localhost:11101        web
+=== Services for: my\-feature ===
+
+  Service                    Source    Endpoint                        Type           
+  ──────────────────────────────────────────────────────────────────────────────────
+  backend                    k8s      localhost:9052                  api
+  frontend                   local    localhost:11101                 web
+  search                     baseline  localhost:11102                 api
+
+  local = running in Docker on this machine  |  baseline = services.yaml baseline_upstream  |  k8s = port\-forwarded from k8s cluster
 .RE
 .fi
+.PP
+\fBSource\fR is \fBlocal\fR for a container running on this machine, \fBbaseline\fR for the \fBbaseline_upstream\fR named in \fBservices.yaml\fR, \fBk8s\fR for a port\-forward from the cluster, and \fBN/A\fR when the service has no endpoint (\fB(not configured)\fR). If the feature isn't running, the command says so and prints \fBwerkmeister feature up <feature>\fR instead of failing.
 .SH SEE ALSO
 \fBwerkmeister\fR(1)
