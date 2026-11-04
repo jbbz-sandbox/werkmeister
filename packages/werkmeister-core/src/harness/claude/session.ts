@@ -5,8 +5,9 @@
  * resolved folders; sandbox.ts maps session keys to them.
  */
 import fs from "node:fs/promises";
+import path from "node:path";
 import { type AgentState, asksQuestion, questionOf, readAgentState } from "../../agent_state.js";
-import { shellQuote } from "../../tool_bins.js";
+import { runCapture, shellQuote } from "../../tool_bins.js";
 import { runTurn, turnStatus } from "../turn.js";
 import type { SessionSignal, TurnOptions, TurnResult, TurnState } from "../types.js";
 import { resolveClaudeBin } from "./cli.js";
@@ -172,6 +173,30 @@ export function relayPickedUp(
       Date.parse(m.timestamp) > sentAt &&
       m.text.includes(relay.text),
   );
+}
+
+/**
+ * Whether an interactive `claude` (not a `-p` turn) runs with its cwd inside *ws*: the hooks'
+ * record can miss an open session, and a headless `--resume` beside it forks the transcript (SW-397).
+ * shortcut: Desktop sessions (the app's own cwd) and hosts without `ps`/`lsof` are not seen; they rely
+ * on the record. Read /proc on Linux if a host without lsof needs it.
+ */
+export async function claudeOpenIn(ws: string): Promise<boolean> {
+  const ps = await runCapture("ps", ["-axo", "pid=,args="]).catch(() => null);
+  const pids = (ps?.stdout ?? "")
+    .split("\n")
+    .map((l) => l.trim().match(/^(\d+) (\S+)(.*)$/))
+    .filter((m) => m && path.basename(m[2]) === "claude" && !/(^| )(-p|--print)( |$)/.test(m[3]))
+    .map((m) => m?.[1]);
+  if (!pids.length) return false;
+  const root = await fs.realpath(ws).catch(() => ws);
+  // lsof exits 1 when a listed pid has gone; what it printed for the rest still counts.
+  const cwds = await runCapture("lsof", ["-a", "-d", "cwd", "-Fn", "-p", pids.join(",")]).catch(
+    () => null,
+  );
+  return (cwds?.stdout ?? "")
+    .split("\n")
+    .some((l) => l.startsWith("n") && (l.slice(1) === root || l.slice(1).startsWith(`${root}/`)));
 }
 
 /** The shell command that reopens a workspace session in a terminal. */

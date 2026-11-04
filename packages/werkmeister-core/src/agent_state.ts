@@ -39,6 +39,8 @@ const BLOCKING_NOTIFICATIONS = new Set(["permission_prompt", "elicitation_dialog
 export interface SessionRecord {
   status: "busy" | "idle";
   at: string;
+  /** Written by a `claude -p` turn, which may only end its own record (SW-397). */
+  headless?: true;
 }
 
 const stateFile = (root: string) => path.join(dotDir(root), "agent-state.json");
@@ -64,7 +66,7 @@ function sessionsOf(o: Record<string, any> | null): Record<string, SessionRecord
   const sessions: Record<string, SessionRecord> = {};
   for (const [id, s] of Object.entries(o?.sessions ?? {}) as [string, any][])
     if ((s?.status === "busy" || s?.status === "idle") && typeof s.at === "string")
-      sessions[id] = { status: s.status, at: s.at };
+      sessions[id] = { status: s.status, at: s.at, ...(s.headless === true && { headless: true }) };
   return sessions;
 }
 
@@ -344,14 +346,19 @@ export function record(input: Record<string, any>, now = new Date()): string | n
 
   const sessions = sessionsOf(raw);
   const id = input["session_id"];
+  const headless = process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith("sdk") ?? false;
+  // `claude -p --resume <id>` shares an open session's id: its busy/idle counts, its end must not end that session.
+  // shortcut: an interactive session that dies without SessionEnd stays here until stale (24 h); upgrade if crashed sessions block Resume.
+  const foreign = headless && sessions[id] && !sessions[id].headless;
+  const mark = headless && !foreign;
   const status =
     typeof id === "string" && id ? nextSessionStatus(input["hook_event_name"]) : undefined;
   let sessionsChanged = false;
-  if (status === null && id in sessions) {
+  if (status === null && id in sessions && !foreign) {
     delete sessions[id];
     sessionsChanged = true;
-  } else if (status && sessions[id]?.status !== status) {
-    sessions[id] = { status, at: now.toISOString() };
+  } else if (status && (sessions[id]?.status !== status || !!sessions[id]?.headless !== mark)) {
+    sessions[id] = { status, at: now.toISOString(), ...(mark && { headless: true as const }) };
     sessionsChanged = true;
   }
   if (!stateChanged && !sessionsChanged) return null;
