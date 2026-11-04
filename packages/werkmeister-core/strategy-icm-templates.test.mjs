@@ -99,6 +99,8 @@ test("each template renders with no undefined and a route per stage", async () =
           // SW-316: the host run misses the container env; the tests-only gate runs where pr open will.
           assert.match(c, /without the container's env \(`HOST`, `WERKMEISTER_SLOT`/, `${wt}/${d}`);
           assert.match(c, /run `werkmeister pr gate --tests`/, `${wt}/${d}`);
+          // SW-334: the redirect wraps the whole && chain, not its last command.
+          assert.ok(c.includes('`{ <test command>; } > <log> 2>&1; echo "exit $?"`'), `${wt}/${d}`);
         }
         // SW-143: every exercise step defers a library/CLI to its Validation text, and the
         // templates stay app-agnostic — the werkmeister recipe lives in its services.yaml.

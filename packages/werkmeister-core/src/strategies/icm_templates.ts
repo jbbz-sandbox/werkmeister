@@ -72,7 +72,8 @@ const TEST_STEP =
   "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. " +
   "Once it passes, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record both exit codes. " +
   "A subagent you brief to run tests or the CLI gets that wrapped command verbatim in its brief. " +
-  "Redirect output to a file, trust the exit code, read back only the failing slice.";
+  // SW-334: `cmd1 && cmd2 > log` redirects only cmd2; the group sends the whole chain to the log.
+  'Redirect output to a file as one group, so every command in an `&&` chain lands there: `{ <test command>; } > <log> 2>&1; echo "exit $?"`. Trust the exit code, read back only the failing slice.';
 
 // SW-388: in sw-386 a must-fix passed the tests, the exercise and the gate; only a separate review caught it.
 const reviewStep = (rerun: string) =>
