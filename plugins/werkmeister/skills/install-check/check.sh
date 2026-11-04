@@ -81,5 +81,13 @@ else ok "no marketplace werkmeister plugin installed"; fi
 cmd="$(node -e 'console.log(require(process.argv[1]).mcpServers.werkmeister.command)' "$PLUGIN/.mcp.json" 2>/dev/null)"
 [ "$cmd" = werkmeister ] && ok "plugin MCP runs '$cmd mcp' from PATH" || bad "plugin MCP command is '$cmd' (expected werkmeister)"
 
+# 6. VS Code extension is not older than its source (report only: installing needs the person's yes)
+ext="$(ls -td "$HOME"/.vscode/extensions/jbbz.werkmeister-vscode-* 2>/dev/null | head -1)"
+if [ -n "$ext" ]; then
+  newer="$(find "$REPO/packages/werkmeister-vscode/src" -type f -newer "$ext" 2>/dev/null | head -1)"
+  if [ -n "$newer" ]; then bad "VS Code extension ${ext##*/} is older than $newer (run: pnpm --filter werkmeister-vscode install:local)"
+  else ok "VS Code extension ${ext##*/} is up to date"; fi
+fi
+
 [ $drift = 0 ] && echo "RESULT clean" || echo "RESULT drift found$([ $FIX = 1 ] && echo ', fixes applied: rerun to confirm')"
 exit $drift

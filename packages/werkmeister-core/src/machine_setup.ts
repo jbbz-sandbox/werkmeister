@@ -1844,6 +1844,8 @@ export interface VscodeExtensionState {
    * only `prepack` builds it, so a dev's local build is never installed.
    */
   bundled: { path: string; version: string } | null;
+  /** The extension's version in this checkout (packages/werkmeister-vscode), or null when not a checkout. */
+  checkout: string | null;
 }
 
 export function vscodeExtensionState(
@@ -1861,6 +1863,9 @@ export function vscodeExtensionState(
     bundled: fs.existsSync(vsix)
       ? { path: vsix, version: readJson(path.join(root, "package.json"))?.version }
       : null,
+    checkout:
+      readJson(path.join(root, "..", "..", "packages", "werkmeister-vscode", "package.json"))
+        ?.version ?? null,
   };
 }
 
@@ -1886,6 +1891,17 @@ export function syncVscodeExtension(
     ];
   }
   if (!state.bundled) {
+    // SW-378: a checkout never installs on its own, but a stale install still shows as drift.
+    if (state.installed && state.checkout && state.installed !== state.checkout) {
+      return [
+        {
+          label,
+          ok: false,
+          optional: true,
+          detail: `${state.installed}, checkout has ${state.checkout} — pnpm --filter werkmeister-vscode install:local`,
+        },
+      ];
+    }
     return [
       {
         label,

@@ -26,6 +26,7 @@ Run the check first and show the person its output. If it finds drift, run `--fi
 | `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json` includes `plugins/werkmeister` | adds it, and sets `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` |
 | No marketplace `werkmeister@…` plugin installed | reports only: `claude plugin uninstall werkmeister` (ask the person first) |
 | Plugin `.mcp.json` runs `werkmeister` from PATH | reports only |
+| No file in `packages/werkmeister-vscode/src` is newer than the installed `~/.vscode/extensions/jbbz.werkmeister-vscode-*` | reports only: `pnpm --filter werkmeister-vscode install:local` (ask the person first) |
 
 On a machine without the checkout (`$WERKMEISTER_REPO/apps/cli` missing) the script exits 2: there is nothing to compare against.
 

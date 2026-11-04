@@ -806,6 +806,31 @@ describe("syncVscodeExtension", () => {
   });
 });
 
+describe("syncVscodeExtension from a checkout (SW-378)", () => {
+  const LIST = "code --list-extensions --show-versions";
+  let base: string;
+  let root: string;
+  beforeEach(() => {
+    // A stand-in monorepo: root is apps/cli with no packaged .vsix, the extension's package beside it.
+    base = fs.mkdtempSync(path.join(os.tmpdir(), "vsix-checkout-"));
+    root = path.join(base, "apps/cli");
+    fs.mkdirSync(root, { recursive: true });
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ version: "0.65.0" }));
+    const ext = path.join(base, "packages/werkmeister-vscode");
+    fs.mkdirSync(ext, { recursive: true });
+    fs.writeFileSync(path.join(ext, "package.json"), JSON.stringify({ version: "0.65.0" }));
+  });
+  afterEach(() => fs.rmSync(base, { recursive: true, force: true }));
+
+  it("reports an installed extension older than the checkout's as drift", () => {
+    const runner = fakeRunner({ [LIST]: [0, "jbbz.werkmeister-vscode@0.36.2\n"] });
+    const steps = syncVscodeExtension(true, false, vscodeExtensionState(runner, root), runner);
+    expect(steps[0]).toMatchObject({ ok: false, optional: true });
+    expect(steps[0].detail).toContain("0.36.2");
+    expect(steps[0].detail).toContain("0.65.0");
+  });
+});
+
 describe("severity", () => {
   it("keeps optional failures out of the exit-code count", () => {
     // The rule commands/setup.ts applies: only `!ok && !optional` fails a run.

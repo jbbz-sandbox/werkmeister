@@ -87,3 +87,27 @@ test("a failed rebuild reports ERROR and no FIX line, so nothing asks for a rest
   assert.doesNotMatch(r.stdout, /^FIX {3}.*build/m);
   assert.equal(r.status, 1);
 });
+
+/** An installed extension folder, aged *ageMs*, and one extension source file written now. */
+function extension(ageMs) {
+  const ext = path.join(t, "home/.vscode/extensions/jbbz.werkmeister-vscode-0.70.1");
+  fs.mkdirSync(ext, { recursive: true });
+  write(path.join(repo, "packages/werkmeister-vscode/src/extension.ts"), "");
+  const at = new Date(Date.now() - ageMs);
+  fs.utimesSync(ext, at, at);
+}
+
+test("an installed extension older than its source is drift, reported and never installed", () => {
+  extension(60_000);
+  const r = run();
+  assert.match(
+    r.stdout,
+    /^DRIFT VS Code extension jbbz\.werkmeister-vscode-0\.70\.1 is older .*install:local/m,
+  );
+  assert.doesNotMatch(r.calls.join("\n"), /code /);
+});
+
+test("an extension installed after its source changed is up to date", () => {
+  extension(-60_000);
+  assert.match(run().stdout, /^OK {4}VS Code extension .* is up to date/m);
+});
