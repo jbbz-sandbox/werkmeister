@@ -646,6 +646,41 @@ async function repoCheck(dir: string, file: PrFile, deps: Deps): Promise<[boolea
       ];
 }
 
+/**
+ * SW-457: a grouped PR needs rebase and merge to keep one commit per ticket. A warning, never a
+ * failure: on a squash-only base the way out (bypass, or change the ruleset) is the person's call.
+ * shortcut: reads rulesets only, not the repo's own allow_rebase_merge; add it when a ruleset-less repo bites.
+ */
+async function mergeCheck(dir: string, file: PrFile, deps: Deps): Promise<string> {
+  const base = String(file.fm["base"] ?? "main");
+  const r = await deps.run(
+    "gh",
+    ["api", `repos/${String(file.fm["repo"] ?? "")}/rules/branches/${base}`],
+    dir,
+  );
+  let rules: { type?: string; parameters?: Record<string, unknown> }[];
+  try {
+    if (r.code !== 0) throw new Error(r.stderr.trim() || r.stdout.trim() || `exit ${r.code}`);
+    rules = JSON.parse(r.stdout);
+    if (!Array.isArray(rules)) throw new Error("not a list of rules");
+  } catch (e) {
+    return `warning: could not read ${base}'s rules — ${e instanceof Error ? e.message : String(e)}`;
+  }
+  // SW-462: a merge queue's method applies to every PR, whatever the PR rule allows.
+  const queue = rules.find((x) => x.type === "merge_queue")?.parameters?.["merge_method"];
+  if (queue !== undefined)
+    return String(queue).toUpperCase() === "REBASE"
+      ? `rebase allowed on ${base} (merge queue)`
+      : `warning: ${base}'s merge queue merges with ${String(queue)}; a grouped PR needs rebase — say so at the top of the body and bypass the queue to rebase-merge it`;
+  // One entry per active ruleset (org and repo); a method is allowed only when every rule allows it.
+  for (const x of rules.filter((x) => x.type === "pull_request")) {
+    const allowed = x.parameters?.["allowed_merge_methods"];
+    if (Array.isArray(allowed) && !allowed.includes("rebase"))
+      return `warning: ${base}'s ruleset allows ${allowed.join(", ") || "no method"} only; a grouped PR needs rebase and merge to keep one commit per ticket — allow rebase, or merge it another way`;
+  }
+  return `rebase allowed on ${base}`;
+}
+
 const LOAD_POLL_MS = 15_000;
 // The whole gate run's wait, shared by every check, so lint + tests + release can't stack waits (SW-262).
 const LOAD_WAIT_MS = 10 * 60_000;
@@ -767,6 +802,9 @@ async function gateChecks(
     add("acceptance", table === null, table ? `PR file ${table}` : "all PASS");
     add("approved", statusOf(file) === "approved", `status: ${statusOf(file)}`);
     add("repo", ...(await repoCheck(path.join(ws, file.dir), file, deps)));
+    const group = loadConfigFile(ws, null)["group"];
+    if (Array.isArray(group) ? group.length : String(group ?? "").trim())
+      add("merge", true, await mergeCheck(dir, file, deps));
     // exercise.md is a file read too, so a malformed table fails before the tests (SW-286).
     const skipExercise = reason(file.fm["skip_exercise"]);
     if (skipExercise) add("exercise", true, `skipped: ${skipExercise}`);

@@ -25,6 +25,8 @@ export interface FakeWorld {
   issues?: unknown[];
   /** `gh pr create` prints it. */
   prUrl?: string;
+  /** `gh api repos/…/rules/branches/…` prints these (the base's active rules); default none. */
+  rules?: unknown[];
   /** Containers the fake docker shows as running, to the gate's `ps --format {{.Names}}…` only. */
   running?: string[];
 }
@@ -56,6 +58,11 @@ if (tool === "gh") {
       process.stderr.write((world.auth ?? 0) === 0 ? "  ✓ Logged in to github.com account octo (keyring)\\n" : "You are not logged into any GitHub hosts.\\n");
       process.exit(world.auth ?? 0);
     case "api user": out("octo\\n"); break;
+    // The gate's merge row (SW-457): any other \`gh api\` path still falls through to unhandled.
+    case "api " + args[1]:
+      if (!args[1].includes("/rules/branches/")) fail("fake gh: unhandled: " + args.join(" "));
+      out(JSON.stringify(world.rules ?? []) + "\\n");
+      break;
     case "search prs": out("[]\\n"); break;
     case "pr list": break;
     case "pr create": out((world.prUrl ?? "https://github.com/o/app/pull/1") + "\\n"); break;
