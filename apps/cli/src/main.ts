@@ -164,8 +164,6 @@ type CommandSpec = {
    * commands (`stop --if-idle`): hidden, and warns naming the spelling this returns.
    */
   deprecated?: (args: Namespace) => string;
-  /** Runs when its noun is given no verb: `workspace <feature>` predates `workspace new`. */
-  isDefault?: boolean;
 };
 
 const deprecation = (old: string, now: string) =>
@@ -764,7 +762,6 @@ const SPECS: CommandSpec[] = [
   },
   {
     name: "workspace new",
-    isDefault: true,
     group: "Workspaces:",
     help: workspaceHelp,
     load: () => import("./commands/workspace.js"),
@@ -1783,12 +1780,6 @@ export async function main(): Promise<void> {
     return cmd;
   };
 
-  // `workspace <feature>` reached the default verb; `ws` is new, so only the old noun warns.
-  const isImplicit = (noun: string, verb: string) => {
-    const at = process.argv.indexOf(noun);
-    return at >= 0 && process.argv[at + 1] !== verb;
-  };
-
   // *warnAs* marks a hidden pre-SW-186 spelling: it warns on stderr (stdout carries
   // hook and --json output), then runs exactly what the new spelling runs.
   const addCommand = (
@@ -1797,10 +1788,7 @@ export async function main(): Promise<void> {
     name: string,
     warnAs?: (args: Namespace) => string,
   ) => {
-    const cmd = parent.command(name, {
-      hidden: Boolean(warnAs),
-      isDefault: !warnAs && spec.isDefault,
-    });
+    const cmd = parent.command(name, { hidden: Boolean(warnAs) });
     if (parent === program && !warnAs) cmd.helpGroup(spec.group);
     if (spec.help) withHelp(cmd, warnAs ? name : spec.name, spec.help);
     spec.configure(cmd);
@@ -1811,8 +1799,6 @@ export async function main(): Promise<void> {
       const positionals = actionArgs.slice(0, -2);
       const args = spec.namespace(positionals, opts);
       if (warnAs) console.error(deprecation(name, warnAs(args)));
-      else if (spec.isDefault && isImplicit(parent.name(), name))
-        console.error(deprecation(`${parent.name()} <feature>`, spec.name));
       if (parseOnly) {
         console.log(JSON.stringify({ command: spec.name, args }));
         return;
