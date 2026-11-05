@@ -111,3 +111,105 @@ test("an extension installed after its source changed is up to date", () => {
   extension(-60_000);
   assert.match(run().stdout, /^OK {4}VS Code extension .* is up to date/m);
 });
+
+/** Makes the stand-in checkout a git repo on `branch` whose origin is one commit ahead, in a file --fix alone never watches. */
+function behindOrigin(branch = "main") {
+  const git = (cwd, ...a) => {
+    const r = spawnSync("git", a, { cwd, encoding: "utf8" });
+    assert.equal(r.status, 0, r.stderr);
+  };
+  const id = ["-c", "user.name=t", "-c", "user.email=t@t"];
+  git(repo, "init", "-q", "-b", "main");
+  git(repo, "add", "-A");
+  git(repo, ...id, "commit", "-qm", "base");
+  const origin = path.join(t, "origin.git");
+  git(t, "clone", "-q", "--bare", repo, origin);
+  git(repo, "remote", "add", "origin", origin);
+  git(repo, "fetch", "-q", "origin");
+  git(repo, "branch", "-q", "-u", "origin/main");
+  const other = path.join(t, "other");
+  git(t, "clone", "-q", origin, other);
+  write(path.join(other, "apps/werkmeister-mcp/src/x.ts"), "");
+  git(other, "add", "-A");
+  git(other, ...id, "commit", "-qm", "ahead");
+  git(other, "push", "-q");
+  if (branch !== "main") git(repo, "checkout", "-q", "-b", branch);
+  // dist newer than every source --fix watches: only the pull makes it stale.
+  fs.utimesSync(path.join(repo, "apps/cli/dist/main.js"), new Date(), new Date());
+}
+
+test("--pull fast-forwards main, prints the commit to roll back to, and builds every package", () => {
+  behindOrigin();
+  fake("pnpm");
+  fake("corepack");
+  const r = run("--pull");
+  assert.match(r.stdout, /^PULL {2}main \w+ -> \w+ \(roll back: git -C .* checkout \w+/m);
+  assert.ok(fs.existsSync(path.join(repo, "apps/werkmeister-mcp/src/x.ts")), "not pulled");
+  const build = r.calls.find((c) => / turbo run build/.test(c));
+  assert.ok(build, `no build in ${JSON.stringify(r.calls)}`);
+  assert.doesNotMatch(build, /--filter/);
+  assert.match(r.stdout, /^FIX .*turbo run build$/m);
+});
+
+test("--pull off main pulls and builds nothing", () => {
+  behindOrigin("jayboyer/feature");
+  fake("pnpm");
+  fake("corepack");
+  const r = run("--pull");
+  assert.equal(r.status, 2);
+  assert.match(r.stdout, /^ERROR --pull: .* is on jayboyer\/feature, not main/m);
+  assert.equal(r.calls.length, 0, JSON.stringify(r.calls));
+  assert.ok(!fs.existsSync(path.join(repo, "apps/werkmeister-mcp/src/x.ts")));
+});
+
+/** A fake gh: checks pass unless CHECKS_RC says otherwise, the queue reports QUEUE_STATE. */
+function fakeGh() {
+  write(
+    path.join(bin, "gh"),
+    `#!/bin/sh
+case "$*" in
+  "pr checks"*--watch*) exit \${CHECKS_RC:-0} ;;
+  "pr checks"*) echo "test	pass" ;;
+  *headRefOid*) echo abc123 ;;
+  "pr view"*"--json id"*) echo PR_ID ;;
+  *enqueuePullRequest*) echo "enqueue $*" >>"${log}"; echo '{}' ;;
+  "api graphql"*) echo "\${QUEUE_STATE:-MERGED false}" ;;
+esac
+`,
+    0o755,
+  );
+}
+
+function queue(env = {}) {
+  const r = spawnSync("bash", [path.join(import.meta.dirname, "queue-pr.sh"), "7", "o/r"], {
+    env: {
+      ...process.env,
+      PATH: `${bin}:${process.env.PATH}`,
+      QUEUE_PR_INTERVAL: "0",
+      QUEUE_PR_TRIES: "2",
+      ...env,
+    },
+    encoding: "utf8",
+  });
+  const calls = fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : [];
+  return { ...r, calls };
+}
+
+test("queue-pr queues a PR whose checks pass and waits for the merge", () => {
+  fakeGh();
+  const r = queue();
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /^QUEUED #7\nMERGED #7$/m);
+  assert.match(r.calls.join("\n"), /enqueue .*PR_ID/);
+});
+
+test("queue-pr never queues a PR whose checks failed, and reports one that left the queue", () => {
+  fakeGh();
+  const failed = queue({ CHECKS_RC: "1" });
+  assert.equal(failed.status, 1);
+  assert.match(failed.stdout, /^ERROR #7 checks failed/m);
+  assert.equal(failed.calls.length, 0);
+  const dropped = queue({ QUEUE_STATE: "OPEN false" });
+  assert.equal(dropped.status, 1);
+  assert.match(dropped.stdout, /^ERROR #7 left the queue unmerged/m);
+});

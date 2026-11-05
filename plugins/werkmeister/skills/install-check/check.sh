@@ -1,19 +1,35 @@
 #!/bin/bash
 # Check that the global werkmeister CLI, its MCP server and the Claude Code
-# plugin all run from the repo checkout. Pass --fix to repair drift.
+# plugin all run from the repo checkout. Pass --fix to repair drift; --pull
+# first fast-forwards the checkout's main (after a merge or a release), then
+# fixes and builds every package.
 set -uo pipefail
 
 REPO="${WERKMEISTER_REPO:-$HOME/repos/werkmeister}"
 CLI="$REPO/apps/cli"
 PLUGIN="$REPO/plugins/werkmeister"
 SETTINGS="$HOME/.claude/settings.json"
-FIX=0; [ "${1:-}" = "--fix" ] && FIX=1
+FIX=0; PULL=0
+case "${1:-}" in --fix) FIX=1 ;; --pull) FIX=1; PULL=1 ;; esac
 drift=0
 
 ok()   { echo "OK    $*"; }
 bad()  { echo "DRIFT $*"; drift=1; }
 
 [ -d "$CLI" ] || { echo "ERROR repo CLI not found at $CLI (set WERKMEISTER_REPO)"; exit 2; }
+
+# 0. --pull: main only, nothing uncommitted, fast-forward only; any refusal pulls and builds nothing.
+moved=0
+if [ $PULL = 1 ]; then
+  branch="$(git -C "$REPO" symbolic-ref --short HEAD 2>/dev/null)"
+  [ "$branch" = main ] || { echo "ERROR --pull: $REPO is on ${branch:-a detached HEAD}, not main; nothing pulled"; exit 2; }
+  [ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || { echo "ERROR --pull: $REPO has uncommitted changes; nothing pulled"; exit 2; }
+  before="$(git -C "$REPO" rev-parse --short HEAD)"
+  out="$(git -C "$REPO" pull --ff-only -q 2>&1)" || { echo "ERROR --pull: git pull --ff-only failed: $out"; exit 2; }
+  after="$(git -C "$REPO" rev-parse --short HEAD)"
+  if [ "$before" = "$after" ]; then ok "main is up to date at $after"
+  else moved=1; echo "PULL  main $before -> $after (roll back: git -C $REPO checkout $before, then rerun --fix)"; fi
+fi
 
 # 1. CLI binaries on PATH resolve into the repo
 for bin in werkmeister w9r; do
@@ -30,13 +46,15 @@ fi
 
 # 2. dist is not older than the source it bundles (CLI src + workspace packages)
 newer="$(find "$CLI/src" "$REPO"/packages/*/src -type f -newer "$CLI/dist/main.js" 2>/dev/null | head -1)"
-if [ ! -f "$CLI/dist/main.js" ] || [ -n "$newer" ]; then
-  bad "dist is stale (${newer:-dist/main.js missing})"
+# --fix builds the CLI and what it bundles; --pull builds every package (the MCP server's apps/mcp/dist too).
+build="corepack pnpm turbo run build$([ $PULL = 1 ] || echo ' --filter=werkmeister')"
+if [ ! -f "$CLI/dist/main.js" ] || [ -n "$newer" ] || [ $moved = 1 ]; then
+  bad "dist is stale (${newer:-$([ $moved = 1 ] && echo "main moved" || echo "dist/main.js missing")})"
   if [ $FIX = 1 ]; then
     # A pull can add deps, and the CLI bundles core's dist: install, then let turbo build core first (SW-319).
     # FIX only after success: a FIX line asks for a restart, which can't help a failed build.
-    if out="$(cd "$REPO" && corepack pnpm install --frozen-lockfile 2>&1 && corepack pnpm turbo run build --filter=werkmeister 2>&1)"; then
-      echo "FIX   corepack pnpm install --frozen-lockfile && corepack pnpm turbo run build --filter=werkmeister"
+    if out="$(cd "$REPO" && corepack pnpm install --frozen-lockfile 2>&1 && $build 2>&1)"; then
+      echo "FIX   corepack pnpm install --frozen-lockfile && $build"
     else
       echo "ERROR rebuild failed: $(grep -m3 -iE 'error' <<<"$out" | tr '\n' ' ')"
     fi
