@@ -1371,12 +1371,15 @@ export async function openPrs(
       dir,
     );
     let url = existing.code === 0 ? existing.stdout.trim() : "";
+    // A draft can't be merged, so a step outside the code can't be skipped by an early merge (SW-461).
+    const hold = String(f.fm["hold"] ?? "").trim();
+    let held = false;
     if (!url) {
       const bodyFile = path.join(
         fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-pr-")),
         "body.md",
       );
-      fs.writeFileSync(bodyFile, f.body);
+      fs.writeFileSync(bodyFile, hold ? `Don't merge until: ${hold}\n\n${f.body}` : f.body);
       const created = await deps.run(
         "gh",
         [
@@ -1392,10 +1395,12 @@ export async function openPrs(
           f.title,
           "--body-file",
           bodyFile,
+          ...(hold ? ["--draft"] : []),
         ],
         dir,
       );
       fs.rmSync(path.dirname(bodyFile), { recursive: true, force: true });
+      held = !!hold;
       url = created.stdout.trim().split("\n").pop() ?? "";
       if (created.code !== 0 || !url.startsWith("http")) {
         ok = false;
@@ -1415,6 +1420,11 @@ export async function openPrs(
     });
     opened.push(path.relative(ws, f.path));
     lines.push(`${f.stem}: open ${url}`);
+    if (held) lines.push(`  hold: opened as a draft — run gh pr ready ${url} once: ${hold}`);
+    else if (hold)
+      lines.push(
+        `  hold: not applied, the PR was already open — run gh pr ready --undo ${url} to make it a draft`,
+      );
     // Squash and rebase rewrite SHAs, so a blame-ignore entry added here would match nothing on base.
     const ignored = await deps.run("git", [
       "-C",
