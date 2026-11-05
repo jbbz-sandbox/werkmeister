@@ -358,10 +358,10 @@ test("pause gate: an unblocked prompt clears a stale resume nudge", () => {
 
 test("wake nudge: kept needs-you until the session's next hook delivers it, once (SW-418)", () => {
   const dir = workspace("l-wake", null);
-  const file = path.join(dir, ".werkmeister", "wake-nudge.json");
+  const file = path.join(dir, ".werkmeister", "wake-nudge-s-1.json");
   const fire = (e, extra = {}) =>
     hook({ hook_event_name: e, cwd: dir, session_id: "s-1", ...extra });
-  write(file, JSON.stringify({ "s-1": { message: "PR 9 conflicts with main, resolve it." } }));
+  write(file, JSON.stringify({ message: "PR 9 conflicts with main, resolve it." }));
   flagNeedsYou(dir, "waiting for your open session: PR 9 conflicts");
   assert.equal(fire("PreToolUse", { tool_name: "Bash" }), null);
   assert.equal(readAgentState(dir).state, "needs-you", "its own activity doesn't erase the flag");
@@ -380,13 +380,60 @@ test("wake nudge: kept needs-you until the session's next hook delivers it, once
   assert.match(out.hookSpecificOutput.additionalContext, /PR 9 conflicts with main/);
   assert.equal(fs.existsSync(file), false, "delivered once");
   assert.equal(readAgentState(dir).state, "working");
-  write(file, JSON.stringify({ "s-1": { message: "PR 9 merged." } }));
+  write(file, JSON.stringify({ message: "PR 9 merged." }));
   assert.match(fire("UserPromptSubmit").hookSpecificOutput.additionalContext, /PR 9 merged/);
-  write(file, JSON.stringify({ "s-1": { message: "PR 9 merged." } }));
+  write(file, JSON.stringify({ message: "PR 9 merged." }));
   const stop = fire("Stop", { last_assistant_message: "Done." });
   assert.equal(stop.decision, "block", "a turn ending first still gets it");
   assert.match(stop.reason, /PR 9 merged/);
   assert.equal(fs.existsSync(file), false);
+});
+
+test("wake nudge: a write or a second hook landing mid-delivery is neither lost nor sent twice (SW-444)", async () => {
+  const { deliverWake, writeWakeNudge } = await import("./dist/agent_state.js");
+  const { syncBuiltinESMExports } = await import("node:module");
+  const fsc = (await import("node:fs")).default;
+  const real = fsc.readFileSync;
+  // While the hook reads the nudge, pr watch appends B, and (withHook) a parallel hook delivers.
+  for (const withHook of [false, true]) {
+    const dir = workspace(`l-race-${withHook}`, null);
+    const input = { hook_event_name: "PostToolUse", session_id: "s-1", cwd: dir };
+    let nested = null;
+    let armed = true;
+    fsc.readFileSync = function (p, ...rest) {
+      const out = real.call(this, p, ...rest);
+      if (armed && String(p).includes("wake-nudge")) {
+        armed = false;
+        writeWakeNudge(dir, "s-1", "B");
+        if (withHook) nested = deliverWake(input, dir);
+      }
+      return out;
+    };
+    syncBuiltinESMExports();
+    try {
+      writeWakeNudge(dir, "s-1", "A");
+      armed = true;
+      const got = [deliverWake(input, dir), nested];
+      fsc.readFileSync = real;
+      syncBuiltinESMExports();
+      got.push(deliverWake(input, dir));
+      const texts = got.filter(Boolean).map((o) => o.hookSpecificOutput.additionalContext);
+      const seen = JSON.stringify(texts);
+      assert.equal(
+        texts.filter((t) => t.includes("A")).length,
+        1,
+        `A once (withHook ${withHook}): ${seen}`,
+      );
+      assert.equal(
+        texts.filter((t) => t.includes("B")).length,
+        1,
+        `B once (withHook ${withHook}): ${seen}`,
+      );
+    } finally {
+      fsc.readFileSync = real;
+      syncBuiltinESMExports();
+    }
+  }
 });
 
 test("status: a paused workspace reports when, what Resume brings back, and a pending nudge", async () => {
