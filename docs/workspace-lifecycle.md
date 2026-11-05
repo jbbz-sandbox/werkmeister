@@ -225,6 +225,8 @@ A `docker exec` typed by hand in a terminal outside Claude is not seen.
 
 `auto_stop` (a SessionEnd hook, `werkmeister internal session-end`) is on by default for `autonomous` workspaces. Set `auto_stop: false` in `.werkmeister/workspace.yml` to turn it off.
 
+A grouped PR covers several tickets in one workspace and one PR. List the member keys in `.werkmeister/workspace.yml` as `group: [SW-2, SW-3]` (the lead is `issue_id`) before the run starts, then run `werkmeister workspace init`. The ICM build stages then commit once per ticket and review the range `origin/main...HEAD`, and `propose` keeps the per-ticket commits, asks for rebase and merge rather than squash, and closes each member after the release. Init rewrites the stage contracts, so set `group` before stage work begins.
+
 ## Pause and resume
 
 `⏸ Pause` on a card (or `werkmeister feature pause`, the `pause` MCP tool) takes a workspace's load off the host without losing its place (SW-70):

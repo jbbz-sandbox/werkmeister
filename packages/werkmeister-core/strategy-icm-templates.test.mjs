@@ -237,8 +237,8 @@ test("each template renders with no undefined and a route per stage", async () =
   }
 });
 
-/** Init a feature-template icm workspace at *root* with *autonomous*; returns what it wrote. */
-async function initIcm(root, standardsDir, autonomous) {
+/** Init an icm workspace (feature unless *extra* says otherwise) at *root* with *autonomous*; returns what it wrote. */
+async function initIcm(root, standardsDir, autonomous, extra = {}) {
   await withSandboxHome(
     () =>
       withReporter(collectingReporter(), async () =>
@@ -248,7 +248,7 @@ async function initIcm(root, standardsDir, autonomous) {
           repos: [["repo", "me/demo"]],
           task: "t",
           meta: { FEATURE: "demo", SERVICES: "api" },
-          inputs: { work_type: "feature", starting_prompt: "p", autonomous },
+          inputs: { work_type: "feature", starting_prompt: "p", autonomous, ...extra },
           configOverride: null,
         }),
       ),
@@ -314,6 +314,71 @@ test("autonomous renders self-checks and stop points, and turning it off restore
     assert.match(off.claude, chatRule);
     assert.match(off.prRules, chatRule);
     for (const c of [...on.contracts, on.claude, on.prRules]) assert.doesNotMatch(c, chatRule);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(standardsDir, { recursive: true, force: true });
+  }
+});
+
+// SW-438: `group` in workspace.yml marks a grouped PR; unset keeps the uncommitted-diff contracts.
+test("group renders per-ticket commits, a range review and kept commits; unset keeps today's text", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-group-"));
+  const standardsDir = fs.mkdtempSync(path.join(os.tmpdir(), "icm-group-standards-"));
+  try {
+    const on = await initIcm(root, standardsDir, "false", { group: "SW-2,SW-3" });
+    const [, , implement, propose] = on.contracts;
+    assert.match(
+      implement,
+      /one commit per ticket, for the workspace's issue and each member, `SW-2`, `SW-3`/,
+    );
+    assert.match(implement, /commits in `origin\/main\.\.\.HEAD`/);
+    assert.match(
+      implement,
+      /fold each fix into the commit of the ticket it belongs to \(`git commit --fixup <sha>`/,
+    );
+    assert.match(implement, /^- Code changes, one commit per ticket/m);
+    assert.match(implement, /Read each ticket's commit/);
+    assert.doesNotMatch(
+      implement,
+      /uncommitted changes, untracked files included|Code changes, uncommitted/,
+    );
+    assert.doesNotMatch(propose, /One commit per code repo touched/);
+    assert.match(propose, /never squash to one per repo/);
+    // The fold keeps the base; lint runs before it so its fixes land in a commit.
+    assert.match(propose, /git rebase --autosquash \$\(git merge-base HEAD origin\/main\)/);
+    assert.ok(
+      propose.indexOf("Run the repo's lint command") <
+        propose.indexOf("Then fold everything uncommitted"),
+      "lint before fold",
+    );
+    assert.match(propose, /Rebase and merge, not squash/);
+    assert.match(
+      propose,
+      /close each member — `werkmeister issue update <KEY> --status Done --comment <PR url>` for `SW-2`, `SW-3`/,
+    );
+    assert.match(on.pipeline, /one per ticket in a grouped PR/);
+
+    const auto = await initIcm(root, standardsDir, "true", { group: "SW-2" });
+    assert.match(auto.contracts.at(-1), /When the PR ships, close each member/);
+
+    const bugRoot = fs.mkdtempSync(path.join(os.tmpdir(), "icm-group-bugfix-"));
+    try {
+      const bug = await initIcm(bugRoot, standardsDir, "false", {
+        group: "SW-2",
+        work_type: "bugfix",
+      });
+      assert.match(bug.contracts[1], /one commit per ticket/);
+      assert.match(bug.contracts[2], /commits in `origin\/main\.\.\.HEAD`/);
+    } finally {
+      fs.rmSync(bugRoot, { recursive: true, force: true });
+    }
+
+    const off = await initIcm(root, standardsDir, "false");
+    assert.match(off.contracts[2], /uncommitted changes, untracked files included/);
+    assert.match(off.contracts[2], /^- Code changes, uncommitted/m);
+    assert.match(off.contracts[3], /One commit per code repo touched/);
+    for (const c of off.contracts)
+      assert.doesNotMatch(c, /grouped PR|origin\/main\.\.\.HEAD|close each member/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(standardsDir, { recursive: true, force: true });

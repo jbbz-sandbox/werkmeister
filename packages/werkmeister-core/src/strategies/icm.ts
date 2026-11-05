@@ -121,6 +121,7 @@ function vars(ctx: InitContext, stages: Stage[]): IcmVars {
         : "restart whatever serves the change as `.werkmeister/werkmeister-context.md` describes",
     standards: "",
     autonomous: isTrue(ctx.inputs["autonomous"]),
+    group: list(ctx.inputs["group"]),
   };
 }
 

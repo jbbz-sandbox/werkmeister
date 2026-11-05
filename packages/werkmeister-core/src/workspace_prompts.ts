@@ -135,6 +135,7 @@ export const _INPUT_FIELDS: ReadonlyArray<[string, string | null, string]> = [
   ["task", "TASK", "task"],
   ["starting_prompt", "STARTING_PROMPT", "starting_prompt"],
   ["labels", "LABELS", "labels"],
+  ["group", "GROUP", "group"],
   ["autonomous", "AUTONOMOUS", "autonomous"],
   ["model", "MODEL", "model"],
   ["auto_stop", "AUTO_STOP", "auto_stop"],

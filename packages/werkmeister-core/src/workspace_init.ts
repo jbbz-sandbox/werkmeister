@@ -199,7 +199,7 @@ function getuser(): string {
 // ---------------------------------------------------------------------------
 
 // Config fields persisted as a real YAML list rather than a comma-joined string.
-const _LIST_VALUED_FIELDS = new Set<string>(["labels"]);
+const _LIST_VALUED_FIELDS = new Set<string>(["labels", "group"]);
 
 /** Comma-separated string -> trimmed, non-empty list items. */
 function splitMultiValue(value: string): string[] {
