@@ -183,6 +183,10 @@ declare module "claude-code" {
       prsPoll: "ok" | "failed";
       /** The ? legend is shown. */
       legend: boolean;
+      /** Inline (above the prompt) the list shows one line per workspace; expanded it fills the room. */
+      collapsed: boolean;
+      /** Docked, the pane is opened at the widest the dock allows (45% of the terminal). */
+      wide: boolean;
       /** check.sh --fix re-linked werkmeister this session; the next typed prompt is refused once (SW-377). */
       relinked: boolean;
       /** The pane's open tab. */

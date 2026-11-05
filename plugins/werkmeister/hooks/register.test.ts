@@ -49,8 +49,12 @@ function world(on: On, stubs: McpStub = {}, check: CheckAnswer = CLEAN) {
   const calls: { key: string; args: Record<string, unknown>; via: "mcp" | "process" }[] = [];
   const toasts: string[] = [];
   const logs: string[] = [];
+  const opens: { columns?: number }[] = [];
   const clock = mock.clock(on);
-  on("ui.open", () => ({ value: { isPlaced: true as const } }));
+  on("ui.open", (_$, e) => {
+    opens.push(e);
+    return { value: { isPlaced: true as const } };
+  });
   on("ui.close", () => ({ value: undefined }));
   on("ui.panes", () => ({ value: [] }));
   // The workspace server's tools run in a node child (the auto-mode gate refuses a plugin's own MCP call):
@@ -106,7 +110,7 @@ function world(on: On, stubs: McpStub = {}, check: CheckAnswer = CLEAN) {
       };
     return { value: await stub(e.args) };
   });
-  return { calls, toasts, logs, clock };
+  return { calls, toasts, logs, clock, opens };
 }
 
 function ok(structuredContent: unknown, text = "ok"): McpAnswer {
@@ -439,6 +443,51 @@ test("the Focused only toggle shows only workspaces labelled focus", async ($, o
   expect((await ui.find({ key: "row:abc" }))?.text).toBe("abc");
   await ui.press({ key: "focus" });
   expect((await ui.find({ key: "row:ab" }))?.text).toBe("ab");
+  await ui.unmount();
+});
+
+test("docked, Expand reopens the pane at the dock's widest and Collapse at its default", async ($, on) => {
+  const w = world(on, stubs({}));
+  await openPane($);
+  expect(w.opens.at(-1)?.columns).toBeUndefined();
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "terminal",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "collapse" }))?.text).toBe("◂▸ Expand");
+  await ui.press({ key: "collapse" });
+  expect((await ui.find({ key: "collapse" }))?.text).toBe("▸◂ Collapse");
+  expect(w.opens.at(-1)?.columns).toBe(1000);
+  // The cards stay whole either way.
+  expect(await ui.find({ key: "meta:abc" })).toBeDefined();
+  await ui.press({ key: "collapse" });
+  expect(w.opens.at(-1)?.columns).toBeUndefined();
+  await ui.unmount();
+});
+
+test("inline, the Collapse toggle shows one line per workspace", async ($, on) => {
+  world(on, stubs({}));
+  await openPane($);
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "terminal",
+    component: "Pane",
+    props: { ...PANE_PROPS, placement: "inline" as const },
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "collapse" }))?.text).toBe("▾ Collapse");
+  expect(await ui.find({ key: "meta:abc" })).toBeDefined();
+  await ui.press({ key: "collapse" });
+  expect((await ui.find({ key: "collapse" }))?.text).toBe("▴ Expand");
+  expect((await ui.find({ key: "row:abc" }))?.text).toBe("abc");
+  expect((await ui.find({ key: "row:ab" }))?.text).toBe("ab");
+  expect(await ui.find({ key: "meta:abc" })).toBeUndefined();
+  expect(await ui.find({ key: "infra-bar" })).toBeUndefined();
+  await ui.press({ key: "collapse" });
+  expect(await ui.find({ key: "meta:abc" })).toBeDefined();
   await ui.unmount();
 });
 

@@ -191,6 +191,19 @@ const INTERCEPT = "intercept:";
 const PRS = { plugin: "werkmeister", key: "prs" } as const;
 const PRS_POLL = { plugin: "werkmeister", key: "prsPoll" } as const;
 const LEGEND = { plugin: "werkmeister", key: "legend" } as const;
+const COLLAPSED = { plugin: "werkmeister", key: "collapsed" } as const;
+const WIDE = { plugin: "werkmeister", key: "wide" } as const;
+// The engine caps a dock at 45% of the terminal's columns, so asking for more takes the cap.
+const DOCK_MAX_COLUMNS = 1000;
+
+/** Opens (or re-seats) the pane: wide asks the dock for its full share, else its default width. */
+async function openPaneFrame($: EngineInterface, wide: boolean): Promise<void> {
+  await $.ui.open({
+    id: PANE,
+    title: "Werkmeister workspaces",
+    ...(wide ? { columns: DOCK_MAX_COLUMNS } : {}),
+  });
+}
 const RELINKED = { plugin: "werkmeister", key: "relinked" } as const;
 const INSTALL_CHECK = "skills/install-check/check.sh";
 const RESTART =
@@ -1576,7 +1589,7 @@ function startCallbacks($: EngineInterface): void {
 }
 
 async function openPane($: EngineInterface): Promise<void> {
-  await $.ui.open({ id: PANE, title: "Werkmeister workspaces" });
+  await openPaneFrame($, (await $.state.get(WIDE)).value ?? false);
   await tick($);
   void prTick($);
   void resourceTick($);
@@ -1861,6 +1874,11 @@ export const register: Register = (on) => {
     const { value: tab = "list" } = await $.state.get(TAB);
     const { value: focus = false } = await $.state.get(FOCUS);
     const { value: legend = false } = await $.state.get(LEGEND);
+    // Only the inline pane (above the prompt) collapses; a dock already has the screen's height.
+    const inline = e.props.placement === "inline";
+    const { value: collapsedPref = false } = await $.state.get(COLLAPSED);
+    const collapsed = inline && collapsedPref;
+    const { value: wide = false } = await $.state.get(WIDE);
     const { value: prsPoll } = await $.state.get(PRS_POLL);
     const now = new Date(await $.clock.now());
     const shown = visibleRows(rows, focus).map((r) => withLivePrs(r, prs[r.name] ?? []));
@@ -1894,6 +1912,22 @@ export const register: Register = (on) => {
         )}
         {tab === "list" && (
           <Button key="legend" plain label="?" onPress={() => void $.state.set(LEGEND, !legend)} />
+        )}
+        {tab === "list" && inline && (
+          <Button
+            key="collapse"
+            plain
+            label={collapsed ? "▴ Expand" : "▾ Collapse"}
+            onPress={() => void $.state.set(COLLAPSED, !collapsed)}
+          />
+        )}
+        {tab === "list" && !inline && (
+          <Button
+            key="collapse"
+            plain
+            label={wide ? "▸◂ Collapse" : "◂▸ Expand"}
+            onPress={() => void $.state.set(WIDE, !wide).then(() => openPaneFrame($, !wide))}
+          />
         )}
       </Box>
     );
@@ -2266,8 +2300,37 @@ export const register: Register = (on) => {
       );
     };
 
+    if (collapsed) {
+      const loaded = polled !== undefined || prsPoll === "failed";
+      return (
+        <Box flexDirection="column">
+          {tabs}
+          {loadedRows === undefined && (
+            <Text key="loading" dimColor>
+              Loading workspaces…
+            </Text>
+          )}
+          {loadedRows !== undefined && rows.length === 0 && <Text dimColor>No workspaces.</Text>}
+          {shown.map((r) => (
+            <Box key={`line:${r.name}`}>
+              {/* The card's head line: name, agent, auto. */}
+              {
+                cardInfo(
+                  els,
+                  r,
+                  display(r, prsPoll === "failed" ? null : (prs[r.name] ?? []), now, resources),
+                  loaded,
+                )[0]
+              }
+            </Box>
+          ))}
+          {messages}
+        </Box>
+      );
+    }
+
     return (
-      <Box flexDirection="column">
+      <Box flexDirection="column" minHeight={inline ? e.props.scroll.bodyRows : undefined}>
         {tabs}
         <Box key="infra-bar" justifyContent="space-between" marginBottom={1}>
           <Box key="infra-col" flexDirection="column">
