@@ -247,13 +247,15 @@ test("killing the wrapper during its host-load wait stops the wait too (SW-456)"
     },
   );
   const { WERKMEISTER_NO_WAIT: _, ...env } = process.env;
+  // A killed process its new parent hasn't reaped yet is a zombie: kill(pid, 0) still succeeds on it.
   const alive = (pid) => {
     try {
       process.kill(pid, 0);
-      return true;
     } catch {
       return false;
     }
+    const stat = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout;
+    return stat.trim() !== "" && !stat.trim().startsWith("Z");
   };
   const until = async (ok) => {
     for (let i = 0; i < 50 && !ok(); i++) await new Promise((r) => setTimeout(r, 100));
