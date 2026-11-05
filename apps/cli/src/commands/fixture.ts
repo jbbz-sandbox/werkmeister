@@ -12,7 +12,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { seedFixture } from "werkmeister-core/fixture_workspace";
+import { fixturePreset, seedFixture } from "werkmeister-core/fixture_workspace";
 
 const USAGE =
   "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--services <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...";
@@ -83,7 +83,7 @@ export async function run(argv: string[]): Promise<void> {
   const { opts, print, steps } = parsed;
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-fixture-")));
   try {
-    const fx = seedFixture(root, opts);
+    const fx = seedFixture(root, fixturePreset(opts));
     const env = {
       ...process.env,
       ...fx.env,

@@ -6,15 +6,16 @@ import { test } from "node:test";
 import { runCapture } from "./dist/tool_bins.js";
 import { withFakeGh } from "./fixtures.mjs";
 
-const stubbed = async () => (await runCapture("gh", ["pr", "list"])).stderr;
+// Any verb no fake handles (SW-427: the shared fake answers `pr list`).
+const stubbed = async () => (await runCapture("gh", ["release", "list"])).stderr;
 
 test("gh fails closed outside withFakeGh", async () => {
-  assert.match(await stubbed(), /gh called outside withFakeGh: pr list/);
+  assert.match(await stubbed(), /gh called outside withFakeGh: release list/);
 });
 
 test("withFakeGh overrides the stub and puts it back", async () => {
   await withFakeGh({}, async () => {
-    assert.match(await stubbed(), /fake gh: unhandled: pr list/);
+    assert.match(await stubbed(), /fake gh: unhandled: release list/);
   });
   assert.match(await stubbed(), /gh called outside withFakeGh/);
 });
