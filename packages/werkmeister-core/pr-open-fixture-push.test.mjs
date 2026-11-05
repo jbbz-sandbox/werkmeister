@@ -15,7 +15,7 @@ pinWerkmeisterRoot();
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
 /** The gate fixture, inited, with every git push recorded (and answered *pushCode*) instead of run. */
-async function withGateFixture(fn, { origin, pushCode = 0 } = {}) {
+async function withGateFixture(fn, { origin, pushCode = 0, pushErr = "denied" } = {}) {
   await withFixtureWorkspace(
     async (fx) => {
       await withReporter(collectingReporter(), () =>
@@ -23,14 +23,16 @@ async function withGateFixture(fn, { origin, pushCode = 0 } = {}) {
       );
       if (origin) git(fx.repo, "remote", "set-url", "origin", origin);
       const deps = defaultDeps();
+      deps.sleep = async () => {};
       const real = deps.run;
       const pushes = [];
       deps.run = async (bin, args, cwd) => {
         if (bin === "git" && args.includes("push") && !args.includes("--delete")) {
           pushes.push(args);
-          // The gate's dry run (SW-408) passes; the real push answers pushCode.
-          const code = args.includes("--dry-run") ? 0 : pushCode;
-          if (origin) return { code, stdout: "", stderr: code ? "denied" : "" };
+          // The gate's dry run (SW-408) passes; the real push answers pushCode (an array: one per try).
+          const code = args.includes("--dry-run") ? 0 : [pushCode].flat()[0];
+          if (!args.includes("--dry-run") && Array.isArray(pushCode)) pushCode.shift();
+          if (origin) return { code, stdout: "", stderr: code ? pushErr : "" };
         }
         return real(bin, args, cwd);
       };
@@ -86,5 +88,45 @@ test("outside a fixture the push to GitHub runs as before, and its failure ends 
       assert.ok(lines.includes("app: push failed — denied"), lines.join("\n"));
     },
     { origin: "git@github.com:o/app.git", pushCode: 1 },
+  );
+});
+
+test("a push GitHub refuses once with publickey is retried, and the PR opens (SW-410)", async () => {
+  await withGateFixture(
+    async (fx, deps, pushes) => {
+      delete process.env.WERKMEISTER_FIXTURE;
+      deps.run = (
+        (run) => async (bin, args, cwd) =>
+          bin === "gh" && args[1] === "list"
+            ? { code: 0, stdout: "https://github.com/o/app/pull/1\n", stderr: "" }
+            : run(bin, args, cwd)
+      )(deps.run);
+      const { ok, lines } = await openPrs(fx.workspace, undefined, deps, { wait: false });
+      assert.equal(ok, true, lines.join("\n"));
+      assert.equal(pushes.filter((a) => !a.includes("--dry-run")).length, 2);
+    },
+    {
+      origin: "git@github.com:o/app.git",
+      pushCode: [1, 0],
+      pushErr: "git@github.com: Permission denied (publickey).",
+    },
+  );
+});
+
+test("a push GitHub keeps refusing stops after 3 tries and points at GitHub's status (SW-410)", async () => {
+  await withGateFixture(
+    async (fx, deps, pushes) => {
+      delete process.env.WERKMEISTER_FIXTURE;
+      const { ok, lines } = await openPrs(fx.workspace, undefined, deps, { wait: false });
+      assert.equal(ok, false);
+      assert.equal(pushes.filter((a) => !a.includes("--dry-run")).length, 3);
+      assert.match(lines.join("\n"), /push failed — git@github\.com: Permission denied/);
+      assert.match(lines.join("\n"), /githubstatus\.com/);
+    },
+    {
+      origin: "git@github.com:o/app.git",
+      pushCode: [1, 1, 1],
+      pushErr: "git@github.com: Permission denied (publickey).",
+    },
   );
 });

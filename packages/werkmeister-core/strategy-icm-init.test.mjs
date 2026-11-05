@@ -646,6 +646,9 @@ test("the first stage contract, and only it, starts the issue when there is one 
       assert.match(contract("01_research"), start);
       assert.match(contract("01_research"), /^1\. List what exists/m, "step numbers are kept");
       assert.match(contract("01_research"), /`CLI:` line.*stale, stop and apply the fix/);
+      // SW-410: an unchecked fetch is re-checked before the next stage, not passed over.
+      assert.match(contract("01_research"), /could not check.*re-run `werkmeister issue start`/);
+      assert.doesNotMatch(contract("01_research"), /say so and continue/);
       assert.doesNotMatch(contract("02_spec"), /`CLI:` line/);
       assert.doesNotMatch(contract("02_spec"), start);
       // SW-345: after starting the issue, step 0 fills the brief's goal and criteria.

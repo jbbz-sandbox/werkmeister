@@ -603,6 +603,24 @@ async function fixtureSkipsPush(dir: string, deps: Deps): Promise<boolean> {
   return !/^(\/|\.|file:)/.test(origin);
 }
 
+// SW-410: during its incidents GitHub refuses SSH auth now and then; a try seconds later often works.
+const TRANSIENT_PUSH =
+  /Permission denied \(publickey\)|Could not read from remote repository|Connection (closed|reset|timed out)/;
+const PUSH_RETRY_MS = [10_000, 30_000];
+const GITHUB_HINT =
+  "if `ssh -T git@github.com` fails too, GitHub may be having trouble (githubstatus.com); rerun `werkmeister pr open` once it passes";
+
+async function pushWithRetry(dir: string, branch: string, deps: Deps) {
+  const push = () => deps.run("git", ["-C", dir, "push", "-u", "origin", branch]);
+  let r = await push();
+  for (const ms of PUSH_RETRY_MS) {
+    if (r.code === 0 || !TRANSIENT_PUSH.test(r.stderr)) break;
+    await deps.sleep(ms);
+    r = await push();
+  }
+  return r;
+}
+
 async function repoCheck(dir: string, file: PrFile, deps: Deps): Promise<[boolean, string]> {
   const got = String(file.fm["repo"] ?? "");
   const r = await deps.run("git", ["-C", dir, "remote", "get-url", "origin"]);
@@ -782,7 +800,7 @@ async function gateChecks(
         "push",
         push.code === 0,
         push.code
-          ? `${(push.stderr || push.stdout).trim()} — load a key (\`ssh-add\`) or fix origin's credentials, then rerun`
+          ? `${(push.stderr || push.stdout).trim()} — load a key (\`ssh-add\`) or fix origin's credentials, then rerun; ${GITHUB_HINT}`
           : `can push ${branch} to origin`,
       );
     const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
@@ -1280,11 +1298,12 @@ export async function openPrs(
     const dir = path.join(ws, f.dir);
     const push = (await fixtureSkipsPush(dir, deps))
       ? null
-      : await deps.run("git", ["-C", dir, "push", "-u", "origin", branch]);
+      : await pushWithRetry(dir, branch, deps);
     if (!push) lines.push(`${f.stem}: push skipped (fixture)`);
     else if (push.code !== 0) {
       ok = false;
       lines.push(`${f.stem}: push failed — ${push.stderr.trim()}`);
+      if (TRANSIENT_PUSH.test(push.stderr)) lines.push(`  ${GITHUB_HINT}`);
       continue;
     }
     const existing = await deps.run(

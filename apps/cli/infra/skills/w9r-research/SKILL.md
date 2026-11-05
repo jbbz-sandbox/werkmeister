@@ -9,7 +9,8 @@ description: "Begin the research/planning phase in a workspace. Use when explori
   it moves the workspace's issue to In Progress the first time, and does nothing once
   it is past that or when the tracker refuses. It also fetches each code worktree's base and
   fast-forwards a branch with no commits of its own; read its `Worktree:` lines. Also read its `CLI:` line: if the installed werkmeister is
-  stale, stop and apply the fix it prints before going on; if it could not check, say so and continue. Read relevant `finding` and `attempt` notes in
+  stale, stop and apply the fix it prints before going on; if it could not check, carry on, but re-run `werkmeister issue start` before
+  you change code and stop there if it still could not check or reads stale. Read relevant `finding` and `attempt` notes in
   `.werkmeister/notes/` (skip `status: superseded`); never redo answered
   questions or failed approaches. Continue if empty.
 - Skip code standards (`w9r-*-standard`, `ponytail`); they govern writing.
