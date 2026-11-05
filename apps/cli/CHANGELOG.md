@@ -1,5 +1,15 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.73.0
+
+### Minor Changes
+
+- a74391c: New generated `.werkmeister/bin/with-fixture-workspace`: one command seeds a temp fixture workspace (registry, a code repo with a local bare origin, logging fakes for gh and docker, dead Docker, daemon and Jira addresses), runs this workspace's built CLI against it (`--then` chains steps, `--print` shows files, `--gate` adds a ready PR) and removes it. Core tests get the same fixture from `withFixtureWorkspace` (SW-292).
+
+### Patch Changes
+
+- a74391c: `pr open` under `WERKMEISTER_FIXTURE=1` pushes only to a local origin and otherwise prints `push skipped (fixture)`, so an end-to-end fixture run can open a PR with no write to GitHub (SW-381).
+
 ## 0.72.1
 
 ### Patch Changes
