@@ -22,18 +22,35 @@ the workspace root, unless the person says to skip it
      `gh issue list -R jbbz-sandbox/werkmeister --search "<workspace>" --state all`.
    - **Deviations:** ICM `stages/*/output/` (deviations in `exercise.md`, FAIL
      rows); JIT `.werkmeister/notes/`.
+   - **Review leftovers:** every `left:` row in each `review.md` the run wrote
+     (ICM `stages/*/output/review.md`;
+     `find . -name review.md -not -path '*/node_modules/*'` finds the rest). List
+     each with its file. They are not problems: step 4 triages them.
    - **Gate failures and the person's corrections:** this session's transcript,
      and the workspace's other sessions through the werkmeister
      `claude-transcript` MCP tool when it is available.
    - One cause is one problem: a CI failure and the issue filed for it are one row.
-2. **No problems:** write `postmortem.md` with `Problems: none`, commit and push
-   it (step 6), say so, and go on. Ask nothing.
+2. **No problems and no `left:` rows:** write `postmortem.md` with
+   `Problems: none`, commit and push it (step 7), say so, and go on. Ask nothing.
+   With `left:` rows but no problems, skip step 3 and still run step 4.
 3. **For each problem** show the problem, its source and its cause, and propose
    what could have been done differently plus the action that makes it stick
-   (step 5). The person accepts, edits or rejects each. Batch them in one
+   (step 6). The person accepts, edits or rejects each. Batch them in one
    question where the asking tool allows. Ask even in an `autonomous` run:
    close-out is the person's step.
-4. **Write `postmortem.md`** at the workspace root:
+4. **Triage each `left:` row,** one question per row, in order. Ask even in an
+   `autonomous` run. Show the finding, its file and its `left:` reason, then offer:
+   - **file:** a tracker issue through the workspace's `issues-report.md`
+     (search first, as it says). The body names the workspace and the PR URL
+     (the PR file's `url:`); relate it to the workspace's issue where the filing
+     command allows it.
+   - **known issue:** a row in the known-issues file of the folder that holds
+     the workspace (`../KNOWN-ISSUES.md`, created if missing): the finding,
+     where it came from, and its proposed fix.
+   - **drop:** with the person's reason.
+
+   Do each choice as it is made and record it in the leftovers table (step 5).
+5. **Write `postmortem.md`** at the workspace root:
 
    ```markdown
    # Post-mortem — <workspace>
@@ -44,9 +61,17 @@ the workspace root, unless the person says to skip it
    | # | Problem | Source | Cause | Agreed change | Action |
    |---|---|---|---|---|---|
    | 1 | <what went wrong> | <PR #440 CI `test`, transcript, exercise.md, SW-107 …> | <why> | <what changes> | <link or path, or `rejected: <why>`> |
+
+   ## Review leftovers
+
+   | # | Finding | From | Decision | Link or reason |
+   |---|---|---|---|---|
+   | 1 | <the left: row> | <stages/03_implement/output/review.md> | file / known issue / drop | <issue URL, `../KNOWN-ISSUES.md`, or why dropped> |
    ```
 
-5. **Do each accepted action** and put its link or path in Action. Rank them:
+   With no `left:` rows, write `Review leftovers: none` in place of that table.
+
+6. **Do each accepted action** and put its link or path in Action. Rank them:
    pick the highest one that makes the lesson reach every installation of werkmeister.
    1. **Shipped change, through an SW issue** (bug, feature or task): a code,
       skill or generated-text change. A `_shared/` or other generated file belongs
@@ -64,6 +89,6 @@ the workspace root, unless the person says to skip it
    **Already enforced by `<check>`** (for example `name:check`) is also an action
    when a shipped check already catches the problem: confirm it does, name the
    check in Action, and file nothing.
-6. **Commit and push `postmortem.md`** on the workspace (record) branch. Then
+7. **Commit and push `postmortem.md`** on the workspace (record) branch. Then
    close out as `workspace-pr` step 6 says: ask the person before
    `werkmeister workspace close`.
