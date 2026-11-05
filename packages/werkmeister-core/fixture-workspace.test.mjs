@@ -13,7 +13,7 @@ import { gatePrs } from "./dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { initWorkspace } from "./dist/workspace_init.js";
 import { tokensDir } from "./dist/workspace_token.js";
-import { pinWerkmeisterRoot, withFixtureWorkspace } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withFakeDaemon, withFixtureWorkspace } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
 
@@ -64,7 +64,8 @@ test("init under the fixture writes the context and wrappers well inside the 10 
       initWorkspace({}, fx.workspace, { build: false }),
     );
     const ms = performance.now() - t0;
-    assert.ok(ms < 5000, `init took ${Math.round(ms)} ms`);
+    // Measured ~0.5 s; 2 s leaves room for a loaded host (SW-426).
+    assert.ok(ms < 2000, `init took ${Math.round(ms)} ms`);
     const bin = path.join(fx.workspace, ".werkmeister", "bin");
     assert.ok(fs.statSync(path.join(bin, "with-fixture-workspace")).mode & 0o100);
     assert.match(
@@ -145,4 +146,71 @@ test("the workspace folder is a git repo with a local origin, its code clone ign
       path.join(fx.root, "remotes/o/ws.git"),
     );
   });
+});
+
+// SW-424: a fixture step must not reach the caller's claude, kubectl or credentials.
+test("under the fixture, claude and kubectl are not the caller's, and its credentials are blank", async () => {
+  const { resolveClaudeBin } = await import("./dist/harness/claude/cli.js");
+  const { refreshKubeconfig } = await import("./dist/k8s.js");
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "caller-bin-"));
+  const hits = path.join(bin, "hits");
+  for (const name of ["claude", "kubectl"])
+    fs.writeFileSync(path.join(bin, name), `#!/bin/sh\necho ${name} >> "${hits}"\n`, {
+      mode: 0o755,
+    });
+  const creds = ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "KUBECONFIG", "GH_TOKEN"];
+  const prev = Object.fromEntries(["PATH", "CLAUDE_BIN", ...creds].map((k) => [k, process.env[k]]));
+  delete process.env.CLAUDE_BIN;
+  process.env.PATH = `${bin}:${process.env.PATH}`;
+  for (const k of creds) process.env[k] = "caller-secret";
+  try {
+    await withFixtureWorkspace(async () => {
+      for (const k of creds) assert.equal(process.env[k] || "", "", k);
+      const claude = await resolveClaudeBin();
+      try {
+        execFileSync(claude, ["-p", "hi"], { stdio: "ignore" });
+      } catch {}
+      await withReporter(collectingReporter(), () => refreshKubeconfig());
+    });
+    assert.equal(fs.existsSync(hits) ? fs.readFileSync(hits, "utf8") : "", "", "caller's bins ran");
+  } finally {
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    fs.rmSync(bin, { recursive: true, force: true });
+  }
+});
+
+// SW-426: a shell exporting the real daemon's address must not reach it from a fixture.
+test("WERKMEISTER_HOST is dead under the fixture unless it is given a fake daemon", async () => {
+  const { callTool } = await import("./dist/daemon_client.js");
+  await withFakeDaemon(
+    async (daemon) => {
+      await withFixtureWorkspace(async () => {
+        assert.equal(process.env.WERKMEISTER_HOST, "http://127.0.0.1:1");
+      });
+      await withFixtureWorkspace(
+        async () => {
+          assert.deepEqual((await callTool("status", {}, { token: "t" })).data, { ok: 1 });
+          await assert.rejects(
+            callTool("up", {}, { token: "t" }),
+            /fake daemon: unhandled tool up/,
+          );
+        },
+        { daemon: daemon.url },
+      );
+      assert.equal(daemon.calls.filter((c) => c.startsWith("POST /api/tool")).length, 2);
+    },
+    { status: { ok: 1 } },
+  );
+});
+
+test("--gate refuses a registry whose change would map to no service (SW-426)", async () => {
+  const { fixturePreset } = await import("./dist/fixture_workspace.js");
+  assert.throws(
+    () => fixturePreset({ gate: true, services: "services:\n  web: { repo: app, path: . }\n" }),
+    /--gate needs a `lib` service/,
+  );
+  assert.equal(fixturePreset({ gate: true }).running?.length, 1);
 });

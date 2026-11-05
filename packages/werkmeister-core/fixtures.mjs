@@ -109,13 +109,23 @@ export async function withSandboxHome(
   fs.writeFileSync(path.join(home, "services.yaml"), services);
   fs.writeFileSync(path.join(home, "ports.yaml"), ports);
 
-  const prev = process.env.WERKMEISTER_CONFIG_FILE;
-  process.env.WERKMEISTER_CONFIG_FILE = cfg;
+  // os.homedir() reads HOME: without this, tokens and locks land in the real ~ outside with-temp-home (SW-433).
+  const env = {
+    WERKMEISTER_CONFIG_FILE: cfg,
+    // Docker's context lives in the real ~/.docker; pinned before HOME moves, as with-temp-home does (SW-285).
+    DOCKER_CONFIG: process.env.DOCKER_CONFIG || path.join(os.homedir(), ".docker"),
+    HOME: path.join(home, "home"),
+  };
+  fs.mkdirSync(env.HOME);
+  const prev = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, env);
   try {
     return await fn(home);
   } finally {
-    if (prev === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
-    else process.env.WERKMEISTER_CONFIG_FILE = prev;
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
     fs.rmSync(home, { recursive: true, force: true });
   }
 }
@@ -150,32 +160,10 @@ export async function withFakeGh(
   { issue = null, auth = 0, repoView = 0, labels = [], items = [], issues = [] } = {},
   fn,
 ) {
+  // The same fake as the fixture's (SW-427).
+  const { writeFakes } = await import("./dist/fixture_fakes.js");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-gh-"));
-  fs.writeFileSync(path.join(dir, "issue.json"), JSON.stringify(issue));
-  fs.writeFileSync(path.join(dir, "items.json"), JSON.stringify({ items }));
-  fs.writeFileSync(path.join(dir, "issues.json"), JSON.stringify(issues));
-  fs.writeFileSync(path.join(dir, "labels"), labels.map((l) => `${l}\n`).join(""));
-  const bin = path.join(dir, "gh");
-  fs.writeFileSync(
-    bin,
-    `#!/bin/sh
-echo "$*" >> '${dir}/calls'
-case "$1 $2" in
-  "label create") grep -qxF "$3" '${dir}/labels' || echo "$3" >> '${dir}/labels';;
-  "issue edit") if [ "$6" = "--add-label" ] && ! grep -qxF "$7" '${dir}/labels'; then echo "'$7' not found" >&2; exit 1; fi;;
-  "issue view") if [ "$(cat '${dir}/issue.json')" = "null" ]; then echo "could not resolve" >&2; exit 1; fi; cat '${dir}/issue.json';;
-  "auth status") if [ ${auth} = 0 ]; then echo "  ✓ Logged in to github.com account octo (keyring)" >&2; else echo "You are not logged into any GitHub hosts." >&2; fi; exit ${auth};;
-  "repo view") exit ${repoView};;
-  "project item-list") cat '${dir}/items.json';;
-  "issue list") cat '${dir}/issues.json';;
-  "issue close"|"issue comment") ;;
-  "api user") echo octo;;
-  "search prs") echo '[]';;
-  *) echo "fake gh: unhandled: $*" >&2; exit 1;;
-esac
-`,
-    { mode: 0o755 },
-  );
+  const { gh: bin } = writeFakes(dir, { issue, auth, repoView, labels, items, issues });
   const prev = process.env.WERKMEISTER_GH_BIN;
   process.env.WERKMEISTER_GH_BIN = bin;
   try {
@@ -201,12 +189,12 @@ export async function withAgentState(hooks) {
 /**
  * Run *fn* inside the seeded fixture `with-fixture-workspace` uses (SW-292): its registry, a
  * workspace whose code repo has a local bare origin, and logging fake gh and docker in the env.
- * `opts` is `seedFixture`'s (`gate`, `bare`, `services`). Restores the env and removes the dir.
+ * `opts` is `seedFixture`'s, plus the `gate` / `bare` presets (fixturePreset). Restores the env and removes the dir.
  */
 export async function withFixtureWorkspace(fn, opts = {}) {
-  const { seedFixture } = await import("./dist/fixture_workspace.js");
+  const { fixturePreset, seedFixture } = await import("./dist/fixture_workspace.js");
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-fixture-")));
-  const fx = seedFixture(root, opts);
+  const fx = seedFixture(root, fixturePreset(opts));
   const prev = Object.fromEntries(Object.keys(fx.env).map((k) => [k, process.env[k]]));
   Object.assign(process.env, fx.env);
   try {
@@ -217,5 +205,24 @@ export async function withFixtureWorkspace(fn, opts = {}) {
       else process.env[k] = v;
     }
     fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+/**
+ * Run *fn* with a fake daemon (`startFakeDaemon` in fixture_fakes.ts: `/api/status`, and
+ * `/api/tool` answered from *tools*) and WERKMEISTER_HOST pointing at it (SW-426, SW-263).
+ * Pass `daemon.url` to withFixtureWorkspace's `daemon` to reach it from a fixture.
+ */
+export async function withFakeDaemon(fn, tools = {}) {
+  const { startFakeDaemon } = await import("./dist/fixture_fakes.js");
+  const daemon = await startFakeDaemon(tools);
+  const prev = process.env.WERKMEISTER_HOST;
+  process.env.WERKMEISTER_HOST = daemon.url;
+  try {
+    return await fn(daemon);
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_HOST;
+    else process.env.WERKMEISTER_HOST = prev;
+    await daemon.close();
   }
 }

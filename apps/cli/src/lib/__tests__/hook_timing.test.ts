@@ -26,7 +26,12 @@ function timeOnce(args: string[], stdin: string): Promise<number> {
       stdio: ["pipe", "ignore", "ignore"],
     });
     child.on("error", reject);
-    child.on("exit", () => resolve(performance.now() - start));
+    // A missing or crashing entry exits fast, so a time alone would pass it (SW-428).
+    child.on("exit", (code) =>
+      code === 0
+        ? resolve(performance.now() - start)
+        : reject(new Error(`node ${args.join(" ")} exited ${code}`)),
+    );
     child.stdin.end(stdin);
   });
 }
@@ -68,4 +73,8 @@ describe.skipIf(Boolean(process.env.CI) || overloaded)("hook entry cold start (S
       );
     }, 120_000);
   }
+});
+
+it("a missing hook entry fails the measurement instead of timing fast", async () => {
+  await expect(measure(path.join(CLI_DIR, "dist", "lib", "missing.js"), payload)).rejects.toThrow();
 });

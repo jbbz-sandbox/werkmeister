@@ -65,9 +65,10 @@ test("jit init writes the same files, byte for byte", async () => {
             .readFileSync(path.join(root, rel), "utf8")
             .replaceAll(root, "<ROOT>")
             .replaceAll(std, "<STD>")
+            // HOME is now under the sandbox home (SW-433), so it is replaced first.
+            .replaceAll(os.homedir(), "<USERHOME>")
             .replaceAll(home, "<HOME>")
             .replace(REPO_PATH, "<REPO>")
-            .replaceAll(os.homedir(), "<USERHOME>")
             .replace(/jit-snap-ws-[a-zA-Z0-9]+/g, "<WORKSPACE>");
         }
         return out;

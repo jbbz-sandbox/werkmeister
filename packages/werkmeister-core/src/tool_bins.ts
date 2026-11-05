@@ -57,23 +57,39 @@ export function childEnv(): NodeJS.ProcessEnv {
 }
 
 /** `gh`, or $WERKMEISTER_GH_BIN (tests point it at a fake); under WERKMEISTER_FIXTURE a stub that fails (SW-177). */
-export const ghBin = () => envVar("GH_BIN") || (isFixture() ? fixtureGhStub() : "gh");
+export const ghBin = () => envVar("GH_BIN") || (isFixture() ? fixtureStub("gh") : "gh");
+
+/** `claude`; under WERKMEISTER_FIXTURE $CLAUDE_BIN or a stub that fails, never the caller's (SW-424). */
+export const fixtureClaudeBin = () => process.env["CLAUDE_BIN"] || fixtureStub("claude");
 
 /** `docker`, or $WERKMEISTER_DOCKER_BIN (tests and fixture exercises point it at a fake; SW-208). */
 export const dockerBin = () => envVar("DOCKER_BIN") || "docker";
 
-/** *bin*, with `gh` and `docker` resolved through their overrides: childEnv()'s PATH would beat a fake (SW-148, SW-208). */
-export const toolBin = (bin: string): string =>
-  bin === "gh" ? ghBin() : bin === "docker" ? dockerBin() : bin;
+/**
+ * *bin*, with `gh` and `docker` resolved through their overrides: childEnv()'s PATH would beat a fake
+ * (SW-148, SW-208). Under WERKMEISTER_FIXTURE `claude` and `kubectl` are stubs too (SW-424).
+ */
+export function toolBin(bin: string): string {
+  if (bin === "gh") return ghBin();
+  if (bin === "docker") return dockerBin();
+  if (!isFixture()) return bin;
+  if (bin === "claude") return fixtureClaudeBin();
+  return bin === "kubectl" ? fixtureStub("kubectl") : bin;
+}
 
-let ghStub: string | null = null;
-function fixtureGhStub(): string {
-  if (ghStub) return ghStub;
-  const file = path.join(os.tmpdir(), `werkmeister-fixture-gh-${process.pid}`);
-  writeFileSync(file, '#!/bin/sh\necho "gh called under WERKMEISTER_FIXTURE: $*" >&2\nexit 1\n', {
-    mode: 0o755,
-  });
-  ghStub = file;
+const stubs = new Map<string, string>();
+function fixtureStub(bin: string): string {
+  const known = stubs.get(bin);
+  if (known) return known;
+  const file = path.join(os.tmpdir(), `werkmeister-fixture-${bin}-${process.pid}`);
+  writeFileSync(
+    file,
+    `#!/bin/sh\necho "${bin} called under WERKMEISTER_FIXTURE: $*" >&2\nexit 1\n`,
+    {
+      mode: 0o755,
+    },
+  );
+  stubs.set(bin, file);
   return file;
 }
 

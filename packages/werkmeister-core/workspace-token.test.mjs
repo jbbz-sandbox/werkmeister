@@ -54,3 +54,13 @@ test("revoke deletes the host copy, so the daemon no longer knows the token", ()
     revokeWorkspaceToken("proj-a"); // idempotent
   });
 });
+
+// SW-433: withSandboxHome left HOME real, so a core test run outside with-temp-home wrote here.
+test("withSandboxHome moves ~ under its temp home, and puts it back", async () => {
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  const before = process.env.HOME;
+  await withSandboxHome((home) => {
+    assert.ok(tokensDir().startsWith(home + path.sep), `${tokensDir()} is under ${home}`);
+  });
+  assert.equal(process.env.HOME, before);
+});

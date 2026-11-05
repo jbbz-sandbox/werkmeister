@@ -47,6 +47,9 @@ import { removeWorkspace, WorkspaceError } from "./dist/sandbox.js";
 import { TEMP_HOME_SCRIPT } from "./dist/temp_home.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
+// The host-load wait tests need it to wait; a caller exporting it for a quick run would skip it (SW-425).
+delete process.env.WERKMEISTER_NO_WAIT;
+
 const PASS_BODY = "## Acceptance\n| criterion | result |\n|---|---|\n| works | PASS |\n";
 
 function prFile({ status = "approved", body = PASS_BODY, extra = "" } = {}) {
@@ -2319,8 +2322,8 @@ test("closeOut writes usage.md + usage.json before removal, and a summary line i
         return { output: "removed" };
       },
     });
-    await withTranscripts(ws, TRANSCRIPTS, () =>
-      inWorkspacesRoot(ws, (name) => closeOut(name, {}, d)),
+    await inWorkspacesRoot(ws, (name) =>
+      withTranscripts(ws, TRANSCRIPTS, () => closeOut(name, {}, d)),
     );
     assert.deepEqual(atRemoval, ["usage.md", "usage.json"]);
     const u = readUsage(ws);
@@ -2385,8 +2388,8 @@ test("closeOut --abandon with no transcripts: the snapshot says so and close-out
   const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }) } });
   try {
     const d = deps([]);
-    const r = await withTranscripts(ws, {}, () =>
-      inWorkspacesRoot(ws, (name) => closeOut(name, { abandon: "superseded" }, d)),
+    const r = await inWorkspacesRoot(ws, (name) =>
+      withTranscripts(ws, {}, () => closeOut(name, { abandon: "superseded" }, d)),
     );
     assert.match(r.output, /removed/);
     const u = readUsage(ws);
@@ -2417,22 +2420,22 @@ test("closeOut retry after a failed removal keeps the first usage snapshot", asy
         throw new Error("Handoff failed");
       },
     });
-    await withTranscripts(ws, TRANSCRIPTS, async (write) => {
-      await assert.rejects(
-        inWorkspacesRoot(ws, (name) => closeOut(name, {}, failing)),
-        /Handoff failed/,
-      );
-      const first = fs.readFileSync(path.join(ws, "usage.json"), "utf8");
-      const firstMd = fs.readFileSync(path.join(ws, "usage.md"), "utf8");
-      write({ s3: [turn("2026-10-30T12:00:00.000Z", "claude-sonnet-5", { output_tokens: 1 })] });
-      await inWorkspacesRoot(ws, (name) => closeOut(name, {}, deps([[/ls-remote/, { code: 2 }]])));
-      assert.equal(fs.readFileSync(path.join(ws, "usage.json"), "utf8"), first);
-      assert.equal(fs.readFileSync(path.join(ws, "usage.md"), "utf8"), firstMd);
-      assert.match(
-        fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
-        /^Usage: .* across 2 sessions; see usage\.md$/m,
-      );
-    });
+    // Inside the sandbox home, which sets HOME itself (SW-433).
+    await inWorkspacesRoot(ws, (name) =>
+      withTranscripts(ws, TRANSCRIPTS, async (write) => {
+        await assert.rejects(closeOut(name, {}, failing), /Handoff failed/);
+        const first = fs.readFileSync(path.join(ws, "usage.json"), "utf8");
+        const firstMd = fs.readFileSync(path.join(ws, "usage.md"), "utf8");
+        write({ s3: [turn("2026-10-30T12:00:00.000Z", "claude-sonnet-5", { output_tokens: 1 })] });
+        await closeOut(name, {}, deps([[/ls-remote/, { code: 2 }]]));
+        assert.equal(fs.readFileSync(path.join(ws, "usage.json"), "utf8"), first);
+        assert.equal(fs.readFileSync(path.join(ws, "usage.md"), "utf8"), firstMd);
+        assert.match(
+          fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+          /^Usage: .* across 2 sessions; see usage\.md$/m,
+        );
+      }),
+    );
   } finally {
     clean(ws);
   }
@@ -4068,4 +4071,15 @@ test("gate: prints a containers row when a running container is kept (SW-355, SW
   } finally {
     clean(ws);
   }
+});
+
+test("waitForHostLoad: WERKMEISTER_NO_WAIT=1 skips the gate's wait as --no-wait does (SW-425)", async () => {
+  const falls = loaded([90, 1]);
+  process.env.WERKMEISTER_NO_WAIT = "1";
+  try {
+    assert.equal(await withSandboxHome(() => waitForHostLoad(falls, true, "lint")), "");
+  } finally {
+    delete process.env.WERKMEISTER_NO_WAIT;
+  }
+  assert.deepEqual(falls.slept, []);
 });

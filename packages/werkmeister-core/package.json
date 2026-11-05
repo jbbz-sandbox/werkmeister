@@ -30,6 +30,7 @@
     "./form_schema": "./dist/form_schema.js",
     "./fragment_detect": "./dist/fragment_detect/index.js",
     "./generate": "./dist/generate.js",
+    "./fixture_fakes": "./dist/fixture_fakes.js",
     "./fixture_workspace": "./dist/fixture_workspace.js",
     "./gate": "./dist/gate.js",
     "./temp_home": "./dist/temp_home.js",
