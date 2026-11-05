@@ -320,8 +320,10 @@ const bugfix: Stage[] = [
         "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet.",
         "Trace to the root cause: the first place the code does something other than intended. A symptom site is not a root cause.",
         "List every other caller of the function at the root cause — a fix there reaches them too.",
+        // SW-442: sessionBusy had two true cases; stage 01 listed callers, so only review caught the second (sw-418).
+        "When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test.",
         NAME_HISTORY_STEP,
-        "Write `output/repro.md`: steps 1–5, and a proposed fix in one paragraph under a `status: proposed` line.",
+        "Write `output/repro.md`: steps 1–6, and a proposed fix in one paragraph under a `status: proposed` line.",
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
       humanCheck: `Read \`output/repro.md\`. Correct the root cause or the proposed fix if needed, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts the fix without asking again. ${CHAT_APPROVAL}`,

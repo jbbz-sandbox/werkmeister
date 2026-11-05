@@ -86,12 +86,19 @@ test("each template renders with no undefined and a route per stage", async () =
             c,
             d.endsWith("_research")
               ? /evidence from steps 1–3 and 5/
-              : /`output\/repro\.md`: steps 1–5/,
+              : /`output\/repro\.md`: steps 1–6/,
             `${wt}/${d}`,
           );
         } else {
           assert.doesNotMatch(c, /git log -S/, `${wt}/${d}`);
         }
+        // SW-442: reproduce lists each case of a fix's predicate, each with a test.
+        if (d.endsWith("_reproduce"))
+          assert.match(
+            c,
+            /When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test\./,
+            `${wt}/${d}`,
+          );
         // SW-365: research lists whole-module mocks of a module that gains an export.
         if (d.endsWith("_research"))
           assert.match(
