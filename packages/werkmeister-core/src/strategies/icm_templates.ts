@@ -95,6 +95,8 @@ const SKIPPED = "every skipped test by name with its skip reason and where it ra
 const reviewStep = (rerun: string) =>
   "Review the diff: for each code worktree you touched, start a fresh subagent and brief it with only the worktree path and " +
   '"run the `ponytail:ponytail-review` skill over this worktree\'s uncommitted changes, untracked files included" — not how you built it, so the review is not anchored on your reasoning. ' +
+  // SW-431: a diff-scoped review missed two trust-boundary holes in a newly pre-approved wrapper (sw-292).
+  'If the change adds or widens an allow rule or another pre-approved command, add to the brief: "this change pre-approves a command: list every file, env var, network address or process it can reach from its arguments, and treat each that leaves the workspace or its temp HOME as Must fix". ' +
   `Fix every **Must fix** finding in place, then ${rerun}. Leave **Should fix** and **Nice to have** findings as they are. ` +
   "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
   "a `| check | result | evidence |` table with one row per worktree whose result cell is exactly `PASS` (no Must fix left open) or `FAIL` — nothing else in the cell. " +
