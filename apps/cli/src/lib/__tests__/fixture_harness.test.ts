@@ -44,6 +44,14 @@ it("runs init and the gate in a fixture, prints the context and fake calls, and 
   const scratch = path.join(tmp, "tmp");
   fs.mkdirSync(scratch);
   const { port } = engine.address() as { port: number };
+  // The caller's own claude and kubectl, first on PATH, must never run (SW-424).
+  const callerBin = path.join(tmp, "caller-bin");
+  const hits = path.join(tmp, "caller-hits");
+  fs.mkdirSync(callerBin);
+  for (const name of ["claude", "kubectl"])
+    fs.writeFileSync(path.join(callerBin, name), `#!/bin/sh\necho ${name} >> '${hits}'\n`, {
+      mode: 0o755,
+    });
 
   const run = await promisify(execFile)(
     wrapper,
@@ -67,6 +75,11 @@ it("runs init and the gate in a fixture, prints the context and fake calls, and 
         TMPDIR: scratch,
         DOCKER_HOST: `tcp://127.0.0.1:${port}`,
         WERKMEISTER_ROOT: "/elsewhere/apps/cli",
+        PATH: `${callerBin}:${process.env.PATH}`,
+        ANTHROPIC_API_KEY: "caller-secret",
+        CLAUDE_CODE_OAUTH_TOKEN: "caller-secret",
+        KUBECONFIG: path.join(tmp, "caller-kubeconfig"),
+        GH_TOKEN: "caller-secret",
       },
       maxBuffer: 16 * 1024 * 1024,
     },
@@ -77,5 +90,6 @@ it("runs init and the gate in a fixture, prints the context and fake calls, and 
   expect(run.stdout).toMatch(/--- docker calls\n[\s\S]*^exec demo-lib sh -c .* sh -c true$/m);
   expect(fs.readdirSync(home)).toEqual([]);
   expect(engineHits).toBe(0);
+  expect(fs.existsSync(hits), "the caller's claude or kubectl ran").toBe(false);
   expect(fs.readdirSync(scratch), "the fixture and temp HOME are removed").toEqual([]);
 }, 120_000);

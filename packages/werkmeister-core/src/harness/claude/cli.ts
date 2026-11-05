@@ -8,8 +8,9 @@
 import os from "node:os";
 import path from "node:path";
 import type { SDKResultMessage } from "@anthropic-ai/claude-agent-sdk";
+import { isFixture } from "../../config.js";
 import { WorkspaceError } from "../../errors.js";
-import { childEnv, isExecutable, shellQuote } from "../../tool_bins.js";
+import { childEnv, fixtureClaudeBin, isExecutable, shellQuote } from "../../tool_bins.js";
 
 /**
  * Locate the `claude` CLI, robust to Claude Desktop's minimal PATH. Order:
@@ -17,6 +18,7 @@ import { childEnv, isExecutable, shellQuote } from "../../tool_bins.js";
  * the augmented PATH in `childEnv` (tool_bins.ts)).
  */
 export async function resolveClaudeBin(): Promise<string> {
+  if (isFixture()) return fixtureClaudeBin();
   const candidates = [
     process.env.CLAUDE_BIN,
     path.join(os.homedir(), ".local", "bin", "claude"),

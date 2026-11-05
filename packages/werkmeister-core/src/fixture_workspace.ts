@@ -217,6 +217,11 @@ overrides:
       JIRA_BASE_URL: "",
       JIRA_EMAIL: "",
       JIRA_API_TOKEN: "",
+      // A fixture step must not act as the caller on Anthropic, a cluster or GitHub (SW-424).
+      ANTHROPIC_API_KEY: "",
+      CLAUDE_CODE_OAUTH_TOKEN: "",
+      KUBECONFIG: "",
+      GH_TOKEN: "",
       // Unreachable unless the caller points it at a fake daemon (SW-264, SW-263).
       WERKMEISTER_HOST: process.env["WERKMEISTER_HOST"] || "http://127.0.0.1:1",
     },

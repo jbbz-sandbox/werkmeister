@@ -146,3 +146,37 @@ test("the workspace folder is a git repo with a local origin, its code clone ign
     );
   });
 });
+
+// SW-424: a fixture step must not reach the caller's claude, kubectl or credentials.
+test("under the fixture, claude and kubectl are not the caller's, and its credentials are blank", async () => {
+  const { resolveClaudeBin } = await import("./dist/harness/claude/cli.js");
+  const { refreshKubeconfig } = await import("./dist/k8s.js");
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), "caller-bin-"));
+  const hits = path.join(bin, "hits");
+  for (const name of ["claude", "kubectl"])
+    fs.writeFileSync(path.join(bin, name), `#!/bin/sh\necho ${name} >> "${hits}"\n`, {
+      mode: 0o755,
+    });
+  const creds = ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "KUBECONFIG", "GH_TOKEN"];
+  const prev = Object.fromEntries(["PATH", "CLAUDE_BIN", ...creds].map((k) => [k, process.env[k]]));
+  delete process.env.CLAUDE_BIN;
+  process.env.PATH = `${bin}:${process.env.PATH}`;
+  for (const k of creds) process.env[k] = "caller-secret";
+  try {
+    await withFixtureWorkspace(async () => {
+      for (const k of creds) assert.equal(process.env[k] || "", "", k);
+      const claude = await resolveClaudeBin();
+      try {
+        execFileSync(claude, ["-p", "hi"], { stdio: "ignore" });
+      } catch {}
+      await withReporter(collectingReporter(), () => refreshKubeconfig());
+    });
+    assert.equal(fs.existsSync(hits) ? fs.readFileSync(hits, "utf8") : "", "", "caller's bins ran");
+  } finally {
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    fs.rmSync(bin, { recursive: true, force: true });
+  }
+});
