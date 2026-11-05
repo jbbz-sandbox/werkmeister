@@ -153,7 +153,7 @@ test("werkmeister_issues_project sends werkmeister issues to that Jira project",
       const md = buildIssuesReportMd("ws", "PROJ-1");
       assert.match(
         md,
-        /^\| the `werkmeister` tool: .* \| Jira, project `SW` \(https:\/\/x\.atlassian\.net\) \| `werkmeister issue create --project SW --type <type> --title "<title>" --body-file <file>`; .* \|$/m,
+        /^\| the `werkmeister` tool: .* \| Jira, project `SW` \(https:\/\/x\.atlassian\.net\) \| `werkmeister issue create --project SW --type <type> --title "<title>" --body-file <file> \[--relates <issue>\]`; pass `--relates PROJ-1` for a follow-up from this run; .* \|$/m,
       );
       assert.match(
         md,

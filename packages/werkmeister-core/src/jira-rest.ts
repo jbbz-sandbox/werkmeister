@@ -253,6 +253,18 @@ export async function createIssueRest(fields: {
   return { key, url: `${creds.baseUrl}/browse/${key}`, issueType };
 }
 
+/** Link `from` "relates to" `to`. Null when no credentials are configured; throws when Jira refuses. */
+export async function linkIssueRest(from: string, to: string): Promise<true | null> {
+  const creds = await jiraCreds();
+  if (!creds) return null;
+  await jiraFetch(creds, "/rest/api/2/issueLink", {
+    type: { name: "Relates" },
+    inwardIssue: { key: from },
+    outwardIssue: { key: to },
+  });
+  return true;
+}
+
 /**
  * Move an issue to the status named `status` (case-insensitive, matched on the
  * transition's target status, then its own name) and/or add a comment. Null

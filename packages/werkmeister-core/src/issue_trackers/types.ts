@@ -120,6 +120,8 @@ export interface IssueTrackerStrategy {
    * file with the tracker's own CLI (GitHub: `gh issue create`). Throws with the tracker's reason.
    */
   createIssue?(issue: NewIssue): Promise<Issue>;
+  /** Link `ref` "relates to" each of `relates`, in order; only trackers with `createIssue` have it. Throws with the tracker's reason at the first refusal. */
+  linkIssues?(ref: string, relates: string[]): Promise<void>;
   /**
    * Open work in priority order: `board`'s ready column in board rank when given,
    * else the scope's open issues. Throws with the tracker's reason.
