@@ -44,7 +44,7 @@ The state is read from the PR files alone (`lifecycleOf` in `packages/werkmeiste
 3. **The gate** (below) passes before a PR opens.
 4. **Only `werkmeister pr open` opens PRs.** A PreToolUse hook enforces this.
 5. **Auto-fix is always on.** `werkmeister pr watch` wakes the session that opened the PR when a check fails, a review comes in or the PR conflicts with its base, with the cause in the message. Don't turn on Auto-fix in the Claude desktop app (`ccd_pr`). Never turn on auto-merge.
-6. **Merge is the person's act.** Tooling never merges. Squash is the default. A PR whose commit SHAs must survive (e.g. a commit listed in `.git-blame-ignore-revs`) says "Merge with a merge commit" at the top of its body, and the person merges it that way; squash and rebase both rewrite SHAs.
+6. **Merge is the person's act.** Tooling never merges. On a repo with a merge queue, the queue's method decides how every PR merges (`gh api repos/<repo>/rules/branches/<base>`, the `merge_queue` rule's `merge_method`); without one, squash is the default. A PR that needs another method says so at the top of its body, and the person merges it that way, bypassing the queue: a PR whose commit SHAs must survive (e.g. a commit listed in `.git-blame-ignore-revs`) says "Merge with a merge commit", since squash and rebase both rewrite SHAs.
 7. **Close out only once every PR file is `shipped`, `closed` or `abandoned`.**
 
 Each workspace gets these as `_shared/pr-rules.md` (ICM) or `.werkmeister/pr-rules.md` (JIT), routed from its `CLAUDE.md`.
