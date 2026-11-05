@@ -31,7 +31,8 @@ vi.mock("werkmeister-core/issue_tracker", () => ({
   issueTracker: () => ({
     label: "Jira",
     refExample: "PROJ-123",
-    parseRef: (t: string) => (/^[A-Z]+-\d+$/i.test(t) ? t.toUpperCase() : null),
+    // The real Jira pattern is unanchored (jira.ts KEY_RE); the command must not rely on it.
+    parseRef: (t: string) => /[A-Za-z][A-Za-z0-9]+-\d+/.exec(t)?.[0].toUpperCase() ?? null,
     createIssue: async () => {
       s.created++;
       return { ref: "SW-13", type: "Task", url: "https://x/browse/SW-13" };
@@ -82,6 +83,12 @@ it("a bad --relates key files nothing", async () => {
   await expect(create(["SW-292", "nope"])).rejects.toThrow("exit 1");
   expect(s.created).toBe(0);
   expect(s.errors.join("\n")).toMatch(/--relates 'nope' is not a Jira issue ID/);
+});
+
+it.each(["SW-29x", "SW-292,SW-263", " SW-1 x"])("--relates '%s' is not one key: files nothing", async (bad) => {
+  await expect(create([bad])).rejects.toThrow("exit 1");
+  expect(s.created).toBe(0);
+  expect(s.errors.join("\n")).toContain(`--relates '${bad}' is not a Jira issue ID`);
 });
 
 it("a refused link still prints the new key, then exits 1 naming both", async () => {
