@@ -13,7 +13,7 @@ import { run as procRun } from "werkmeister-core/proc";
 type Run = (
   cmd: string[],
   opts: { capture: true; timeout: number },
-) => { status: number; stdout: string };
+) => { status: number; stdout: string; stderr?: string };
 
 export interface CliCurrency {
   /** `null` when the check could not run (offline, no git). */
@@ -51,12 +51,16 @@ export function checkCliCurrent(deps: CurrencyDeps = {}): CliCurrency {
   if (top?.status === 0) {
     const repo = top.stdout.trim();
     const git = (...a: string[]) => safe(["git", "-C", repo, ...a], 60);
-    const fix = `git -C ${repo} checkout main && git -C ${repo} pull, then from ${repo}: corepack pnpm install --frozen-lockfile && corepack pnpm turbo run build`;
-    if (git("fetch", "origin", "main", "--quiet")?.status !== 0)
+    // SW-436: a bare pull dies under pull.rebase=true with a merge ref set.
+    const fix = `git -C ${repo} checkout main && git -C ${repo} pull --ff-only origin main, then from ${repo}: corepack pnpm install --frozen-lockfile && corepack pnpm turbo run build`;
+    const fetch = git("fetch", "origin", "main", "--quiet");
+    if (fetch?.status !== 0) {
+      const why = fetch?.stderr?.trim().split("\n")[0] || "timed out";
       return {
         current: null,
-        text: `could not fetch origin main in ${repo}, currency not checked`,
+        text: `could not check: fetch of origin main in ${repo} failed (${why}); re-check with \`werkmeister issue start\``,
       };
+    }
     const branch = git("rev-parse", "--abbrev-ref", "HEAD")?.stdout.trim();
     if (branch !== "main")
       return {
