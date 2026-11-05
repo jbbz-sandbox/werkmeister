@@ -86,6 +86,11 @@
       "items": { "type": "string" },
       "description": "Freeform labels for the workspace."
     },
+    "group": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Member issue keys of a grouped PR led by issue_id: one workspace, one PR, one commit per ticket. Set before the run starts; `werkmeister workspace init` renders the ICM contracts for it."
+    },
     "standards_override": {
       "type": "object",
       "additionalProperties": false,

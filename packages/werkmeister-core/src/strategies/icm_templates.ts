@@ -21,6 +21,8 @@ export interface IcmVars {
   standards: string;
   /** The `autonomous` input: every human check renders as a self-check. */
   autonomous: boolean;
+  /** Member issue keys of a grouped PR (`group` in workspace.yml); empty when it is not one. */
+  group: string[];
 }
 
 export interface Contract {
@@ -91,17 +93,35 @@ const diffCheck = (doc: string) =>
 
 const SKIPPED = "every skipped test by name with its skip reason and where it ran instead";
 
+// SW-438: a grouped PR commits per ticket as it goes; the uncommitted-diff contracts contradicted it (sw-323).
+const keys = (group: string[]) => group.map((k) => `\`${k}\``).join(", ");
+// The merge-base keeps the fold in place; `origin/main` would also move every commit onto an untested base.
+const FOLD =
+  "`git commit --fixup <sha>`, then `git rebase --autosquash $(git merge-base HEAD origin/main)`";
+const groupStep = (v: IcmVars) =>
+  v.group.length
+    ? [
+        `This workspace is a grouped PR (\`group\` in \`workspace.yml\`): one commit per ticket, for the workspace's issue and each member, ${keys(v.group)}, so each can be reverted alone. ` +
+          "Take the tickets one at a time: make that ticket's changes and tests, run the diff check below on them, then commit on the worktree's branch with a message that starts with its key (`<KEY> <summary>`) before starting the next. " +
+          "Each commit builds and passes the host tests on its own.",
+      ]
+    : [];
+
 // SW-388: in sw-386 a must-fix passed the tests, the exercise and the gate; only a separate review caught it.
-const reviewStep = (rerun: string) =>
+const reviewStep = (rerun: string, group: string[]) =>
   "Review the diff: for each code worktree you touched, start a fresh subagent and brief it with only the worktree path and " +
-  '"run the `ponytail:ponytail-review` skill over this worktree\'s uncommitted changes, untracked files included" — not how you built it, so the review is not anchored on your reasoning. ' +
+  `"run the \`ponytail:ponytail-review\` skill over this worktree's ${
+    group.length
+      ? "commits in `origin/main...HEAD` (the PR's base in place of `main` when it differs), plus any uncommitted changes and untracked files"
+      : "uncommitted changes, untracked files included"
+  }" — not how you built it, so the review is not anchored on your reasoning. ` +
   // SW-431: a diff-scoped review missed two trust-boundary holes in a newly pre-approved wrapper (sw-292).
   'If the change adds or widens an allow rule or another pre-approved command, add to the brief: "this change pre-approves a command: list every file, env var, network address or process it can reach from its arguments, and treat each that leaves the workspace or its temp HOME as Must fix". ' +
-  `Fix every **Must fix** finding in place, then ${rerun}. Leave **Should fix** and **Nice to have** findings as they are. ` +
+  `Fix every **Must fix** finding in place, ${group.length ? `fold each fix into the commit of the ticket it belongs to (${FOLD}), ` : ""}then ${rerun}. Leave **Should fix** and **Nice to have** findings as they are. ` +
   "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
   "a `| check | result | evidence |` table with one row per worktree whose result cell is exactly `PASS` (no Must fix left open) or `FAIL` — nothing else in the cell. " +
   "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`.";
-const IMPLEMENT_REVIEW = reviewStep("rerun the host test step above");
+const implementReview = (v: IcmVars) => reviewStep("rerun the host test step above", v.group);
 
 // SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
 const NAME_HISTORY_STEP =
@@ -119,14 +139,18 @@ export const SELF_CHECK =
 const exerciseFormat = (col: string) =>
   `a \`| check | result | ${col} |\` table whose result cell is exactly \`PASS\` or \`FAIL\` — nothing else in the cell — with the captured output in the ${col} column. The rule holds for every table in \`exercise.md\`; describe a superseded run in prose, not as a \`FAIL\` row`;
 
+const LINT =
+  "the repo's lint command (the `&& <lint>` tail of the test command in `werkmeister-context.md`, when it has one, which the PR gate's lint row runs) and fix what it fails, release entry included.";
+
 const propose: Stage = {
   name: "propose",
   job: "acceptance walk and PR files",
-  writes: "one commit per code repo touched, `output/pr-<worktree>.md` per repo",
+  writes:
+    "the code commits (one per repo, or one per ticket in a grouped PR), `output/pr-<worktree>.md` per repo",
   check: "approve each PR file; `werkmeister pr open` opens it",
   standards: "none",
   contract: (v) => ({
-    oneJob: `One job: prove each acceptance criterion, commit in each code worktree, and write one PR file per repo touched. ${
+    oneJob: `One job: prove each acceptance criterion, ${v.group.length ? "check the per-ticket commits in" : "commit in"} each code worktree, and write one PR file per repo touched. ${
       v.autonomous ? "You approve it after the self-check" : "Approving is the person's act"
     }; opening is \`werkmeister pr open\`.`,
     inputs: [
@@ -138,19 +162,30 @@ const propose: Stage = {
     doNotLoad: "`_shared/standards.md` (no code is written here), source files, `.werkmeister/`.",
     process: [
       "Walk every acceptance criterion in `BRIEF.md`. For each, write a row whose result cell is exactly PASS or FAIL, with the file and line in a prior `output/` that proves it in a separate evidence column. A FAIL routes back to the owning stage — do not fix it here.",
-      "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit. " +
-        // SW-399: a changeset written after the last lint run failed the gate only at `pr open`.
-        "Before committing, run the repo's lint command (the `&& <lint>` tail of the test command in `werkmeister-context.md`, when it has one, which the PR gate's lint row runs) and fix what it fails, release entry included.",
-      "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value). Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs (every table with a `result` column — the gate reads them all — has a result cell of exactly `PASS` and the output in its own column: a FAIL cell anywhere in the PR file stops the PR, so describe a pre-fix reproduction in prose, not as a FAIL row), the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub.",
+      v.group.length
+        ? // Lint before the fold, so a lint fix lands in a commit and the gate's clean row holds.
+          `The commits are already made, one per ticket: keep them, never squash to one per repo. For a repo with \`ship: tag\` and a \`release_check\` in the registry, write the release entry it needs (e.g. a changeset). Run ${LINT} Then fold everything uncommitted into its ticket's commit (${FOLD}), the release entry into the workspace issue's, and check that \`git log --oneline origin/main..HEAD\` in each worktree shows one commit per ticket (the workspace's issue and ${keys(v.group)}), each message starting with its key.`
+        : "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit. " +
+          // SW-399: a changeset written after the last lint run failed the gate only at `pr open`.
+          `Before committing, run ${LINT}`,
+      "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value). Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs (every table with a `result` column — the gate reads them all — has a result cell of exactly `PASS` and the output in its own column: a FAIL cell anywhere in the PR file stops the PR, so describe a pre-fix reproduction in prose, not as a FAIL row), the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub." +
+        (v.group.length
+          ? " Start the body with `Rebase and merge, not squash: one commit per ticket, each revertable alone.` and list each member under the summary."
+          : ""),
       "Commit and push this folder's branch — the record. Never open a PR for it.",
     ],
     outputs: [
-      "One commit per code repo touched, on that worktree's branch",
+      v.group.length
+        ? "The per-ticket commits, kept, on each worktree's branch"
+        : "One commit per code repo touched, on that worktree's branch",
       "`output/pr-<worktree>.md` per repo",
     ],
-    humanCheck: `Read each \`pr-*.md\`. Set \`status: approved\` on each one to open — that flip is the approval. Then \`werkmeister pr open\`, run detached as \`_shared/pr-rules.md\` rule 3 shows, runs the gate and opens it. Merging is yours. After the release, \`werkmeister pr status\`, then the post-mortem (\`postmortem\` skill), then ask the person before \`werkmeister workspace close\`. Code written after a PR merged (e.g. found at release) is a follow-up: \`werkmeister pr new <worktree> --slug <slug>\`. ${CHAT_APPROVAL}`,
+    humanCheck: `Read each \`pr-*.md\`. Set \`status: approved\` on each one to open — that flip is the approval. Then \`werkmeister pr open\`, run detached as \`_shared/pr-rules.md\` rule 3 shows, runs the gate and opens it. Merging is yours. After the release, \`werkmeister pr status\`, then ${v.group.length ? `close each member — \`werkmeister issue update <KEY> --status Done --comment <PR url>\` for ${keys(v.group)} — then ` : ""}the post-mortem (\`postmortem\` skill), then ask the person before \`werkmeister workspace close\`. Code written after a PR merged (e.g. found at release) is a follow-up: \`werkmeister pr new <worktree> --slug <slug>\`. ${CHAT_APPROVAL}`,
     selfCheck:
-      "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `werkmeister pr open` detached, as `_shared/pr-rules.md` rule 3 shows. Stop at the PR URL. Merging is the person's.",
+      "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `werkmeister pr open` detached, as `_shared/pr-rules.md` rule 3 shows. Stop at the PR URL. Merging is the person's." +
+      (v.group.length
+        ? ` When the PR ships, close each member (\`werkmeister issue update <KEY> --status Done --comment <PR url>\` for ${keys(v.group)}) before the post-mortem.`
+        : ""),
   }),
 };
 
@@ -235,22 +270,26 @@ const feature: Stage[] = [
       doNotLoad: `\`BRIEF.md\` (\`decisions.md\` and \`spec.md\` carry the settled scope), \`inventory.md\`, \`.werkmeister/*.yml\`, \`${COMPOSE_FILE}\`, other stages.`,
       process: [
         ...IMPLEMENT_STEPS,
+        ...groupStep(v),
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         diffCheck("spec.md"),
         HOST_TEST_STEP,
-        IMPLEMENT_REVIEW,
+        implementReview(v),
         GATE_STEP,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
       ],
       outputs: [
-        "Code changes, uncommitted — the next stage commits after the person reads the diff",
+        v.group.length
+          ? "Code changes, one commit per ticket (`<KEY> …`), on the worktree's branch — the next stage keeps them"
+          : "Code changes, uncommitted — the next stage commits after the person reads the diff",
         "`output/exercise.md`",
         "`output/review.md`",
       ],
-      humanCheck:
-        "Read the diff. Run the tests yourself. Edit the code in place if something is off — the next stage commits what is on disk.",
+      humanCheck: v.group.length
+        ? "Read each ticket's commit (`git log -p origin/main..HEAD` in each worktree). Run the tests yourself. Edit the code in place if something is off and fold it into that ticket's commit — the next stage keeps the commits as they are."
+        : "Read the diff. Run the tests yourself. Edit the code in place if something is off — the next stage commits what is on disk.",
     }),
   },
   propose,
@@ -306,14 +345,19 @@ const bugfix: Stage[] = [
         "`BRIEF.md` (`repro.md` carries the settled scope), `.werkmeister/*.yml`, other stages.",
       process: [
         ...IMPLEMENT_STEPS,
+        ...groupStep(v),
         "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
         diffCheck("repro.md"),
         TEST_STEP,
         `Write \`output/fix.md\`: \`git diff --stat\` per repo, the failing test's name, the test exit code and summary line, and ${SKIPPED}.`,
       ],
-      outputs: ["Code changes plus the test, uncommitted", "`output/fix.md`"],
-      humanCheck:
-        "Read the diff. Confirm the fix sits where `repro.md` put the root cause. Edit in place if not.",
+      outputs: [
+        v.group.length
+          ? "Code changes plus the test, one commit per ticket"
+          : "Code changes plus the test, uncommitted",
+        "`output/fix.md`",
+      ],
+      humanCheck: `${v.group.length ? "Read each ticket's commit (`git log -p origin/main..HEAD`)" : "Read the diff"}. Confirm the fix sits where \`repro.md\` put the root cause. Edit in place if not.`,
     }),
   },
   {
@@ -338,12 +382,15 @@ const bugfix: Stage[] = [
         `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
         reviewStep(
           "rerun the test command exactly as `../../.werkmeister/werkmeister-context.md` states it (through `.werkmeister/bin/with-temp-home`), rerun steps 2–3 and update `exercise.md`",
+          v.group,
         ),
       ],
       outputs: [
         "`output/exercise.md`",
         "`output/review.md`",
-        "Code changes from Must fix findings, uncommitted",
+        v.group.length
+          ? "Code changes from Must fix findings, folded into their tickets' commits"
+          : "Code changes from Must fix findings, uncommitted",
       ],
       humanCheck: "Read `exercise.md` and `review.md`. A FAIL sends the run back to the fix stage.",
     }),
@@ -397,15 +444,22 @@ const refactor: Stage[] = [
         "`BRIEF.md` (`scope.md` carries the settled scope), `.werkmeister/*.yml`, other stages.",
       process: [
         ...IMPLEMENT_STEPS,
+        ...groupStep(v),
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
         `Take the steps in order. After each one: ${diffCheck("scope.md")} ${HOST_TEST_STEP}`,
-        IMPLEMENT_REVIEW,
+        implementReview(v),
         GATE_STEP,
         `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
       ],
-      outputs: ["Code changes, uncommitted", "`output/exercise.md`", "`output/review.md`"],
-      humanCheck: "Read the diff against `scope.md`. Anything outside scope goes back.",
+      outputs: [
+        v.group.length
+          ? "Code changes, one commit per ticket (`<KEY> …`)"
+          : "Code changes, uncommitted",
+        "`output/exercise.md`",
+        "`output/review.md`",
+      ],
+      humanCheck: `Read the diff against \`scope.md\`. Anything outside scope goes back.${v.group.length ? " Read it per commit: `git log -p origin/main..HEAD`." : ""}`,
     }),
   },
   propose,
