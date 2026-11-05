@@ -2877,3 +2877,42 @@ test("a headless session never runs the check: nobody there can restart it", asy
   expect(w.toasts).toEqual([]);
   expect((await $.prompt.submit(typed("hi"))).drop).toBeUndefined();
 });
+
+const BAND_PROPS = {
+  hasSurvey: false,
+  isWorking: false,
+  maxRows: 20,
+  bodyColumns: 100,
+  scroll: { offset: 0, bodyRows: 20 },
+  view: {},
+};
+
+test("a session inside a workspace draws its card above the prompt, without buttons; elsewhere nothing", async ($, on) => {
+  world(on, stubs());
+  on("fs.list", () => ({ value: [] }));
+  on("fs.exists", (_$, e) => ({ value: e.path === "/ws/abc/.werkmeister/workspace.yml" }));
+  on("session.start", (_$, e) => ({ cwd: e.cwd }));
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({
+      plugin: "werkmeister",
+      surface,
+      component: "AbovePrompt",
+      props: BAND_PROPS,
+    });
+    expect((await ui.find({ key: "row:abc" }))?.text).toBe("abc");
+    expect((await ui.find({ key: "meta:abc" }))?.text).toMatch(/containers/);
+    expect(await ui.find({ key: "row:ab" })).toBeUndefined();
+    expect(await ui.find({ key: "new:abc" })).toBeUndefined();
+    await ui.unmount();
+  }
+});
+
+test("a session outside any workspace starts no band and reads no workspaces", async ($, on) => {
+  const w = world(on, stubs());
+  on("fs.list", () => ({ value: [] }));
+  on("fs.exists", () => ({ value: false }));
+  on("session.start", (_$, e) => ({ cwd: e.cwd }));
+  await $.session.start({ cwd: "/elsewhere", surface: "terminal", isInteractive: true });
+  expect(w.calls.filter((c) => c.key === `${WS}/list-workspaces`)).toHaveLength(0);
+});
