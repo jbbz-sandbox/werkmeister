@@ -102,6 +102,8 @@ test("jit: the same create twice gives byte-identical files", async () => {
               fs
                 .readFileSync(path.join(root, f), "utf8")
                 .replace(/create-copy-ws-[A-Za-z0-9]+/g, "<WS>")
+                // HOME is a fresh folder per run (SW-433).
+                .replaceAll(os.homedir(), "<USERHOME>")
                 .replaceAll(os.tmpdir(), "<TMP>"),
             ]),
         );

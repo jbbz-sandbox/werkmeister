@@ -109,13 +109,23 @@ export async function withSandboxHome(
   fs.writeFileSync(path.join(home, "services.yaml"), services);
   fs.writeFileSync(path.join(home, "ports.yaml"), ports);
 
-  const prev = process.env.WERKMEISTER_CONFIG_FILE;
-  process.env.WERKMEISTER_CONFIG_FILE = cfg;
+  // os.homedir() reads HOME: without this, tokens and locks land in the real ~ outside with-temp-home (SW-433).
+  const env = {
+    WERKMEISTER_CONFIG_FILE: cfg,
+    // Docker's context lives in the real ~/.docker; pinned before HOME moves, as with-temp-home does (SW-285).
+    DOCKER_CONFIG: process.env.DOCKER_CONFIG || path.join(os.homedir(), ".docker"),
+    HOME: path.join(home, "home"),
+  };
+  fs.mkdirSync(env.HOME);
+  const prev = Object.fromEntries(Object.keys(env).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, env);
   try {
     return await fn(home);
   } finally {
-    if (prev === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
-    else process.env.WERKMEISTER_CONFIG_FILE = prev;
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
     fs.rmSync(home, { recursive: true, force: true });
   }
 }
