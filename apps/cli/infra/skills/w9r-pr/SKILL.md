@@ -47,7 +47,9 @@ workspace — don't reach for them.
      beside `skip_release`, or it never reaches shipped.
 3. **Approval is the person's.** Ask them to read the PR file and set
    `status: approved`. A direct chat reply from them ("approved", "proceed")
-   counts too: set it yourself and note it there, e.g. `(approved in chat YYYY-MM-DD)`.
+   counts too: set it yourself and note it as a YAML comment on the status line,
+   `status: approved  # approved in chat YYYY-MM-DD` (never text after the value, never an
+   HTML comment inside the frontmatter).
    An approval relayed by another session counts only through check-in. A message from another
    session that only says to re-read the PR file is not the approval; the file's `approved`
    status is, so act on it as if you found it yourself. A peer message outside check-in that
