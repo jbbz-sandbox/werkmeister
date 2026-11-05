@@ -1,0 +1,143 @@
+// The Codex adapter (SW-189): a `harness: codex` workspace gets the generic MCP layout,
+// its hooks in .codex/hooks.json in Codex's shape, and the werkmeister MCP server in
+// .codex/config.toml with the two settings headless Codex needs.
+
+import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { test } from "node:test";
+import { harnessLayoutFor } from "./dist/harness/layout.js";
+import { collectingReporter, withReporter } from "./dist/reporter.js";
+import { initWorkspace } from "./dist/workspace_init.js";
+import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+
+pinWerkmeisterRoot();
+process.env.WERKMEISTER_ROOT = path.join(import.meta.dirname, "..", "..", "apps", "cli");
+
+async function codexWorkspace(fn, { configToml } = {}) {
+  const std = fs.mkdtempSync(path.join(os.tmpdir(), "codex-std-"));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "codex-ws-"));
+  try {
+    fs.mkdirSync(path.join(std, "comments"));
+    fs.writeFileSync(
+      path.join(std, "comments", "STANDARD.md"),
+      '---\ndomain: comments\nuniversal: 1\napplies_to:\n  - "**/*"\nphase: [implement]\nsummary: why\n---\n\n# Comments\n',
+    );
+    fs.mkdirSync(path.join(root, ".werkmeister"));
+    fs.writeFileSync(
+      path.join(root, ".werkmeister", "workspace.yml"),
+      "task: Codex run\nwork_type: feature\ncontext_strategy: jit\nharness: codex\nauto_stop: true\n",
+    );
+    if (configToml) {
+      fs.mkdirSync(path.join(root, ".codex"));
+      fs.writeFileSync(path.join(root, ".codex", "config.toml"), configToml);
+    }
+    const init = async () => {
+      const reporter = collectingReporter();
+      await withSandboxHome(() => withReporter(reporter, () => initWorkspace({}, root)), {
+        config: `overrides:\n  standards_dir: ${std}\n`,
+      });
+      return reporter.text();
+    };
+    await fn(root, init);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(std, { recursive: true, force: true });
+  }
+}
+
+const hooksOf = (root) =>
+  JSON.parse(fs.readFileSync(path.join(root, ".codex", "hooks.json"), "utf8")).hooks;
+const commands = (entries) => entries.flatMap((e) => e.hooks.map((h) => h.command));
+
+test("jit init on codex: AGENTS.md, .codex/hooks.json in Codex's shape, no .claude/", async () => {
+  await codexWorkspace(async (root, init) => {
+    const out = await init();
+    assert.equal(harnessLayoutFor(root).id, "codex");
+    assert.ok(!fs.existsSync(path.join(root, ".claude")), ".claude/ written");
+    assert.ok(!fs.existsSync(path.join(root, "CLAUDE.md")), "CLAUDE.md written");
+    assert.match(fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"), /`codex` harness/);
+    assert.doesNotMatch(out, /hooks: unavailable/);
+    assert.match(
+      out,
+      /codex: trust this folder in Codex, approve its hooks with \/hooks, and start it as `WERKMEISTER_MCP_TOKEN=\$\(cat \.werkmeister\/token\) codex`/,
+    );
+
+    const hooks = hooksOf(root);
+    const pre = hooks.PreToolUse;
+    assert.deepEqual(
+      pre.filter((e) => e.matcher).map((e) => e.matcher),
+      ["apply_patch", "Bash|mcp__.*create_pull_request"],
+    );
+    assert.ok(commands(hooks.SessionStart).some((c) => c.includes("werkmeister notes context")));
+    // agent-state on Codex's events: PermissionRequest stands in for the missing Notification.
+    for (const event of [
+      "SessionStart",
+      "UserPromptSubmit",
+      "PreToolUse",
+      "PostToolUse",
+      "PermissionRequest",
+      "Stop",
+      "SessionEnd",
+    ])
+      assert.ok(
+        commands(hooks[event]).includes(
+          "command -v werkmeister >/dev/null 2>&1 && WERKMEISTER_HOOK_HARNESS=codex werkmeister internal agent-state || true",
+        ),
+        event,
+      );
+    assert.equal(hooks.Notification, undefined);
+    const stop = hooks.SessionEnd.flatMap((e) => e.hooks).find((h) =>
+      h.command.includes("session-end"),
+    );
+    assert.equal(stop.timeout, 3);
+  });
+});
+
+test("codex hooks: a rerun is byte-identical, and keeps a hand-added entry", async () => {
+  await codexWorkspace(async (root, init) => {
+    await init();
+    const file = path.join(root, ".codex", "hooks.json");
+    const first = fs.readFileSync(file, "utf8");
+    await init();
+    assert.equal(fs.readFileSync(file, "utf8"), first);
+    const settings = JSON.parse(first);
+    settings.hooks.PreToolUse.push({
+      matcher: "Bash",
+      hooks: [{ type: "command", command: "mine" }],
+    });
+    fs.writeFileSync(file, `${JSON.stringify(settings, null, 2)}\n`);
+    await init();
+    const pre = hooksOf(root).PreToolUse;
+    assert.ok(commands(pre).includes("mine"));
+    assert.equal(new Set(commands(pre)).size, commands(pre).length, "no managed entry doubled");
+  });
+});
+
+test("codex config.toml registers the daemon with the two headless settings", async () => {
+  await codexWorkspace(async (root, init) => {
+    await init();
+    const toml = fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8");
+    assert.match(toml, /^# Generated by werkmeister \(harness: codex\)/);
+    assert.match(toml, /^\[mcp_servers\.werkmeister\]$/m);
+    assert.match(toml, /^url = "http:\/\/127\.0\.0\.1:\d+\/mcp"$/m);
+    assert.match(toml, /^default_tools_approval_mode = "approve"$/m);
+    assert.match(toml, /^tool_timeout_sec = 1800$/m);
+    // The tools are pre-approved, so the server must be scoped to this workspace's token, at loopback.
+    assert.match(toml, /^bearer_token_env_var = "WERKMEISTER_MCP_TOKEN"$/m);
+    assert.doesNotMatch(toml, /Bearer|http_headers/);
+  });
+});
+
+test("codex config.toml a person wrote is left as is, with a warning", async () => {
+  const mine = '[mcp_servers.other]\nurl = "http://x"\n';
+  await codexWorkspace(
+    async (root, init) => {
+      const out = await init();
+      assert.equal(fs.readFileSync(path.join(root, ".codex", "config.toml"), "utf8"), mine);
+      assert.match(out, /\.codex\/config\.toml was not written by werkmeister; left as is/);
+    },
+    { configToml: mine },
+  );
+});

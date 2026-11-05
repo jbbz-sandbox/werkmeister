@@ -6,17 +6,17 @@ host daemon. The workspace's `harness` (in `.werkmeister/workspace.yml`, set by
 `--harness` on `werkmeister workspace new` / `werkmeister workspace init`, or
 `WERKMEISTER_HARNESS`) decides which files `workspace init` writes and where.
 
-| | Claude Code (plugin) | Claude Code (devcontainer) | Generic MCP harness (`harness: mcp`) |
-|---|---|---|---|
-| Instructions file | `CLAUDE.md` | `CLAUDE.md` | `AGENTS.md` |
-| Skills | `.claude/skills/w9r-*` | `.claude/skills/w9r-*` | `.agents/skills/w9r-*` |
-| Subagents | `.claude/agents/w9r-*` | `.claude/agents/w9r-*` | none |
-| MCP server | the plugin's `.mcp.json` (`werkmeister internal mcp`, a stdio proxy to the daemon) | `http://host.docker.internal:3002/mcp` with the workspace token, registered by `postCreateCommand` | the daemon at `http://127.0.0.1:3002/mcp`, registered by you (below) |
-| Hooks | `.claude/settings.json` (session start, standards gate, PR guard, agent state, auto-stop) | same | **unavailable**: `workspace init` and `werkmeister feature up` print `hooks: unavailable on mcp (…)`, the `hooks` MCP tool returns `hooks: "unavailable: …"`, and `AGENTS.md` carries the note |
-| Session tools (`claude-transcript`, `claude-send`, `claude-resume`, `refine-prompt`, `pr-reconcile`), the Workspaces pane | yes | yes | no: the daemon still lists them, they answer for Claude sessions only |
+| | Claude Code (plugin) | Claude Code (devcontainer) | Generic MCP harness (`harness: mcp`) | Codex CLI (`harness: codex`) |
+|---|---|---|---|---|
+| Instructions file | `CLAUDE.md` | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` |
+| Skills | `.claude/skills/w9r-*` | `.claude/skills/w9r-*` | `.agents/skills/w9r-*` | `.agents/skills/w9r-*` |
+| Subagents | `.claude/agents/w9r-*` | `.claude/agents/w9r-*` | none | none |
+| MCP server | the plugin's `.mcp.json` (`werkmeister internal mcp`, a stdio proxy to the daemon) | `http://host.docker.internal:3002/mcp` with the workspace token, registered by `postCreateCommand` | the daemon at `http://127.0.0.1:3002/mcp`, registered by you (below) | the daemon, registered by `workspace init` in `.codex/config.toml` (below) |
+| Hooks | `.claude/settings.json` (session start, standards gate, PR guard, agent state, auto-stop) | same | **unavailable**: `workspace init` and `werkmeister feature up` print `hooks: unavailable on mcp (…)`, the `hooks` MCP tool returns `hooks: "unavailable: …"`, and `AGENTS.md` carries the note | `.codex/hooks.json` (the same hooks; see [Codex](#codex) for what differs) |
+| Session tools (`claude-transcript`, `claude-send`, `claude-resume`, `refine-prompt`, `pr-reconcile`), the Workspaces pane | yes | yes | no: the daemon still lists them, they answer for Claude sessions only | no (Codex sessions are SW-384) |
 
 Examples of a generic MCP harness: Codex CLI, Cursor, GitHub Copilot CLI. Codex
-is the one this was verified on (the Codex hooks adapter is SW-189).
+has its own harness with hooks, `harness: codex` ([Codex](#codex)).
 
 ## Connecting a generic MCP harness
 
@@ -32,7 +32,7 @@ is the one this was verified on (the Codex hooks adapter is SW-189).
    ```
 
    `workspace init` writes `AGENTS.md`, projects the skills into `.agents/skills/`,
-   and prints `hooks: unavailable on mcp (a generic MCP harness has no hooks adapter; SW-189 adds Codex)`.
+   and prints `hooks: unavailable on mcp (a generic MCP harness has no hooks adapter; use harness: codex for Codex)`.
    Re-running `werkmeister workspace init --harness mcp` on an existing workspace
    switches it; delete the old `CLAUDE.md` and `.claude/` by hand.
 3. **Register the server in the harness.** The URL is `http://127.0.0.1:3002/mcp`
@@ -74,10 +74,52 @@ is the one this was verified on (the Codex hooks adapter is SW-189).
    opened any way but `werkmeister pr open`, and the Workspaces pane shows the
    session as idle because no agent-state hook reports it.
 
+## Codex
+
+`harness: codex` is the generic MCP layout plus Codex's hooks.
+
+1. **Create the workspace for Codex:** `werkmeister workspace new my-feature --harness codex …`,
+   or `werkmeister workspace init --harness codex` on an existing one (delete the old
+   `CLAUDE.md` and `.claude/` by hand). `workspace init` and `werkmeister feature up` write:
+   - `.codex/hooks.json`: session-start notes and the standards gate (jit), the PR guard,
+     agent state and, while `auto_stop` is on, the session-end stop. Hand-added entries
+     are kept, like `.claude/settings.json`.
+   - `.codex/config.toml`: the werkmeister MCP server at the loopback daemon, with
+     `default_tools_approval_mode = "approve"` and `tool_timeout_sec = 1800` (why: step 3
+     above), and `bearer_token_env_var = "WERKMEISTER_MCP_TOKEN"`. A `.codex/config.toml`
+     you wrote yourself (no werkmeister header) is left as it is, with a warning.
+2. **Trust the folder and its hooks, once per workspace.** Codex reads a project's
+   `.codex/` only when the folder is trusted (its first-open prompt, or
+   `[projects."<path>"] trust_level = "trusted"` in `~/.codex/config.toml`), and runs a hook
+   only after `/hooks` has approved it. A werkmeister upgrade that changes a hook command
+   asks again. Headless `codex exec` can pass `--dangerously-bypass-hook-trust` instead.
+   Werkmeister never writes `~/.codex`.
+3. **Start Codex with the workspace's token:**
+   `WERKMEISTER_MCP_TOKEN=$(cat .werkmeister/token) codex` (or `codex exec …`). The tools
+   are pre-approved, and a loopback call with no token acts as the whole machine (step 1
+   above); the workspace token scopes the session to this workspace's tools, and the
+   `werkmeister` CLI it runs reads the same variable. The daemon issues
+   `.werkmeister/token` only for a workspace under the workspaces root.
+   Without the variable, Codex 0.166 skips the server silently: no werkmeister tools,
+   rather than machine-wide ones.
+
+What differs from Claude Code:
+
+- Codex edits files through `apply_patch`, so the gate matches `apply_patch` and reads
+  the paths from the patch.
+- Codex has no `Notification` event: its approval prompts arrive as `PermissionRequest`,
+  which marks the session needs-you.
+- A paused workspace denies each tool call but cannot end the turn: Codex rejects
+  `continue: false` on `PreToolUse`.
+- Codex's `SessionEnd` also fires after 30 minutes idle, so with `auto_stop` on the
+  feature stops then. Its hook gets at most 3 s.
+- Sessions (transcripts, `claude-send`, the pane's activity) are Claude's until SW-384.
+
 ## Adding a harness adapter
 
 A harness with its own hooks gets its own layout under
 `packages/werkmeister-core/src/harness/<id>/` (`HarnessLayout` in
 `harness/types.ts`), registered in `harness/layout.ts`, with its hooks writer
 mapping werkmeister's hook events to the harness's file and payload. The Claude
-Code adapter in `harness/claude/` is the reference.
+Code adapter in `harness/claude/` is the reference. The Codex adapter in `harness/codex/` shows the
+small case: it reuses `harness/claude/hooks_gen.ts`'s merge with its own file and event map.

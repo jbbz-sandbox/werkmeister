@@ -3,12 +3,13 @@
 // import edge in the tree. Pinned here so deleting that copy is provably safe.
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { decide, findWorkspaceRoot } from "./dist/gate.js";
+import { decide, findWorkspaceRoot, patchPaths } from "./dist/gate.js";
 
 test("findWorkspaceRoot walks up to the nearest .werkmeister directory", () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "ws-")));
@@ -190,5 +191,52 @@ test("phase gate: a note with no frontmatter fails open", () => {
       "no frontmatter\n",
     );
     assert.doesNotMatch(decide(ws, "s1", src(ws)) ?? "", /Phase gate/);
+  });
+});
+
+// SW-189: Codex edits through apply_patch, sending the patch in tool_input.command and no file_path.
+const PATCH = [
+  "*** Begin Patch",
+  "*** Add File: .werkmeister/notes/002-decision-y.md",
+  "+x",
+  "*** Update File: repo/src/a.ts",
+  "*** Move to: repo/src/b.ts",
+  "@@",
+  "-a",
+  "+b",
+  "*** Delete File: repo/src/a.ts",
+  "*** End Patch",
+].join("\n");
+
+test("patchPaths lists each file an apply_patch body touches, once, in order", () => {
+  assert.deepEqual(patchPaths(PATCH), [
+    ".werkmeister/notes/002-decision-y.md",
+    "repo/src/a.ts",
+    "repo/src/b.ts",
+  ]);
+  assert.deepEqual(patchPaths("echo hi"), []);
+});
+
+const runGate = (input) =>
+  execFileSync(
+    process.execPath,
+    ["--input-type=module", "-e", 'import { main } from "./dist/gate.js"; main();'],
+    { cwd: import.meta.dirname, input: JSON.stringify(input), encoding: "utf8" },
+  );
+
+test("gate main: a Codex apply_patch is gated on the paths in the patch, relative to cwd", () => {
+  withGatedWorkspace(DECIDED, (ws) => {
+    const out = runGate({
+      session_id: "s1",
+      cwd: ws,
+      hook_event_name: "PreToolUse",
+      tool_name: "apply_patch",
+      tool_input: { command: "*** Begin Patch\n*** Update File: repo/src/a.ts\n*** End Patch" },
+      turn_id: "t1",
+    });
+    const deny = JSON.parse(out).hookSpecificOutput;
+    assert.equal(deny.permissionDecision, "deny");
+    // Without the patch paths the gate saw "" and skipped the phase gate.
+    assert.match(deny.permissionDecisionReason, /^Phase gate:/);
   });
 });

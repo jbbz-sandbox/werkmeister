@@ -118,3 +118,19 @@ test("allows other commands, and everything outside a workspace", () => {
     fs.rmSync(ws, { recursive: true, force: true });
   }
 });
+
+// SW-189 pinning test: Codex reports shell as Bash and MCP tools as mcp__<server>__<tool>,
+// with its own extra fields, so the guard needs no Codex code path.
+test("denies Codex-shaped payloads: Bash gh pr create and an MCP create_pull_request", () => {
+  const ws = workspace();
+  const codex = { session_id: "s", hook_event_name: "PreToolUse", turn_id: "t", model: "gpt-5" };
+  try {
+    assert.ok(decide({ ...codex, ...bash(ws, "gh pr create --fill"), tool_use_id: "u" }));
+    assert.ok(
+      decide({ ...codex, cwd: ws, tool_name: "mcp__github__create_pull_request", tool_input: {} }),
+    );
+    assert.equal(decide({ ...codex, ...bash(ws, "gh pr view") }), null);
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+});

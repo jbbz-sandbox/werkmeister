@@ -1,7 +1,8 @@
 /**
  * Generated workspace hooks — docs/jit-context-system.md §5.6, §6.
  *
- * Emits two managed hooks into each workspace's `.claude/settings.json`:
+ * Emits two managed hooks into each workspace's `.claude/settings.json` (`.codex/hooks.json` on
+ * `harness: codex`, SW-189: gate matcher `apply_patch`, PermissionRequest for Notification):
  *
  * - SessionStart: every new context window (startup / resume / clear /
  *   post-compaction) runs `werkmeister notes context`, which injects the latest
@@ -57,10 +58,14 @@ import {
   loadServices,
   type ServicesConfig,
 } from "../../config.js";
+import { info } from "../../reporter.js";
 import { repoDirs } from "../../standards.js";
 import { tempHomeWrapper } from "../../temp_home.js";
 // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { readAutonomous, readAutoStop, readModel } from "../../workspace_prompts.js";
+import { CODEX_HOOKS_FILE, CODEX_LAUNCH, writeCodexConfig } from "../codex/index.js";
+// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
+import { harnessLayoutFor } from "../layout.js";
 
 // Markers doubling as the payload: entries containing them are werkmeister-managed.
 const _HOOK_MARKER = "werkmeister notes context";
@@ -97,6 +102,8 @@ export const PRE_TOOL_USE_GATE_COMMAND = `command -v werkmeister >/dev/null 2>&1
 export const PR_GUARD_COMMAND = `command -v werkmeister >/dev/null 2>&1 && ${_PR_GUARD_MARKER} || true`;
 export const SESSION_END_COMMAND = `command -v werkmeister >/dev/null 2>&1 && ${_AUTO_STOP_MARKER} >/dev/null 2>&1 || true`;
 export const AGENT_STATE_COMMAND = `command -v werkmeister >/dev/null 2>&1 && ${_AGENT_STATE_MARKER} || true`;
+// The pause gate needs the harness and agent_state cannot import harness/layout (cycle via jira), so the command says it.
+export const CODEX_AGENT_STATE_COMMAND = `command -v werkmeister >/dev/null 2>&1 && WERKMEISTER_HOOK_HARNESS=codex ${_AGENT_STATE_MARKER} || true`;
 
 /** The events agent_state.ts needs: working / needs-you / done, and session start and end. */
 export const AGENT_STATE_EVENTS = [
@@ -109,10 +116,19 @@ export const AGENT_STATE_EVENTS = [
   "SessionEnd",
 ] as const;
 
+/** {@link AGENT_STATE_EVENTS} on Codex, which has no Notification: its approval prompts arrive as PermissionRequest. */
+export const CODEX_AGENT_STATE_EVENTS = AGENT_STATE_EVENTS.map((e) =>
+  e === "Notification" ? "PermissionRequest" : e,
+);
+
 // SessionEnd hooks get a 1.5s budget unless one sets `timeout`, and the CLI's own
 // start-up can take most of that. The stop itself runs detached, so this only
 // bounds the idle check.
 const _SESSION_END_TIMEOUT_S = 10;
+// Codex caps SessionEnd hooks at 3 s.
+const _CODEX_SESSION_END_TIMEOUT_S = 3;
+
+const isCodex = (workspaceRoot: string) => harnessLayoutFor(workspaceRoot).id === "codex";
 
 /** One matcher group under `hooks.<event>` in `.claude/settings.json`. */
 export type HookEntry = {
@@ -126,9 +142,10 @@ export function buildSessionStartEntry(): HookEntry {
 }
 
 /** The managed PreToolUse matcher-group (Edit/Write only). */
-export function buildPreToolUseGateEntry(): HookEntry {
+export function buildPreToolUseGateEntry(codex = false): HookEntry {
   return {
-    matcher: "Edit|Write",
+    // Codex edits files only through apply_patch.
+    matcher: codex ? "apply_patch" : "Edit|Write",
     hooks: [{ type: "command", command: PRE_TOOL_USE_GATE_COMMAND }],
   };
 }
@@ -142,15 +159,16 @@ export function buildPrGuardEntry(): HookEntry {
 }
 
 /** The managed SessionEnd matcher-group (matcher-less: every exit reason; the command filters). */
-export function buildSessionEndEntry(): HookEntry {
-  return {
-    hooks: [{ type: "command", command: SESSION_END_COMMAND, timeout: _SESSION_END_TIMEOUT_S }],
-  };
+export function buildSessionEndEntry(codex = false): HookEntry {
+  const timeout = codex ? _CODEX_SESSION_END_TIMEOUT_S : _SESSION_END_TIMEOUT_S;
+  return { hooks: [{ type: "command", command: SESSION_END_COMMAND, timeout }] };
 }
 
 /** The managed agent-state matcher-group, the same for every event in {@link AGENT_STATE_EVENTS}. */
-export function buildAgentStateEntry(): HookEntry {
-  return { hooks: [{ type: "command", command: AGENT_STATE_COMMAND }] };
+export function buildAgentStateEntry(codex = false): HookEntry {
+  return {
+    hooks: [{ type: "command", command: codex ? CODEX_AGENT_STATE_COMMAND : AGENT_STATE_COMMAND }],
+  };
 }
 
 // A pre-SW-106 entry ran `sandbox …`: recognising it lets the next write replace it, not add a twin. // name-check: ignore
@@ -206,7 +224,9 @@ function _isDict(value: unknown): value is Record<string, unknown> {
 }
 
 function _settingsPath(workspaceRoot: string): string {
-  return path.join(workspaceRoot, ".claude", "settings.json");
+  return isCodex(workspaceRoot)
+    ? path.join(workspaceRoot, CODEX_HOOKS_FILE)
+    : path.join(workspaceRoot, ".claude", "settings.json");
 }
 
 /** The settings object (`{}` when absent), or null when a human left something we must not rewrite. */
@@ -272,16 +292,21 @@ function _writeManaged(workspaceRoot: string, managed: Managed[]): string {
 export function writeWorkspaceHooks(workspaceRoot: string): string {
   return _writeManaged(workspaceRoot, [
     ["SessionStart", buildSessionStartEntry(), _HOOK_MARKER],
-    ["PreToolUse", buildPreToolUseGateEntry(), _GATE_MARKER],
+    ["PreToolUse", buildPreToolUseGateEntry(isCodex(workspaceRoot)), _GATE_MARKER],
     ["PreToolUse", buildPrGuardEntry(), _PR_GUARD_MARKER],
   ]);
 }
 
 /** The agent-state hook on each of its events. */
 export function writeAgentStateHooks(workspaceRoot: string): string {
+  const codex = isCodex(workspaceRoot);
   return _writeManaged(
     workspaceRoot,
-    AGENT_STATE_EVENTS.map((event) => [event, buildAgentStateEntry(), _AGENT_STATE_MARKER]),
+    (codex ? CODEX_AGENT_STATE_EVENTS : AGENT_STATE_EVENTS).map((event) => [
+      event,
+      buildAgentStateEntry(codex),
+      _AGENT_STATE_MARKER,
+    ]),
   );
 }
 
@@ -307,7 +332,7 @@ export function removeWorkspaceHooks(workspaceRoot: string): string[] {
 export function writeAutoStopHook(workspaceRoot: string, on: boolean): string {
   if (on) {
     return _writeManaged(workspaceRoot, [
-      ["SessionEnd", buildSessionEndEntry(), _AUTO_STOP_MARKER],
+      ["SessionEnd", buildSessionEndEntry(isCodex(workspaceRoot)), _AUTO_STOP_MARKER],
     ]);
   }
   _removeManaged(workspaceRoot, [["SessionEnd", _AUTO_STOP_MARKER]]);
@@ -769,6 +794,16 @@ export function writeWorkspaceModel(workspaceRoot: string, model: string | null)
 
 /** The workspace's allow and deny rules, model, auto-stop and agent-state hooks, from its `.env`, registry and workspace.yml. */
 export function writeWorkspaceSettings(workspaceRoot: string): void {
+  if (isCodex(workspaceRoot)) {
+    // permissions and model are Claude settings; Codex gets its MCP server instead.
+    writeAutoStopHook(workspaceRoot, readAutoStop(workspaceRoot));
+    writeAgentStateHooks(workspaceRoot);
+    writeCodexConfig(workspaceRoot);
+    info(
+      `codex: trust this folder in Codex, approve its hooks with /hooks, and start it as \`${CODEX_LAUNCH}\` (docs/harnesses.md § Codex)`,
+    );
+    return;
+  }
   writeWorkspacePermissions(
     workspaceRoot,
     workspaceAllowRules(workspaceRoot),

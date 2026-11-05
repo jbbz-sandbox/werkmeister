@@ -577,7 +577,8 @@ function registerAuthoringTools(server: McpServer): void {
       annotations: { readOnlyHint: false },
       description:
         "Refresh the workspace's context layer the way `werkmeister feature up` does: jit re-merges its " +
-        "SessionStart and PreToolUse hooks into the harness's settings; icm removes any " +
+        "SessionStart and PreToolUse hooks into the harness's hook file (`.claude/settings.json`, or " +
+        "`.codex/hooks.json` on `harness: codex`); icm removes any " +
         "werkmeister-managed hooks. Never touches hooks it does not own. On a harness without " +
         "hooks (`harness: mcp`) nothing is written and `hooks` says why.",
       inputSchema: { ...WORKSPACE_ARG },

@@ -10,7 +10,7 @@
 import type { AgentState } from "../agent_state.js";
 
 /** First entry is the default; a workspace.yml without `harness:` reads as claude. */
-export const HARNESS_IDS = ["claude", "mcp"] as const;
+export const HARNESS_IDS = ["claude", "mcp", "codex"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
 export type HooksSupport = { available: true } | { available: false; reason: string };

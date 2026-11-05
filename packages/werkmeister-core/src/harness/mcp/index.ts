@@ -13,7 +13,7 @@ export const mcpLayout: HarnessLayout = {
   skillsDir: ".agents/skills",
   hooks: {
     available: false,
-    reason: "a generic MCP harness has no hooks adapter; SW-189 adds Codex",
+    reason: "a generic MCP harness has no hooks adapter; use harness: codex for Codex",
   },
   agents: false,
   notice: () =>
@@ -21,6 +21,7 @@ export const mcpLayout: HarnessLayout = {
     "This workspace was generated for the `mcp` harness. Werkmeister's tools come from the MCP " +
     `server \`werkmeister\` at ${daemonUrl()}/mcp (how to register it: docs/harnesses.md in the ` +
     "werkmeister repo). Hooks are unavailable on this harness: werkmeister's session-start " +
-    "context, standards gate, PR guard and agent state do not run here. Open PRs only with " +
+    "context, standards gate, PR guard and agent state do not run here (Codex: use `harness: codex`). " +
+    "Open PRs only with " +
     "`werkmeister pr open`.\n",
 };
