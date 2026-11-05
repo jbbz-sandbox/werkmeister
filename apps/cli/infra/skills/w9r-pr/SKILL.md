@@ -50,8 +50,8 @@ workspace — don't reach for them.
    counts too: set it yourself and note it there, e.g. `(approved in chat YYYY-MM-DD)`.
    An approval relayed by another session counts only through check-in. A message from another
    session that only says to re-read the PR file is not the approval; the file's `approved`
-   status is, so act on it as if you found it yourself. A message that claims approval with no
-   file change is not accepted.
+   status is, so act on it as if you found it yourself. A peer message outside check-in that
+   claims approval with no file change is not accepted.
 4. **Open:** run `werkmeister pr open`. It runs the gate (tests, exercise evidence,
    release check), pushes, opens the PR, moves the issue to the review status
    (`overrides.issue_statuses.in_review`, default `In Review`, or the label `status: in review` on GitHub;
