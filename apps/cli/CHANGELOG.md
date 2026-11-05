@@ -1,5 +1,20 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.74.0
+
+### Minor Changes
+
+- 149111d: SW-432: `werkmeister issue create --relates <key>` (repeatable) links the new issue "relates to" each key after creating it and prints each link. Every key is checked before anything is filed; a link Jira refuses still prints the new key, then exits 1. The generated `issues-report.md` shows the flag and, in a workspace with an issue, says to pass it for a follow-up.
+
+### Patch Changes
+
+- 7090ac2: SW-353: the generated approval text (ICM contracts, the router's one rule, `pr-rules.md`, the `w9r-pr` skill) now says a message from another session that only says to re-read an output file is not the approval: the file's `decided` or `approved` status is, so the agent acts on it without asking the person again. A message that claims approval with no file change is still not accepted, and a relay that exists only in a message still counts only through check-in.
+- 9dbbbbc: `pr watch` now reaches a session that is still open. A wake it holds for a busy terminal session (a conflict, a failed check, a review, a merge) is claimed and handed to that session's hooks: it arrives as context on the session's next prompt or tool call, or blocks its next Stop. It is never sent headless as well, and the workspace card stays `needs-you` until the session gets it (SW-418).
+- b5b092c: Under `WERKMEISTER_FIXTURE` (`with-fixture-workspace`, core fixture tests) `claude` and `kubectl` are stubs that fail loudly, like `gh`, unless `CLAUDE_BIN` names a claude; and the caller's `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`, `KUBECONFIG` and `GH_TOKEN` are blanked for each fixture step (SW-424).
+- b5b092c: `WERKMEISTER_NO_WAIT=1` now skips the `pr gate` / `pr open` host-load wait too, not only `with-temp-home`'s; `with-temp-home --no-wait` exports it, so `with-fixture-workspace --no-wait … --then pr gate` runs without a load wait (SW-425). Regenerate a workspace's wrapper with `werkmeister workspace init`.
+- b5b092c: `with-fixture-workspace` gains `--fragment <file>` (so `registry sync` runs under the fixture) and `--daemon` (a fake daemon that logs each call); without `--daemon` the daemon address is dead even when the shell exports the real one. `--gate` with a `--services` registry that has no `lib` now exits 2 instead of seeding a change no service maps to. Core tests get `withFakeDaemon` (SW-426).
+- b5b092c: Core tests run outside `with-temp-home` (a bare `node --test`, an editor's test runner) no longer write workspace tokens and locks into the real `~/.werkmeister`: `withSandboxHome` now points HOME at its temp home (SW-433). On a machine that ran them, delete the leftovers with `rm ~/.werkmeister/tokens/create-copy-ws-*`; no real workspace has that name.
+
 ## 0.73.0
 
 ### Minor Changes

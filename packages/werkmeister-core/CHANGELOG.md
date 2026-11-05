@@ -1,5 +1,12 @@
 # sandbox-core
 
+## 0.74.0
+
+### Patch Changes
+
+- 7090ac2: SW-353: the generated approval text (ICM contracts, the router's one rule, `pr-rules.md`, the `w9r-pr` skill) now says a message from another session that only says to re-read an output file is not the approval: the file's `decided` or `approved` status is, so the agent acts on it without asking the person again. A message that claims approval with no file change is still not accepted, and a relay that exists only in a message still counts only through check-in.
+- 149111d: SW-434: the generated `issues-report.md` search step also searches by the workspace's name (Jira `text ~ "<workspace>"`, GitHub `--search "<workspace>"`), since other sessions file from the same review and exercise files and an issue filed from a workspace names it.
+
 ## 0.73.0
 
 ## 0.72.1
