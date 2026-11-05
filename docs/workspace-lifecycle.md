@@ -305,16 +305,17 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `wer
 
 Lessons found mid-run (SW-104's CI failure on a typecheck the listed test commands never ran, SW-107) are lost with the workspace unless someone asks for them on purpose. So every close-out, shipped or abandoned, needs `postmortem.md` at the workspace root. The werkmeister `postmortem` skill writes it, and every route to close-out points there first (the ICM `CLAUDE.md` row and propose/spike checks, `pr-rules.md` rule 7 for ICM and JIT, `w9r-pr`, `workspace-pr`).
 
-1. **Gather** the run's problems: failed checks, Auto-fix commits and change-requesting reviews on each PR file's `url`; issues filed from the workspace (their bodies name it); deviations and FAIL rows in stage outputs or JIT notes; gate failures and the person's corrections in the session transcripts.
+1. **Gather** the run's problems: failed checks, Auto-fix commits and change-requesting reviews on each PR file's `url`; issues filed from the workspace (their bodies name it); deviations and FAIL rows in stage outputs or JIT notes; gate failures and the person's corrections in the session transcripts; and every `left:` row in the run's `review.md` files (SW-412).
 2. **Agree** a change per problem: the agent proposes what could have been done differently, and the person accepts, edits or rejects it.
-3. **Record** one row per problem: problem, source, cause, agreed change, action. A run with no problems records `Problems: none` and asks nothing.
-4. **Act** on each accepted change, and name it in the row. Rank the actions: pick the highest one that makes the lesson reach every installation of werkmeister.
+3. **Triage** each `left:` row, one question per row: file it (the issue names the workspace and its PR), add it to the known-issues file of the folder that holds the workspace, or drop it with a reason. Review findings deferred at the build stage are otherwise lost with the record branch.
+4. **Record** one row per problem: problem, source, cause, agreed change, action; and one row per `left:` row with its decision and link or reason. A run with no problems and no `left:` rows records `Problems: none` and asks nothing.
+5. **Act** on each accepted change, and name it in the row. Rank the actions: pick the highest one that makes the lesson reach every installation of werkmeister.
    1. **Shipped change, through an SW issue** (bug, feature or task): a code, skill or generated-text change. A change to `_shared/` or another generated file belongs here too, since the workspace's copy is regenerated and removed at close-out.
    2. **Standards edit** in the standards tree.
    3. **Memory entry, only for one person's own preferences,** such as their PR rules. It lives in Claude Code's auto-memory on one machine (`~/.claude/projects/<project>/memory/`), in no repo, and never ships with werkmeister, so no other developer or machine sees it. Never use it for a lesson about how werkmeister works.
 
    **Already enforced by `<check>`** (for example `name:check`) is also an action when a shipped check already catches the problem: confirm it does, name the check, and file nothing.
-5. **Commit and push** `postmortem.md` on the record branch. The handoff also stages it by name, as it does `closeout.md`.
+6. **Commit and push** `postmortem.md` on the record branch. The handoff also stages it by name, as it does `closeout.md`.
 
 Without `postmortem.md`, close-out refuses before it changes anything: an unshipped workspace hears the ship refusal first, and with `--abandon` the PR files stay as they were. `--skip-postmortem "<reason>"` (MCP `skip_postmortem`) closes out without one, only when the person says to, and the reason goes in `closeout.md`. A retry of a `closed-out` workspace isn't checked again. The pane's and VS Code's buttons have no skip: they show the refusal, which says to ask Claude to close out.
 

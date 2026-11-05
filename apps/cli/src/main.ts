@@ -1579,7 +1579,7 @@ const SPECS: CommandSpec[] = [
       [
         "create",
         "File a new issue and print its URL (Jira)",
-        ["project", "type", "title", "body-file"],
+        ["project", "type", "title", "body-file", "relates"],
       ],
       ["start", "Move the workspace's issue to in progress and fast-forward its worktrees", []],
       ["ready", "List a project's open work in priority order", ["project", "json"]],
@@ -1610,8 +1610,12 @@ const SPECS: CommandSpec[] = [
           type: ["--type <type>", "bug, feature or task (mapped to the tracker's issue type)"],
           title: ["--title <text>", "The issue's summary"],
           "body-file": ["--body-file <path>", "The issue's description, from a file (- for stdin)"],
+          relates: ["--relates <issue>", "Link the new issue 'relates to' this one (repeatable)"],
         };
-        for (const f of flags) cmd.option(...options[f]);
+        for (const f of flags)
+          if (f === "relates")
+            cmd.option(...options[f], (v: string, prev: string[] = []) => [...prev, v]);
+          else cmd.option(...options[f]);
       },
       namespace: ([ref], o) => ({
         action,
@@ -1623,6 +1627,7 @@ const SPECS: CommandSpec[] = [
         type: o.type ?? null,
         title: o.title ?? null,
         bodyFile: o.bodyFile ?? null,
+        relates: o.relates ?? [],
       }),
     }),
   ),

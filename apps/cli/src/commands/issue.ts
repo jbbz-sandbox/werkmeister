@@ -1,6 +1,6 @@
 /**
  * werkmeister issue <view|update> [ref] [--json] [--status <name>] [--comment <text>]
- * werkmeister issue create --project <key> --type <bug|feature|task> --title <text> --body-file <path|->
+ * werkmeister issue create --project <key> --type <bug|feature|task> --title <text> --body-file <path|-> [--relates <ref>]...
  * werkmeister issue start
  * werkmeister issue ready [--project <name>] [--json]
  *
@@ -10,8 +10,9 @@
  *
  * view:   print the issue's briefing (`--json`: the Issue as JSON).
  * update: move its status and/or add a comment; at least one is required.
- * create: file a new issue and print its URL. Only trackers with an API path
- *         (Jira); GitHub issues are filed with `gh issue create`.
+ * create: file a new issue and print its URL, then link it "relates to" each
+ *         --relates ref (SW-432). Only trackers with an API path (Jira); GitHub
+ *         issues are filed with `gh issue create`.
  * start:  inside a workspace, the first stage or phase began: move its issue to
  *         in progress, forward only (docs/workspace-lifecycle.md § Issue status),
  *         then fast-forward each code worktree with no commits of its own to base.
@@ -130,12 +131,29 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       );
     const issue = newIssueFromArgs(args);
     if (typeof issue === "string") fail(issue);
+    // Every --relates ref is checked before anything is filed, so a typo never leaves an unlinked issue.
+    const relates = ((args.relates as string[] | undefined) ?? []).map((t) => {
+      const ref = tracker.parseRef(t);
+      if (!ref)
+        fail(`--relates '${t}' is not a ${tracker.label} issue ID (e.g. ${tracker.refExample}).`);
+      return ref;
+    });
+    if (relates.length && !tracker.linkIssues) fail(`${tracker.label} cannot link issues.`);
+    let created: Issue;
     try {
-      const created = await tracker.createIssue(issue);
-      success(`Created ${created.ref} (${created.type}).`);
-      console.log(created.url ?? created.ref);
+      created = await tracker.createIssue(issue);
     } catch (e) {
       fail(`Could not create the issue in ${issue.project}: ${(e as Error).message}`);
+    }
+    success(`Created ${created.ref} (${created.type}).`);
+    console.log(created.url ?? created.ref);
+    for (const to of relates) {
+      try {
+        await tracker.linkIssues?.(created.ref, [to]);
+      } catch (e) {
+        fail(`Created ${created.ref}, but could not link it to ${to}: ${(e as Error).message}`);
+      }
+      success(`Linked ${created.ref} relates to ${to}.`);
     }
     return;
   }

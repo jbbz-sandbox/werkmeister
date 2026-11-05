@@ -148,15 +148,14 @@ export function githubTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
       );
     },
 
-    filingGuide() {
+    filingGuide(_issueId, workspace = "<workspace>") {
       const repos = githubIssueRepos(scope);
       const where = repos.length
         ? `the GitHub issues of the repo it belongs to — one of ${repos.map((r) => `\`${r}\``).join(", ")}`
         : "that repo's GitHub issues — find it with `git -C <worktree> remote get-url origin`";
       return {
         row: `| app code in a worktree | ${where} | \`gh issue create -R <owner>/<repo> --label <label>\` |`,
-        search:
-          'Search first: `gh issue list -R <owner>/<repo> --search "<keywords>" --state all`. If it exists, comment on it instead.',
+        search: `Search first: \`gh issue list -R <owner>/<repo> --search "<keywords>" --state all\`, then the same with \`--search "${workspace}"\`: other sessions file from the same review and exercise files, and an issue filed from this workspace names it. If it exists, comment on it instead.`,
       };
     },
 

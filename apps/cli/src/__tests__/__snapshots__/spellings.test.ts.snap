@@ -139,6 +139,24 @@ exports[`command spellings > ["intercept","f","-s","api","--leave"] 1`] = `
 }
 `;
 
+exports[`command spellings > ["issue","create","--project","SW","--title","t","--relates","SW-1","--relates","SW-2"] 1`] = `
+{
+  "action": "create",
+  "bodyFile": null,
+  "comment": null,
+  "json": false,
+  "project": "SW",
+  "ref": null,
+  "relates": [
+    "SW-1",
+    "SW-2",
+  ],
+  "status": null,
+  "title": "t",
+  "type": null,
+}
+`;
+
 exports[`command spellings > ["issue","create","--project","SW","--type","bug","--title","t"] 1`] = `
 {
   "action": "create",
@@ -147,6 +165,7 @@ exports[`command spellings > ["issue","create","--project","SW","--type","bug","
   "json": false,
   "project": "SW",
   "ref": null,
+  "relates": [],
   "status": null,
   "title": "t",
   "type": "bug",
@@ -161,6 +180,7 @@ exports[`command spellings > ["issue","update","--status","Done","--comment","c"
   "json": false,
   "project": null,
   "ref": null,
+  "relates": [],
   "status": "Done",
   "title": null,
   "type": null,
@@ -175,6 +195,7 @@ exports[`command spellings > ["issue","view","SW-1","--json"] 1`] = `
   "json": true,
   "project": null,
   "ref": "SW-1",
+  "relates": [],
   "status": null,
   "title": null,
   "type": null,

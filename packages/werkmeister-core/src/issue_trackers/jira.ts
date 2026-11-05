@@ -15,6 +15,7 @@ import {
   isJiraPlaceholder,
   type JiraRestIssue,
   jiraMyself,
+  linkIssueRest,
   searchIssuesRest,
   updateIssueRest,
 } from "../jira-rest.js";
@@ -211,6 +212,10 @@ export function markdownToWiki(md: string): string {
 /** Werkmeister issues go to GitHub unless `overrides.werkmeister_issues_project` names a Jira project; issues_report.ts names it too. */
 const WERKMEISTER_ISSUES_REPO = "jbbz-sandbox/werkmeister";
 
+const NO_REST =
+  "no Jira REST credentials: set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md), " +
+  "or file it with the Atlassian MCP tools";
+
 const ISSUE_TYPES: Record<IssueKind, string> = { bug: "Bug", feature: "Story", task: "Task" };
 
 /** Jira, narrowed to `scope.project`'s keys when set (SW-104). The site stays the machine's `jira:` block. */
@@ -245,16 +250,20 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
       return out;
     },
 
-    filingGuide(issueId) {
+    filingGuide(issueId, workspace = "<workspace>") {
       const project = /^([A-Z][A-Z0-9]+)-\d+$/.exec(issueId)?.[1] ?? key;
       const sandboxProject = loadSandboxIssuesProject();
       const rawBase = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
       const site = isJiraPlaceholder(rawBase) || !rawBase ? "" : ` (${rawBase})`;
       const command = (key?: string) =>
-        `\`werkmeister issue create --project ${key ?? "<KEY>"} --type <type> --title "<title>" --body-file <file>\`; ` +
+        `\`werkmeister issue create --project ${key ?? "<KEY>"} --type <type> --title "<title>" --body-file <file> [--relates <issue>]\`; ` +
+        (issueId ? `pass \`--relates ${issueId}\` for a follow-up from this run; ` : "") +
         "if it fails for want of a Jira API token, the Atlassian MCP tools if connected, otherwise hand the person the title, type and body to file";
-      const jql = (key?: string) =>
-        `JQL \`${key ? `project = ${key} AND ` : ""}text ~ "<keywords>"\``;
+      const jql = (key: string | undefined, term: string) =>
+        `JQL \`${key ? `project = ${key} AND ` : ""}text ~ "${term}"\``;
+      const both = (key?: string) => `${jql(key, "<keywords>")}, then ${jql(key, workspace)}`;
+      const gh = (term: string) =>
+        `\`gh issue list -R ${WERKMEISTER_ISSUES_REPO} --search "${term}" --state all\``;
       const where = `Jira${project ? `, project \`${project}\`` : " — ask the person which project"}${site}`;
       return {
         row: `| app code in a worktree | ${where} | ${command(project)} |`,
@@ -264,7 +273,7 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
               command: command(sandboxProject),
             }
           : undefined,
-        search: `Search first: ${jql(project)}. If it exists, comment on it instead. (Werkmeister issues: ${sandboxProject ? jql(sandboxProject) : `\`gh issue list -R ${WERKMEISTER_ISSUES_REPO} --search "<keywords>" --state all\``}.)`,
+        search: `Search first: ${both(project)}: other sessions file from the same review and exercise files, and an issue filed from this workspace names it. If it exists, comment on it instead. (Werkmeister issues: ${sandboxProject ? both(sandboxProject) : `${gh("<keywords>")}, then ${gh(workspace)}`}.)`,
       };
     },
 
@@ -276,12 +285,12 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
         summary: title,
         description: markdownToWiki(body),
       });
-      if (!created)
-        throw new Error(
-          "no Jira REST credentials: set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md), " +
-            "or file it with the Atlassian MCP tools",
-        );
+      if (!created) throw new Error(NO_REST);
       return { ref: created.key, title, type: created.issueType, url: created.url };
+    },
+
+    async linkIssues(ref, relates) {
+      for (const to of relates) if (!(await linkIssueRest(ref, to))) throw new Error(NO_REST);
     },
 
     async listReady(board) {

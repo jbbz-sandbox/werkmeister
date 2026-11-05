@@ -104,9 +104,13 @@ export interface IssueTrackerStrategy {
   /**
    * The issues guide's routing: the "Where" table's app-code row, the
    * search-first step, and where and how to file werkmeister issues when this
-   * tracker takes those too (absent: GitHub). `issueId` is the workspace's own issue, "" when none.
+   * tracker takes those too (absent: GitHub). `issueId` is the workspace's own issue, "" when none;
+   * `workspace` its name, searched for too since issues filed from a workspace name it (SW-434).
    */
-  filingGuide(issueId: string): {
+  filingGuide(
+    issueId: string,
+    workspace?: string,
+  ): {
     row: string;
     search: string;
     werkmeister?: { where: string; command: string };
@@ -116,6 +120,8 @@ export interface IssueTrackerStrategy {
    * file with the tracker's own CLI (GitHub: `gh issue create`). Throws with the tracker's reason.
    */
   createIssue?(issue: NewIssue): Promise<Issue>;
+  /** Link `ref` "relates to" each of `relates`, in order; only trackers with `createIssue` have it. Throws with the tracker's reason at the first refusal. */
+  linkIssues?(ref: string, relates: string[]): Promise<void>;
   /**
    * Open work in priority order: `board`'s ready column in board rank when given,
    * else the scope's open issues. Throws with the tracker's reason.

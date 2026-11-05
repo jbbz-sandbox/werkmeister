@@ -20,7 +20,11 @@ export function buildIssuesReportMd(
   issueId = "",
   tracker: IssueTrackerStrategy = issueTracker(),
 ): string {
-  const { row: appRow, search: searchStep, werkmeister } = tracker.filingGuide(issueId.trim());
+  const {
+    row: appRow,
+    search: searchStep,
+    werkmeister,
+  } = tracker.filingGuide(issueId.trim(), workspaceName);
   const sandboxWhere = werkmeister ?? {
     where: `https://github.com/${WERKMEISTER_ISSUES_REPO}/issues`,
     command: `\`gh issue create -R ${WERKMEISTER_ISSUES_REPO} --label <label>\``,

@@ -8,7 +8,7 @@ import { test } from "node:test";
 process.env.JIRA_BASE_URL = "https://x.atlassian.net";
 process.env.JIRA_EMAIL = "a@b.c";
 process.env.JIRA_API_TOKEN = "tok";
-const { createIssueRest } = await import("./dist/jira-rest.js");
+const { createIssueRest, linkIssueRest } = await import("./dist/jira-rest.js");
 const { trackerById } = await import("./dist/issue_tracker.js");
 
 function stubFetch(types, createStatus = 201) {
@@ -77,4 +77,46 @@ test("the jira tracker maps feature to Story and returns the issue's URL", async
     url: "https://x.atlassian.net/browse/SW-13",
   });
   assert.equal(calls[1].body.fields.summary, "Add X");
+});
+
+// SW-432: `issue create --relates`; Jira answers a new link with 201 and no body.
+function stubLinks(status = 201) {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url: String(url), method: init.method, body: JSON.parse(init.body) });
+    return status === 201
+      ? new Response(null, { status })
+      : new Response('{"errorMessages":["Issue Does Not Exist"]}', { status });
+  };
+  return calls;
+}
+
+test("linkIssueRest posts one Relates link, new issue inward", async () => {
+  const calls = stubLinks();
+  assert.equal(await linkIssueRest("SW-13", "SW-292"), true);
+  assert.deepEqual(calls, [
+    {
+      url: "https://x.atlassian.net/rest/api/2/issueLink",
+      method: "POST",
+      body: {
+        type: { name: "Relates" },
+        inwardIssue: { key: "SW-13" },
+        outwardIssue: { key: "SW-292" },
+      },
+    },
+  ]);
+});
+
+test("a refused link carries Jira's reason", async () => {
+  stubLinks(404);
+  await assert.rejects(linkIssueRest("SW-13", "SW-9999"), /HTTP 404: .*Issue Does Not Exist/);
+});
+
+test("the jira tracker links each key in order", async () => {
+  const calls = stubLinks();
+  await trackerById("jira").linkIssues("SW-13", ["SW-292", "SW-263"]);
+  assert.deepEqual(
+    calls.map((c) => c.body.outwardIssue.key),
+    ["SW-292", "SW-263"],
+  );
 });
