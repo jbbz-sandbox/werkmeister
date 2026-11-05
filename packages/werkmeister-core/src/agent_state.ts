@@ -332,7 +332,8 @@ export function writeWakeNudge(root: string, session: string, message: string, n
 export function deliverWake(input: Record<string, any>, root: string): object | null {
   const event = input["hook_event_name"];
   if (event !== "UserPromptSubmit" && event !== "PostToolUse" && event !== "Stop") return null;
-  // A subagent's hooks carry the parent's session id; its context isn't the conversation's.
+  // A subagent's hooks carry the parent's session id plus agent_id (seen live, Claude Code 2.1.318,
+  // SW-443); its context isn't the conversation's.
   if (input["agent_id"]) return null;
   if (!pendingWake(root, input["session_id"])) return null;
   const file = wakeNudgePath(root, input["session_id"]);
