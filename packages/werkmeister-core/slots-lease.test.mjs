@@ -15,12 +15,9 @@ import { withSandboxHome } from "./fixtures.mjs";
 /** Fresh HOME (locks and leases live under it) and seeded registry; no Docker. */
 async function withHome(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "slots-lease-home-"));
-  const prev = process.env.HOME;
-  process.env.HOME = home;
   try {
     return await withSandboxHome(() => fn(home));
   } finally {
-    process.env.HOME = prev;
     fs.rmSync(home, { recursive: true, force: true });
   }
 }
