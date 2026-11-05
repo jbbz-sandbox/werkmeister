@@ -81,7 +81,7 @@ test("jit init writes the same files, byte for byte", async () => {
     assert.deepEqual(
       files,
       JSON.parse(fs.readFileSync(SNAPSHOT, "utf8")),
-      "generated output differs from strategy-jit.snapshot.json: intended change? regenerate with UPDATE_SNAPSHOT=1 node --test strategy-jit-snapshot.test.mjs",
+      "generated output differs from strategy-jit.snapshot.json: intended change? regenerate in packages/werkmeister-core through with-temp-home: with-temp-home env UPDATE_SNAPSHOT=1 node --test strategy-jit-snapshot.test.mjs",
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
