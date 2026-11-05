@@ -131,10 +131,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       );
     const issue = newIssueFromArgs(args);
     if (typeof issue === "string") fail(issue);
-    // Every --relates ref is checked before anything is filed, so a typo never leaves an unlinked issue.
+    // Every --relates value is checked to be exactly one key before anything is filed, so a typo never
+    // leaves an unlinked issue. parseRef alone finds a key inside "SW-29x" or "SW-1,SW-2", hence the equality.
+    // Existence is not checked (SW-451).
     const relates = ((args.relates as string[] | undefined) ?? []).map((t) => {
       const ref = tracker.parseRef(t);
-      if (!ref)
+      if (!ref || ref !== t.trim().toUpperCase())
         fail(`--relates '${t}' is not a ${tracker.label} issue ID (e.g. ${tracker.refExample}).`);
       return ref;
     });
