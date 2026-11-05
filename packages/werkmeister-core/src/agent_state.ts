@@ -292,6 +292,46 @@ export function claimNudge(root: string): string | null {
   return message;
 }
 
+/** `<dot-dir>/wake-nudge.json` (SW-418): `pr watch` wakes held for open sessions, by session id. */
+export const wakeNudgePath = (root: string) => path.join(dotDir(root), "wake-nudge.json");
+
+function readWakeNudges(root: string): Record<string, { message: string; at: string }> {
+  try {
+    const o = JSON.parse(fs.readFileSync(wakeNudgePath(root), "utf8"));
+    return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Queue *message* for *session*'s next hook event, after any it hasn't had yet. */
+export function writeWakeNudge(root: string, session: string, message: string, now = new Date()) {
+  const all = readWakeNudges(root);
+  const before = all[session]?.message;
+  all[session] = { message: before ? `${before}\n\n${message}` : message, at: now.toISOString() };
+  writeAtomic(wakeNudgePath(root), all);
+}
+
+/**
+ * The hook's stdout handing *input*'s session its pending wake, or null. Taken out of the
+ * file first, so it is delivered once; Stop is blocked so a turn that is ending still reads it.
+ */
+export function deliverWake(input: Record<string, any>, root: string): object | null {
+  const event = input["hook_event_name"];
+  if (event !== "UserPromptSubmit" && event !== "PostToolUse" && event !== "Stop") return null;
+  // A subagent's hooks carry the parent's session id; its context isn't the conversation's.
+  if (input["agent_id"]) return null;
+  const all = readWakeNudges(root);
+  const message = all[input["session_id"]]?.message;
+  if (typeof message !== "string") return null;
+  delete all[input["session_id"]];
+  if (Object.keys(all).length) writeAtomic(wakeNudgePath(root), all);
+  else fs.rmSync(wakeNudgePath(root), { force: true });
+  return event === "Stop"
+    ? { decision: "block", reason: message }
+    : { hookSpecificOutput: { hookEventName: event, additionalContext: message } };
+}
+
 /**
  * The hook's stdout while the workspace is paused or waiting for capacity, or null. `continue: false` ends
  * the turn with the transcript intact; the deny also holds where a host ignores it.
@@ -334,7 +374,14 @@ export function record(input: Record<string, any>, now = new Date()): string | n
   if (!root) return null;
   const raw = readRaw(root);
   const current = stateOf(raw);
-  const next = nextState(input, current);
+  let next = nextState(input, current);
+  // A held PR wake's needs-you lasts until the session is handed it, not its next tool call (SW-418).
+  if (
+    next?.state === "working" &&
+    current?.state === "needs-you" &&
+    readWakeNudges(root)[input["session_id"]]
+  )
+    next = null;
   const stateChanged =
     next !== null &&
     !(
@@ -397,6 +444,10 @@ export function main(): void {
     // The session got a prompt, so a "continue" still waiting for it is stale.
     if (root && parsed["hook_event_name"] === "UserPromptSubmit")
       fs.rmSync(nudgePath(root), { force: true });
+    const wake = root ? deliverWake(parsed, root) : null;
+    if (wake) console.log(JSON.stringify(wake));
+    // A blocked Stop isn't the end of the turn, so it records nothing, like the pause gate.
+    if (wake && parsed["hook_event_name"] === "Stop") return;
     record(parsed);
   } catch {
     // a hook must never break the session

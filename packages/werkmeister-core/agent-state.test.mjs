@@ -284,7 +284,9 @@ test("hooks: a headless turn ending on an open session's id keeps that session l
 });
 
 // SW-70: while `paused.json` exists the same hook holds the session.
-const { pauseGate, PAUSED_REASON, writePaused, writeNudge } = await import("./dist/agent_state.js");
+const { flagNeedsYou, pauseGate, PAUSED_REASON, writePaused, writeNudge } = await import(
+  "./dist/agent_state.js"
+);
 
 test("pause gate: PreToolUse ends the turn and denies, UserPromptSubmit blocks, the rest pass", () => {
   const dir = workspace("j-gate", null);
@@ -352,6 +354,39 @@ test("pause gate: an unblocked prompt clears a stale resume nudge", () => {
   assert.equal(hook({ hook_event_name: "UserPromptSubmit", cwd: dir }), null);
   assert.equal(fs.existsSync(path.join(dir, ".werkmeister", "resume-nudge.json")), false);
   assert.equal(readAgentState(dir).state, "working");
+});
+
+test("wake nudge: kept needs-you until the session's next hook delivers it, once (SW-418)", () => {
+  const dir = workspace("l-wake", null);
+  const file = path.join(dir, ".werkmeister", "wake-nudge.json");
+  const fire = (e, extra = {}) =>
+    hook({ hook_event_name: e, cwd: dir, session_id: "s-1", ...extra });
+  write(file, JSON.stringify({ "s-1": { message: "PR 9 conflicts with main, resolve it." } }));
+  flagNeedsYou(dir, "waiting for your open session: PR 9 conflicts");
+  assert.equal(fire("PreToolUse", { tool_name: "Bash" }), null);
+  assert.equal(readAgentState(dir).state, "needs-you", "its own activity doesn't erase the flag");
+  assert.equal(
+    fire("PostToolUse", { session_id: "other", tool_name: "Bash" }),
+    null,
+    "not another session's",
+  );
+  assert.equal(
+    fire("PostToolUse", { agent_id: "sub-1", tool_name: "Bash" }),
+    null,
+    "not a subagent's, which shares the session id",
+  );
+  const out = fire("PostToolUse", { tool_name: "Bash" });
+  assert.equal(out.hookSpecificOutput.hookEventName, "PostToolUse");
+  assert.match(out.hookSpecificOutput.additionalContext, /PR 9 conflicts with main/);
+  assert.equal(fs.existsSync(file), false, "delivered once");
+  assert.equal(readAgentState(dir).state, "working");
+  write(file, JSON.stringify({ "s-1": { message: "PR 9 merged." } }));
+  assert.match(fire("UserPromptSubmit").hookSpecificOutput.additionalContext, /PR 9 merged/);
+  write(file, JSON.stringify({ "s-1": { message: "PR 9 merged." } }));
+  const stop = fire("Stop", { last_assistant_message: "Done." });
+  assert.equal(stop.decision, "block", "a turn ending first still gets it");
+  assert.match(stop.reason, /PR 9 merged/);
+  assert.equal(fs.existsSync(file), false);
 });
 
 test("status: a paused workspace reports when, what Resume brings back, and a pending nudge", async () => {

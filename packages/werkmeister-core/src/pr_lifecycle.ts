@@ -12,7 +12,7 @@ import * as path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import YAML from "yaml";
 
-import { flagNeedsYou } from "./agent_state.js";
+import { flagNeedsYou, writeWakeNudge } from "./agent_state.js";
 import { serviceTestCommand } from "./archetypes.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import {
@@ -1956,18 +1956,24 @@ export async function claimCallbacks(
         const session = String(f.fm["session"]);
         const sessionDir = reason(f.fm["session_cwd"]) || null;
         const hostSession = reason(f.fm["host_session"]) || null;
-        // A held message stays unclaimed, so the next pass sends it once the session is idle.
+        // A headless turn would fork a session in use: hand the message to its hooks instead (SW-418).
         const held = async () => {
           if (hostSession || !(await deps.sessionBusy(ws, session, sessionDir))) return false;
           lines.push(`${f.dir}: wake held, session ${session} in use`);
           flagNeedsYou(ws, `waiting for your open session: ${message?.split("\n")[0]}`);
+          // Only an open session fires hooks; one closed in the last minutes stays unclaimed for a headless pass.
+          if (!liveSessions(ws).some((s) => s.sessionId === session)) return "wait";
+          writeWakeNudge(ws, session, message as string);
           return true;
         };
+        let nudged = false;
         let message: string | null;
         let fields: Record<string, string | undefined>;
         if (status !== (reason(f.fm["notified"]) || "open")) {
           message = callbackMessage(status, url, reason(f.fm["release"]) || undefined);
-          if (message && (await held())) continue;
+          const h = message ? await held() : false;
+          if (h === "wait") continue;
+          nudged = h;
           fields = SETTLED.has(status)
             ? {
                 session: undefined,
@@ -1985,11 +1991,13 @@ export async function claimCallbacks(
           const wake = await wakeEvents(ws, f, view, deps);
           lines.push(...wake.lines.map((l) => `${path.basename(ws)}/${l}`));
           message = wake.events.length ? wakeMessage(url, wake.events) : null;
-          if (message && (await held())) continue;
+          const h = message ? await held() : false;
+          if (h === "wait") continue;
+          nudged = h;
           fields = wake.claim;
           if (!Object.keys(fields).length) continue;
         }
-        if (message)
+        if (message && !nudged)
           claimed.push({ ws, dir: f.dir, url, session, sessionDir, hostSession, message });
         writePrFields(f, fields);
         changed.push(path.relative(ws, f.path));
