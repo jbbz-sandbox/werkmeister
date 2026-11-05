@@ -2,7 +2,7 @@
 // removes it on exit, so no test reaches the real ~/.werkmeister.
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -229,6 +229,56 @@ test("a daemon call under the wrapper raises DaemonUnavailable, never reaching :
     assert.equal(r.status, 0, r.stderr);
     assert.equal(r.stdout, "http://127.0.0.1:1\nDAEMON_DOWN\n");
   } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// SW-456: a "hang" under the wrapper was its host-load wait; killing the wrapper left wait-load polling for up to 10 min.
+test("killing the wrapper during its host-load wait stops the wait too (SW-456)", async () => {
+  const { root, bin } = wrapper();
+  const stub = path.join(root, "stub-bin");
+  fs.mkdirSync(stub);
+  const pidFile = path.join(root, "wait.pid");
+  fs.writeFileSync(
+    path.join(stub, "werkmeister"),
+    `#!/bin/sh\necho $$ > "${pidFile}"\nexec sleep 30\n`,
+    {
+      mode: 0o755,
+    },
+  );
+  const { WERKMEISTER_NO_WAIT: _, ...env } = process.env;
+  const alive = (pid) => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const until = async (ok) => {
+    for (let i = 0; i < 50 && !ok(); i++) await new Promise((r) => setTimeout(r, 100));
+    return ok();
+  };
+  const child = spawn(bin, ["true"], {
+    env: { ...env, PATH: `${stub}:${process.env.PATH}` },
+    stdio: "ignore",
+  });
+  const exited = new Promise((r) => child.on("exit", (code, signal) => r({ code, signal })));
+  let waitPid = 0;
+  try {
+    assert.ok(
+      await until(() => fs.existsSync(pidFile) && fs.readFileSync(pidFile, "utf8").trim()),
+      "wait started",
+    );
+    waitPid = Number(fs.readFileSync(pidFile, "utf8"));
+    child.kill("SIGTERM");
+    await exited;
+    assert.ok(
+      await until(() => !alive(waitPid)),
+      `wait-load ${waitPid} still running after the wrapper was killed`,
+    );
+  } finally {
+    if (waitPid && alive(waitPid)) process.kill(waitPid);
     fs.rmSync(root, { recursive: true, force: true });
   }
 });

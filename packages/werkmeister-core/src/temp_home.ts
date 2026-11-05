@@ -21,7 +21,13 @@ no_wait=\${WERKMEISTER_NO_WAIT:-}
 [ "$#" -gt 0 ] || { echo "usage: with-temp-home [--no-wait] <cmd> [args...]" >&2; exit 2; }
 # Wait like the pr gate while host load is over budget.host_load (SW-224), before HOME
 # changes so the real config's budget applies; no werkmeister on PATH, no wait.
-[ -n "$no_wait" ] || ! command -v werkmeister >/dev/null 2>&1 || werkmeister internal wait-load >&2 || :
+# In the background with a trap, so killing the wrapper ends the wait too (SW-456).
+[ -n "$no_wait" ] || ! command -v werkmeister >/dev/null 2>&1 || {
+  werkmeister internal wait-load >&2 &
+  wait_pid=$!
+  trap 'kill "$wait_pid" 2>/dev/null; exit 130' HUP INT TERM
+  wait "$wait_pid"
+} || :
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' HUP INT TERM
