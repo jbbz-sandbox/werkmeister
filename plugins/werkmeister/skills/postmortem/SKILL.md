@@ -24,7 +24,9 @@ the workspace root, unless the person says to skip it
      rows); JIT `.werkmeister/notes/`.
    - **Review leftovers:** every `left:` row in each `review.md` the run wrote
      (ICM `stages/*/output/review.md`;
-     `find . -name review.md -not -path '*/node_modules/*'` finds the rest). List
+     `find stages .werkmeister -name review.md 2>/dev/null` finds the rest;
+     never search the code worktrees, whose own `review.md` files are not this
+     run's). List
      each with its file. They are not problems: step 4 triages them.
    - **Gate failures and the person's corrections:** this session's transcript,
      and the workspace's other sessions through the werkmeister
