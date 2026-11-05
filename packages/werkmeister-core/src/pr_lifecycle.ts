@@ -1774,7 +1774,7 @@ export function callbackMessage(status: string, url: string, release?: string): 
 
 // ---- Open-PR wakes (SW-160) ------------------------------------------------
 // While a PR is open, a pass also wakes its session on a failed check, a review or a
-// conflict, claimed in `notified_checks` / `notified_review` / `notified_conflict`.
+// conflict, claimed in `notified_checks` / `notified_queue` / `notified_review` / `notified_conflict`.
 
 /** The `gh pr view` fields `refreshPrStatus` reads; the wake fields only on an open PR. */
 interface PrView {
@@ -1899,6 +1899,55 @@ async function wakeEvents(
     events.push({ kind: "check", name, cause: cause || `see ${link}` });
   }
   if (events.length) claim["notified_checks"] = `${head}: ${[...announced].sort().join(", ")}`;
+
+  // Queue runs sit on gh-readonly-queue/<base>/pr-<N>-<sha>, never in the head's rollup (SW-454).
+  // shortcut: the newest 30 merge_group runs; a busy queue can push the PR's out, page if that shows up.
+  const queue = await deps.run("gh", [
+    "run",
+    "list",
+    "--repo",
+    repo,
+    "--event",
+    "merge_group",
+    "--json",
+    "databaseId,headBranch,headSha,conclusion,workflowName,url",
+    "-L",
+    "30",
+  ]);
+  if (queue.code !== 0) lines.push(`${f.stem}: merge queue runs unread — ${queue.stderr.trim()}`);
+  const prefix = `gh-readonly-queue/${view.baseRefName ?? String(f.fm["base"] ?? "main")}/pr-${view.number}-`;
+  const runs =
+    queue.code === 0
+      ? (
+          JSON.parse(queue.stdout || "[]") as Array<{
+            databaseId?: number;
+            headBranch?: string;
+            headSha?: string;
+            conclusion?: string;
+            workflowName?: string;
+            url?: string;
+          }>
+        ).filter((r) => r.headBranch?.startsWith(prefix))
+      : [];
+  // One queue entry can run several merge_group workflows: judge them all, on its commit.
+  const entry = runs[0]?.headSha ?? "";
+  if (entry && entry !== reason(f.fm["notified_queue"])) {
+    // gh run list spells conclusions in lower case; the rollup in upper.
+    const failed = runs.filter(
+      (r) => r.headSha === entry && FAILED_RUN.has((r.conclusion ?? "").toUpperCase()),
+    );
+    for (const r of failed) {
+      const id = String(r.databaseId ?? "");
+      const log = await deps.run("gh", ["run", "view", id, "--log-failed", "--repo", repo]);
+      const cause = log.code === 0 ? failureExcerpt(log.stdout) : "";
+      events.push({
+        kind: "check",
+        name: `merge queue (${r.workflowName ?? "CI"})`,
+        cause: cause || `see ${r.url}`,
+      });
+    }
+    if (failed.length) claim["notified_queue"] = entry;
+  }
 
   const inline = await deps.run("gh", [
     "api",
@@ -2053,6 +2102,7 @@ export async function claimCallbacks(
                 host_session: undefined,
                 notified: undefined,
                 notified_checks: undefined,
+                notified_queue: undefined,
                 notified_review: undefined,
                 notified_conflict: undefined,
               }
