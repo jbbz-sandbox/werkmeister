@@ -1,7 +1,7 @@
 /**
  * Proof that {@link HarnessAdapter} needs nothing from harness/claude (SW-383): a
  * session-less adapter that typechecks against the interface. Not dispatched:
- * `harness()` never returns it. The Codex adapter (SW-189) starts from this shape.
+ * `harness()` never returns it. Codex sessions (SW-384) start from this shape.
  */
 import { WorkspaceError } from "../../errors.js";
 import type { HarnessAdapter } from "../types.js";

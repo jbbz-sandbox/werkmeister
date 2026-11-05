@@ -839,8 +839,9 @@ const SPECS: CommandSpec[] = [
         .addOption(
           new Option(
             "--harness <id>",
-            "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks) or " +
-              "mcp (AGENTS.md, .agents/skills, no hooks) (env: WERKMEISTER_HARNESS; config: harness).",
+            "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), " +
+              "mcp (AGENTS.md, .agents/skills, no hooks) or codex (AGENTS.md, .agents/skills, " +
+              ".codex/hooks.json, .codex/config.toml) (env: WERKMEISTER_HARNESS; config: harness).",
           ).choices([...HARNESS_IDS]),
         )
         .option(
@@ -1210,8 +1211,9 @@ const SPECS: CommandSpec[] = [
         .addOption(
           new Option(
             "--harness <id>",
-            "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks) or " +
-              "mcp (AGENTS.md, .agents/skills, no hooks) (env: WERKMEISTER_HARNESS; config: harness).",
+            "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), " +
+              "mcp (AGENTS.md, .agents/skills, no hooks) or codex (AGENTS.md, .agents/skills, " +
+              ".codex/hooks.json, .codex/config.toml) (env: WERKMEISTER_HARNESS; config: harness).",
           ).choices([...HARNESS_IDS]),
         )
         .option(

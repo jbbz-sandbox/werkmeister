@@ -399,6 +399,13 @@ export function decide(workspaceStart: string, sessionId: string, filePath: stri
   return parts.join("\n");
 }
 
+const PATCH_PATH = /^\*\*\* (?:Add File|Update File|Delete File|Move to): (.+)$/gm;
+
+/** The files a Codex `apply_patch` body touches, in order: Codex sends the patch, not a `file_path` (SW-189). */
+export function patchPaths(patch: string): string[] {
+  return [...new Set([...patch.matchAll(PATCH_PATH)].map((m) => m[1].trim()))];
+}
+
 /**
  * `werkmeister internal gate` entrypoint: reads the PreToolUse stdin JSON, prints
  * a deny hookSpecificOutput on deny, prints nothing on allow. Always exits 0
@@ -416,13 +423,21 @@ export function main(): void {
   }
 
   const sessionId = String(data["session_id"] || "");
-  const toolInput = data["tool_input"];
-  const filePath = String((_isDict(toolInput) && toolInput["file_path"]) || "");
+  const rawInput = data["tool_input"];
+  const toolInput: Record<string, unknown> = _isDict(rawInput) ? rawInput : {};
   const start = String(data["cwd"] || process.cwd());
+  const patch = data["tool_name"] === "apply_patch" ? toolInput["command"] : undefined;
+  const filePaths =
+    typeof patch === "string"
+      ? patchPaths(patch).map((p) => path.resolve(start, p))
+      : [String(toolInput["file_path"] || "")];
 
-  let reason: string | null;
+  let reason: string | null = null;
   try {
-    reason = decide(start, sessionId, filePath);
+    for (const filePath of filePaths) {
+      reason = decide(start, sessionId, filePath);
+      if (reason) break;
+    }
   } catch {
     // same doctrine as above
     reason = null;

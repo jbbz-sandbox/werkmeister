@@ -6,7 +6,9 @@
  */
 import { SandboxError } from "../errors.js";
 import { warn } from "../reporter.js";
+// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { readWorkspaceField } from "../workspace_prompts.js";
+import { codexLayout } from "./codex/index.js";
 import { mcpLayout } from "./mcp/index.js";
 import { HARNESS_IDS, type HarnessId, type HarnessLayout } from "./types.js";
 
@@ -19,7 +21,11 @@ export const claudeLayout: HarnessLayout = {
   notice: () => "",
 };
 
-const REGISTRY: Record<HarnessId, HarnessLayout> = { claude: claudeLayout, mcp: mcpLayout };
+const REGISTRY: Record<HarnessId, HarnessLayout> = {
+  claude: claudeLayout,
+  mcp: mcpLayout,
+  codex: codexLayout,
+};
 
 export function harnessLayoutById(id: HarnessId): HarnessLayout {
   return REGISTRY[id];

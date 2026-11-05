@@ -173,6 +173,17 @@ export function nextState(input: Record<string, any>, current: AgentStateFile | 
       if (current?.state === "needs-you" && current.question) return null;
       return { state: "needs-you", question: message || undefined };
     }
+    case "PermissionRequest": {
+      // Codex's approval prompt; it has no Notification event (SW-189).
+      const described = input["tool_input"]?.["description"];
+      return {
+        state: "needs-you",
+        question:
+          typeof described === "string" && described.trim()
+            ? described.trim()
+            : `Approve ${String(input["tool_name"] ?? "the tool call")}?`,
+      };
+    }
     case "Stop": {
       let text: string | null = null;
       if (typeof input["last_assistant_message"] === "string")
@@ -364,16 +375,18 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
     ? `Waiting for capacity (position ${waiting.position}). End your turn now; it starts when another feature stops.`
     : PAUSED_REASON;
   switch (input["hook_event_name"]) {
-    case "PreToolUse":
-      return {
-        continue: false,
-        stopReason: reason,
+    case "PreToolUse": {
+      const deny = {
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "deny",
           permissionDecisionReason: reason,
         },
       };
+      // Codex fails a PreToolUse hook whose output has continue/stopReason, and the tool then runs.
+      if (process.env.WERKMEISTER_HOOK_HARNESS === "codex") return deny;
+      return { continue: false, stopReason: reason, ...deny };
+    }
     case "UserPromptSubmit":
       // One guard for every sender: the person, claude-send, PR callbacks, check-in.
       return {

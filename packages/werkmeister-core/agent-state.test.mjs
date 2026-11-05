@@ -448,3 +448,34 @@ test("status: a paused workspace reports when, what Resume brings back, and a pe
   const other = (await getWorkspaceStatuses()).statuses.find((w) => w.name === "j-gate");
   assert.equal(other.resumeNudge, false);
 });
+
+// SW-189: Codex has no Notification; its approval prompt is PermissionRequest.
+test("PermissionRequest marks needs-you with the tool's description, else the tool name", async () => {
+  const { nextState } = await import("./dist/agent_state.js");
+  const ask = (tool_input) =>
+    nextState({ hook_event_name: "PermissionRequest", tool_name: "Bash", tool_input }, null);
+  assert.deepEqual(ask({ command: "rm -rf x", description: "Delete x" }), {
+    state: "needs-you",
+    question: "Delete x",
+  });
+  assert.deepEqual(ask({ command: "rm -rf x", description: null }), {
+    state: "needs-you",
+    question: "Approve Bash?",
+  });
+});
+
+// SW-189: Codex fails a PreToolUse hook whose output carries continue/stopReason, and runs the tool.
+test("pause gate on Codex: PreToolUse denies without continue or stopReason", () => {
+  const dir = workspace("j-gate-codex", null);
+  writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: true });
+  process.env.WERKMEISTER_HOOK_HARNESS = "codex";
+  try {
+    const pre = pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir);
+    assert.deepEqual(Object.keys(pre), ["hookSpecificOutput"]);
+    assert.equal(pre.hookSpecificOutput.permissionDecision, "deny");
+    assert.equal(pre.hookSpecificOutput.permissionDecisionReason, PAUSED_REASON);
+    assert.equal(pauseGate({ hook_event_name: "UserPromptSubmit" }, dir).decision, "block");
+  } finally {
+    delete process.env.WERKMEISTER_HOOK_HARNESS;
+  }
+});

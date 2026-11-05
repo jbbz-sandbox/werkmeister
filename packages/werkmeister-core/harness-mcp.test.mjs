@@ -19,7 +19,8 @@ test("parseHarnessId: blank is claude, an unknown id names the choices", () => {
   assert.equal(parseHarnessId(""), "claude");
   assert.equal(parseHarnessId(undefined), "claude");
   assert.equal(parseHarnessId("mcp"), "mcp");
-  assert.throws(() => parseHarnessId("codex"), /Unknown harness 'codex'.*claude, mcp/);
+  assert.equal(parseHarnessId("codex"), "codex");
+  assert.throws(() => parseHarnessId("cursor"), /Unknown harness 'cursor'.*claude, mcp, codex/);
 });
 
 test("jit init on the mcp harness: AGENTS.md, .agents/skills, no .claude/, hooks reported unavailable", async () => {
@@ -58,6 +59,7 @@ test("jit init on the mcp harness: AGENTS.md, .agents/skills, no .claude/, hooks
       .split("\n")
       .filter((l) => /hooks: unavailable on mcp/.test(l));
     assert.equal(unavailable.length, 1, reporter.text());
+    assert.match(unavailable[0], /use harness: codex for Codex/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(std, { recursive: true, force: true });

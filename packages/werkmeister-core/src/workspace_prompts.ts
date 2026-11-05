@@ -516,8 +516,9 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "harness",
     label: "Harness",
     help:
-      "Which agent harness reads this workspace: claude (Claude Code: CLAUDE.md, .claude/, hooks) " +
-      "or mcp (any harness with MCP and skills: AGENTS.md, .agents/skills, no hooks).",
+      "Which agent harness reads this workspace: claude (Claude Code: CLAUDE.md, .claude/, hooks), " +
+      "mcp (any harness with MCP and skills: AGENTS.md, .agents/skills, no hooks) " +
+      "or codex (Codex CLI: AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml).",
     pattern: "^(" + HARNESS_IDS.join("|") + ")$",
     default: HARNESS_IDS[0],
     choicesFn: () => [...HARNESS_IDS],
