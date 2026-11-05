@@ -75,6 +75,7 @@ session:                       # the Claude Code session that ran werkmeister pr
 host_session:                  # its desktop app id (local_…), only when opened from the desktop app
 notified:                      # the last status that session was told
 notified_checks:               # written by pr watch: <head sha>: <failing checks announced on it>
+notified_queue:                # written by pr watch: the merge-queue commit whose failed runs were announced
 notified_review:               # written by pr watch: time of the newest review or comment announced
 notified_conflict:             # written by pr watch while an announced conflict lasts
 ---
@@ -183,6 +184,7 @@ While the PR is open, the same pass also wakes the session when it needs work (r
 | Event | Message starts | Cause in the message | Claimed in |
 |---|---|---|---|
 | a check on the head commit fails (`FAILURE`, `TIMED_OUT`, `STARTUP_FAILURE`; a status `FAILURE`/`ERROR`) | check `<name>` failed on PR `<url>`, fix it. | the first error lines of `gh run view --job <id> --log-failed` | `notified_checks`: the head SHA and the names announced on it. A new head announces every failing check again |
+| a merge-queue run (`merge_group`, on `gh-readonly-queue/<base>/pr-<N>-…`) of the PR's newest queue entry fails, in any of its workflows: GitHub drops it from the queue while its head checks stay green | check `merge queue (<workflow>)` failed on PR `<url>`, fix it. | the first error lines of `gh run view <run> --log-failed` | `notified_queue`: the queue entry's commit. A re-queued entry that fails wakes again |
 | a CHANGES_REQUESTED review, a review or PR comment, or an inline comment | address the review on PR `<url>`: | the comments, quoted (`path:line` for inline ones) | `notified_review`: the time of the newest one. `pr open` sets it, so an early review still counts; a PR opened before this keeps its old comments as history |
 | `mergeable` is `CONFLICTING` | PR `<url>` conflicts with `<base>`, resolve it. | `git log --oneline HEAD..origin/<base>` | `notified_conflict`, cleared once GitHub reports it mergeable again, so a later conflict counts |
 

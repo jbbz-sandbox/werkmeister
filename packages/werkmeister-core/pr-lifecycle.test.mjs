@@ -3366,6 +3366,57 @@ test("claimCallbacks: a failed check wakes once with its cause; the next pass se
   }
 });
 
+test("claimCallbacks: a failed merge-queue run wakes once with its cause; a green one doesn't (SW-454)", async () => {
+  // Queue runs sit on gh-readonly-queue/<base>/pr-<N>-<sha>, never in the head's statusCheckRollup.
+  const Q = "q1";
+  const qrun = (id, conclusion, workflowName, headSha = Q, pr = 9) => ({
+    databaseId: id,
+    headBranch: `gh-readonly-queue/main/pr-${pr}-${headSha}`,
+    headSha,
+    conclusion,
+    status: "completed",
+    workflowName,
+  });
+  const queue = (...runs) => [
+    /^gh run list .*--event merge_group/,
+    { stdout: JSON.stringify([qrun(88, "failure", "CI", "q9", 10), ...runs]) },
+  ];
+  const RUN_LOG = [/^gh run view 7\d .*--log-failed/, { stdout: LOG }];
+  const green = openView({ statusCheckRollup: [run("test", "SUCCESS")] });
+  const ws = icmWorkspace({ files: { app: openFile() } });
+  try {
+    // The newest run is a green CI; e2e on the same queue commit failed.
+    const r = await claim(
+      ws,
+      deps([green, queue(qrun(77, "success", "CI"), qrun(76, "failure", "e2e")), RUN_LOG]),
+    );
+    assert.equal(r.claimed.length, 1, "the dropped queue entry wakes the session");
+    assert.match(r.claimed[0].message, /^check merge queue \(e2e\) failed on PR /);
+    assert.doesNotMatch(r.claimed[0].message, /merge queue \(CI\)/);
+    assert.match(r.claimed[0].message, /src\/a\.ts:12:5 - error TS2322/);
+    assert.equal(readPrFiles(ws)[0].fm.notified_queue, Q);
+    const again = deps([
+      green,
+      queue(qrun(77, "success", "CI"), qrun(76, "failure", "e2e")),
+      RUN_LOG,
+    ]);
+    assert.deepEqual(wakes(await claim(ws, again)), [], "announced once");
+    assert.ok(!again.calls.some((c) => c.startsWith("gh run view")));
+    const retry = await claim(ws, deps([green, queue(qrun(79, "failure", "CI", "q2")), RUN_LOG]));
+    assert.equal(retry.claimed.length, 1, "a re-queued entry that fails wakes again");
+  } finally {
+    clean(ws);
+  }
+  const ok = icmWorkspace({ files: { app: openFile() } });
+  try {
+    const d = deps([green, queue(qrun(77, "success", "CI"), qrun(76, "success", "e2e"))]);
+    assert.deepEqual(wakes(await claim(ok, d)), [], "a green queue run is no news");
+    assert.ok(!d.calls.some((c) => c.startsWith("gh run view")));
+  } finally {
+    clean(ok);
+  }
+});
+
 test("claimCallbacks: a new head announces what still fails; the same head only new names", async () => {
   const ws = icmWorkspace({ files: { app: openFile(`notified_checks: "${SHA1}: test"\n`) } });
   try {
