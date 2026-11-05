@@ -34,7 +34,7 @@ jobs:
       # for the key with a dir holding fewer builds.
       # ponytail: the dir only grows (each save carries the last); GitHub's 10GB
       # LRU evicts old entries. Prune or move to a remote cache if restores slow.
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         with:
           path: .turbo/cache
           key: turbo-${{ runner.os }}-node24-${{ github.sha }}
@@ -53,6 +53,13 @@ jobs:
       # dependency: its licence is outside the allowlist. Bump with the plugin's types.
       - run: npm i -g @anthropic-ai/claude-code@2.1.316
       - run: pnpm turbo run typecheck build test --continue --filter='!werkmeister-core'
+      # SW-423: a merge-queue run's cache is scoped to its gh-readonly-queue ref,
+      # which nothing else can restore, so saving it only evicts main's entries.
+      - if: github.event_name != 'merge_group'
+        uses: actions/cache/save@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-node24-${{ github.sha }}
       # After the build: commands and flags come from the built CLI's `__complete`.
       # Its unit test runs with `licenses` above (scripts/*.test.mjs).
       - run: pnpm run docs:check
