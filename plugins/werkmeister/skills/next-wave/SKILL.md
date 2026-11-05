@@ -5,7 +5,7 @@ description: Use when the person wants the next batch of tickets from a project'
 
 # next-wave
 
-Turn a project's open tickets into a set of workspaces that can run **at the same time without stepping on each other**, mark each one autonomous or interactive, and start them as Claude Desktop sessions. The root session plans and starts; it never does a ticket's work itself.
+Turn a project's open tickets into a set of workspaces that can run **at the same time without stepping on each other**, mark each one autonomous or interactive, and start them as Claude Code sessions with Remote Control on. The root session plans and starts; it never does a ticket's work itself.
 
 No UI: don't call the werkmeister MCP tools that render the workspaces dashboard (`list-workspaces`, `status`, `open-workspaces-ui`). Everything here comes from Jira, `gh`, `git` and the `werkmeister` CLI.
 
@@ -52,9 +52,24 @@ werkmeister workspace new <slug> --issue-id <ref> --repos <repo> \
 - Batch check each one: the workspace dir holds `.werkmeister/issue.md` and `CLAUDE.md` has a `## Issue` section.
 - The CLI writes `starting_prompt` from the ticket. When you edit one by hand, don't copy in a step that writes machine state (`werkmeister registry sync`, `werkmeister infra proxy-reload`, `npm link`, global installs) as a run step: the run limits forbid it. Say it happens after merge instead, e.g. "the next `registry sync` after merge picks up the fragment edit". The CLI drops such steps from the distilled prompt and the autonomous brief too (SW-296).
 
-## 5. Start each one in Claude Desktop
+## 5. Start each one with Remote Control on
 
-`werkmeister workspace prompt --args --start <workspace dir>` prints the run's `title`, `model`, `prompt` and `background` as JSON: the same ones the pane's ▶ Start work sends, with the run limits (autonomous) or the interactive line already in `prompt`. An autonomous workspace's `BRIEF.md` carries the same limits from create. Pass them to `start_session` unchanged, with `initiation: "user_asked"`, `cwd` = the workspace dir, `use_worktree: false`, `context: "fresh"`; for an interactive one, append the decisions it must ask about to `prompt`. Start them **one at a time** in one message each preceded by a bold title line; mark a chapter first when starting two or more.
+`werkmeister workspace prompt --args --start <workspace dir>` prints the run's `title`, `model`, `prompt` and `background` as JSON: the same ones the pane's ▶ Start work sends, with the run limits (autonomous) or the interactive line already in `prompt`. An autonomous workspace's `BRIEF.md` carries the same limits from create. For an interactive one, append the decisions it must ask about to `prompt`.
+
+Every run starts with Remote Control on, so the person can follow and answer it from claude.ai/code or the Claude app. On macOS, start each one in its own Terminal window, **one at a time**, from a launcher in your scratchpad (`$S`). A `.command` file opens in Terminal and keeps the prompt's quotes and newlines intact:
+
+```bash
+D=<workspace dir>; W=$(basename "$D")
+werkmeister workspace prompt --args --start "$D" > "$S/$W.json"
+jq -r '[.background, .prompt] | map(select(.)) | join("\n\n")' "$S/$W.json" > "$S/$W.prompt"   # then append any interactive decisions
+m=$(jq -r '.model // empty' "$S/$W.json")
+printf '#!/bin/bash\ncd %q && exec claude "$(cat %q)" --remote-control %q%s\n' "$D" "$S/$W.prompt" "$W" "${m:+ --model $m}" > "$S/$W.command"
+chmod +x "$S/$W.command" && open -a Terminal "$S/$W.command"
+```
+
+Confirm each one with `pgrep -f -- "--remote-control $W"`. Under heavy load a window can take a minute to open. Report each session's Remote Control name (`$W`).
+
+When the person asks for Claude Desktop instead: `start_session` with `title`, `model`, `prompt` and `background` unchanged, `initiation: "user_asked"`, `cwd` = the workspace dir, `use_worktree: false`, `context: "fresh"`, one message each preceded by a bold title line, with a chapter marked first when starting two or more. It has no Remote Control option, so tell the person to type `/remote-control` in each session it opens.
 
 Everything started carries the `focus` label (set at create, or `werkmeister workspace init --labels focus`), so `/check-in` cycles only this wave.
 
@@ -66,8 +81,9 @@ Everything started carries the `focus` label (set at create, or `werkmeister wor
 | Creating workspaces in parallel | Worktree and slot races on the shared source repo | One `werkmeister workspace new` at a time |
 | Every service on every workspace | Watchers and parallel installs saturate the host (load 155 with 5 runs) | Only what the ticket says to run; stop after `pr open` |
 | Starting a ticket that waits on an unmerged or unreleased one | Wasted run, or a PR built on stale main | Classify it Blocked |
-| Running headless (`claude-send`) when the person asked for Desktop | Nothing in the sidebar to watch or steer | `start_session` with the workspace `cwd` |
+| Running headless (`claude-send`), or a launcher without Remote Control | Nothing to watch or answer from claude.ai/code or the app | The step 5 launcher with `--remote-control` |
+| Putting the prompt inline in `osascript … do script` | Its quotes and newlines break the command; the window runs nothing | The `.command` launcher in step 5 |
 
 ## Stop when
 
-Every ticket in the wave has a workspace and a started Desktop session labelled `focus`, and the person has the wave table plus the deferred list. Follow-up questions from the runs come back through `/check-in`.
+Every ticket in the wave has a workspace and a started session with Remote Control on, labelled `focus`, and the person has the wave table plus the deferred list. Follow-up questions from the runs come back through `/check-in`.
