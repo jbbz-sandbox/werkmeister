@@ -150,6 +150,14 @@ test("buildAllowRules: each wrapped rule also has the --no-wait form, never the 
   assert.ok(!rules.includes(`Bash(${w} --no-wait:*)`));
 });
 
+test("buildAllowRules: with a built CLI, the fixture wrapper is allowed whole (SW-292)", () => {
+  const fixture = "Bash(/ws/w/.werkmeister/bin/with-fixture-workspace:*)";
+  const tempHome = "/ws/w/.werkmeister/bin/with-temp-home";
+  const cli = "/ws/w/werkmeister/apps/cli/werkmeister";
+  assert.ok(buildAllowRules("feat", [], {}, {}, tempHome, [cli]).includes(fixture));
+  assert.ok(!buildAllowRules("feat", [], {}, {}, tempHome, []).includes(fixture));
+});
+
 test("buildAllowRules: an archetype's {service} template is expanded", () => {
   const rules = buildAllowRules(
     "feat",

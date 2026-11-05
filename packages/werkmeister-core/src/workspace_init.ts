@@ -46,6 +46,7 @@ import {
 import { daemonPort } from "./daemon_client.js";
 import { writeWorkspaceDevcontainer } from "./devcontainer_gen.js";
 import { SandboxError } from "./errors.js";
+import { writeFixtureWrapper } from "./fixture_workspace.js";
 import { workspaceUnder } from "./gate.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { candidateWorkspaceRoots, loadPaths, loadWorkspaceRepo } from "./global_config.js";
@@ -774,6 +775,7 @@ export async function initWorkspace(
   seedWorkspaceMetadataEnv(envPath, meta);
   success(`Wrote ${envPath}`);
   success(`Wrote ${writeTempHomeWrapper(workspaceRoot)}`);
+  success(`Wrote ${writeFixtureWrapper(workspaceRoot)}`);
 
   // 5b–6c. The context layer — CLAUDE.md and everything the agent reads
   // beside it — belongs to the workspace's strategy (docs/context-strategies.md).

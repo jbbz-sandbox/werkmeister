@@ -25,6 +25,7 @@ import {
 } from "./config.js";
 import { docker } from "./docker.js";
 import { DOT_DIR, dotDir } from "./dot_dir.js";
+import { writeFixtureWrapper } from "./fixture_workspace.js";
 import {
   ensureZshenvSources,
   ensureZshrcCompletion,
@@ -409,7 +410,10 @@ function nounGroupSteps(wsRoot: string, checkOnly: boolean): Step[] {
       if (/werkmeister hooks gate/.test(hooks)) writeWorkspaceHooks(dir);
       else if (/werkmeister hooks pr-guard/.test(hooks)) writePrGuardHook(dir);
       writeWorkspaceSettings(dir);
-      if (fs.existsSync(tempHomeWrapper(dir))) writeTempHomeWrapper(dir);
+      if (fs.existsSync(tempHomeWrapper(dir))) {
+        writeTempHomeWrapper(dir);
+        writeFixtureWrapper(dir);
+      }
     }
   }
   const names = (list: string[]) => list.map((d) => path.basename(d)).join(", ");

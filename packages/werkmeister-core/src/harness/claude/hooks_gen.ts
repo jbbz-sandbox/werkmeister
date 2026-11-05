@@ -560,6 +560,9 @@ export function buildAllowRules(
     if (tempHome) rules.push(...rest.map((c) => `Bash(${c}:*)`));
   }
   if (tempHome) for (const cli of builtClis) rules.push(`Bash(${tempHome} ${cli}:*)`);
+  // SW-292: its sibling runs only the workspace's own built CLI, in a fixture, so it is safe whole.
+  if (tempHome && builtClis.length)
+    rules.push(`Bash(${path.join(path.dirname(tempHome), "with-fixture-workspace")}:*)`);
   // The fixture form werkmeister-context.md recommends; never `Bash(${tempHome}:*)`, which runs anything.
   if (tempHome && rules.length)
     rules.push(`Bash(${tempHome} env WERKMEISTER_ROOT=* node --test:*)`);

@@ -27,7 +27,13 @@ after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 /** A daemon stand-in: stateless /mcp with one `echo` tool that returns the headers it saw. */
 function fakeDaemon() {
-  const daemon = { build: "1.0.0 @ t1", server: null, port: 0, slowAborted: false };
+  const daemon = {
+    build: "1.0.0 @ t1",
+    server: null,
+    port: 0,
+    slowStarted: false,
+    slowAborted: false,
+  };
   const handler = async (req, res) => {
     res.setHeader("x-werkmeister-build", daemon.build);
     if (req.url === "/api/status") {
@@ -40,6 +46,7 @@ function fakeDaemon() {
       content: [{ type: "text", text: JSON.stringify(extra.requestInfo?.headers ?? {}) }],
     }));
     mcp.registerTool("slow", { inputSchema: {} }, async (_args, extra) => {
+      daemon.slowStarted = true;
       await new Promise((resolve) => {
         extra.signal.addEventListener("abort", resolve);
         setTimeout(resolve, 10_000).unref();
@@ -218,7 +225,8 @@ test("cancelling a call in the session aborts it in the daemon", async (t) => {
   const call = client.callTool({ name: "slow", arguments: {} }, undefined, {
     signal: abort.signal,
   });
-  await sleep(300);
+  // Cancel only once the call is in the daemon: a fixed sleep lost that race under load.
+  await until(() => daemon.slowStarted);
   abort.abort();
   await assert.rejects(call);
   await until(() => daemon.slowAborted);

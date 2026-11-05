@@ -15,6 +15,8 @@ pinWerkmeisterRoot();
 
 const SNAPSHOT = path.join(import.meta.dirname, "strategy-jit.snapshot.json");
 const REPO = path.resolve(import.meta.dirname, "..", "..");
+// Whole path segments only: the gate mounts the repo at /app, a prefix of every `/apps/…` in the files.
+const REPO_PATH = new RegExp(`${REPO.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w.-])`, "g");
 // Skill templates come from $WERKMEISTER_ROOT/infra/skills; a developer's shell
 // often points it at another checkout. Pin it to this one.
 process.env.WERKMEISTER_ROOT = path.join(REPO, "apps", "cli");
@@ -64,7 +66,7 @@ test("jit init writes the same files, byte for byte", async () => {
             .replaceAll(root, "<ROOT>")
             .replaceAll(std, "<STD>")
             .replaceAll(home, "<HOME>")
-            .replaceAll(REPO, "<REPO>")
+            .replace(REPO_PATH, "<REPO>")
             .replaceAll(os.homedir(), "<USERHOME>")
             .replace(/jit-snap-ws-[a-zA-Z0-9]+/g, "<WORKSPACE>");
         }
