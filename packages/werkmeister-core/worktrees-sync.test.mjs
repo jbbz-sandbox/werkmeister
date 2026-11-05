@@ -90,7 +90,11 @@ test("fetch fails: a warning, no throw, HEAD unchanged", () => {
   const before = head(dir);
   const [r] = syncToBase([{ repo: "app", dir }]);
   assert.equal(r.ok, false);
-  assert.match(r.text, /^app: could not fetch origin \(.+\), left as is$/);
+  // SW-410: the line says how to re-run the check once the fetch can work.
+  assert.match(
+    r.text,
+    /^app: could not fetch origin \(.+\), left as is; re-check with `werkmeister issue start`$/,
+  );
   assert.equal(head(dir), before);
 });
 

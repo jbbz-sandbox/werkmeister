@@ -246,7 +246,9 @@ export function syncToBase(
       run(["git", "-C", dir, ...args], { capture: true, timeout: 60 });
     const fetch = git("fetch", "origin", "--prune", "--quiet");
     if (fetch.status !== 0)
-      return warn(`could not fetch origin (${firstLine(fetch.stderr) || "timed out"}), left as is`);
+      return warn(
+        `could not fetch origin (${firstLine(fetch.stderr) || "timed out"}), left as is; re-check with \`werkmeister issue start\``,
+      );
     let base: string;
     try {
       base = baseRef(dir);
