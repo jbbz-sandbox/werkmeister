@@ -493,6 +493,57 @@ test("gate: repo: matches an SSH, HTTPS or .git-less origin (SW-194)", async () 
   }
 });
 
+// SW-457: a grouped PR's gate warns, never fails, when the base won't rebase-merge; SW-462: a queue decides.
+test("gate: a grouped workspace's merge row reads the base's rules and warns unless rebase is possible (SW-457)", async () => {
+  const rules = (r) => [/^gh api repos\/o\/app\/rules\/branches\/main$/, r];
+  const json = (x) => ({ stdout: JSON.stringify(x) });
+  const pr = (methods) => ({
+    type: "pull_request",
+    parameters: { allowed_merge_methods: methods },
+  });
+  const queue = (m) => ({ type: "merge_queue", parameters: { merge_method: m } });
+  const cases = [
+    [
+      json([pr(["squash"])]),
+      /^warning: main's ruleset allows squash only; a grouped PR needs rebase/,
+    ],
+    [json([pr(["squash", "rebase"])]), /^rebase allowed on main$/],
+    [
+      json([pr(["squash", "rebase"]), queue("SQUASH")]),
+      /^warning: main's merge queue merges with SQUASH; .*bypass the queue/,
+    ],
+    // The queue decides: a squash-only PR rule does not matter when every PR goes through it.
+    [json([pr(["squash"]), queue("REBASE")]), /^rebase allowed on main \(merge queue\)$/],
+    // Org and repo rulesets each add a rule; any one without rebase blocks it.
+    [
+      json([pr(["merge", "squash", "rebase"]), pr(["squash"])]),
+      /^warning: main's ruleset allows squash only/,
+    ],
+    [json([]), /^rebase allowed on main$/],
+    [{ code: 1, stderr: "HTTP 403\n" }, /^warning: could not read main's rules — HTTP 403$/],
+  ];
+  for (const [res, want] of cases) {
+    const ws = icmWorkspace();
+    fs.appendFileSync(path.join(dotDir(ws), "workspace.yml"), "group:\n  - SW-2\n");
+    try {
+      const g = await gate(ws, deps([rules(res), DIFF_API]));
+      assert.deepEqual(failed(g), [], String(want));
+      assert.match(g.checks.find((c) => c.name === "merge").detail, want);
+    } finally {
+      clean(ws);
+    }
+  }
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API]);
+    const g = await gate(ws, d);
+    assert.ok(!g.checks.some((c) => c.name === "merge"), "no merge row without group");
+    assert.ok(!d.calls.some((c) => c.startsWith("gh api")));
+  } finally {
+    clean(ws);
+  }
+});
+
 /** Exercise evidence missing from a stage that has other output, so the stages check passes. */
 function noExercise(opts = {}) {
   const ws = icmWorkspace({ exercise: null, ...opts });
