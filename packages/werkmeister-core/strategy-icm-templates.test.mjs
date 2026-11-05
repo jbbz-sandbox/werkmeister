@@ -382,6 +382,22 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
       /close each member — `werkmeister issue update <KEY> --status Done --comment <PR url>` for `SW-2`, `SW-3`/,
     );
     assert.match(on.pipeline, /one per ticket in a grouped PR/);
+    // SW-460: a grouped refactor nests scope.md's steps inside each ticket's commit.
+    const refactorRoot = fs.mkdtempSync(path.join(os.tmpdir(), "icm-group-refactor-"));
+    try {
+      const refactor = await initIcm(refactorRoot, standardsDir, "false", {
+        group: "SW-2,SW-3",
+        work_type: "refactor",
+      });
+      const implement = refactor.contracts.find((c) => /^# 02_implement/m.test(c));
+      assert.match(
+        implement,
+        /For each ticket, take its `scope\.md` steps in order, then commit it before the next ticket; do not commit after every step\./,
+      );
+      assert.doesNotMatch(implement, /Take the steps in order\. After each one/);
+    } finally {
+      fs.rmSync(refactorRoot, { recursive: true, force: true });
+    }
 
     const auto = await initIcm(root, standardsDir, "true", { group: "SW-2" });
     assert.match(auto.contracts.at(-1), /When the PR ships, close each member/);

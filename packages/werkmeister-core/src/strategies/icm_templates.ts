@@ -450,7 +450,8 @@ const refactor: Stage[] = [
         ...IMPLEMENT_STEPS,
         ...groupStep(v),
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
-        `Take the steps in order. After each one: ${diffCheck("scope.md")} ${HOST_TEST_STEP}`,
+        // SW-460: groupStep commits per ticket; say how scope.md's steps nest so no step gets its own commit.
+        `${v.group.length ? "For each ticket, take its `scope.md` steps in order, then commit it before the next ticket; do not commit after every step. After each step" : "Take the steps in order. After each one"}: ${diffCheck("scope.md")} ${HOST_TEST_STEP}`,
         implementReview(v),
         GATE_STEP,
         `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
