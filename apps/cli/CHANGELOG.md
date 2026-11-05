@@ -1,5 +1,18 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.76.0
+
+### Minor Changes
+
+- 63769dd: SW-445: an unknown word after `workspace` or `ws` now fails with `unknown command` and creates nothing. The deprecated `workspace <feature>` form, due for removal in 0.58.0, is gone: use `workspace new <feature>`.
+- 9b3acaf: A grouped PR (SW-438) no longer needs a hand edit of `workspace.yml`: `werkmeister workspace new` and `werkmeister workspace init` take `--group <member keys>`, the create form (terminal wizard, browser form, Desktop pane and its `workspaces_pane_fill_create_form` tool) has a **Grouped PR members** field, the `init-workspace` MCP tool takes `group`, and the plugin's next-wave skill folds a triage group into its lead and creates the lead's workspace with `--group`. `WERKMEISTER_GROUP` still works (SW-459).
+
+### Patch Changes
+
+- c160d18: SW-451: `werkmeister issue create --relates` refuses a value that is not exactly one issue key (`SW-29x`, `SW-292,SW-263`) before anything is filed. Only the key's format is checked, not that the issue exists.
+- 71b7749: SW-456: killing the generated `with-temp-home` while it waits for host load now ends its `werkmeister internal wait-load` too, instead of leaving it polling for up to 10 min. The generated werkmeister-context.md says that a `with-temp-home` call with no output and only `wait-load` under it is that wait, not a hang, and that `--no-wait` skips it. A workspace gets the new wrapper and text the next time `werkmeister workspace init` runs in it.
+- 9c03ab6: SW-462: pr-rules rule 6 says a merge queue's method decides how every PR merges; a PR that needs another method says so and the person bypasses the queue. Grouped with SW-457 (rule 6's grouped exception; `pr gate` warns when a grouped PR's base won't rebase-merge), SW-448 (the no-file-change approval sentence covers peer messages outside check-in only), SW-458 (a chat approval in a PR file is a YAML comment on the status line), SW-449 (the review step fixes a Should fix that shows the change's own text is false), SW-442 (reproduce lists each condition that makes a fix's predicate true), SW-460 (a grouped refactor takes each ticket's scope steps, then commits) and SW-453 (the postmortem's review.md search stays out of the code worktrees).
+
 ## 0.75.0
 
 ### Minor Changes
