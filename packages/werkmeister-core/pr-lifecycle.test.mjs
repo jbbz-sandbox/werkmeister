@@ -1391,6 +1391,60 @@ test("openPrs: warns to use a merge commit when the branch adds a blame-ignore S
   }
 });
 
+test("openPrs: hold: opens a draft whose body starts with the hold line; without it, no change (SW-461)", async () => {
+  for (const hold of ["apply the merge-queue ruleset", ""]) {
+    const ws = icmWorkspace({ files: { app: prFile({ extra: hold ? `hold: ${hold}\n` : "" }) } });
+    try {
+      const d = deps([
+        DIFF_API,
+        [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }],
+      ]);
+      const run = d.run;
+      let body;
+      // The body file is removed right after gh pr create, so read it as the call is made.
+      d.run = async (bin, args, cwd) => {
+        if (bin === "gh" && args[1] === "create")
+          body = fs.readFileSync(args[args.indexOf("--body-file") + 1], "utf8");
+        return run(bin, args, cwd);
+      };
+      const r = await open(ws, d);
+      assert.equal(r.ok, true, r.lines.join("\n"));
+      const create = d.calls.find((c) => c.startsWith("gh pr create"));
+      if (hold) {
+        assert.match(create, / --draft$/);
+        assert.ok(body.startsWith(`Don't merge until: ${hold}\n\n${PASS_BODY}`), body);
+        assert.ok(
+          r.lines.includes(
+            `  hold: opened as a draft — run gh pr ready https://github.com/o/app/pull/9 once: ${hold}`,
+          ),
+          r.lines.join("\n"),
+        );
+      } else {
+        assert.ok(!create.includes("--draft"), create);
+        assert.equal(body, PASS_BODY);
+        assert.ok(!r.lines.some((l) => l.includes("hold:")), r.lines.join("\n"));
+      }
+    } finally {
+      clean(ws);
+    }
+  }
+  // Already open: gh pr create isn't run, so the hold can't apply; say so instead of staying silent.
+  const ws = icmWorkspace({ files: { app: prFile({ extra: "hold: x\n" }) } });
+  try {
+    const d = deps([DIFF_API, [/^gh pr list/, { stdout: "https://github.com/o/app/pull/9\n" }]]);
+    const r = await open(ws, d);
+    assert.ok(!d.calls.some((c) => c.startsWith("gh pr create")));
+    assert.ok(
+      r.lines.includes(
+        "  hold: not applied, the PR was already open — run gh pr ready --undo https://github.com/o/app/pull/9 to make it a draft",
+      ),
+      r.lines.join("\n"),
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
 test("openPrs: nothing approved is refused and stops nothing (SW-39)", async () => {
   const ws = icmWorkspace({ files: { app: prFile({ status: "draft" }) } });
   try {
