@@ -17,7 +17,8 @@ import { dotDir } from "../dot_dir.js";
 import type { Note } from "../notes.js";
 import type { DecisionSource } from "./types.js";
 
-const DECIDED = /^status:\s*decided$/;
+// SW-455: an approval note may follow, e.g. `status: decided (approved via check-in YYYY-MM-DD)`.
+const DECIDED = /^status:\s*decided\b/;
 const HEADING = /^(#{1,6})\s+(.+?)\s*#*$/;
 const FENCE = /^\s*(```|~~~)/;
 

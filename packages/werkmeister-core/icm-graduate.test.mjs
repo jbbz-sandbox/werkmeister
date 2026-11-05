@@ -50,7 +50,11 @@ test("decided sections are decisions; proposed ones, code blocks and frontmatter
       "## Which port?\n\nstatus: proposed\n\n## Example\n\n```\nstatus: decided\n```\n",
   );
   write("stages/04_propose/output/pr-sandbox.md", "---\nstatus: decided\n---\n\n# PR\n");
-  write("stages/01_reproduce/output/repro.md", "status: decided\n\nNo heading above.\n");
+  // SW-455: a check-in approval note after the status still counts.
+  write(
+    "stages/01_reproduce/output/repro.md",
+    "status: decided (approved via check-in 2026-11-05)\n\nNo heading above.\n",
+  );
 
   const open = icm.open(ws);
   assert.deepEqual(
