@@ -164,10 +164,23 @@ test("each template renders with no undefined and a route per stage", async () =
         if (wt !== "spike" && d === build) {
           assert.match(c, /`ponytail:ponytail-review`/, `${wt}/${d}`);
           assert.match(c, /## Outputs[\s\S]*^- `output\/review\.md`$/m, `${wt}/${d}`);
-          assert.ok(
-            c.indexOf("Review the diff") > c.indexOf("Write `output/exercise.md`"),
-            `${wt}/${d}: review before exercise.md`,
-          );
+          if (d.endsWith("_implement")) {
+            // SW-430: host tests → review and fix → the gate, once → exercise.md.
+            const order = [
+              "Run the test command",
+              "Review the diff",
+              "Once the review's fixes are in, run `werkmeister pr gate --tests`",
+              "Write `output/exercise.md`",
+            ].map((s) => c.indexOf(s));
+            assert.ok(
+              order.every((at, i) => at >= 0 && (i === 0 || at > order[i - 1])),
+              `${wt}/${d}: ${order}`,
+            );
+          } else
+            assert.ok(
+              c.indexOf("Review the diff") > c.indexOf("Write `output/exercise.md`"),
+              `${wt}/${d}: review after exercise.md`,
+            );
           assert.match(
             c,
             /Reference \(every run\): `\.\.\/\.\.\/_shared\/standards\.md`/,

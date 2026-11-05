@@ -67,15 +67,23 @@ const IMPLEMENT_STEPS = [
 
 // SW-124: one wrapper, so no session or subagent hand-rolls (or forgets) its temp HOME.
 // SW-316: a host run misses the container's env; the tests-only gate runs where pr open will.
-const TEST_STEP =
+const HOST_TESTS =
   "Run the test command exactly as `../../.werkmeister/werkmeister-context.md` states it: through `.werkmeister/bin/with-temp-home`, which gives it a fresh temporary HOME — never hand-roll `HOME=…`. " +
-  "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. " +
-  "Once it passes, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record both exit codes. " +
+  "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. ";
+const TEST_TAIL =
   "A subagent you brief to run tests or the CLI gets that wrapped command verbatim in its brief. " +
   // SW-125: a host-skipped test still asserted removed behaviour; only the gate's container run found it.
   "A skipped test is not a pass: name each one with its skip reason, and run it where it can run (the workspace container) or say where it will (the gate, CI). " +
   // SW-334: `cmd1 && cmd2 > log` redirects only cmd2; the group sends the whole chain to the log.
   'Redirect output to a file as one group, so every command in an `&&` chain lands there: `{ <test command>; } > <log> 2>&1; echo "exit $?"`. Trust the exit code, read back only the failing slice.';
+const TEST_STEP =
+  HOST_TESTS +
+  "Once it passes, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record both exit codes. " +
+  TEST_TAIL;
+const HOST_TEST_STEP = `${HOST_TESTS}Record its exit code. ${TEST_TAIL}`;
+// SW-430: the gate runs once, on reviewed code; a Must fix found after it forced a rerun (SW-344).
+const GATE_STEP =
+  "Once the review's fixes are in, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record its exit code. A fix here reruns the host test step first.";
 
 // SW-351: one of five parallel Edits reported success but never reached the file; tests did not cover it.
 const diffCheck = (doc: string) =>
@@ -91,7 +99,7 @@ const reviewStep = (rerun: string) =>
   "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
   "a `| check | result | evidence |` table with one row per worktree whose result cell is exactly `PASS` (no Must fix left open) or `FAIL` — nothing else in the cell. " +
   "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`.";
-const IMPLEMENT_REVIEW = reviewStep("rerun the test step above and update `exercise.md`");
+const IMPLEMENT_REVIEW = reviewStep("rerun the host test step above");
 
 // SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
 const NAME_HISTORY_STEP =
@@ -228,10 +236,11 @@ const feature: Stage[] = [
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         diffCheck("spec.md"),
-        TEST_STEP,
+        HOST_TEST_STEP,
+        IMPLEMENT_REVIEW,
+        GATE_STEP,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
-        IMPLEMENT_REVIEW,
       ],
       outputs: [
         "Code changes, uncommitted — the next stage commits after the person reads the diff",
@@ -387,10 +396,11 @@ const refactor: Stage[] = [
       process: [
         ...IMPLEMENT_STEPS,
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
-        `Take the steps in order. After each one: ${diffCheck("scope.md")} ${TEST_STEP}`,
-        `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
-        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
+        `Take the steps in order. After each one: ${diffCheck("scope.md")} ${HOST_TEST_STEP}`,
         IMPLEMENT_REVIEW,
+        GATE_STEP,
+        `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
+        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
       ],
       outputs: ["Code changes, uncommitted", "`output/exercise.md`", "`output/review.md`"],
       humanCheck: "Read the diff against `scope.md`. Anything outside scope goes back.",
