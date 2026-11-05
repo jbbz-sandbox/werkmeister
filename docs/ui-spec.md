@@ -136,6 +136,7 @@ One form on every surface, built from `_WIZARD_PROMPTS` (`packages/werkmeister-c
 | `auto_stop` | Auto-stop on session end | toggle | no | off |
 | `services` + `repos` | Services to run locally · Extra repos | checkboxes grouped by repo | at least one service **or** repo, on every surface including the wizard | none |
 | `labels` | Labels | chip input | no | empty |
+| `group` | Grouped PR members | chip input | no | empty |
 | `test_path` | Feature test path | text, must start with `/` | no | empty |
 | `task` | Task title | text; help "Defaults to the feature name in words." | no | empty |
 | `description` | Description | text | no | empty |

@@ -573,6 +573,14 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     multi: true,
   },
   {
+    key: "group",
+    label: "Grouped PR members",
+    help:
+      "Comma-separated issue keys this workspace's PR also covers, led by its issue: one PR, " +
+      "one commit per ticket. Blank for a one-ticket PR.",
+    multi: true,
+  },
+  {
     key: "test_path",
     label: "Feature test path",
     help: "URL path for the feature entry point, appended to the routed host.",

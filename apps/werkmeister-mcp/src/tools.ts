@@ -441,6 +441,10 @@ const WORKSPACE_FIELDS = {
   task: z.string().optional().describe("One-line task title."),
   description: z.string().optional().describe("Longer description."),
   labels: z.string().optional().describe("Comma-separated labels."),
+  group: z
+    .string()
+    .optional()
+    .describe("Comma-separated member issue keys of a grouped PR led by issue_id."),
   test_path: z
     .string()
     .optional()

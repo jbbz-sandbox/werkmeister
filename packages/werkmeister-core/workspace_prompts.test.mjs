@@ -47,6 +47,7 @@ test("the spec carries the wizard prompts, with repos spliced after services", (
       "auto_stop",
       "services",
       "labels",
+      "group",
       "test_path",
       "task",
       "description",

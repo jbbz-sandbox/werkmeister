@@ -30,6 +30,8 @@ Model per ticket: `--model sonnet` for mechanical work (renames, lint/tsc fixes,
 
 ## 3. Pick the wave: no two tickets in the same files
 
+**Groups first.** Triage groups tickets that change the same text or files under a lead. The lead carries a comment starting `Grouped PR (triage …)` that lists its members, and each member "relates to" the lead. Fold every open member into its lead: the group is one candidate, ranked where the lead is, whose files are the union of its members' files. A member is never a candidate on its own, even when its lead is blocked or deferred (then the whole group waits). A Done member drops out. If a member was later moved under another lead, the newest comment wins. Don't make new groups here; that is triage's job.
+
 Estimate the functions each candidate changes (paths and identifiers named in the ticket, plus `git grep` for them). Compare every candidate against the others **and against tickets already in flight** (their workspaces from `werkmeister workspace list`). Walk the candidates in priority order. Two tickets that change the **same function** go in different waves: keep the higher-priority one (on a tie, the one that unblocks more), defer the other and say why. Different functions in the same file are allowed in one wave; note the shared file so the later PR expects a rebase. Shared test files and CHANGELOGs never count.
 
 Show the person the wave as one table — ticket, autonomous or interactive, model, reason — plus the deferred list with a reason each. Then create without waiting unless they object.
@@ -41,10 +43,11 @@ One `werkmeister workspace new` per ticket, **in sequence** (they share source r
 ```bash
 werkmeister workspace new <slug> --issue-id <ref> --repos <repo> \
   [--services <only what the ticket says to run or measures>] --work-type <feature|bugfix|refactor|spike> \
-  --labels focus [--autonomous] [--model sonnet]
+  --labels focus [--group <member keys>] [--autonomous] [--model sonnet]
 ```
 
 - Before the first create: the code checkout the CLI runs from is on an up-to-date `main` and rebuilt (`pnpm run build` at its root; the plugin's MCP server runs `apps/werkmeister-mcp/dist`).
+- A group gets one workspace, for its lead: `--group <member keys, comma-separated>`, so the ICM contracts render the grouped PR (one commit per ticket). Its starting prompt names every member and says to close the members when the PR ships. Check that `group:` appears in its `workspace.yml`.
 - List only the services the ticket says to run (usually none), and any service whose container the ticket measures or exercises (memory, cold build or gate timings, its runtime): without it `werkmeister feature up` starts nothing and the run measures in a throwaway container (SW-280). The gate starts each touched service's container that isn't running and stops it again (SW-34, SW-336), so zero services is fine for a plain code change. Every listed service is a container plus an install and build on `werkmeister feature up`, so extra ones cost real CPU (SW-28).
 - Batch check each one: the workspace dir holds `.werkmeister/issue.md` and `CLAUDE.md` has a `## Issue` section.
 - The CLI writes `starting_prompt` from the ticket. When you edit one by hand, don't copy in a step that writes machine state (`werkmeister registry sync`, `werkmeister infra proxy-reload`, `npm link`, global installs) as a run step: the run limits forbid it. Say it happens after merge instead, e.g. "the next `registry sync` after merge picks up the fragment edit". The CLI drops such steps from the distilled prompt and the autonomous brief too (SW-296).

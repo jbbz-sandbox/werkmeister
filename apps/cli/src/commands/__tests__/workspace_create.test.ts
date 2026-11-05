@@ -154,11 +154,13 @@ describe("sandbox workspace", () => {
       services: "cli, api",
       repos: "a,b",
       labels: "x,y",
+      group: "SW-2,SW-3",
     });
     expect(JSON.parse(cmd[cmd.indexOf("--prefill") + 1])).toEqual({
       services: ["cli", "api"],
       repos: ["a", "b"],
       labels: "x,y",
+      group: "SW-2,SW-3",
     });
   });
 

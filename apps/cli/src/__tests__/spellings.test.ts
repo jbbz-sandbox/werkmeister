@@ -289,4 +289,13 @@ describe("command spellings", () => {
     expect((await parse(["workspace", "init", "--no-build"])).args.build).toBe(false);
     expect((await parse(["workspace", "init"])).args.build).toBe(true);
   });
+
+  it("workspace new and init --group reach run() (SW-459)", async () => {
+    const [created, inited] = await Promise.all([
+      parse(["workspace", "new", "f", "--group", "SW-2,SW-3"]),
+      parse(["workspace", "init", "--group", "SW-2,SW-3"]),
+    ]);
+    expect(created.args.group).toBe("SW-2,SW-3");
+    expect(inited.args.group).toBe("SW-2,SW-3");
+  });
 });
