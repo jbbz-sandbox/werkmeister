@@ -55,6 +55,8 @@ test("a fixture with a local origin pushes there and opens through the fake gh",
       git(fx.repo, "rev-parse", "HEAD"),
     );
     assert.ok(lines.includes("app: open https://github.com/o/app/pull/1"), lines.join("\n"));
+    // SW-437: every run that opens a PR says whether pr watch will wake this session.
+    assert.match(lines.join("\n"), /^pr watch: (scheduled|NOT scheduled)/m);
     // The record (the opened PR file) is committed and pushed to the workspace's own origin.
     assert.equal(
       git(`${fx.root}/remotes/o/ws.git`, "log", "-1", "--format=%s", "me/demo"),

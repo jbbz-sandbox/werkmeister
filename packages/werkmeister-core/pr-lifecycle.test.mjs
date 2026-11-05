@@ -155,6 +155,13 @@ function deps(table, over = {}) {
       stopped.push(ws);
       return "containers stopped";
     },
+    prWatch: () => ({
+      kind: "launchd",
+      installed: true,
+      current: true,
+      where: "/p",
+      logFile: "/l",
+    }),
     reapIdle: async () => ({ lines: [] }),
     startService: async (_ws, feature, service, composeName) => {
       started.push(`${feature}-${service}`);

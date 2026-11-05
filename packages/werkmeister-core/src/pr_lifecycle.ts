@@ -47,7 +47,12 @@ import {
   stop as stopFeature,
   stopIdle,
 } from "./lifecycle.js";
-import { originSlug, type Step } from "./machine_setup.js";
+import {
+  originSlug,
+  type PrWatchScheduleState,
+  prWatchScheduleState,
+  type Step,
+} from "./machine_setup.js";
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import {
@@ -155,6 +160,8 @@ export interface Deps {
   runningServices: () => { feature: string; services: string[] }[];
   /** Stop the workspace's feature containers (SW-39); one line, never throws. */
   stop: (ws: string) => Promise<string>;
+  /** Whether the `pr watch` schedule is installed (SW-437). */
+  prWatch: () => PrWatchScheduleState;
   /** `os.loadavg()` and the core count, read before and after each gate check (SW-209). */
   hostLoad: () => { load: number[]; cores: number };
   sleep: (ms: number) => Promise<void>;
@@ -239,6 +246,7 @@ export function defaultDeps(): Deps {
         services: readServicesFromWorkspace(r.workspace),
       })),
     stop: stopWorkspace,
+    prWatch: () => prWatchScheduleState(),
     hostLoad: readHostLoad,
     sleep: (ms) => delay(ms),
     reapIdle: async () => {
@@ -1396,6 +1404,13 @@ export async function openPrs(
     }
   }
   if (opened.length) {
+    // SW-437: pr open starts no watcher; say whether the schedule will wake a terminal session.
+    const w = deps.prWatch();
+    lines.push(
+      w.installed
+        ? `pr watch: scheduled (${w.where}, every 10 min; log ${w.logFile})`
+        : "pr watch: NOT scheduled; a failing check or a conflict will not wake a terminal session. Run `werkmeister pr watch --install`",
+    );
     // SW-401: the gate and pr-open logs are the evidence behind the PR file; keep them on the record.
     // Only logs that exist: `git add` fails the whole call on a pathspec that matches nothing.
     const logs = fs
