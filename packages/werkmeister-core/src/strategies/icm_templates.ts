@@ -117,7 +117,9 @@ const reviewStep = (rerun: string, group: string[]) =>
   }" — not how you built it, so the review is not anchored on your reasoning. ` +
   // SW-431: a diff-scoped review missed two trust-boundary holes in a newly pre-approved wrapper (sw-292).
   'If the change adds or widens an allow rule or another pre-approved command, add to the brief: "this change pre-approves a command: list every file, env var, network address or process it can reach from its arguments, and treat each that leaves the workspace or its temp HOME as Must fix". ' +
-  `Fix every **Must fix** finding in place, ${group.length ? `fold each fix into the commit of the ticket it belongs to (${FOLD}), ` : ""}then ${rerun}. Leave **Should fix** and **Nice to have** findings as they are. ` +
+  // SW-449: a left Should fix shipped a false "every key is checked" in a changeset (sw-412).
+  "Fix every **Must fix** finding in place, and any **Should fix** finding that shows the change's own docs, comments, help text or changeset state something false (fix the code, or reword that text so it is true), " +
+  `${group.length ? `fold each fix into the commit of the ticket it belongs to (${FOLD}), ` : ""}then ${rerun}. Leave the other **Should fix** and **Nice to have** findings as they are. ` +
   "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
   "a `| check | result | evidence |` table with one row per worktree whose result cell is exactly `PASS` (no Must fix left open) or `FAIL` — nothing else in the cell. " +
   "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`.";
