@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.76.1
+
+### Patch Changes
+
+- e96afd6: A wake `pr watch` holds for an open session is now kept in `.werkmeister/wake-nudge-<session>.json`, and the hook claims it by renaming the file before reading it. Two hooks firing at once no longer both deliver it, and a message `pr watch` adds during delivery is no longer dropped (SW-444). A wake still held in the old `wake-nudge.json` at upgrade is not delivered.
+- 24cb424: `pr watch` now wakes the session when an open PR's merge-queue run fails. GitHub drops the PR from the queue while its head checks stay green, so the check rollup never showed it; the wake names `merge queue (<workflow>)` and quotes the failing run's log (SW-454).
+
 ## 0.76.0
 
 ### Minor Changes
