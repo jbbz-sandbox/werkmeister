@@ -1,5 +1,18 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.72.1
+
+### Patch Changes
+
+- 8b09898: `pr gate` and `pr open` no longer wait for host load on a diff that touches no service (docs only, `no_service_paths`): lint and the release check run at once, since no test suite runs (SW-303).
+- 8b09898: The pr gate's lint, test and release commands now run inside the container through the `with-temp-home` script (inline, with `--no-wait`), so a gate test run can no longer read or write the real `~/.werkmeister` the container mounts (SW-329).
+- 8b09898: `with-temp-home` now unsets `CLAUDECODE` and every `CLAUDE_CODE_*` variable (keeping `CLAUDE_BIN`) before running its command, so a test or exercise run from an agent's shell matches a clean shell or CI. Run `werkmeister machine migrate` to refresh an existing workspace's wrapper (SW-332).
+- 8b09898: `pr gate` and `pr open` now check the worktree is clean together with the other quick rows (stages, acceptance, approved, repo, exercise, review) and stop there when any fails, before lint and the tests start containers or wait for host load (SW-364).
+- 8b09898: `.werkmeister/bin/with-temp-home --no-wait <cmd>` skips the host-load wait without an env assignment, so the agent keeps its one permission rule; the generated allow rules and werkmeister-context.md cover the flag. `WERKMEISTER_NO_WAIT=1` still works. Run `werkmeister machine migrate` to refresh an existing workspace's wrapper and rules (SW-367).
+- 8b09898: The gate's acceptance, exercise and review rows now name the table (its heading) and the row that holds a FAIL or a non-PASS result, and the 04_propose contract says every `result` cell in the PR file must be `PASS`, with a pre-fix reproduction in prose (SW-390).
+- 8b09898: `pr open`'s record commit force-adds the paths it names, so a workspace created before SW-401 (whose `.gitignore` still ignores `gate-*.log`) gets its "record opened PR(s)" commit with the PR file and logs instead of failing on the ignored pathspec (SW-407).
+- 8b09898: `pr gate` and `pr open` check push access first (`git push --dry-run origin <branch>`): with no access they fail within seconds with a ✗ push row naming the git error and how to fix it, and run no lint or tests (SW-408).
+
 ## 0.72.0
 
 ### Minor Changes
