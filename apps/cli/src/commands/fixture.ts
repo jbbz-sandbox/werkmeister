@@ -1,9 +1,10 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--services <file>] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--services <file>] [--fragment <file>] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
- * failure), prints each `--print` file and the fake gh/docker calls, then deletes the folder.
+ * failure), prints each `--print` file and the fake gh/docker (and, with --daemon, daemon) calls,
+ * then deletes the folder.
  * main.ts hands it raw argv, so a werkmeister flag like `--services` never reaches commander here.
  */
 
@@ -12,10 +13,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
+import { startFakeDaemon } from "werkmeister-core/fixture_fakes";
 import { fixturePreset, seedFixture } from "werkmeister-core/fixture_workspace";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--services <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--services <file>] [--fragment <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -30,21 +32,25 @@ export function inside(base: string, p: string): string | null {
 }
 
 function parse(argv: string[]) {
-  const opts = { gate: false, bare: false, services: undefined as string | undefined };
+  const opts = {
+    gate: false,
+    bare: false,
+    daemon: false,
+    services: undefined as string | undefined,
+    fragment: undefined as string | undefined,
+  };
   const print: string[] = [];
   let i = 0;
   for (; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--gate") opts.gate = true;
     else if (a === "--bare") opts.bare = true;
-    else if ((a === "--services" || a === "--print") && argv[i + 1] !== undefined) {
-      const v = argv[++i] as string;
-      if (a === "--print") print.push(v);
-      else {
-        const file = inside(process.cwd(), v);
-        if (!file || !fs.existsSync(file)) return null;
-        opts.services = fs.readFileSync(file, "utf8");
-      }
+    else if (a === "--daemon") opts.daemon = true;
+    else if (a === "--print" && argv[i + 1] !== undefined) print.push(argv[++i] as string);
+    else if ((a === "--services" || a === "--fragment") && argv[i + 1] !== undefined) {
+      const file = inside(process.cwd(), argv[++i] as string);
+      if (!file || !fs.existsSync(file)) return { bad: a };
+      opts[a === "--services" ? "services" : "fragment"] = fs.readFileSync(file, "utf8");
     } else break;
   }
   const steps: string[][] = [[]];
@@ -74,16 +80,26 @@ function show(label: string, file: string): void {
 
 export async function run(argv: string[]): Promise<void> {
   const parsed = parse(argv);
-  if (!parsed || parsed.steps.some((s) => s.length === 0)) {
-    if (!parsed) console.error("--services: a file under the current folder");
+  if ("bad" in parsed || parsed.steps.some((s) => s.length === 0)) {
+    if ("bad" in parsed) console.error(`${parsed.bad}: a file under the current folder`);
     console.error(USAGE);
     process.exitCode = 2;
     return;
   }
   const { opts, print, steps } = parsed;
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-fixture-")));
+  let seed: ReturnType<typeof fixturePreset>;
   try {
-    const fx = seedFixture(root, fixturePreset(opts));
+    seed = fixturePreset({ ...opts, daemon: undefined });
+  } catch (e) {
+    console.error((e as Error).message);
+    console.error(USAGE);
+    process.exitCode = 2;
+    return;
+  }
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-fixture-")));
+  const daemon = opts.daemon ? await startFakeDaemon() : null;
+  try {
+    const fx = seedFixture(root, { ...seed, daemon: daemon?.url });
     const env = {
       ...process.env,
       ...fx.env,
@@ -102,8 +118,13 @@ export async function run(argv: string[]): Promise<void> {
     }
     show("gh calls", fx.ghLog);
     show("docker calls", fx.dockerLog);
+    if (daemon)
+      process.stdout.write(
+        `--- daemon calls\n${daemon.calls.map((c) => `${c}\n`).join("") || "(none)\n"}`,
+      );
     process.exitCode = code;
   } finally {
+    await daemon?.close();
     fs.rmSync(root, { recursive: true, force: true });
   }
 }

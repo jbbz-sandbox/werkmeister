@@ -13,7 +13,7 @@ import { gatePrs } from "./dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { initWorkspace } from "./dist/workspace_init.js";
 import { tokensDir } from "./dist/workspace_token.js";
-import { pinWerkmeisterRoot, withFixtureWorkspace } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withFakeDaemon, withFixtureWorkspace } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
 
@@ -64,7 +64,8 @@ test("init under the fixture writes the context and wrappers well inside the 10 
       initWorkspace({}, fx.workspace, { build: false }),
     );
     const ms = performance.now() - t0;
-    assert.ok(ms < 5000, `init took ${Math.round(ms)} ms`);
+    // Measured ~0.5 s; 2 s leaves room for a loaded host (SW-426).
+    assert.ok(ms < 2000, `init took ${Math.round(ms)} ms`);
     const bin = path.join(fx.workspace, ".werkmeister", "bin");
     assert.ok(fs.statSync(path.join(bin, "with-fixture-workspace")).mode & 0o100);
     assert.match(
@@ -179,4 +180,37 @@ test("under the fixture, claude and kubectl are not the caller's, and its creden
     }
     fs.rmSync(bin, { recursive: true, force: true });
   }
+});
+
+// SW-426: a shell exporting the real daemon's address must not reach it from a fixture.
+test("WERKMEISTER_HOST is dead under the fixture unless it is given a fake daemon", async () => {
+  const { callTool } = await import("./dist/daemon_client.js");
+  await withFakeDaemon(
+    async (daemon) => {
+      await withFixtureWorkspace(async () => {
+        assert.equal(process.env.WERKMEISTER_HOST, "http://127.0.0.1:1");
+      });
+      await withFixtureWorkspace(
+        async () => {
+          assert.deepEqual((await callTool("status", {}, { token: "t" })).data, { ok: 1 });
+          await assert.rejects(
+            callTool("up", {}, { token: "t" }),
+            /fake daemon: unhandled tool up/,
+          );
+        },
+        { daemon: daemon.url },
+      );
+      assert.equal(daemon.calls.filter((c) => c.startsWith("POST /api/tool")).length, 2);
+    },
+    { status: { ok: 1 } },
+  );
+});
+
+test("--gate refuses a registry whose change would map to no service (SW-426)", async () => {
+  const { fixturePreset } = await import("./dist/fixture_workspace.js");
+  assert.throws(
+    () => fixturePreset({ gate: true, services: "services:\n  web: { repo: app, path: . }\n" }),
+    /--gate needs a `lib` service/,
+  );
+  assert.equal(fixturePreset({ gate: true }).running?.length, 1);
 });

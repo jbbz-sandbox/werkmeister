@@ -22,13 +22,21 @@ const engine = http.createServer((_req, res) => {
   engineHits++;
   res.writeHead(500).end();
 });
+// The caller's daemon, exported in its shell: the fixture must leave it dead (SW-426).
+let daemonHits = 0;
+const callerDaemon = http.createServer((_req, res) => {
+  daemonHits++;
+  res.writeHead(500).end();
+});
 
 beforeAll(async () => {
   tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fixture-harness-")));
   await new Promise<void>((resolve) => engine.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => callerDaemon.listen(0, "127.0.0.1", resolve));
 });
 afterAll(() => {
   engine.close();
+  callerDaemon.close();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
@@ -76,6 +84,7 @@ it("runs init and the gate in a fixture, prints the context and fake calls, and 
         DOCKER_HOST: `tcp://127.0.0.1:${port}`,
         WERKMEISTER_ROOT: "/elsewhere/apps/cli",
         PATH: `${callerBin}:${process.env.PATH}`,
+        WERKMEISTER_HOST: `http://127.0.0.1:${(callerDaemon.address() as { port: number }).port}`,
         ANTHROPIC_API_KEY: "caller-secret",
         CLAUDE_CODE_OAUTH_TOKEN: "caller-secret",
         KUBECONFIG: path.join(tmp, "caller-kubeconfig"),
@@ -90,6 +99,10 @@ it("runs init and the gate in a fixture, prints the context and fake calls, and 
   expect(run.stdout).toMatch(/--- docker calls\n[\s\S]*^exec demo-lib sh -c .* sh -c true$/m);
   expect(fs.readdirSync(home)).toEqual([]);
   expect(engineHits).toBe(0);
+  expect(daemonHits).toBe(0);
+  // Every gh call went to the fake, which logs it; a reload would show as a docker call to w9r-caddy.
+  expect(run.stdout).toMatch(/--- gh calls\n/);
+  expect(run.stdout.slice(run.stdout.indexOf("--- docker calls"))).not.toMatch(/caddy/i);
   expect(fs.existsSync(hits), "the caller's claude or kubectl ran").toBe(false);
   expect(fs.readdirSync(scratch), "the fixture and temp HOME are removed").toEqual([]);
 }, 120_000);

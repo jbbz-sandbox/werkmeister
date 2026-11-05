@@ -207,3 +207,22 @@ export async function withFixtureWorkspace(fn, opts = {}) {
     fs.rmSync(root, { recursive: true, force: true });
   }
 }
+
+/**
+ * Run *fn* with a fake daemon (`startFakeDaemon` in fixture_fakes.ts: `/api/status`, and
+ * `/api/tool` answered from *tools*) and WERKMEISTER_HOST pointing at it (SW-426, SW-263).
+ * Pass `daemon.url` to withFixtureWorkspace's `daemon` to reach it from a fixture.
+ */
+export async function withFakeDaemon(fn, tools = {}) {
+  const { startFakeDaemon } = await import("./dist/fixture_fakes.js");
+  const daemon = await startFakeDaemon(tools);
+  const prev = process.env.WERKMEISTER_HOST;
+  process.env.WERKMEISTER_HOST = daemon.url;
+  try {
+    return await fn(daemon);
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_HOST;
+    else process.env.WERKMEISTER_HOST = prev;
+    await daemon.close();
+  }
+}

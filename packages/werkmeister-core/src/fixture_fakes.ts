@@ -6,6 +6,7 @@
  */
 
 import * as fs from "node:fs";
+import * as http from "node:http";
 import * as path from "node:path";
 
 /** What the fakes answer. Absent fields take the defaults in FAKE_JS. */
@@ -101,5 +102,47 @@ export function writeFakes(dir: string, world: FakeWorld = {}): Fakes {
     docker: path.join(dir, "docker"),
     ghLog: path.join(dir, "calls"),
     dockerLog: path.join(dir, "docker-calls"),
+  };
+}
+
+export interface FakeDaemon {
+  /** Point WERKMEISTER_HOST here. */
+  url: string;
+  /** Each request, `METHOD /path body`, in order. */
+  calls: string[];
+  close(): Promise<void>;
+}
+
+/**
+ * A stand-in for the daemon's HTTP API, as the CLI's daemon client speaks it (SW-426, SW-263):
+ * `GET /api/status`, and `POST /api/tool` answered from *tools* (name → structuredContent).
+ * Any other tool fails with code FAKE_DAEMON, so a path the fake doesn't cover fails loudly.
+ */
+export async function startFakeDaemon(tools: Record<string, unknown> = {}): Promise<FakeDaemon> {
+  const calls: string[] = [];
+  const server = http.createServer(async (req, res) => {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    calls.push(`${req.method} ${req.url}${body ? ` ${body}` : ""}`);
+    const reply = (status: number, json: unknown) =>
+      res.writeHead(status, { "content-type": "application/json" }).end(JSON.stringify(json));
+    if (req.url === "/api/status") return reply(200, { pid: process.pid, loaded: "fake" });
+    if (req.method === "POST" && req.url === "/api/tool") {
+      const { name } = JSON.parse(body || "{}") as { name?: string };
+      if (name && name in tools) return reply(200, { structuredContent: tools[name], text: "" });
+      return reply(501, { error: `fake daemon: unhandled tool ${name}`, code: "FAKE_DAEMON" });
+    }
+    reply(404, { error: `fake daemon: unhandled ${req.method} ${req.url}`, code: "FAKE_DAEMON" });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address() as { port: number };
+  return {
+    url: `http://127.0.0.1:${port}`,
+    calls,
+    close: () =>
+      new Promise((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
   };
 }
