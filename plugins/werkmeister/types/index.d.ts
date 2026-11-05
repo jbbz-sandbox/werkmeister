@@ -161,6 +161,8 @@ declare module "claude-code" {
   interface PluginState {
     werkmeister: {
       rows: WorkspaceRow[];
+      /** The AbovePrompt band's row: the workspace this session runs in; null outside one or before the first read. */
+      bandRow: WorkspaceRow | null;
       error: string;
       busy: string;
       /** `close-out:<name>`, `abandon:<name>` or `intercept:<name>/<service>` between a button's two presses; '' when none is pending. */

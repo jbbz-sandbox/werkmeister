@@ -1,4 +1,4 @@
-import type { Color, EngineInterface, Register } from "claude-code";
+import type { Color, Elements, EngineInterface, Register, RenderSurface } from "claude-code";
 
 import type {
   Draft,
@@ -164,8 +164,15 @@ export const PR_POLL_MS = 60000;
 export const RESOURCE_POLL_MS = 30000;
 /** PR callbacks (#236): every desktop session runs a pass this often; the core's lock lets one through. */
 export const CALLBACK_POLL_MS = 600000;
+// The AbovePrompt band runs in every workspace session, and each core read covers all workspaces,
+// so it polls slower than the one root pane.
+// shortcut: each band reads every workspace's rows and PRs; scope the core reads to one workspace if gh rate limits bite.
+export const BAND_POLL_MS = 15000;
+export const BAND_PR_POLL_MS = 300000;
+export const BAND_RESOURCE_POLL_MS = 60000;
 
 const ROWS = { plugin: "werkmeister", key: "rows" } as const;
+const BAND_ROW = { plugin: "werkmeister", key: "bandRow" } as const;
 const ERROR = { plugin: "werkmeister", key: "error" } as const;
 const BUSY = { plugin: "werkmeister", key: "busy" } as const;
 const CONFIRM = { plugin: "werkmeister", key: "confirmEnd" } as const;
@@ -798,6 +805,74 @@ export function subtitle(r: WorkspaceRow): string {
 
 /** The design's type tags (Bug, Feature, …); the wizard's `bugfix` reads as Bug. */
 const WORK_TYPE: Record<string, string> = { bugfix: "Bug" };
+
+/**
+ * A card's read-only lines: name and chips, subtitle, the compact line, resources, crash loop, the asked
+ * question. The pane's card draws them above its services and buttons; the AbovePrompt band draws only these.
+ */
+function cardInfo(
+  els: Elements[RenderSurface],
+  r: WorkspaceRow,
+  d: WorkspaceDisplay,
+  loaded: boolean,
+) {
+  const { Box, Text, Link } = els;
+  const part = (p: Part, i: number) =>
+    p.href ? (
+      <Link key={`p${i}`} href={p.href} label={p.text} />
+    ) : (
+      <Text key={`p${i}`} color={p.tone && TONE[p.tone]} dimColor={p.key}>
+        {p.text}
+      </Text>
+    );
+  const sub = subtitle(r);
+  const vitals = resourcesLine(d);
+  return [
+    <Box key={`head:${r.name}`} justifyContent="space-between" gap={1}>
+      <Box key={`row:${r.name}`}>
+        <Text bold>{r.name}</Text>
+      </Box>
+      <Box key={`chips:${r.name}`} gap={2}>
+        <Box key={`claude:${r.name}`}>
+          <Text color={TONE[d.agent.tone]} bold={d.needs}>
+            {d.agent.label}
+          </Text>
+        </Box>
+        {d.autonomous && (
+          <Box key={`auto:${r.name}`}>
+            <Text>{d.autonomous.compact}</Text>
+          </Box>
+        )}
+      </Box>
+    </Box>,
+    sub !== "" && (
+      <Box key={`task:${r.name}`}>
+        <Text>{sub}</Text>
+      </Box>
+    ),
+    <Box key={`meta:${r.name}`}>
+      <Text>{metaParts(d, loaded).map(part)}</Text>
+    </Box>,
+    vitals !== "" && (
+      <Box key={`vitals:${r.name}`}>
+        <Text dimColor>{vitals}</Text>
+      </Box>
+    ),
+    d.crash && (
+      <Box key={`crash:${r.name}`}>
+        <Text color={TONE.err}>{d.crash.text}</Text>
+      </Box>
+    ),
+    d.question && (
+      <Box key={`question:${r.name}`}>
+        <Text>
+          <Text color="warning">{"▸ asked: "}</Text>
+          <Text dimColor>{`“${d.question}”`}</Text>
+        </Text>
+      </Box>
+    ),
+  ];
+}
 
 /** A session Continue can pick up: one the app lists, or the newest on disk. */
 function hasSession(r: WorkspaceRow): boolean {
@@ -1515,12 +1590,44 @@ async function hasWorkspaceYml($: EngineInterface, dir: string): Promise<boolean
   return $.fs.exists(`${dir}/.werkmeister/workspace.yml`);
 }
 
-/** A workspace or a folder inside one: `dir` or some ancestor holds `.werkmeister/workspace.yml`. */
-async function inWorkspace($: EngineInterface, dir: string): Promise<boolean> {
+/** The nearest of `dir` and its ancestors that holds `.werkmeister/workspace.yml`; null outside a workspace. */
+async function workspaceRoot($: EngineInterface, dir: string): Promise<string | null> {
   for (let d = dir; d.length > 1; d = d.slice(0, d.lastIndexOf("/")) || "/") {
-    if (await hasWorkspaceYml($, d)) return true;
+    if (await hasWorkspaceYml($, d)) return d;
   }
-  return false;
+  return null;
+}
+
+let bandTimers: { cancel: () => void }[] = [];
+let bandTicking = false;
+/** The band's row read: rows only, none of the pane tick's side effects (resume nudges, tracker check). */
+async function bandTick($: EngineInterface, root: string): Promise<void> {
+  if (bandTicking) return;
+  bandTicking = true;
+  try {
+    const [list, status] = await Promise.all([
+      core<ListResult>($, "list-workspaces"),
+      core<StatusResult>($, "workspace-status"),
+    ]);
+    await $.state.set(BAND_ROW, buildRows(list, status, []).find((r) => r.path === root) ?? null);
+  } catch {
+    // Keep the last card; the next tick tries again.
+  } finally {
+    bandTicking = false;
+  }
+}
+
+/** Polls for the AbovePrompt band; kept apart from the pane's timers, so closing the pane leaves these running. */
+function startBand($: EngineInterface, root: string): void {
+  for (const t of bandTimers) t.cancel();
+  void bandTick($, root);
+  void prTick($);
+  void resourceTick($);
+  bandTimers = [
+    $.clock.every(BAND_POLL_MS, () => void bandTick($, root)),
+    $.clock.every(BAND_PR_POLL_MS, () => void prTick($)),
+    $.clock.every(BAND_RESOURCE_POLL_MS, () => void resourceTick($)),
+  ];
 }
 
 /** Files this session under SESSION_GROUP when that group exists and the session sits in no group yet. */
@@ -1611,7 +1718,9 @@ export const register: Register = (on) => {
       void prTick($);
       void resourceTick($);
     } else if (e.isInteractive && (await holdsWorkspaces($, e.cwd))) await openPane($);
-    if (e.surface === "desktop" && (await inWorkspace($, e.cwd))) await fileInGroup($);
+    const root = await workspaceRoot($, e.cwd);
+    if (root) startBand($, root);
+    if (e.surface === "desktop" && root) await fileInGroup($);
     if (e.surface === "desktop") startCallbacks($);
     await runInstallCheck($, e.isInteractive).catch(() => undefined);
     return next(e);
@@ -1687,6 +1796,49 @@ export const register: Register = (on) => {
     // Enter in the issue field fills from the issue; elsewhere a one-line Enter does nothing.
     if (data.submit === true && key === "issue_id") void fetchIssue($);
     return {};
+  });
+
+  // In a workspace session: that workspace's card above the prompt, without its buttons or intercept controls.
+  on("ui.render", { component: "AbovePrompt" }, async ($, e, next) => {
+    if (e.props.hasSurvey) return next(e);
+    const { value: raw } = await $.state.get(BAND_ROW);
+    if (!raw) return next(e);
+    const { value: polled } = await $.state.get(PRS);
+    const { value: prsPoll } = await $.state.get(PRS_POLL);
+    const { value: resources = null } = await $.state.get(RESOURCES);
+    const live = polled?.[raw.name] ?? [];
+    const r = withLivePrs(raw, live);
+    const d = display(
+      r,
+      prsPoll === "failed" ? null : live,
+      new Date(await $.clock.now()),
+      resources,
+    );
+    const els = $.ui.resolve(e);
+    const { Box, Text } = els;
+    return (
+      <Box
+        key="band"
+        flexDirection="column"
+        borderStyle={d.needs ? "bold" : "round"}
+        borderColor={d.needs ? "warning" : "inactive"}
+        borderDimColor={d.needs ? undefined : true}
+        paddingX={1}
+      >
+        {cardInfo(els, r, d, polled !== undefined || prsPoll === "failed")}
+        {r.services.map((svc, i) => {
+          const glyph = d.services[i];
+          return (
+            <Box key={`svc:${r.name}/${svc.name}`}>
+              <Text>
+                <Text color={glyph ? TONE[glyph.tone] : undefined}>{glyph?.glyph ?? "●"}</Text>{" "}
+                {svc.name}
+              </Text>
+            </Box>
+          );
+        })}
+      </Box>
+    );
   });
 
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
@@ -1934,17 +2086,8 @@ export const register: Register = (on) => {
     }
 
     const canType = Input !== null;
-    const part = (p: Part, i: number) =>
-      p.href ? (
-        <Link key={`p${i}`} href={p.href} label={p.text} />
-      ) : (
-        <Text key={`p${i}`} color={p.tone && TONE[p.tone]} dimColor={p.key}>
-          {p.text}
-        </Text>
-      );
     const card = (r: WorkspaceRow) => {
       const d = display(r, prsPoll === "failed" ? null : (prs[r.name] ?? []), now, resources);
-      const vitals = resourcesLine(d);
       const acts = actionsFor(r, d, canType);
       const label = (a: Action) =>
         a === "continue"
@@ -1984,7 +2127,6 @@ export const register: Register = (on) => {
       )
         .map(([g, lines]) => [g, lines.filter((l) => l.length > 0)] as const)
         .filter(([, lines]) => lines.length > 0);
-      const sub = subtitle(r);
       const confirming =
         confirm === CLOSE_OUT + r.name
           ? "closeout"
@@ -2002,49 +2144,7 @@ export const register: Register = (on) => {
           paddingX={1}
           marginBottom={1}
         >
-          <Box key={`head:${r.name}`} justifyContent="space-between" gap={1}>
-            <Box key={`row:${r.name}`}>
-              <Text bold>{r.name}</Text>
-            </Box>
-            <Box key={`chips:${r.name}`} gap={2}>
-              <Box key={`claude:${r.name}`}>
-                <Text color={TONE[d.agent.tone]} bold={d.needs}>
-                  {d.agent.label}
-                </Text>
-              </Box>
-              {d.autonomous && (
-                <Box key={`auto:${r.name}`}>
-                  <Text>{d.autonomous.compact}</Text>
-                </Box>
-              )}
-            </Box>
-          </Box>
-          {sub !== "" && (
-            <Box key={`task:${r.name}`}>
-              <Text>{sub}</Text>
-            </Box>
-          )}
-          <Box key={`meta:${r.name}`}>
-            <Text>{metaParts(d, polled !== undefined || prsPoll === "failed").map(part)}</Text>
-          </Box>
-          {vitals !== "" && (
-            <Box key={`vitals:${r.name}`}>
-              <Text dimColor>{vitals}</Text>
-            </Box>
-          )}
-          {d.crash && (
-            <Box key={`crash:${r.name}`}>
-              <Text color={TONE.err}>{d.crash.text}</Text>
-            </Box>
-          )}
-          {d.question && (
-            <Box key={`question:${r.name}`}>
-              <Text>
-                <Text color="warning">{"▸ asked: "}</Text>
-                <Text dimColor>{`“${d.question}”`}</Text>
-              </Text>
-            </Box>
-          )}
+          {cardInfo(els, r, d, polled !== undefined || prsPoll === "failed")}
           {r.services.map((svc, i) => {
             const row = snap?.intercepts.find(
               (x) => x.feature === r.feature && x.service === svc.name,
