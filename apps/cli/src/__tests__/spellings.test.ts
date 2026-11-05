@@ -99,8 +99,8 @@ const CASES: [string[], string[]][] = [
   ],
   [["proxy-reload"], ["infra", "proxy-reload"]],
   [
-    ["workspace", "f", "--issue-id", "SW-1", "-s", "api,web", "--autonomous"],
-    ["ws", "new", "f", "--issue-id", "SW-1", "-s", "api,web", "--autonomous"],
+    ["workspace", "new", "f", "--issue-id", "SW-1", "-s", "api,web", "--autonomous"],
+    ["workspace", "new", "f", "--issue-id", "SW-1", "-s", "api,web", "--autonomous"],
   ],
   [
     ["init-workspace", "--feature", "f", "--refresh-issue"],
@@ -282,6 +282,15 @@ describe("command spellings", () => {
         `removed in \\d+\\.\\d+\\.\\d+; use 'werkmeister ${newArgv[0] === "ws" ? "workspace" : newArgv[0]} ${newArgv[1]}`,
       ),
     );
+  });
+
+  // SW-445: the `workspace <feature>` default outlived its 0.58.0 removal and made any
+  // mistyped verb (`workspace status`) create a workspace.
+  it.each([["workspace"], ["ws"]])("%s <unknown word> fails and creates nothing", async (noun) => {
+    await expect(parse([noun, "status"])).rejects.toMatchObject({
+      code: 1,
+      stderr: expect.stringContaining("unknown command 'status'"),
+    });
   });
 
   // SW-216: the flag must survive main.ts's namespace whitelist, or init always builds.
