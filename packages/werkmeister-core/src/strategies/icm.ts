@@ -201,7 +201,8 @@ const START_ISSUE =
 const WRITE_BRIEF =
   "If `../../BRIEF.md` has no `## Acceptance criteria` section, write `## Goal`, `## Acceptance criteria` (a `- [ ]` list, each with how it is checked) and `## Open questions` into it now, from the issue (`werkmeister issue view`) or else the starting prompt, before step 1: every later stage and self-check walks that list. " +
   // SW-374: "regenerate this workspace's file" cannot run mid-run: init rewrites the contracts and the installed CLI predates the change.
-  "For a change to generated text (a context file, `CLAUDE.md`, a stage contract), the criterion is a fixture run of the built generator showing the new text; regenerating this workspace's own copy is a post-release check, not a criterion.";
+  // SW-414: no werkmeister file names in a generic template (SW-143).
+  "For a change to text a generator writes, the criterion is a fixture run of the built generator showing the new text; regenerating this workspace's own copy is a post-release check, not a criterion.";
 
 // SW-275: SW-257's brief said "test-only" but the cause was in production code; with no rule the run stopped to ask.
 const OUT_OF_SCOPE =

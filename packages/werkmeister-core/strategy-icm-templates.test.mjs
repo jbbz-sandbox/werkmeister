@@ -267,6 +267,12 @@ test("autonomous renders self-checks and stop points, and turning it off restore
 
     const off = await initIcm(root, standardsDir, "false");
     for (const c of off.contracts) assert.match(c, /^## Human check$/m);
+    // SW-414: step 0's generated-text rule names no werkmeister files (SW-143).
+    assert.match(
+      off.contracts[0],
+      /For a change to text a generator writes, the criterion is a fixture run/,
+    );
+    assert.doesNotMatch(off.contracts[0], /a context file|`CLAUDE\.md`, a stage contract/);
     assert.match(off.contracts.at(-1), /Set `status: approved` on each one to open/);
     assert.match(off.claude, /## The one rule/);
     assert.doesNotMatch(off.claude, /## Stop points/);
