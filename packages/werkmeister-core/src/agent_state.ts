@@ -292,41 +292,59 @@ export function claimNudge(root: string): string | null {
   return message;
 }
 
-/** `<dot-dir>/wake-nudge.json` (SW-418): `pr watch` wakes held for open sessions, by session id. */
-export const wakeNudgePath = (root: string) => path.join(dotDir(root), "wake-nudge.json");
+/** `<dot-dir>/wake-nudge-<session>.json` (SW-418): a `pr watch` wake held for that open session. */
+export const wakeNudgePath = (root: string, session: string) =>
+  path.join(dotDir(root), `wake-nudge-${session}.json`);
+// The id comes from hook input and names a file.
+const SESSION_ID = /^[\w-]+$/;
 
-function readWakeNudges(root: string): Record<string, { message: string; at: string }> {
+function readWakeNudge(file: string): string | null {
   try {
-    const o = JSON.parse(fs.readFileSync(wakeNudgePath(root), "utf8"));
-    return o && typeof o === "object" && !Array.isArray(o) ? o : {};
+    const message = JSON.parse(fs.readFileSync(file, "utf8"))?.message;
+    return typeof message === "string" ? message : null;
   } catch {
-    return {};
+    return null;
   }
 }
 
+const pendingWake = (root: string, session: unknown) =>
+  typeof session === "string" &&
+  SESSION_ID.test(session) &&
+  fs.existsSync(wakeNudgePath(root, session));
+
 /** Queue *message* for *session*'s next hook event, after any it hasn't had yet. */
 export function writeWakeNudge(root: string, session: string, message: string, now = new Date()) {
-  const all = readWakeNudges(root);
-  const before = all[session]?.message;
-  all[session] = { message: before ? `${before}\n\n${message}` : message, at: now.toISOString() };
-  writeAtomic(wakeNudgePath(root), all);
+  if (!SESSION_ID.test(session)) return;
+  const file = wakeNudgePath(root, session);
+  const before = readWakeNudge(file);
+  writeAtomic(file, {
+    message: before ? `${before}\n\n${message}` : message,
+    at: now.toISOString(),
+  });
 }
 
 /**
- * The hook's stdout handing *input*'s session its pending wake, or null. Taken out of the
- * file first, so it is delivered once; Stop is blocked so a turn that is ending still reads it.
+ * The hook's stdout handing *input*'s session its pending wake, or null. Claimed by renaming
+ * the file first (SW-444): a rename succeeds once, so parallel hooks deliver it once, and a
+ * `pr watch` write after it starts a new file instead of being dropped. Stop is blocked so a
+ * turn that is ending still reads it.
  */
 export function deliverWake(input: Record<string, any>, root: string): object | null {
   const event = input["hook_event_name"];
   if (event !== "UserPromptSubmit" && event !== "PostToolUse" && event !== "Stop") return null;
   // A subagent's hooks carry the parent's session id; its context isn't the conversation's.
   if (input["agent_id"]) return null;
-  const all = readWakeNudges(root);
-  const message = all[input["session_id"]]?.message;
-  if (typeof message !== "string") return null;
-  delete all[input["session_id"]];
-  if (Object.keys(all).length) writeAtomic(wakeNudgePath(root), all);
-  else fs.rmSync(wakeNudgePath(root), { force: true });
+  if (!pendingWake(root, input["session_id"])) return null;
+  const file = wakeNudgePath(root, input["session_id"]);
+  const claimed = `${file}.${process.pid}-${Date.now()}.claimed`;
+  try {
+    fs.renameSync(file, claimed);
+  } catch {
+    return null; // another hook claimed it
+  }
+  const message = readWakeNudge(claimed);
+  fs.rmSync(claimed, { force: true });
+  if (message === null) return null;
   return event === "Stop"
     ? { decision: "block", reason: message }
     : { hookSpecificOutput: { hookEventName: event, additionalContext: message } };
@@ -379,7 +397,7 @@ export function record(input: Record<string, any>, now = new Date()): string | n
   if (
     next?.state === "working" &&
     current?.state === "needs-you" &&
-    readWakeNudges(root)[input["session_id"]]
+    pendingWake(root, input["session_id"])
   )
     next = null;
   const stateChanged =

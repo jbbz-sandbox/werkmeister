@@ -3597,7 +3597,7 @@ const openSession = (ws) => {
 test("claimCallbacks: a wake for an open session is claimed and left as its nudge, never sent headless (SW-418)", async () => {
   const ws = icmWorkspace({ files: { app: openFile() } });
   const nudge = () =>
-    JSON.parse(fs.readFileSync(path.join(dotDir(ws), "wake-nudge.json"), "utf8"))["s-1"];
+    JSON.parse(fs.readFileSync(path.join(dotDir(ws), "wake-nudge-s-1.json"), "utf8"));
   try {
     openSession(ws);
     const view = openView({ mergeable: "CONFLICTING" });
@@ -3617,8 +3617,7 @@ test("claimCallbacks: a wake for an open session is claimed and left as its nudg
     const held = await claim(merged, deps([MERGED, NO_TAG], { sessionBusy: async () => true }));
     assert.deepEqual(wakes(held), []);
     assert.equal(
-      JSON.parse(fs.readFileSync(path.join(dotDir(merged), "wake-nudge.json"), "utf8"))["s-1"]
-        .message,
+      JSON.parse(fs.readFileSync(path.join(dotDir(merged), "wake-nudge-s-1.json"), "utf8")).message,
       callbackMessage("merged", URL9),
       "a status message is nudged the same way",
     );
@@ -3633,7 +3632,10 @@ test("claimCallbacks: a session busy only by a fresh transcript has closed: held
     const view = openView({ statusCheckRollup: [run("test", "FAILURE")] });
     const busy = await claim(ws, deps([view, JOB_LOG], { sessionBusy: async () => true }));
     assert.deepEqual(wakes(busy), []);
-    assert.ok(!fs.existsSync(path.join(dotDir(ws), "wake-nudge.json")), "no hooks to deliver it");
+    assert.ok(
+      !fs.existsSync(path.join(dotDir(ws), "wake-nudge-s-1.json")),
+      "no hooks to deliver it",
+    );
     assert.ok(!("notified_checks" in readPrFiles(ws)[0].fm), "nothing claimed while held");
     assert.equal((await claim(ws, deps([view, JOB_LOG]))).claimed.length, 1);
   } finally {
