@@ -724,6 +724,7 @@ Create a new workspace under $WERKMEISTER_WORKSPACES_ROOT (git worktrees on a \<
 - `-s, --services <list>`: Comma-separated services to run locally. Their owning repos are added as worktrees, and the list is passed through to init-workspace.
 - `-r, --repos <list>`: Comma-separated repos to create worktrees for (union with the repos derived from --services). Interactive multi-select if neither --repos nor --services is given.
 - `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search; passed through to init-workspace.
+- `--group <keys>`: Comma-separated member issue keys of a grouped PR led by --issue-id (one PR, one commit per ticket); passed through to init-workspace.
 - `-t, --task <title>`: Task title for the workspace CLAUDE.md; passed through to init-workspace.
 - `--test-path <path>`: URL path for feature testing; passed through to init-workspace.
 - `--description <text>`: Free-form description for the CLAUDE.md header; passed through to init-workspace.
@@ -795,6 +796,7 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 - `--issue-id <ref>`: Issue ID in this machine's issue tracker (see `werkmeister machine setup`) (env: WERKMEISTER_ISSUE_ID; config: issue_id).
 - `--project <name>`: The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue (env: WERKMEISTER_PROJECT; config: project).
 - `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search (env: WERKMEISTER_LABELS; config: labels).
+- `--group <keys>`: Comma-separated member issue keys of a grouped PR led by issue_id: the ICM contracts commit once per ticket (env: WERKMEISTER_GROUP; config: group).
 - `--test-path <path>`: URL path for feature testing (env: WERKMEISTER_TEST_PATH; config: test_path).
 - `--description <text>`: Free-form description for the CLAUDE.md header (env: WERKMEISTER_DESCRIPTION; config: description).
 - `--starting-prompt <text>`: First instruction for the agent; persisted to .werkmeister/workspace.yml (env: WERKMEISTER_STARTING_PROMPT; config: starting_prompt).

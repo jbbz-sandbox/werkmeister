@@ -1692,7 +1692,7 @@ export const register: Register = (on) => {
         "Fills fields of the pane's Create tab (the New Werkmeister Workspace form), so the person can " +
         "set them from the prompt (e.g. paste a long starting prompt) and review before creating. Opens the pane on " +
         'the Create tab. Each value replaces the field; "" clears it. Fields: issue_id, feature (lowercase-hyphen ' +
-        'slug), work_type, context_strategy, autonomous ("true" or "false"), model (an alias like sonnet, or a claude-… id), auto_stop ("true" or "false"), services (a list of choices), labels, test_path, task, ' +
+        'slug), work_type, context_strategy, autonomous ("true" or "false"), model (an alias like sonnet, or a claude-… id), auto_stop ("true" or "false"), services (a list of choices), labels, group (comma-separated member issue keys of a grouped PR), test_path, task, ' +
         "description, starting_prompt (multi-line). Pass {} as fields to read the current values. Returns what the " +
         "form holds, values it left out and why, and what is still required. It never creates the workspace: the " +
         "person presses Create in the pane.",

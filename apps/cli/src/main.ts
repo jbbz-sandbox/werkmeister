@@ -806,6 +806,11 @@ const SPECS: CommandSpec[] = [
           "Comma-separated free-form tags for filtering workspaces in the dashboard search; passed through to init-workspace.",
         )
         .option(
+          "--group <keys>",
+          "Comma-separated member issue keys of a grouped PR led by --issue-id (one PR, one " +
+            "commit per ticket); passed through to init-workspace.",
+        )
+        .option(
           "-t, --task <title>",
           "Task title for the workspace CLAUDE.md; passed through to init-workspace.",
         )
@@ -884,6 +889,7 @@ const SPECS: CommandSpec[] = [
       services: o.services ?? null,
       repos: o.repos ?? null,
       labels: o.labels ?? null,
+      group: o.group ?? null,
       task: o.task ?? null,
       test_path: o.testPath ?? null,
       description: o.description ?? null,
@@ -1173,6 +1179,11 @@ const SPECS: CommandSpec[] = [
             "dashboard search (env: WERKMEISTER_LABELS; config: labels).",
         )
         .option(
+          "--group <keys>",
+          "Comma-separated member issue keys of a grouped PR led by issue_id: the ICM " +
+            "contracts commit once per ticket (env: WERKMEISTER_GROUP; config: group).",
+        )
+        .option(
           "--test-path <path>",
           "URL path for feature testing (env: WERKMEISTER_TEST_PATH; config: test_path).",
         )
@@ -1247,6 +1258,7 @@ const SPECS: CommandSpec[] = [
       issue_id: o.issueId ?? null,
       project: o.project ?? null,
       labels: o.labels ?? null,
+      group: o.group ?? null,
       test_path: o.testPath ?? null,
       description: o.description ?? null,
       starting_prompt: o.startingPrompt ?? null,

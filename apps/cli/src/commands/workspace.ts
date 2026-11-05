@@ -159,6 +159,7 @@ const FORM_KEYS = [
   "services",
   "repos",
   "labels",
+  "group",
   "task",
   "test_path",
   "description",
