@@ -245,7 +245,7 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
       return out;
     },
 
-    filingGuide(issueId) {
+    filingGuide(issueId, workspace = "<workspace>") {
       const project = /^([A-Z][A-Z0-9]+)-\d+$/.exec(issueId)?.[1] ?? key;
       const sandboxProject = loadSandboxIssuesProject();
       const rawBase = (loadJira().base_url ?? "").trim().replace(/\/+$/, "");
@@ -253,8 +253,11 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
       const command = (key?: string) =>
         `\`werkmeister issue create --project ${key ?? "<KEY>"} --type <type> --title "<title>" --body-file <file>\`; ` +
         "if it fails for want of a Jira API token, the Atlassian MCP tools if connected, otherwise hand the person the title, type and body to file";
-      const jql = (key?: string) =>
-        `JQL \`${key ? `project = ${key} AND ` : ""}text ~ "<keywords>"\``;
+      const jql = (key: string | undefined, term: string) =>
+        `JQL \`${key ? `project = ${key} AND ` : ""}text ~ "${term}"\``;
+      const both = (key?: string) => `${jql(key, "<keywords>")}, then ${jql(key, workspace)}`;
+      const gh = (term: string) =>
+        `\`gh issue list -R ${WERKMEISTER_ISSUES_REPO} --search "${term}" --state all\``;
       const where = `Jira${project ? `, project \`${project}\`` : " — ask the person which project"}${site}`;
       return {
         row: `| app code in a worktree | ${where} | ${command(project)} |`,
@@ -264,7 +267,7 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
               command: command(sandboxProject),
             }
           : undefined,
-        search: `Search first: ${jql(project)}. If it exists, comment on it instead. (Werkmeister issues: ${sandboxProject ? jql(sandboxProject) : `\`gh issue list -R ${WERKMEISTER_ISSUES_REPO} --search "<keywords>" --state all\``}.)`,
+        search: `Search first: ${both(project)}: other sessions file from the same review and exercise files, and an issue filed from this workspace names it. If it exists, comment on it instead. (Werkmeister issues: ${sandboxProject ? both(sandboxProject) : `${gh("<keywords>")}, then ${gh(workspace)}`}.)`,
       };
     },
 

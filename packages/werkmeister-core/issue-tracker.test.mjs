@@ -134,6 +134,19 @@ test("by default werkmeister issues go to GitHub, with labels, whatever the trac
   }
 });
 
+// SW-434: a keyword search missed a duplicate filed from the same review; the workspace name finds it.
+test("the search step also searches by the workspace's name, on both trackers", () => {
+  const search = (t) =>
+    buildIssuesReportMd("sw-9-x", "PROJ-1", t)
+      .split("\n")
+      .find((l) => l.startsWith("1. Search first"));
+  const gh = search(it.trackerById("github"));
+  assert.match(gh, /--search "<keywords>".*--search "sw-9-x"/);
+  const jira = search(it.trackerById("jira"));
+  assert.match(jira, /text ~ "<keywords>"`, then JQL `project = PROJ AND text ~ "sw-9-x"`/);
+  assert.match(jira, /Werkmeister issues: .*--search "<keywords>".*--search "sw-9-x"/);
+});
+
 test("werkmeister_issues_project sends werkmeister issues to that Jira project", async () => {
   await withSandboxHome(
     async () => {

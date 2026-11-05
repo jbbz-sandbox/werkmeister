@@ -104,9 +104,13 @@ export interface IssueTrackerStrategy {
   /**
    * The issues guide's routing: the "Where" table's app-code row, the
    * search-first step, and where and how to file werkmeister issues when this
-   * tracker takes those too (absent: GitHub). `issueId` is the workspace's own issue, "" when none.
+   * tracker takes those too (absent: GitHub). `issueId` is the workspace's own issue, "" when none;
+   * `workspace` its name, searched for too since issues filed from a workspace name it (SW-434).
    */
-  filingGuide(issueId: string): {
+  filingGuide(
+    issueId: string,
+    workspace?: string,
+  ): {
     row: string;
     search: string;
     werkmeister?: { where: string; command: string };
