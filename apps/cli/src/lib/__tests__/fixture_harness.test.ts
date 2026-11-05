@@ -57,9 +57,8 @@ it("runs init and the gate in a fixture, prints the context and fake calls, and 
       "--no-build",
       "--then",
       "pr",
+      // No --no-wait here: the leading one reaches the gate's load wait (SW-425).
       "gate",
-      // The suite itself loads the host; the gate's load wait would outlast the test.
-      "--no-wait",
     ],
     {
       env: {

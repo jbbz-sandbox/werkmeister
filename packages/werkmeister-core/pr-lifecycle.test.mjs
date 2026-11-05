@@ -47,6 +47,9 @@ import { removeWorkspace, WorkspaceError } from "./dist/sandbox.js";
 import { TEMP_HOME_SCRIPT } from "./dist/temp_home.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
+// The host-load wait tests need it to wait; a caller exporting it for a quick run would skip it (SW-425).
+delete process.env.WERKMEISTER_NO_WAIT;
+
 const PASS_BODY = "## Acceptance\n| criterion | result |\n|---|---|\n| works | PASS |\n";
 
 function prFile({ status = "approved", body = PASS_BODY, extra = "" } = {}) {
@@ -4068,4 +4071,15 @@ test("gate: prints a containers row when a running container is kept (SW-355, SW
   } finally {
     clean(ws);
   }
+});
+
+test("waitForHostLoad: WERKMEISTER_NO_WAIT=1 skips the gate's wait as --no-wait does (SW-425)", async () => {
+  const falls = loaded([90, 1]);
+  process.env.WERKMEISTER_NO_WAIT = "1";
+  try {
+    assert.equal(await withSandboxHome(() => waitForHostLoad(falls, true, "lint")), "");
+  } finally {
+    delete process.env.WERKMEISTER_NO_WAIT;
+  }
+  assert.deepEqual(falls.slept, []);
 });

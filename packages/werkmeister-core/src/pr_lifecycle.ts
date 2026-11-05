@@ -19,6 +19,7 @@ import {
   type ArchetypeRegistry,
   containerOf,
   dotDir,
+  envVar,
   IDLE_SERVICE_TYPES,
   isFixture,
   loadArchetypes,
@@ -641,7 +642,8 @@ export async function waitForHostLoad(
 ): Promise<string> {
   let { load, cores } = deps.hostLoad();
   const limit = hostLoadLimit(cores);
-  if (!wait || limit === 0 || load[0] <= limit) return "";
+  // WERKMEISTER_NO_WAIT reaches the gate too, not only with-temp-home's own wait (SW-425).
+  if (!wait || envVar("NO_WAIT") || limit === 0 || load[0] <= limit) return "";
   const spent = () =>
     `ran with host load ${load[0].toFixed(1)} over ${limit}; the ${minutes(LOAD_WAIT_MS)} min host-load wait is spent`;
   if (budget.leftMs <= 0) return spent();
