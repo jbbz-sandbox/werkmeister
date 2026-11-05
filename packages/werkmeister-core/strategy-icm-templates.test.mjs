@@ -163,6 +163,13 @@ test("each template renders with no undefined and a route per stage", async () =
         const build = { feature: "03_implement", refactor: "02_implement" }[wt] ?? "03_exercise";
         if (wt !== "spike" && d === build) {
           assert.match(c, /`ponytail:ponytail-review`/, `${wt}/${d}`);
+          // SW-431: the brief asks what a newly pre-approved command can reach, in generic text (SW-143).
+          assert.match(
+            c,
+            /If the change adds or widens an allow rule or another pre-approved command, add to the brief: "this change pre-approves a command/,
+            `${wt}/${d}`,
+          );
+          assert.doesNotMatch(c, /buildAllowRules|\.werkmeister\/bin\/\*/, `${wt}/${d}`);
           assert.match(c, /## Outputs[\s\S]*^- `output\/review\.md`$/m, `${wt}/${d}`);
           if (d.endsWith("_implement")) {
             // SW-430: host tests → review and fix → the gate, once → exercise.md.
