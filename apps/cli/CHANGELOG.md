@@ -1,5 +1,17 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.75.0
+
+### Minor Changes
+
+- 9ab8223: A workspace can mark itself as a grouped PR with `group: [<member keys>]` in `.werkmeister/workspace.yml`. Its ICM build stages then commit once per ticket and review the range `origin/main...HEAD`, and `propose` keeps the per-ticket commits, asks for rebase and merge, and closes each member after the release (SW-438). The same release: implement stages review before `pr gate --tests` (SW-430), the review brief asks what a newly pre-approved command can reach (SW-431), the first stage's brief rule names no werkmeister files (SW-414), and propose's lint step reads "when it has one" (SW-415).
+
+### Patch Changes
+
+- 8eb783e: SW-410: `pr open` retries a push that GitHub refuses with an SSH auth or connection error (twice, 10 s then 30 s apart), and a push that still fails points at githubstatus.com. When `issue start` can't fetch, its `Worktree:` line says to re-check with `werkmeister issue start`, and the first stage contract (and the w9r-research skill) now re-runs it before going on instead of continuing unchecked. Rule 3 in the generated `_shared/pr-rules.md` runs `pr open` as a harness-tracked background job instead of `nohup … &`.
+- c08f22a: SW-436: `issue start`'s stale-CLI fix now reads `git -C <checkout> pull --ff-only origin main`, which works under `pull.rebase=true`. When the origin fetch fails, the `CLI:` line says it could not check, names the fetch error and how to re-check, instead of `currency not checked`.
+- 5a04db0: SW-437: every `pr open` run that opens a PR prints one `pr watch:` line: scheduled (where, and its log), or NOT scheduled with `werkmeister pr watch --install`, so a session knows whether a failing check or a conflict will wake it.
+
 ## 0.74.0
 
 ### Minor Changes
