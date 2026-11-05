@@ -28,12 +28,9 @@ const G = 2 ** 30;
 
 async function withHome(fn, config = "") {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "sched-home-"));
-  const prev = process.env.HOME;
-  process.env.HOME = home;
   try {
     return await withSandboxHome(() => fn(home), { config });
   } finally {
-    process.env.HOME = prev;
     fs.rmSync(home, { recursive: true, force: true });
   }
 }

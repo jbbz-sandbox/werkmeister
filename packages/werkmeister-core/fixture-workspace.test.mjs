@@ -212,5 +212,11 @@ test("--gate refuses a registry whose change would map to no service (SW-426)", 
     () => fixturePreset({ gate: true, services: "services:\n  web: { repo: app, path: . }\n" }),
     /--gate needs a `lib` service/,
   );
+  // SW-447: the right repo at another path still maps the packages/lib change to no service.
+  assert.throws(
+    () =>
+      fixturePreset({ gate: true, services: "services:\n  lib: { repo: app, path: libs/lib }\n" }),
+    /--gate needs a `lib` service/,
+  );
   assert.equal(fixturePreset({ gate: true }).running?.length, 1);
 });
