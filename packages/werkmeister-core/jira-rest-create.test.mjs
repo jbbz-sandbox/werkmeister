@@ -112,11 +112,11 @@ test("a refused link carries Jira's reason", async () => {
   await assert.rejects(linkIssueRest("SW-13", "SW-9999"), /HTTP 404: .*Issue Does Not Exist/);
 });
 
-test("the jira tracker links each key in order", async () => {
+test("the jira tracker links the issue to the key", async () => {
   const calls = stubLinks();
-  await trackerById("jira").linkIssues("SW-13", ["SW-292", "SW-263"]);
+  await trackerById("jira").linkIssue("SW-13", "SW-292");
   assert.deepEqual(
     calls.map((c) => c.body.outwardIssue.key),
-    ["SW-292", "SW-263"],
+    ["SW-292"],
   );
 });

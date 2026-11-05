@@ -289,8 +289,8 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
       return { ref: created.key, title, type: created.issueType, url: created.url };
     },
 
-    async linkIssues(ref, relates) {
-      for (const to of relates) if (!(await linkIssueRest(ref, to))) throw new Error(NO_REST);
+    async linkIssue(ref, to) {
+      if (!(await linkIssueRest(ref, to))) throw new Error(NO_REST);
     },
 
     async listReady(board) {

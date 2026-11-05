@@ -140,7 +140,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
         fail(`--relates '${t}' is not a ${tracker.label} issue ID (e.g. ${tracker.refExample}).`);
       return ref;
     });
-    if (relates.length && !tracker.linkIssues) fail(`${tracker.label} cannot link issues.`);
+    if (relates.length && !tracker.linkIssue) fail(`${tracker.label} cannot link issues.`);
     let created: Issue;
     try {
       created = await tracker.createIssue(issue);
@@ -151,7 +151,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     console.log(created.url ?? created.ref);
     for (const to of relates) {
       try {
-        await tracker.linkIssues?.(created.ref, [to]);
+        await tracker.linkIssue?.(created.ref, to);
       } catch (e) {
         fail(`Created ${created.ref}, but could not link it to ${to}: ${(e as Error).message}`);
       }
