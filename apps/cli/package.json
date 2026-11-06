@@ -74,6 +74,7 @@
     "./man/werkmeister-notes.1",
     "./man/werkmeister-machine-detect.1",
     "./man/werkmeister-machine-clean.1",
+    "./man/werkmeister-machine-tokens.1",
     "./man/werkmeister-machine-stats.1",
     "./man/werkmeister-machine-optimize.1",
     "./man/werkmeister-machine-setup.1",

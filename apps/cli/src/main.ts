@@ -70,6 +70,7 @@ import statsHelp from "./commands/stats.help.md";
 import statusHelp from "./commands/status.help.md";
 import stopHelp from "./commands/stop.help.md";
 import testHelp from "./commands/test.help.md";
+import tokensHelp from "./commands/tokens.help.md";
 import upHelp from "./commands/up.help.md";
 import waitLoadHelp from "./commands/wait-load.help.md";
 import workspaceHelp from "./commands/workspace.help.md";
@@ -612,6 +613,18 @@ const SPECS: CommandSpec[] = [
         .option("--dry-run", "Show what would be cleaned without actually removing anything");
     },
     namespace: (_a, o) => ({ all: Boolean(o.all), dry_run: Boolean(o.dryRun) }),
+  },
+  {
+    name: "machine tokens",
+    group: "Machine:",
+    help: tokensHelp,
+    load: () => import("./commands/tokens.js"),
+    configure: (cmd) => {
+      cmd
+        .description("List daemon tokens with no workspace; --remove deletes them")
+        .option("--remove", "Delete the stale tokens (default: list only)");
+    },
+    namespace: (_a, o) => ({ remove: Boolean(o.remove) }),
   },
   {
     name: "machine stats",

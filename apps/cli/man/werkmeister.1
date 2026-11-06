@@ -148,6 +148,9 @@ Generate \e<repo>/.werkmeister/services.yaml from the repo's package manifests, 
 \fBmachine clean\fR
 Remove orphaned volumes and generated files from stopped features
 .TP
+\fBmachine tokens\fR
+List daemon tokens with no workspace; \-\-remove deletes them
+.TP
 \fBmachine stats\fR
 Show Docker container resource usage (CPU, memory)
 .TP
@@ -235,6 +238,7 @@ Restart the daemon, through launchd when launchd owns it
 \fBwerkmeister\-notes\fR(1),
 \fBwerkmeister\-machine\-detect\fR(1),
 \fBwerkmeister\-machine\-clean\fR(1),
+\fBwerkmeister\-machine\-tokens\fR(1),
 \fBwerkmeister\-machine\-stats\fR(1),
 \fBwerkmeister\-machine\-optimize\fR(1),
 \fBwerkmeister\-machine\-setup\fR(1),
