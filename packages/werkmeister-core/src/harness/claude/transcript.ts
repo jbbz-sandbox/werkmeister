@@ -15,6 +15,7 @@ import path from "node:path";
 import readline from "node:readline";
 import { WorkspaceError } from "../../errors.js";
 import { isFile } from "../../tool_bins.js";
+import { windowMessages } from "../sessions.js";
 import type { SessionMessage, SessionSource, SessionTranscript } from "../types.js";
 
 export type ClaudeMessage = SessionMessage;
@@ -367,22 +368,10 @@ export async function transcriptIn(
 
   const entries = parseSessionLines(text);
 
-  // Window to the last `limit` conversational (user/assistant) messages,
-  // keeping the tool-activity rows that fall inside that window.
-  let start = entries.length;
-  let count = 0;
-  for (let i = entries.length - 1; i >= 0; i--) {
-    if (entries[i].role !== "tool") {
-      count++;
-      if (count > limit) break;
-    }
-    start = i;
-  }
-
   return {
     sessionId: resolvedId,
     workspacePath: target,
-    messages: entries.slice(start),
+    messages: windowMessages(entries, limit),
     sessionCount: sessions.length,
     updatedAt: chosen.mtime.toISOString(),
   };

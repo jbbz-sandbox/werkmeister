@@ -156,6 +156,8 @@ export interface HarnessAdapter {
   listSessions(
     dir: string,
   ): Promise<Array<{ sessionId: string; title: string; updatedAt: string; isNewest: boolean }>>;
+  /** One session file's text as messages, for the live tailer (the rows {@link HarnessAdapter.transcript} returns). */
+  parseSession(text: string): SessionMessage[];
   /** Working / needs you / done / idle for the workspace list. */
   agentSignal(
     key: string,

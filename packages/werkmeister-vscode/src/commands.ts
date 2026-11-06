@@ -8,11 +8,7 @@ import { DOT_DIR, getReposRoot, workspacesRoot } from "werkmeister-core/config";
 import { callTool } from "werkmeister-core/daemon_client";
 import { ARGV, LIFECYCLE } from "./argv.js";
 import type { WsNode } from "./build-tree.js";
-import {
-  CONTINUE_COMMAND,
-  NEW_SESSION_COMMAND,
-  openClaudeTerminal,
-} from "./harness/claude/terminals.js";
+import { openSessionTerminal } from "./harness/claude/terminals.js";
 import { showLogs } from "./logs.js";
 import { runInTerminal } from "./terminal.js";
 import type { SandboxTreeProvider } from "./tree.js";
@@ -126,9 +122,9 @@ async function pickRepo(): Promise<string | null> {
   return choice?.path ?? null;
 }
 
-async function claudeIn(node: WsNode | undefined, command: string): Promise<void> {
+async function sessionIn(node: WsNode | undefined, mode: "new" | "continue"): Promise<void> {
   const ws = await pickWorkspace(node);
-  if (ws) openClaudeTerminal(ws, command);
+  if (ws) openSessionTerminal(ws, mode);
 }
 
 /** Close out (no reason) or abandon (with one) through the daemon's `close-out` tool. */
@@ -359,10 +355,10 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     }),
 
     vscode.commands.registerCommand("sandbox.continue", (node?: WsNode) =>
-      claudeIn(node, CONTINUE_COMMAND),
+      sessionIn(node, "continue"),
     ),
     vscode.commands.registerCommand("sandbox.newSession", (node?: WsNode) =>
-      claudeIn(node, NEW_SESSION_COMMAND),
+      sessionIn(node, "new"),
     ),
 
     vscode.commands.registerCommand("sandbox.refreshPrs", () => provider.refreshPrs()),

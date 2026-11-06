@@ -1,16 +1,19 @@
 /**
  * Which harness reads a workspace, and where (proposal § 4.3, SW-188). Chosen per
  * workspace by `harness:` in workspace.yml, like `context_strategy`; the writers
- * of the context layer ask `harnessLayoutFor` and never name a harness. Sessions
- * (ask, sendTurn, transcripts) stay Claude's in `HarnessAdapter`.
+ * of the context layer ask `harnessLayoutFor`, and a workspace's sessions `harnessFor`;
+ * neither caller names a harness.
  */
 import { SandboxError } from "../errors.js";
 import { warn } from "../reporter.js";
 // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { readWorkspaceField } from "../workspace_prompts.js";
+// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
+import { claudeAdapter } from "./claude/index.js";
+import { codexAdapter } from "./codex/adapter.js";
 import { codexLayout } from "./codex/index.js";
 import { mcpLayout } from "./mcp/index.js";
-import { HARNESS_IDS, type HarnessId, type HarnessLayout } from "./types.js";
+import { HARNESS_IDS, type HarnessAdapter, type HarnessId, type HarnessLayout } from "./types.js";
 
 export const claudeLayout: HarnessLayout = {
   id: "claude",
@@ -45,6 +48,27 @@ export function parseHarnessId(value: unknown): HarnessId {
 /** The layout of the harness that reads *workspaceRoot*. */
 export function harnessLayoutFor(workspaceRoot: string): HarnessLayout {
   return REGISTRY[parseHarnessId(readWorkspaceField(workspaceRoot, "harness"))];
+}
+
+// A generic MCP harness has no session store werkmeister reads; it keeps Claude's (idle) readers.
+const ADAPTERS: Record<HarnessId, HarnessAdapter> = {
+  claude: claudeAdapter,
+  mcp: claudeAdapter,
+  codex: codexAdapter,
+};
+
+/** The `harness:` of *workspaceRoot*; an unknown value reads as claude, so one bad workspace.yml can't fail the status sweep. */
+export function harnessIdOf(workspaceRoot: string): HarnessId {
+  try {
+    return parseHarnessId(readWorkspaceField(workspaceRoot, "harness"));
+  } catch {
+    return HARNESS_IDS[0];
+  }
+}
+
+/** The session adapter of the harness that reads *workspaceRoot* (a reconcile dir has no workspace.yml: Claude). */
+export function harnessFor(workspaceRoot: string): HarnessAdapter {
+  return ADAPTERS[harnessIdOf(workspaceRoot)];
 }
 
 /** True when the workspace's harness takes hooks; otherwise says why none were written, never silently. */

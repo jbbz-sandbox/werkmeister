@@ -122,7 +122,7 @@ async function resolveModelPricingYaml(): Promise<string | null> {
   return (await isFile(p)) ? p : null;
 }
 
-async function loadPriceTable(): Promise<Record<string, ModelRate>> {
+export async function loadPriceTable(): Promise<Record<string, ModelRate>> {
   const p = await resolveModelPricingYaml();
   if (!p) return DEFAULT_PRICES;
   try {
@@ -140,21 +140,9 @@ async function loadPriceTable(): Promise<Record<string, ModelRate>> {
  * getWorkspaceUsage resolves the name; close-out's snapshot passes the folder (SW-206).
  */
 export async function usageForDir(name: string, target: string): Promise<WorkspaceUsage> {
-  const empty: WorkspaceUsage = {
-    name,
-    totals: zeroTotals(),
-    estUsd: null,
-    byModel: [],
-    sessions: [],
-  };
   const projectDir = await findClaudeProjectDir(target);
-  if (!projectDir) return empty;
-  const files = await listSessionFiles(projectDir); // newest first
-  const prices = await loadPriceTable();
-
-  const wsByModel = new Map<string, UsageTotals>();
-  const sessions: SessionUsage[] = [];
-
+  const files = projectDir ? await listSessionFiles(projectDir) : []; // newest first
+  const sessions: SessionTally[] = [];
   for (const f of files) {
     let text: string;
     try {
@@ -162,7 +150,32 @@ export async function usageForDir(name: string, target: string): Promise<Workspa
     } catch {
       continue;
     }
-    const session = reduceSession(text);
+    const sessionId = path.basename(f.file, ".jsonl");
+    sessions.push({
+      sessionId,
+      title: await readSessionTitle(f.file, sessionId),
+      updatedAt: f.mtime.toISOString(),
+      reduction: reduceSession(text),
+    });
+  }
+  return rollUpUsage(name, sessions);
+}
+
+/** One session's reduced usage, the input {@link rollUpUsage} takes from any harness. */
+export interface SessionTally {
+  sessionId: string;
+  title: string;
+  updatedAt: string;
+  reduction: SessionReduction;
+}
+
+/** A workspace's sessions summed by model and by session, priced from the price table. */
+export async function rollUpUsage(name: string, tallies: SessionTally[]): Promise<WorkspaceUsage> {
+  const prices = await loadPriceTable();
+  const wsByModel = new Map<string, UsageTotals>();
+  const sessions: SessionUsage[] = [];
+
+  for (const { sessionId, title, updatedAt, reduction: session } of tallies) {
     const perModel = session.byModel;
     if (!perModel.size) continue;
     const sessionTotals = zeroTotals();
@@ -178,11 +191,10 @@ export async function usageForDir(name: string, target: string): Promise<Workspa
       const usd = estimateUsd(t, rateFor(prices, model));
       if (usd != null) sessionUsd = (sessionUsd ?? 0) + usd;
     }
-    const sessionId = path.basename(f.file, ".jsonl");
     sessions.push({
       sessionId,
-      title: await readSessionTitle(f.file, sessionId),
-      updatedAt: f.mtime.toISOString(),
+      title,
+      updatedAt,
       firstTurn: session.firstTurn,
       lastTurn: session.lastTurn,
       turns: session.turns,
