@@ -39,6 +39,10 @@ test("compose and runtime state are ignored; the record's own files are not", ()
       ".werkmeister/agent-state.json",
       ".werkmeister/last-exec",
       ".werkmeister/starts.json",
+      // SW-476: held wakes, before (SW-418) and since (SW-444) one file per session.
+      ".werkmeister/wake-nudge.json",
+      ".werkmeister/wake-nudge-s-1.json",
+      ".werkmeister/wake-nudge-s-1.json.123-456.claimed",
     ];
     assert.deepEqual(ignored(generated), generated);
     // SW-401: the gate and pr-open logs belong on the record.
@@ -54,6 +58,53 @@ test("compose and runtime state are ignored; the record's own files are not", ()
       ]),
       [],
     );
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("a record commit never takes a held wake, so the next one shows no deletion (SW-476)", () => {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "record-wake-"));
+  const git = (...a) =>
+    execFileSync("git", ["-C", ws, "-c", "user.email=t@t", "-c", "user.name=t", ...a], {
+      encoding: "utf8",
+    });
+  const wakes = [
+    ".werkmeister/wake-nudge-s-1.json",
+    ".werkmeister/wake-nudge-s-1.json.123-456.claimed",
+  ];
+  try {
+    git("init", "-q");
+    writeWorkspaceGitignore(ws, ["sandbox"]);
+    fs.mkdirSync(path.join(ws, ".werkmeister"));
+    for (const f of wakes) fs.writeFileSync(path.join(ws, f), '{"message":"A"}\n');
+    git("add", "-A");
+    git("commit", "-qm", "record");
+    assert.deepEqual(git("ls-files", ".werkmeister").trim(), "", "not committed");
+    for (const f of wakes) fs.rmSync(path.join(ws, f)); // delivered
+    assert.equal(git("status", "--short"), "", "no deletion on the next record commit");
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("an older workspace with a committed held wake has it untracked on up (SW-476)", () => {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "record-wake-old-"));
+  const git = (...a) => execFileSync("git", ["-C", ws, ...a], { encoding: "utf8" });
+  try {
+    git("init", "-q");
+    fs.mkdirSync(path.join(ws, ".werkmeister"));
+    fs.writeFileSync(path.join(ws, ".werkmeister/wake-nudge.json"), "{}\n");
+    fs.writeFileSync(path.join(ws, ".werkmeister/wake-nudge-s-1.json"), "{}\n");
+    fs.writeFileSync(path.join(ws, ".werkmeister/workspace.yml"), "name: x\n");
+    git("add", "-A");
+    git("-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "old init");
+    ensureGeneratedIgnored(ws);
+    assert.equal(
+      git("status", "--short"),
+      "D  .werkmeister/wake-nudge-s-1.json\nD  .werkmeister/wake-nudge.json\n?? .gitignore\n",
+    );
+    assert.ok(fs.existsSync(path.join(ws, ".werkmeister/wake-nudge-s-1.json")), "kept on disk");
   } finally {
     fs.rmSync(ws, { recursive: true, force: true });
   }
