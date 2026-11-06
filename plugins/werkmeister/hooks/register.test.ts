@@ -1792,42 +1792,49 @@ test("the multi-line field types across lines and its text reaches the create ca
   await ui.unmount();
 });
 
-test("text fields are plugin-drawn editors: a click draws the cursor in that field alone; Enter in the issue field fills from the issue", async ($, on) => {
-  const w = world(on, formStubs());
-  answerIssueModel(on);
-  await openPane($);
-  const ui = await $.ui.mount({
-    plugin: "werkmeister",
-    surface: "desktop",
-    component: "Pane",
-    props: PANE_PROPS,
-    requestId: "workspaces",
-  });
-  await ui.press({ key: "tab:create" });
-  for (const key of ["f:issue_id", "f:feature", "f:task"])
-    expect((await ui.find({ key }))?.type).toBe("Client");
-  const focusedOf = async (key: string) =>
-    (must(await ui.find({ key })).props.props as { focused: boolean }).focused;
-  await ui.pointer({ type: "down", x: 1, y: 0, button: "left", in: "f:feature" });
-  expect([await focusedOf("f:feature"), await focusedOf("f:task")]).toEqual([true, false]);
-  await ui.pointer({ type: "down", x: 1, y: 0, button: "left", in: "f:task" });
-  expect([await focusedOf("f:feature"), await focusedOf("f:task")]).toEqual([false, true]);
-  // A one-line Enter adds no line.
-  for (const key of ["a", "return", "b"]) await ui.key({ key, in: "f:task" });
-  for (const key of ["a", "p", "i", "#", "7", "return"]) await ui.key({ key, in: "f:issue_id" });
-  expect(w.calls.find((c) => c.key === `${WS}/issue-form-request`)?.args).toEqual({ ref: "api#7" });
-  await ui.post({ value: "x" }, { in: "f:feature" });
-  await ui.select({ key: "f:work_type", value: "feature" });
-  await ui.press({ key: "create:go" });
-  expect(
-    (
-      must(w.calls.find((c) => c.key === `${WS}/create-workspace`)).args as {
-        formData: Record<string, unknown>;
-      }
-    ).formData.task,
-  ).toBe("ab");
-  await ui.unmount();
-});
+// SW-492: 30 s, not the 5 s default: a loaded host (load 40-143 on 12 cores) timed this one out.
+test(
+  "text fields are plugin-drawn editors: a click draws the cursor in that field alone; Enter in the issue field fills from the issue",
+  { timeoutMs: 30_000 },
+  async ($, on) => {
+    const w = world(on, formStubs());
+    answerIssueModel(on);
+    await openPane($);
+    const ui = await $.ui.mount({
+      plugin: "werkmeister",
+      surface: "desktop",
+      component: "Pane",
+      props: PANE_PROPS,
+      requestId: "workspaces",
+    });
+    await ui.press({ key: "tab:create" });
+    for (const key of ["f:issue_id", "f:feature", "f:task"])
+      expect((await ui.find({ key }))?.type).toBe("Client");
+    const focusedOf = async (key: string) =>
+      (must(await ui.find({ key })).props.props as { focused: boolean }).focused;
+    await ui.pointer({ type: "down", x: 1, y: 0, button: "left", in: "f:feature" });
+    expect([await focusedOf("f:feature"), await focusedOf("f:task")]).toEqual([true, false]);
+    await ui.pointer({ type: "down", x: 1, y: 0, button: "left", in: "f:task" });
+    expect([await focusedOf("f:feature"), await focusedOf("f:task")]).toEqual([false, true]);
+    // A one-line Enter adds no line.
+    for (const key of ["a", "return", "b"]) await ui.key({ key, in: "f:task" });
+    for (const key of ["a", "p", "i", "#", "7", "return"]) await ui.key({ key, in: "f:issue_id" });
+    expect(w.calls.find((c) => c.key === `${WS}/issue-form-request`)?.args).toEqual({
+      ref: "api#7",
+    });
+    await ui.post({ value: "x" }, { in: "f:feature" });
+    await ui.select({ key: "f:work_type", value: "feature" });
+    await ui.press({ key: "create:go" });
+    expect(
+      (
+        must(w.calls.find((c) => c.key === `${WS}/create-workspace`)).args as {
+          formData: Record<string, unknown>;
+        }
+      ).formData.task,
+    ).toBe("ab");
+    await ui.unmount();
+  },
+);
 
 test("fetch fills only the empty fields, distilled on the session model, then create submits the draft and returns to the list", async ($, on) => {
   const w = world(on, formStubs());
