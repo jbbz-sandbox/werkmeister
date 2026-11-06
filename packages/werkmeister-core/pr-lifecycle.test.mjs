@@ -3395,7 +3395,14 @@ test("failureExcerpt: strips job, step and time, drops warnings, keeps file:line
 
 test("wakeMessage: each event opens with the ticket's sentence, all in one message", () => {
   const m = wakeMessage(URL9, [
-    { kind: "conflict", base: "main", moved: "abc fix: x" },
+    {
+      kind: "conflict",
+      base: "main",
+      moved: "abc fix: x",
+      dir: "/w/app",
+      branch: "me/ws",
+      head: "abc",
+    },
     { kind: "review", quote: "ann: rename it" },
     { kind: "check", name: "test", cause: "src/a.ts:1 error" },
   ]);
@@ -3404,7 +3411,14 @@ test("wakeMessage: each event opens with the ticket's sentence, all in one messa
     [
       `check test failed on PR ${URL9}, fix it.\n  Cause:\n    src/a.ts:1 error`,
       `address the review on PR ${URL9}:\n    ann: rename it`,
-      `PR ${URL9} conflicts with main, resolve it.\n  Base moved:\n    abc fix: x`,
+      [
+        `PR ${URL9} conflicts with main, resolve it.\n  Base moved:\n    abc fix: x`,
+        "  Rebase, never merge main in (GitHub can't rebase-merge a branch with a merge from its base):",
+        "    git -C /w/app fetch origin main && git -C /w/app rebase origin/main",
+        "  A conflict in a generated file (a snapshot, a lockfile): take main's copy and regenerate it; never hand-merge it.",
+        "  You can't force-push: give the person",
+        "    git -C /w/app push --force-with-lease=me/ws:abc",
+      ].join("\n"),
       "Follow the workspace router; push the fix to the PR's branch.",
     ].join("\n\n"),
   );
@@ -3602,10 +3616,19 @@ test("claimCallbacks: a conflict wakes once with the base commits; resolved rese
     const moved = [/log --oneline -10 HEAD\.\.origin\/main/, { stdout: "abc1234 feat: moved\n" }];
     const conflicting = openView({ mergeable: "CONFLICTING" });
     const r = await claim(ws, deps([conflicting, moved]));
-    assert.equal(
-      wakes(r)[0].split("\n\n")[0],
-      `PR ${URL9} conflicts with main, resolve it.\n  Base moved:\n    abc1234 feat: moved`,
+    assert.ok(
+      wakes(r)[0].startsWith(
+        `PR ${URL9} conflicts with main, resolve it.\n  Base moved:\n    abc1234 feat: moved\n`,
+      ),
     );
+    // SW-494: the lease names the PR file's branch and GitHub's head, the commit the person replaces.
+    assert.ok(
+      wakes(r)[0].includes(
+        `git -C ${path.join(ws, "app")} push --force-with-lease=me/ws:${SHA1}\n`,
+      ),
+      wakes(r)[0],
+    );
+    assert.ok(wakes(r)[0].includes(`git -C ${path.join(ws, "app")} rebase origin/main`));
     assert.equal(readPrFiles(ws)[0].fm.notified_conflict, "true");
     assert.deepEqual(wakes(await claim(ws, deps([conflicting, moved]))), []);
     assert.deepEqual(wakes(await claim(ws, deps([openView({ mergeable: "UNKNOWN" })]))), []);
