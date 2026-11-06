@@ -839,7 +839,8 @@ const SPECS: CommandSpec[] = [
         .addOption(
           new Option(
             "--work-type <type>",
-            "Kind of work; seeds the first-phase handoff note. Passed through to init-workspace.",
+            "Kind of work; selects the ICM stages and seeds the JIT first-phase handoff note. " +
+              "Passed through to init-workspace.",
           ).choices(["feature", "bugfix", "refactor", "spike", "incident"]),
         )
         .addOption(
@@ -1210,7 +1211,7 @@ const SPECS: CommandSpec[] = [
         .addOption(
           new Option(
             "--work-type <type>",
-            "Kind of work; seeds the first-phase handoff note " +
+            "Kind of work; selects the ICM stages and seeds the JIT first-phase handoff note " +
               "(env: WERKMEISTER_WORK_TYPE; config: work_type).",
           ).choices(["feature", "bugfix", "refactor", "spike", "incident"]),
         )
