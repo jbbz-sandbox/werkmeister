@@ -955,6 +955,11 @@ async function gateChecks(
             `add a \`repos: { ${file.dir}: { services, path_mappings } }\` registry entry, or \`skip_tests: { tests: <reason> }\``,
     );
   }
+  // Name what the diff left out, so a short gate isn't read as a skipped one (SW-450).
+  const rest = touched.length
+    ? ((repo["services"] ?? []) as string[]).filter((s) => !touched.includes(s))
+    : [];
+  if (rest.length) add("tests", true, `not touched, not run: ${rest.join(", ")}`);
   const releaseRuns =
     repo["ship"] === "tag" && Boolean(repo["release_check"]) && !reason(file.fm["skip_release"]);
 

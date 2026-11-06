@@ -23,7 +23,11 @@ repo:
   lint: pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
   # Changes here touch no service, so the gate runs no service tests for them.
   # Anything else outside a service's `path` still touches every service.
-  no_service_paths: [docs, .changeset, .gitignore, README.md]
+  no_service_paths: [docs, .changeset, .gitignore, README.md, .github, .vscode, .claude]
+  # SW-450: paths no service owns by path, so a change there doesn't test all five.
+  path_mappings:
+    apps/werkmeister-mcp: cli # cli's row runs --filter=werkmeister-mcp
+    plugins: werkmeister-core # plugin tests live in core; core's row also runs cli's filters
 
 services:
   # --- The werkmeister repo's own workspaces (self-hosting) -----------------------

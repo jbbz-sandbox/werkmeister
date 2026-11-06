@@ -250,6 +250,11 @@ test("mapTouched: longest prefix wins; an unmapped file touches every service", 
   assert.deepEqual(mapTouched(["README.md"], repo), ["a", "b", "c"]);
 });
 
+test("mapTouched: a path_mappings entry for a non-service path touches only its service (SW-450)", () => {
+  const repo = { services: ["a", "b"], path_mappings: { "apps/a": "a", plugins: "b" } };
+  assert.deepEqual(mapTouched(["plugins/x/SKILL.md"], repo), ["b"]);
+});
+
 test("mapTouched: no_service_paths touch nothing; other unmapped files still touch every service", () => {
   const repo = {
     services: ["a", "b"],
@@ -302,7 +307,7 @@ test("gate --tests: no PR file, an uncommitted api change runs only the api test
     assert.equal(g.ok, true, g.lines.join("\n"));
     assert.deepEqual(
       g.lines.filter((l) => /^ {2}[✓✗]/.test(l)).map((l) => l.split(":")[0].trim()),
-      ["✓ containers", "✓ test api"],
+      ["✓ tests", "✓ containers", "✓ test api"],
     );
     assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api"));
     assert.ok(!d.calls.some((c) => c.includes("...HEAD") || c.includes("changeset status")));
@@ -396,6 +401,11 @@ test("gate: docs plus code tests only the code's service", async () => {
       g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name),
       ["test api"],
     );
+    // SW-450: the service the diff left out is named, not silently dropped.
+    assert.deepEqual(
+      g.checks.filter((c) => c.name === "tests").map((c) => [c.ok, c.detail]),
+      [[true, "not touched, not run: lib"]],
+    );
   } finally {
     clean(ws);
   }
@@ -410,6 +420,11 @@ test("gate: an unmapped non-doc file still touches every service", async () => {
       ["test api", "test lib"],
     );
     assert.deepEqual(failed(g), ["test lib"]);
+    assert.equal(
+      g.checks.find((c) => c.name === "tests"),
+      undefined,
+      "no not-touched row when every service runs",
+    );
   } finally {
     clean(ws);
   }

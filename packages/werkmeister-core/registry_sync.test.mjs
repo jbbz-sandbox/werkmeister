@@ -144,6 +144,16 @@ test("mergeRegistry merges a fragment's repo: block into repos.<repo>", () => {
   );
 });
 
+test("mergeRegistry keeps a repo: block's path_mappings and adds each service's path on top (SW-450)", () => {
+  const out = merge([
+    frag("app", {
+      repo: { path_mappings: { plugins: "api" } },
+      services: { api: { path: "apps/api" } },
+    }),
+  ]);
+  assert.deepEqual(out.repos.app.path_mappings, { plugins: "api", "apps/api": "api" });
+});
+
 test("mergeRegistry layers defaults, fragments and derives repos", () => {
   const out = merge([
     frag("demo", {
