@@ -62,6 +62,9 @@ export const ghBin = () => envVar("GH_BIN") || (isFixture() ? fixtureStub("gh") 
 /** `claude`; under WERKMEISTER_FIXTURE $CLAUDE_BIN or a stub that fails, never the caller's (SW-424). */
 export const fixtureClaudeBin = () => process.env["CLAUDE_BIN"] || fixtureStub("claude");
 
+/** `codex`, the same way: under WERKMEISTER_FIXTURE $CODEX_BIN or a stub that fails (SW-384). */
+export const fixtureCodexBin = () => process.env["CODEX_BIN"] || fixtureStub("codex");
+
 /** `docker`, or $WERKMEISTER_DOCKER_BIN (tests and fixture exercises point it at a fake; SW-208). */
 export const dockerBin = () => envVar("DOCKER_BIN") || "docker";
 

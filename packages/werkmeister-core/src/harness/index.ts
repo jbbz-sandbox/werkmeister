@@ -6,8 +6,9 @@ export type { HarnessAdapter, HarnessId, HarnessLayout } from "./types.js";
 export { HARNESS_IDS } from "./types.js";
 
 /**
- * The harness whose sessions this process drives: Claude Code. Where a workspace's
- * files go is per workspace: `harnessLayoutFor` in ./layout.js, exported as
+ * The machine-level adapter, for callers with no workspace (the Jira fallback, refine,
+ * distill, PR reconcile): Claude Code. A workspace's own sessions and files follow its
+ * `harness:`: `harnessFor` / `harnessLayoutFor` in ./layout.js, exported as
  * `werkmeister-core/harness_layout` and not from here: jira.ts imports this module,
  * and layout.js reaches jira.ts through workspace_prompts, which would be a cycle.
  */

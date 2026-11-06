@@ -1,11 +1,11 @@
 /**
- * Per-workspace live tailer over Claude Code's session JSONL — the server half
+ * Per-workspace live tailer over the harness's session JSONL — the server half
  * of the browser dashboard's streaming chat (see docs/browser-chat-streaming
  * handoff). Ports vibe-kanban's model (a history buffer + broadcast, delivered
  * as "backfill then live tail" with index-addressed idempotent deltas) without
  * its mechanism: no Rust/tokio/WebSocket, and no stream-json stdout capture.
  *
- * Source of truth is the file Claude Code already appends to, so turns we
+ * Source of truth is the file the harness already appends to, so turns we
  * didn't start (an external `claude --resume` in the same workspace) stream too
  * — the same property the old poller had. One tailer per workspace, ref-counted
  * by subscribers; the watchers/interval tear down at zero subscribers.
@@ -20,7 +20,7 @@ import fs from "node:fs";
 import {
   type ClaudeMessage,
   getClaudeTurnStatus,
-  parseSessionLines,
+  parseSessionText,
   resolveSessionSource,
   turnEvents,
 } from "werkmeister-core";
@@ -147,7 +147,7 @@ class Tailer {
     } catch {
       return;
     }
-    const next = parseSessionLines(text);
+    const next = await parseSessionText(this.name, text);
     for (let i = 0; i < next.length; i++) {
       if (i >= this.entries.length || JSON.stringify(next[i]) !== JSON.stringify(this.entries[i])) {
         this.broadcast({ type: "entry", index: i, message: next[i] });

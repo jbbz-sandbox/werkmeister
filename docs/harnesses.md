@@ -13,7 +13,7 @@ host daemon. The workspace's `harness` (in `.werkmeister/workspace.yml`, set by
 | Subagents | `.claude/agents/w9r-*` | `.claude/agents/w9r-*` | none | none |
 | MCP server | the plugin's `.mcp.json` (`werkmeister internal mcp`, a stdio proxy to the daemon) | `http://host.docker.internal:3002/mcp` with the workspace token, registered by `postCreateCommand` | the daemon at `http://127.0.0.1:3002/mcp`, registered by you (below) | the daemon, registered by `workspace init` in `.codex/config.toml` (below) |
 | Hooks | `.claude/settings.json` (session start, standards gate, PR guard, agent state, auto-stop) | same | **unavailable**: `workspace init` and `werkmeister feature up` print `hooks: unavailable on mcp (…)`, the `hooks` MCP tool returns `hooks: "unavailable: …"`, and `AGENTS.md` carries the note | `.codex/hooks.json` (the same hooks; see [Codex](#codex) for what differs) |
-| Session tools (`claude-transcript`, `claude-send`, `claude-resume`, `refine-prompt`, `pr-reconcile`), the Workspaces pane | yes | yes | no: the daemon still lists them, they answer for Claude sessions only | no (Codex sessions are SW-384) |
+| Session tools (`claude-transcript`, `claude-send`, `claude-resume`, `refine-prompt`, `pr-reconcile`), the Workspaces pane | yes | yes | no: the daemon still lists them, they answer for Claude sessions only | yes, from `~/.codex/sessions` ([Sessions](#sessions)); `refine-prompt` and `pr-reconcile` still run Claude Code |
 
 Examples of a generic MCP harness: Codex CLI, Cursor, GitHub Copilot CLI. Codex
 has its own harness with hooks, `harness: codex` ([Codex](#codex)).
@@ -113,13 +113,47 @@ What differs from Claude Code:
   `continue: false` on `PreToolUse`.
 - Codex's `SessionEnd` also fires after 30 minutes idle, so with `auto_stop` on the
   feature stops then. Its hook gets at most 3 s.
-- Sessions (transcripts, `claude-send`, the pane's activity) are Claude's until SW-384.
+
+### Sessions
+
+The session tools and the Workspaces pane follow the workspace's `harness:` (SW-384). The
+tools keep their `claude-*` names.
+
+- **Where sessions come from.** Codex files sessions by date under `~/.codex/sessions`
+  (`$CODEX_HOME/sessions`); werkmeister reads each rollout's first line and keeps the ones
+  whose recorded `cwd` is the workspace folder. Transcript rows are your messages, Codex's
+  replies and one line per tool call; the AGENTS.md and environment context Codex injects
+  are left out.
+- **`claude-send`** runs `codex exec -- <message>` in the workspace, or
+  `codex exec resume <id> -- <message>` to continue the newest session. Both pass
+  `-c sandbox_mode="workspace-write"`, so a `sandbox_mode` in `~/.codex/config.toml` never
+  widens a headless turn. Codex takes no tool allow or deny list on the command line, so an
+  unattended turn relies on the PreToolUse gate in `.codex/hooks.json`; the refused-calls
+  list a waited turn returns is always empty.
+- **Working / Needs you / Done** comes from the agent-state hook, else from the session's
+  last line, as on Claude Code.
+- **`claude-resume`** and the pane's Continue / New Session open
+  `WERKMEISTER_MCP_TOKEN=$(cat .werkmeister/token) codex` (`resume <id>`, `resume --last`).
+- **Usage** sums each session's last `token_count`. There is no USD estimate unless
+  `~/.werkmeister/model-pricing.yaml` has a row for the model.
+- **Not on Codex:** calls with no workspace (the Jira fallback, refining a prompt, PR
+  reconcile) still ask Claude Code. The resume nudge's open-session check and the
+  `pr watch` wake still look for Claude sessions only.
+
+**CLI, not the SDK.** The adapter runs the `codex` CLI. `codex exec --output-schema` with
+`-o` already returns a structured answer, the `@openai/codex-sdk` package wraps the same
+binary and would be a new dependency, and the shared turn runner spawns a binary anyway.
+The user's own `codex` keeps their login and config. Codex sends the schema in strict mode
+(every object closed, every property required), so a free-form JSON answer travels as a
+string in `result` and is parsed from there.
 
 ## Adding a harness adapter
 
 A harness with its own hooks gets its own layout under
 `packages/werkmeister-core/src/harness/<id>/` (`HarnessLayout` in
 `harness/types.ts`), registered in `harness/layout.ts`, with its hooks writer
-mapping werkmeister's hook events to the harness's file and payload. The Claude
+mapping werkmeister's hook events to the harness's file and payload. A harness with
+sessions also implements `HarnessAdapter` (`harness/types.ts`) and adds it to
+`harnessFor`'s registry in `harness/layout.ts`; `harness/codex/adapter.ts` is the example. The Claude
 Code adapter in `harness/claude/` is the reference. The Codex adapter in `harness/codex/` shows the
 small case: it reuses `harness/claude/hooks_gen.ts`'s merge with its own file and event map.

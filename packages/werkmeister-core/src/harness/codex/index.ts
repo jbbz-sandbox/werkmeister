@@ -3,7 +3,7 @@
  * writes the hooks into `.codex/hooks.json` (same shape as Claude's settings `hooks`);
  * this file registers the werkmeister MCP server in `.codex/config.toml`. Codex reads
  * both only once the folder is a trusted project and `/hooks` has approved each hook
- * (docs/harnesses.md § Codex). Sessions stay Claude's until SW-384.
+ * (docs/harnesses.md § Codex). Its sessions are ./adapter.ts (SW-384).
  */
 import * as fs from "node:fs";
 import * as path from "node:path";

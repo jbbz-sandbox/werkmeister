@@ -221,6 +221,7 @@ overrides:
       ...GIT_ENV,
       // os.homedir() reads HOME, so tokens, locks and anything else under ~ stay in the fixture.
       HOME: home,
+      CODEX_HOME: path.join(home, ".codex"),
       WERKMEISTER_CONFIG_FILE: configFile,
       WERKMEISTER_FIXTURE: "1",
       WERKMEISTER_GH_BIN: fakes.gh,

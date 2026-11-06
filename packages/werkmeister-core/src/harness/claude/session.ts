@@ -6,9 +6,9 @@
  */
 import fs from "node:fs/promises";
 import path from "node:path";
-import { type AgentState, asksQuestion, questionOf, readAgentState } from "../../agent_state.js";
 import { runCapture, shellQuote } from "../../tool_bins.js";
-import { runTurn, turnStatus } from "../turn.js";
+import { signalFrom } from "../sessions.js";
+import { runTurn } from "../turn.js";
 import type { SessionSignal, TurnOptions, TurnResult, TurnState } from "../types.js";
 import { resolveClaudeBin } from "./cli.js";
 import { type ClaudeMessage, parseSessionLines } from "./transcript.js";
@@ -16,63 +16,13 @@ import { type ClaudeMessage, parseSessionLines } from "./transcript.js";
 export type ClaudeSessionSignal = SessionSignal;
 export type ClaudeTurnState = TurnState;
 
-/** Past this, a turn whose transcript ends mid-turn has died rather than gone quiet on a long tool call. */
-const LIVE_TURN_MS = 10 * 60 * 1000;
-
-/** Read the last `maxBytes` of a file, dropping a leading partial line. Cheap enough
- *  to run per-workspace in the status sweep without reading whole transcripts. */
-async function readFileTail(file: string, maxBytes = 131072): Promise<string> {
-  const fh = await fs.open(file, "r");
-  try {
-    const { size } = await fh.stat();
-    const start = Math.max(0, size - maxBytes);
-    const buf = Buffer.alloc(size - start);
-    await fh.read(buf, 0, buf.length, start);
-    let text = buf.toString("utf-8");
-    if (start > 0) {
-      const nl = text.indexOf("\n");
-      if (nl >= 0) text = text.slice(nl + 1);
-    }
-    return text;
-  } finally {
-    await fh.close();
-  }
-}
-
-/**
- * The workspace list's agent signal. A live claude-send turn this process runs
- * is working; otherwise the state file the workspace's hooks write (agent_state.ts)
- * says what the session last did. A workspace whose hooks predate it falls back
- * to the transcript tail: Claude spoke last → needs-you if it asked, else done;
- * a fresh tool row or user message → working; anything else → idle. The tail
- * can't see a permission prompt; only the Notification hook can.
- */
-export async function sessionSignal(
+/** The workspace list's agent signal ({@link signalFrom}) over Claude's transcript lines. */
+export function sessionSignal(
   name: string,
   dir: string,
   src: { sessionFile: string | null; updatedAt: string | null } | null,
 ): Promise<{ signal: ClaudeSessionSignal; lastActivity: string | null }> {
-  const lastActivity = src?.updatedAt ?? null;
-  const state = turnStatus(name).state;
-  const signal = (agent: AgentState, at = lastActivity, question: string | null = null) => ({
-    signal: { state, agent, at, question },
-    lastActivity,
-  });
-  if (state === "running") return signal("working");
-  const recorded = readAgentState(dir);
-  if (recorded) return signal(recorded.state, recorded.at, recorded.question ?? null);
-  let last: ClaudeMessage | undefined;
-  try {
-    if (src?.sessionFile) last = parseSessionLines(await readFileTail(src.sessionFile)).at(-1);
-  } catch {
-    /* best-effort — no signal */
-  }
-  if (!last || !lastActivity) return signal("idle");
-  if (last.role === "assistant")
-    return asksQuestion(last.text)
-      ? signal("needs-you", lastActivity, questionOf(last.text))
-      : signal("done");
-  return signal(Date.now() - Date.parse(lastActivity) < LIVE_TURN_MS ? "working" : "idle");
+  return signalFrom(name, dir, src, parseSessionLines);
 }
 
 /**

@@ -26,8 +26,9 @@ import { extractJson, extractResult } from "./harness/claude/cli.js";
 import { type ClaudeSessionSignal, claudeOpenIn } from "./harness/claude/session.js";
 import type { ClaudeTranscript } from "./harness/claude/transcript.js";
 import type { WorkspaceUsage } from "./harness/claude/usage.js";
-import { type HarnessAdapter, harness } from "./harness/index.js";
-import type { TurnOptions, TurnResult } from "./harness/types.js";
+import { type HarnessAdapter, type HarnessId, harness } from "./harness/index.js";
+import { harnessFor, harnessIdOf } from "./harness/layout.js";
+import type { SessionMessage, TurnOptions, TurnResult } from "./harness/types.js";
 import { claudeLauncher, claudeLaunchUri, type Launcher, reconcileLaunchUri } from "./launcher.js";
 import { buildStartArgs, deferMachineSteps, type StartArgs } from "./run_start.js";
 import { isExecutable, isFile, runCapture, shellQuote, stripAnsi } from "./tool_bins.js";
@@ -59,6 +60,7 @@ export {
   usageForDir,
   type WorkspaceUsage,
 } from "./harness/claude/usage.js";
+export { CODEX_LAUNCH } from "./harness/codex/index.js";
 export { type HarnessAdapter, type HarnessId, harness } from "./harness/index.js";
 export { turnEvents } from "./harness/turn.js";
 export * from "./run_start.js";
@@ -1274,7 +1276,9 @@ export interface WorkspaceStatus {
    * Same buckets as {@link InfraStatus}. Empty when docker is unreachable or nothing runs.
    */
   services: { name: string; state: ServiceHealth }[];
-  /** Claude Code session signal: claude-send turn state + what the agent is doing. */
+  /** The harness that reads the workspace (`harness:` in workspace.yml), so callers pick its session commands. */
+  harness: HarnessId;
+  /** The session signal of the workspace's harness: claude-send turn state + what the agent is doing. */
   claude: ClaudeSessionSignal;
   /** The workspace's Claude model, or null for Claude Code's default. */
   model: string | null;
@@ -1286,7 +1290,7 @@ export interface WorkspaceStatus {
   autonomous: boolean;
   /** `auto_stop` in workspace.yml; unset follows `autonomous`. */
   autoStop: boolean;
-  /** mtime (ISO) of the workspace's newest Claude transcript, or null when it has none. */
+  /** mtime (ISO) of the workspace's newest session file, or null when it has none. */
   lastActivity: string | null;
   /** The earliest running container's start and what started it (SW-41); null when none runs. */
   started: Started | null;
@@ -1476,7 +1480,8 @@ export async function getWorkspaceStatuses(): Promise<{
         const feature = await readWorkspaceFeature(dir);
         project = feature ? projectName(feature) : null;
       }
-      const { signal: claude, lastActivity } = await harness().agentSignal(
+      const harnessId = harnessIdOf(dir);
+      const { signal: claude, lastActivity } = await harnessFor(dir).agentSignal(
         name,
         dir,
         await resolveSessionSource(name).catch(() => null),
@@ -1486,6 +1491,7 @@ export async function getWorkspaceStatuses(): Promise<{
       const paused = rec ? { at: rec.at, containers: rec.containers } : null;
       // Docker-independent card fields, the same in both returns below.
       const card = {
+        harness: harnessId,
         paused,
         resumeNudge: existsSync(nudgePath(dir)),
         claude,
@@ -2855,24 +2861,32 @@ export async function runWorkspaceAction(
   };
 }
 
-// Claude Code sessions: the readers live in harness/claude/ (SW-187); these map a
-// workspace or reconcile-session name to the folder they read.
+// Sessions: the readers live in harness/<id>/ (SW-187, SW-384); these map a workspace or
+// reconcile-session name to the folder they read and dispatch on its `harness:`.
 
-/** A workspace's Claude sessions (newest first) with a display title, for the chat panel's picker. */
+/** A workspace's sessions (newest first) with a display title, for the chat panel's picker. */
 export async function listSessions(
   name: string,
 ): Promise<Array<{ sessionId: string; title: string; updatedAt: string; isNewest: boolean }>> {
-  return harness().listSessions(await resolveWorkspaceDir(name));
+  const dir = await resolveWorkspaceDir(name);
+  return harnessFor(dir).listSessions(dir);
 }
 
-/** A workspace's Claude Code token usage and USD estimate ({@link HarnessAdapter.usage}). */
+/** A workspace's token usage and USD estimate ({@link HarnessAdapter.usage}). */
 export async function getWorkspaceUsage(name: string): Promise<WorkspaceUsage> {
-  return harness().usage(name, await resolveWorkspaceDir(name));
+  const dir = await resolveWorkspaceDir(name);
+  return harnessFor(dir).usage(name, dir);
 }
 
 /** The newest session file for a session key, the source the live tailer watches ({@link HarnessAdapter.sessionSource}). */
 export async function resolveSessionSource(name: string, sessionId?: string, startDir?: string) {
-  return harness().sessionSource(await resolveSessionDir(name), sessionId, startDir);
+  const dir = await resolveSessionDir(name);
+  return harnessFor(dir).sessionSource(dir, sessionId, startDir);
+}
+
+/** A session file's text as messages, parsed by the session key's harness (the live tailer). */
+export async function parseSessionText(name: string, text: string): Promise<SessionMessage[]> {
+  return harnessFor(await resolveSessionDir(name)).parseSession(text);
 }
 
 /** The newest session's last `limit` messages for a session key ({@link HarnessAdapter.transcript}). */
@@ -2881,11 +2895,12 @@ export async function getClaudeTranscript(
   limit = 20,
   sessionId?: string,
 ): Promise<ClaudeTranscript> {
-  return harness().transcript(await resolveSessionDir(name), limit, sessionId);
+  const dir = await resolveSessionDir(name);
+  return harnessFor(dir).transcript(dir, limit, sessionId);
 }
 
 /**
- * Send one message to a session key's newest Claude Code session, or start one
+ * Send one message to a session key's newest session, or start one
  * when it has none ({@link HarnessAdapter.sendTurn}).
  *
  * FIRE-AND-FORGET: agentic turns routinely exceed the caller's MCP request
@@ -2909,7 +2924,7 @@ export async function sendToClaudeSession(
   const target = await resolveSessionDir(name);
   const transcript = await resolveSessionSource(name, sessionId, startDir);
   const { model } = await readWorkspaceConfig(target);
-  const result = await harness().sendTurn(
+  const result = await harnessFor(target).sendTurn(
     name,
     startDir ?? target,
     body,
@@ -3048,7 +3063,7 @@ export async function resumeClaudeInTerminal(
   const resumeId = fresh ? null : (await getClaudeTranscript(name, 1, sessionId)).sessionId;
   const { model } = await readWorkspaceConfig(target);
   const opened = await openClaudeSession(
-    `cd ${shellQuote(target)} && ${harness().resumeCommand(resumeId, model, prompt)}`,
+    `cd ${shellQuote(target)} && ${harnessFor(target).resumeCommand(resumeId, model, prompt)}`,
     claudeLaunchUri({ workspace: path.basename(target), sessionId: resumeId, prompt }),
     true,
     launcher,

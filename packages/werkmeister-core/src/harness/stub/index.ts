@@ -1,7 +1,7 @@
 /**
  * Proof that {@link HarnessAdapter} needs nothing from harness/claude (SW-383): a
  * session-less adapter that typechecks against the interface. Not dispatched:
- * `harness()` never returns it. Codex sessions (SW-384) start from this shape.
+ * neither `harness()` nor `harnessFor` returns it.
  */
 import { WorkspaceError } from "../../errors.js";
 import type { HarnessAdapter } from "../types.js";
@@ -20,6 +20,7 @@ export const stubAdapter: HarnessAdapter = {
   transcript: async () => unsupported(),
   sessionSource: async () => unsupported(),
   listSessions: async () => [],
+  parseSession: () => [],
   agentSignal: async () => unsupported(),
   usage: async () => unsupported(),
   resumeCommand: () => unsupported(),

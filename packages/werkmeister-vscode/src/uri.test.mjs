@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { claudeLaunchUri, reconcileLaunchUri } from "werkmeister-core/launcher";
-import { parseLaunchUri, shellQuote } from "../out/harness/claude/uri.js";
+import { parseLaunchUri, sessionCommand, shellQuote } from "../out/harness/claude/uri.js";
 
 const parts = (uri) => {
   const u = new URL(uri);
@@ -24,6 +24,18 @@ test("each mode builds its claude command", () => {
     parseLaunchUri("/claude", "workspace=ws&mode=resume&session=abc-1").command,
     "claude --resume abc-1",
   );
+});
+
+// SW-384: a codex workspace gets codex commands behind the same /claude URI.
+test("each mode builds its codex command for a codex workspace", () => {
+  const launch = "WERKMEISTER_MCP_TOKEN=$(cat .werkmeister/token) codex";
+  const cmd = (q) => parseLaunchUri("/claude", q, "codex", launch).command;
+  assert.equal(cmd("workspace=ws&mode=new"), launch);
+  assert.equal(cmd("workspace=ws&mode=continue"), `${launch} resume --last`);
+  assert.equal(cmd("workspace=ws&mode=resume&session=019a-ff"), `${launch} resume 019a-ff`);
+  assert.equal(cmd("workspace=ws&mode=new&prompt=hi"), `${launch} 'hi'`);
+  assert.equal(sessionCommand("codex", "continue"), "codex resume --last");
+  assert.equal(sessionCommand("mcp", "continue"), "claude --continue");
 });
 
 test("the prompt is one single-quoted argv, whatever it holds", () => {
