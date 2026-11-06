@@ -51,7 +51,7 @@ Kind of work; selects the ICM stages and seeds the JIT first\-phase handoff note
 Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
 .TP
 \fB\-\-harness <id>\fR
-Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks) or codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) (env: WERKMEISTER_HARNESS; config: harness).
+Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).
 .TP
 \fB\-\-autonomous\fR
 Run an icm workspace stage\-to\-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).

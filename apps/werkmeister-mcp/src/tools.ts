@@ -588,10 +588,15 @@ function registerAuthoringTools(server: McpServer): void {
         const workspace = resolveWorkspace(args.workspace, headersOf(extra)).dir;
         const strategy = strategyFor(workspace);
         strategy.refresh(workspace);
-        const { hooks } = harnessLayoutFor(workspace);
+        const { id, hooks } = harnessLayoutFor(workspace);
         return {
           strategy: strategy.id,
-          hooks: hooks.available ? "written" : `unavailable: ${hooks.reason}`,
+          hooks:
+            hooks.available === true
+              ? "written"
+              : hooks.available === "own"
+                ? `written; not run on ${id}: ${hooks.missing}`
+                : `unavailable: ${hooks.reason}`,
         };
       }),
   );

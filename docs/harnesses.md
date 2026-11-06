@@ -6,14 +6,14 @@ host daemon. The workspace's `harness` (in `.werkmeister/workspace.yml`, set by
 `--harness` on `werkmeister workspace new` / `werkmeister workspace init`, or
 `WERKMEISTER_HARNESS`) decides which files `workspace init` writes and where.
 
-| | Claude Code (plugin) | Claude Code (devcontainer) | Generic MCP harness (`harness: mcp`) | Codex CLI (`harness: codex`) |
-|---|---|---|---|---|
-| Instructions file | `CLAUDE.md` | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` |
-| Skills | `.claude/skills/w9r-*` | `.claude/skills/w9r-*` | `.agents/skills/w9r-*` | `.agents/skills/w9r-*` |
-| Subagents | `.claude/agents/w9r-*` | `.claude/agents/w9r-*` | none | none |
-| MCP server | the plugin's `.mcp.json` (`werkmeister internal mcp`, a stdio proxy to the daemon) | `http://host.docker.internal:3002/mcp` with the workspace token, registered by `postCreateCommand` | the daemon at `http://127.0.0.1:3002/mcp`, registered by you (below) | the daemon, registered by `workspace init` in `.codex/config.toml` (below) |
-| Hooks | `.claude/settings.json` (session start, standards gate, PR guard, agent state, auto-stop) | same | **unavailable**: `workspace init` and `werkmeister feature up` print `hooks: unavailable on mcp (…)`, the `hooks` MCP tool returns `hooks: "unavailable: …"`, and `AGENTS.md` carries the note | `.codex/hooks.json` (the same hooks; see [Codex](#codex) for what differs) |
-| Session tools (`claude-transcript`, `claude-send`, `claude-resume`, `refine-prompt`, `pr-reconcile`), the Workspaces pane | yes | yes | no: the daemon still lists them, they answer for Claude sessions only | yes, from `~/.codex/sessions` ([Sessions](#sessions)); `refine-prompt` and `pr-reconcile` still run Claude Code |
+| | Claude Code (plugin) | Claude Code (devcontainer) | Generic MCP harness (`harness: mcp`) | Codex CLI (`harness: codex`) | OpenCode (`harness: opencode`) |
+|---|---|---|---|---|---|
+| Instructions file | `CLAUDE.md` | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` | `AGENTS.md` |
+| Skills | `.claude/skills/w9r-*` | `.claude/skills/w9r-*` | `.agents/skills/w9r-*` | `.agents/skills/w9r-*` | `.agents/skills/w9r-*` |
+| Subagents | `.claude/agents/w9r-*` | `.claude/agents/w9r-*` | none | none | none |
+| MCP server | the plugin's `.mcp.json` (`werkmeister internal mcp`, a stdio proxy to the daemon) | `http://host.docker.internal:3002/mcp` with the workspace token, registered by `postCreateCommand` | the daemon at `http://127.0.0.1:3002/mcp`, registered by you (below) | the daemon, registered by `workspace init` in `.codex/config.toml` (below) | `mcp.werkmeister` in the workspace's `opencode.json`, written by `workspace init` |
+| Hooks | `.claude/settings.json` (session start, standards gate, PR guard, agent state, auto-stop) | same | **unavailable**: `workspace init` and `werkmeister feature up` print `hooks: unavailable on mcp (…)`, the `hooks` MCP tool returns `hooks: "unavailable: …"`, and `AGENTS.md` carries the note | `.codex/hooks.json` (the same hooks; see [Codex](#codex) for what differs) | `.opencode/plugins/werkmeister.js`: standards gate, PR guard, agent state. Session-start context and auto-stop do not run (no such OpenCode events); `workspace init` prints `hooks: partial on opencode (…)` |
+| Session tools (`claude-transcript`, `claude-send`, `claude-resume`, `refine-prompt`, `pr-reconcile`), the Workspaces pane | yes | yes | no: the daemon still lists them, they answer for Claude sessions only | yes, from `~/.codex/sessions` ([Sessions](#sessions)); `refine-prompt` and `pr-reconcile` still run Claude Code | yes, over `opencode run`; the dashboard's live chat tail does not follow OpenCode sessions, and token totals read as zero |
 
 Examples of a generic MCP harness: Codex CLI, Cursor, GitHub Copilot CLI. Codex
 has its own harness with hooks, `harness: codex` ([Codex](#codex)).
@@ -156,6 +156,39 @@ binary and would be a new dependency, and the shared turn runner spawns a binary
 The user's own `codex` keeps their login and config. Codex sends the schema in strict mode
 (every object closed, every property required), so a free-form JSON answer travels as a
 string in `result` and is parsed from there.
+
+## OpenCode
+
+1. Install OpenCode 2.x with its v2 installer (`--no-modify-path` leaves your shell profile alone;
+   the binary lands in `~/.opencode/bin/opencode`). The opencode.ai/install script installs 1.x,
+   and `brew install opencode` builds from source where no bottle exists. Then log in to a model
+   provider once with `opencode auth login`, run in a real terminal: it is an interactive picker and
+   saves nothing when run without a TTY (an agent's shell, a `!` prompt).
+2. Create the workspace for it: `werkmeister workspace new my-feature --harness opencode …`
+   (or `harness: opencode` in `workspace.yml`, or `WERKMEISTER_HARNESS=opencode`). `workspace init`
+   writes `AGENTS.md`, `.agents/skills/`, the plugin `.opencode/plugins/werkmeister.js` and the
+   `werkmeister` MCP server in `opencode.json` (other keys in an existing file are kept; a file that
+   isn't plain JSON is left alone with a warning).
+3. Run `opencode` in the workspace folder. The plugin loads on OpenCode 1.x and 2.x (it exports both
+   plugin APIs) and sends each tool call, prompt and session event to `werkmeister internal gate`,
+   `pr-guard` and `agent-state`, so the Workspaces pane shows working / needs you / done.
+4. A `model:` in `workspace.yml` reaches headless turns (`claude-send` on this workspace) only in
+   OpenCode's `provider/model` form; a Claude alias like `sonnet` is left to OpenCode's own config.
+
+`opencode.json` also gets werkmeister's MCP server with this workspace's token
+(`Bearer {file:.werkmeister/token}`), and `permission.bash` deny rules for shared infra, other
+workspaces, global installs and `gh pr merge` (the list Claude's unattended turns get). They hold in
+your own OpenCode sessions in the workspace too; run those commands from a terminal.
+
+Checked on OpenCode 2.2.5 (SW-385): it loads the plugin through its V2 `setup`; its shell tool is
+`shell` and its file tools `write` / `edit` pass `path`; a turn ends with
+`session.execution.succeeded`, which the plugin sends as Stop. A headless `opencode run` exits before
+that Stop call finishes, so for turns werkmeister started (`claude-send`) the card reads done from the
+turn runner instead. `session export <id>` gives the transcript. The permission-prompt event name
+(needs you) is from OpenCode's docs and not yet seen on 2.2.5.
+
+OpenCode has no session-end event: a session quit mid-turn reads as working until its record goes
+stale (24 h), and auto-stop does not run.
 
 ## Adding a harness adapter
 

@@ -156,11 +156,12 @@ test("a tool call goes through to core: list-workspaces reads the workspaces roo
   }
 });
 
-test("hooks: says written on claude and unavailable on the mcp harness (SW-188)", async () => {
+test("hooks: written on claude, unavailable on mcp, written with the missing ones on opencode (SW-188, SW-385)", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-tools-root-"));
   for (const [name, harness] of [
     ["claudews", ""],
     ["mcpws", "harness: mcp\n"],
+    ["ocws", "harness: opencode\n"],
   ]) {
     fs.mkdirSync(path.join(root, name, ".werkmeister"), { recursive: true });
     fs.writeFileSync(
@@ -185,6 +186,15 @@ test("hooks: says written on claude and unavailable on the mcp harness (SW-188)"
         assert.match(mcp.structuredContent.hooks, /^unavailable: /);
         assert.match(mcp.content[0].text, /unavailable/);
         assert.ok(!fs.existsSync(path.join(root, "mcpws", ".claude")));
+
+        const oc = await client.callTool({ name: "hooks", arguments: { workspace: "ocws" } });
+        assert.ok(!oc.isError, JSON.stringify(oc.content));
+        assert.equal(
+          oc.structuredContent.hooks,
+          "written; not run on opencode: session-start context, auto-stop",
+        );
+        assert.ok(fs.existsSync(path.join(root, "ocws", ".opencode", "plugins", "werkmeister.js")));
+        assert.ok(!fs.existsSync(path.join(root, "ocws", ".claude")));
       },
       { config: `paths:\n  workspaces_root: ${root}\n` },
     );

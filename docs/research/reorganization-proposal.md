@@ -600,10 +600,11 @@ added during the spike.
    once the scheduler exists (SW-181).
 5. **Preemption of autonomous runs by a person's session:** on by default, can be
    turned off.
-6. **Second harness: Codex.** Its hooks accept Claude Code's payloads, deny format and
-   matcher names (8.4). OpenCode was chosen first and then dropped: it has no
-   session-end event and two incompatible plugin lines. Cursor comes later; Gemini CLI
-   is dropped.
+6. **Second harness: Codex,** then OpenCode. Codex hooks accept Claude Code's payloads,
+   deny format and matcher names (8.4). OpenCode was chosen first and then dropped for
+   its missing session-end event and two incompatible plugin lines; SW-385 brought it
+   back: SW-182's liveness record stands in for session end, and one plugin file exports
+   both plugin APIs. Cursor comes later; Gemini CLI is dropped.
 7. **Order:** the one in 8.5, not section 5's. The scheduler does not need the host
    daemon.
 8. **One verdict per area,** not one for the whole proposal (8.1).
