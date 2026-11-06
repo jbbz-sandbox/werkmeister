@@ -450,11 +450,13 @@ function failCellRow(text: string): TableRow | null {
 /** Where a row is, so the first failed run names the table to fix (SW-390). */
 const rowAt = (r: TableRow) => `${r.heading ? ` under "${r.heading}"` : ""}: ${r.row}`;
 
-function passTable(text: string): string | null {
+/** With *manual*, a `MANUAL` result (a criterion only the reviewer can check, SW-155) passes and is collected there. */
+function passTable(text: string, manual?: TableRow[]): string | null {
   const results = resultCells(text);
   const fail = failCellRow(text) ?? results.find((r) => r.cell.startsWith("FAIL"));
   if (fail) return `has a FAIL row${rowAt(fail)}`;
-  const other = results.find((r) => r.cell !== "PASS");
+  if (manual) manual.push(...results.filter((r) => r.cell === "MANUAL"));
+  const other = results.find((r) => r.cell !== "PASS" && !(manual && r.cell === "MANUAL"));
   if (other !== undefined)
     return `has a result \`${other.cell}\` that is neither PASS nor FAIL${rowAt(other)} — ${CELL_FORMAT}`;
   if (!PASS_CELL.test(text)) return `has no PASS row — ${CELL_FORMAT}`;
@@ -798,8 +800,15 @@ async function gateChecks(
 
   const dir = path.join(ws, file.dir);
   if (!testsOnly) {
-    const table = passTable(file.body);
-    add("acceptance", table === null, table ? `PR file ${table}` : "all PASS");
+    const manual: TableRow[] = [];
+    const table = passTable(file.body, manual);
+    add(
+      "acceptance",
+      table === null,
+      table
+        ? `PR file ${table}`
+        : `all PASS${manual.length ? `; MANUAL, for the reviewer: ${manual.map((r) => cellsOf(r.row)[0]).join("; ")}` : ""}`,
+    );
     add("approved", statusOf(file) === "approved", `status: ${statusOf(file)}`);
     add("repo", ...(await repoCheck(path.join(ws, file.dir), file, deps)));
     const group = loadConfigFile(ws, null)["group"];
@@ -2418,7 +2427,7 @@ export async function newPr(
   const fm = { worktree, repo: prev.fm["repo"], branch, base, status: "draft" };
   fs.writeFileSync(
     file,
-    `---\n${YAML.stringify(fm)}---\n# <PR title>\n\n<body: summary, test and exercise results, acceptance table: a result cell of exactly PASS or FAIL, evidence in its own column — see ${path.basename(prRulesPath(ws))}>\n`,
+    `---\n${YAML.stringify(fm)}---\n# <PR title>\n\n<body: summary, test and exercise results, acceptance table: a result cell of exactly PASS, FAIL or MANUAL (only the reviewer can check it), evidence in its own column — see ${path.basename(prRulesPath(ws))}>\n`,
   );
   const rel = path.relative(ws, file);
   return {
