@@ -25,6 +25,8 @@ export interface FakeWorld {
   issues?: unknown[];
   /** `gh pr create` prints it. */
   prUrl?: string;
+  /** `gh pr view` reports this state (default `OPEN`); `MERGED` adds a merge commit (SW-482). */
+  prState?: string;
   /** `gh api repos/…/rules/branches/…` prints these (the base's active rules); default none. */
   rules?: unknown[];
   /** Containers the fake docker shows as running, to the gate's `ps --format {{.Names}}…` only. */
@@ -69,6 +71,15 @@ if (tool === "gh") {
     case "search prs": out("[]\\n"); break;
     case "pr list": break;
     case "pr create": out((world.prUrl ?? "https://github.com/o/app/pull/1") + "\\n"); break;
+    case "pr view": {
+      const state = world.prState ?? "OPEN";
+      out(JSON.stringify({
+        url: args[2], number: 1, title: "fixture", state, headRefName: "me/demo", baseRefName: "main", headRefOid: "",
+        mergeCommit: state === "MERGED" ? { oid: "0".repeat(40) } : null, mergeable: "MERGEABLE", reviewDecision: "",
+        latestReviews: [], reviews: [], comments: [], files: [], statusCheckRollup: [],
+      }) + "\\n");
+      break;
+    }
     case "repo view": process.exit(world.repoView ?? 0);
     case "label create":
       if (!labels.includes(args[2])) fs.writeFileSync(worldFile, JSON.stringify({ ...world, labels: [...labels, args[2]] }));

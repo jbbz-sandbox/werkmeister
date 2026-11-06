@@ -59,3 +59,21 @@ test("docker exec: answers 0 by default; with execCwd runs the last argument the
   assert.equal(run(on.docker, "exec", "c", "sh", "-c", "exit 3").status, 3);
   assert.equal(fs.readFileSync(on.dockerLog, "utf8").trim().split("\n").length, 2);
 });
+
+test("gh pr view: OPEN by default, MERGED with a merge commit on request (SW-482)", () => {
+  const view = (world) =>
+    JSON.parse(
+      run(
+        writeFakes(path.join(tmp, `view-${world.prState}`), world).gh,
+        "pr",
+        "view",
+        "u",
+        "--json",
+        "state",
+      ).stdout,
+    );
+  assert.equal(view({}).state, "OPEN");
+  const merged = view({ prState: "MERGED" });
+  assert.equal(merged.state, "MERGED");
+  assert.equal(merged.mergeCommit.oid.length, 40);
+});

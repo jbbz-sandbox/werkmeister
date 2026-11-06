@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { jiraCreds } from "./dist/jira-rest.js";
-import { gatePrs } from "./dist/pr_lifecycle.js";
+import { closeOut, gatePrs, openPrs, refreshPrStatus } from "./dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { initWorkspace } from "./dist/workspace_init.js";
 import { tokensDir } from "./dist/workspace_token.js";
@@ -136,6 +136,26 @@ test("a grouped icm gate fixture passes pr gate with no hand edits (SW-464)", as
       assert.match(out, /✓ exercise: stages\/04_propose\/output\/exercise\.md/);
     },
     { gate: true, workspace: { group: ["SW-2"], context_strategy: "icm" } },
+  );
+});
+
+test("with merged the fake gh reports the PR merged, so a run reaches workspace close (SW-482)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      assert.equal(open.ok, true, open.lines.join("\n"));
+      const status = await refreshPrStatus(fx.workspace);
+      assert.match(status.lines.join("\n"), /app: shipped https:\/\/github\.com\/o\/app\/pull\/1/);
+      await withReporter(collectingReporter(), () =>
+        closeOut("demo", { skipPostmortem: "fixture" }),
+      );
+      assert.equal(fs.existsSync(fx.workspace), false, "the workspace is removed");
+      assert.match(fs.readFileSync(fx.dockerLog, "utf8"), /^compose .* down /m);
+    },
+    { gate: true, merged: true },
   );
 });
 

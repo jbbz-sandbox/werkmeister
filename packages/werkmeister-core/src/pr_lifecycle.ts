@@ -223,7 +223,8 @@ export function defaultDeps(): Deps {
         closedOut: true,
         abandon: abandoned ? "close-out --abandon" : undefined,
       }),
-    terminals: (ws) => openTerminalSessions(ws),
+    // A fixture's sessions are none of the host's; don't read its process table (SW-482).
+    terminals: async (ws) => (process.env["WERKMEISTER_FIXTURE"] ? [] : openTerminalSessions(ws)),
     sourceOf: async (dir) => (await worktreeSources([dir]))[0] ?? null,
     session: (ws) => callbackFields(ws, process.env),
     sessionBusy: async (ws, session, cwd) => {
