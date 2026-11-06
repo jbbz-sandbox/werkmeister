@@ -381,6 +381,9 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     assert.match(implement, /commits in `origin\/main\.\.\.HEAD`/);
     // SW-466: each ticket's commit carries its own snapshot regeneration.
     assert.match(implement, /regenerate it in that ticket's commit/);
+    // SW-503: each ticket's changeset goes in that ticket's own commit, in the build and propose stages.
+    assert.match(implement, /carries its release entry \(changeset\) in its own commit/);
+    assert.match(propose, /each ticket's release entry into that ticket's own commit/);
     // SW-497: order across tickets is free; the spec does not fix it.
     assert.match(implement, /Commit order across tickets is free/);
     assert.match(

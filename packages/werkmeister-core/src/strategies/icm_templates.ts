@@ -104,6 +104,8 @@ const groupStep = (v: IcmVars) =>
         `This workspace is a grouped PR (\`group\` in \`workspace.yml\`): one commit per ticket, for the workspace's issue and each member, ${keys(v.group)}, so each can be reverted alone. ` +
           "Take the tickets one at a time: make that ticket's changes and tests, run the diff check below on them, then commit on the worktree's branch with a message that starts with its key (`<KEY> <summary>`) before starting the next. " +
           "Each commit builds and passes the host tests on its own. " +
+          // SW-503: a changeset folded into the lead's commit survives a revert of the member that earned it (sw-481).
+          "A ticket that changes a released package carries its release entry (changeset) in its own commit. " +
           // SW-466: SW-462's brief said to regenerate the snapshot once for the PR, so three commits failed it alone.
           "When a ticket's change alters a generated snapshot (e.g. `strategy-jit.snapshot.json`), regenerate it in that ticket's commit, so the commit passes the snapshot test alone; a brief that says to regenerate once for the whole PR does not override this. " +
           // SW-497: a scripted reorder to match the spec dropped a commit (sw-406); rebase-and-merge keeps any order.
@@ -176,7 +178,7 @@ const propose: Stage = {
       "Walk every acceptance criterion in `BRIEF.md`. For each, write a row whose result cell is exactly PASS or FAIL (MANUAL for a criterion only the reviewer can check, e.g. it needs a real PR or the desktop app, with why in the evidence; never PASS for a check nobody ran), with the file and line in a prior `output/` that proves it in a separate evidence column. A FAIL routes back to the owning stage — do not fix it here.",
       v.group.length
         ? // Lint before the fold, so a lint fix lands in a commit and the gate's clean row holds.
-          `The commits are already made, one per ticket: keep them, never squash to one per repo. For a repo with \`ship: tag\` and a \`release_check\` in the registry, write the release entry it needs (e.g. a changeset). Run ${LINT} Then fold everything uncommitted into its ticket's commit (${FOLD}), the release entry into the workspace issue's, and check that \`git log --oneline origin/main..HEAD\` in each worktree shows one commit per ticket (the workspace's issue and ${keys(v.group)}), each message starting with its key.`
+          `The commits are already made, one per ticket: keep them, never squash to one per repo. For a repo with \`ship: tag\` and a \`release_check\` in the registry, write the release entry it needs (e.g. a changeset). Run ${LINT} Then fold everything uncommitted into its ticket's commit (${FOLD}), each ticket's release entry into that ticket's own commit, and check that \`git log --oneline origin/main..HEAD\` in each worktree shows one commit per ticket (the workspace's issue and ${keys(v.group)}), each message starting with its key.`
         : "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit. " +
           // SW-399: a changeset written after the last lint run failed the gate only at `pr open`.
           `Before committing, run ${LINT}`,
