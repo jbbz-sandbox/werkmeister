@@ -6,6 +6,7 @@ import { codexResumeCommand, codexSignal, codexStartTurn } from "./session.js";
 import {
   codexListSessionsIn,
   codexSessionSourceIn,
+  codexSessionStartDir,
   codexTranscriptIn,
   parseCodexLines,
 } from "./transcript.js";
@@ -20,6 +21,7 @@ export const codexAdapter: HarnessAdapter = {
   turnStatus,
   transcript: codexTranscriptIn,
   sessionSource: codexSessionSourceIn,
+  sessionStartDir: codexSessionStartDir,
   listSessions: codexListSessionsIn,
   parseSession: parseCodexLines,
   agentSignal: codexSignal,

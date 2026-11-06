@@ -1774,7 +1774,7 @@ export async function callbackFields(
     (await resolveSessionSource(path.basename(ws)).catch(() => null))?.sessionId;
   if (!session) return {};
   const host = env["CLAUDE_CODE_HOST_SESSION_ID"];
-  const cwd = await sessionStartDir(session);
+  const cwd = await sessionStartDir(ws, session);
   return { session, ...(host && { host_session: host }), ...(cwd && { session_cwd: cwd }) };
 }
 
@@ -2185,7 +2185,7 @@ export async function shipMerged(
  */
 export async function deliverHeadless(cb: PrCallback): Promise<string[]> {
   const name = path.basename(cb.ws);
-  const dir = cb.sessionDir ?? (await sessionStartDir(cb.session)) ?? cb.ws;
+  const dir = cb.sessionDir ?? (await sessionStartDir(cb.ws, cb.session)) ?? cb.ws;
   // sendToClaudeSession falls back to the newest session for an unknown id; a callback reaches its own or none.
   if ((await resolveSessionSource(name, cb.session, dir)).sessionId !== cb.session)
     throw new WorkspaceError(`session ${cb.session} is gone`);

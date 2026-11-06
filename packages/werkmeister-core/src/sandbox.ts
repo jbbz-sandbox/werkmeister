@@ -52,7 +52,6 @@ export {
   type ClaudeMessage,
   type ClaudeTranscript,
   parseSessionLines,
-  sessionStartDir,
 } from "./harness/claude/transcript.js";
 export {
   estimateUsd,
@@ -2892,6 +2891,11 @@ export async function getWorkspaceUsage(name: string): Promise<WorkspaceUsage> {
 export async function resolveSessionSource(name: string, sessionId?: string, startDir?: string) {
   const dir = await resolveSessionDir(name);
   return harnessFor(dir).sessionSource(dir, sessionId, startDir);
+}
+
+/** The folder session *sessionId* of workspace *ws* started in, from its harness's session store (SW-16, SW-489). */
+export function sessionStartDir(ws: string, sessionId: string): Promise<string | null> {
+  return harnessFor(ws).sessionStartDir(ws, sessionId);
 }
 
 /** A session file's text as messages, parsed by the session key's harness (the live tailer). */

@@ -3880,6 +3880,52 @@ test("deliverHeadless: a session started in a code worktree is resumed from ther
   }
 });
 
+test("deliverHeadless: a codex session started in a code worktree is resumed from there (SW-489)", async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pr-deliver-")));
+  const env = { ...process.env };
+  process.env.WERKMEISTER_WORKSPACES_ROOT = root;
+  process.env.CODEX_HOME = path.join(root, "codex");
+  const ws = path.join(root, "a-ws");
+  fs.renameSync(icmWorkspace(), ws);
+  fs.appendFileSync(path.join(dotDir(ws), "workspace.yml"), "harness: codex\n");
+  const sub = path.join(ws, "sandbox");
+  fs.mkdirSync(sub);
+  const day = path.join(process.env.CODEX_HOME, "sessions", "2026", "11", "05");
+  fs.mkdirSync(day, { recursive: true });
+  fs.writeFileSync(
+    path.join(day, "rollout-2026-11-05T10-00-00-c-sub.jsonl"),
+    `${JSON.stringify({ type: "session_meta", payload: { id: "c-sub", cwd: sub } })}\n`,
+  );
+  const log = path.join(root, "codex.log");
+  process.env.CODEX_BIN = path.join(root, "codex-bin");
+  fs.writeFileSync(process.env.CODEX_BIN, `#!/bin/sh\n{ pwd -P; echo "$@"; } >> "${log}"\n`, {
+    mode: 0o755,
+  });
+  try {
+    await withSandboxHome(async () => {
+      assert.deepEqual(await callbackFields(ws, {}), { session: "c-sub", session_cwd: sub });
+      // Recorded before SW-489: no start folder, found by its id alone.
+      await deliverHeadless({
+        ws,
+        dir: "app",
+        url: URL9,
+        session: "c-sub",
+        sessionDir: null,
+        hostSession: null,
+        message: "merged",
+      });
+      for (const end = Date.now() + 30_000; !fs.existsSync(log) && Date.now() < end; )
+        await sleep(50);
+      assert.equal(fs.readFileSync(log, "utf8").split("\n")[0], sub);
+    });
+  } finally {
+    for (const k of ["WERKMEISTER_WORKSPACES_ROOT", "CODEX_HOME", "CODEX_BIN"])
+      if (env[k] === undefined) delete process.env[k];
+      else process.env[k] = env[k];
+    clean(root);
+  }
+});
+
 test("deliverHeadless: the wake can test, commit and push in a non-autonomous workspace (SW-313)", async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pr-deliver-")));
   const prev = process.env.WERKMEISTER_WORKSPACES_ROOT;
