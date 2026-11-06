@@ -19,6 +19,7 @@ export const stubAdapter: HarnessAdapter = {
   turnStatus: () => ({ state: "idle", startedAt: null, exitCode: null, error: null }),
   transcript: async () => unsupported(),
   sessionSource: async () => unsupported(),
+  sessionStartDir: async () => null,
   listSessions: async () => [],
   parseSession: () => [],
   agentSignal: async () => unsupported(),

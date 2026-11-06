@@ -152,6 +152,8 @@ export interface HarnessAdapter {
   transcript(dir: string, limit?: number, sessionId?: string): Promise<SessionTranscript>;
   /** The newest (or pinned) session file for *dir*; *startDir* when sessions are filed under a folder below it. */
   sessionSource(dir: string, sessionId?: string, startDir?: string): Promise<SessionSource>;
+  /** The folder session *sessionId* of *dir* started in (it may be below *dir*); null when no session has that id. */
+  sessionStartDir(dir: string, sessionId: string): Promise<string | null>;
   /** Sessions started in *dir*, newest first, with a display title. */
   listSessions(
     dir: string,

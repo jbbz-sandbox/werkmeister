@@ -20,6 +20,7 @@ export function codexSessionsRoot(): string {
 interface CodexSessionFile {
   file: string;
   id: string;
+  cwd: string;
   mtime: Date;
 }
 
@@ -72,7 +73,7 @@ export async function codexSessionsIn(dir: string): Promise<CodexSessionFile[]> 
     const meta = await readMeta(file);
     if (!meta || !owns(meta.cwd)) continue;
     try {
-      out.push({ file, id: meta.id, mtime: (await fs.stat(file)).mtime });
+      out.push({ file, id: meta.id, cwd: meta.cwd, mtime: (await fs.stat(file)).mtime });
     } catch {
       /* gone since the walk */
     }
@@ -128,6 +129,11 @@ export function parseCodexLines(text: string): SessionMessage[] {
     }
   }
   return out;
+}
+
+/** The `cwd` session *sessionId*'s `session_meta` records (SW-489). */
+export async function codexSessionStartDir(dir: string, sessionId: string): Promise<string | null> {
+  return (await codexSessionsIn(dir)).find((s) => s.id === sessionId)?.cwd ?? null;
 }
 
 /** The newest (or pinned) rollout for *dir*. Codex records the cwd itself, so *startDir* is not needed. */
