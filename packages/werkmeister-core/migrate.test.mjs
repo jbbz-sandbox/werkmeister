@@ -384,3 +384,40 @@ test("SW-186: a stale token with no mcp-token file is not ok and the old line st
     "SANDBOX_MCP_TOKEN=s3cr3t\n",
   );
 });
+
+// SW-510: a workspace inited before the node --test form moved from allow to ask.
+test("SW-510: migrate moves the node --test rules from allow to ask", async () => {
+  const { writeWorkspaceSettings } = await import("./dist/harness/claude/hooks_gen.js");
+  const { tempHomeWrapper } = await import("./dist/temp_home.js");
+  movedHome();
+  const ws = path.join(features, "demo");
+  write(path.join(ws, ".werkmeister", "workspace.yml"), "feature: demo\n");
+  write(path.join(ws, ".env"), "FEATURE=demo\n");
+  writeWorkspaceSettings(ws);
+  const w = tempHomeWrapper(ws);
+  const nodeTest = [
+    `Bash(${w} env WERKMEISTER_ROOT=* node --test:*)`,
+    `Bash(${w} --no-wait env WERKMEISTER_ROOT=* node --test:*)`,
+  ];
+  const settingsFile = path.join(ws, ".claude", "settings.json");
+  const record = path.join(ws, ".werkmeister", "claude-permissions.json");
+  for (const file of [settingsFile, record]) {
+    const json = JSON.parse(fs.readFileSync(file, "utf8"));
+    const perms = file === record ? json : json.permissions;
+    perms.allow = [...perms.allow, ...nodeTest];
+    delete perms.ask;
+    write(file, JSON.stringify(json));
+  }
+
+  const steps = await run();
+  assert.ok(
+    steps.every((s) => s.ok),
+    JSON.stringify(steps, null, 2),
+  );
+  const { permissions } = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  assert.ok(
+    !permissions.allow.some((r) => r.includes("node --test")),
+    permissions.allow.join("\n"),
+  );
+  for (const r of nodeTest) assert.ok(permissions.ask.includes(r), r);
+});

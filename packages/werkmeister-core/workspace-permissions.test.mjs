@@ -147,7 +147,6 @@ test("buildAllowRules: each wrapped rule also has the --no-wait form, never the 
   const w = "/ws/w/.werkmeister/bin/with-temp-home";
   const rules = buildAllowRules("", [], { cli: { test: "pnpm test" } }, {}, w, [], ["cli"]);
   assert.ok(rules.includes(`Bash(${w} --no-wait pnpm test:*)`), rules.join("\n"));
-  assert.ok(rules.includes(`Bash(${w} --no-wait env WERKMEISTER_ROOT=* node --test:*)`));
   assert.ok(!rules.includes(`Bash(${w} --no-wait:*)`));
 });
 
@@ -185,11 +184,7 @@ test("workspaceAllowRules: a werkmeister worktree gets the wrapped built-CLI rul
   const wrapper = path.join(root, ".werkmeister", "bin", "with-temp-home");
   // includes, not deepEqual: a machine registry (the gate's container has one) adds the repo's test rules (SW-398).
   const rules = workspaceAllowRules(root, false);
-  for (const r of [
-    `Bash(${wrapper} ${cli}:*)`,
-    `Bash(${wrapper} env WERKMEISTER_ROOT=* node --test:*)`,
-    ...READ_ONLY_GIT_RULES,
-  ])
+  for (const r of [`Bash(${wrapper} ${cli}:*)`, ...READ_ONLY_GIT_RULES])
     assert.ok(rules.includes(r), r);
   assert.ok(!rules.includes(`Bash(${wrapper}:*)`));
 });
@@ -357,8 +352,9 @@ test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and
   setAutonomous(root, false);
   strategyById("icm").refresh(root);
   settings = readSettings(root);
-  assert.deepEqual(settings.permissions, { allow: ["Bash(git:*)", ...READ_ONLY_GIT_RULES] });
-  assert.deepEqual(readRecord(root), { allow: READ_ONLY_GIT_RULES });
+  const ask = workspaceAskRules(root);
+  assert.deepEqual(settings.permissions, { allow: ["Bash(git:*)", ...READ_ONLY_GIT_RULES], ask });
+  assert.deepEqual(readRecord(root), { allow: READ_ONLY_GIT_RULES, ask });
 });
 
 // The rules before narrowing, as a record from an earlier release holds them.
@@ -444,9 +440,30 @@ test("ask rules land beside allow, are recorded, and removal drops them (SW-473)
   assert.deepEqual(readSettings(root).permissions, { ask: ["mine"] });
 });
 
-test("--exec-runs forms of the fixture wrapper and built CLI ask; none without a built CLI (SW-473)", () => {
+test("node --test through the temp-HOME wrapper asks, both forms, never allowed (SW-510)", () => {
+  const w = "/ws/w/.werkmeister/bin/with-temp-home";
+  const cli = "/ws/w/werkmeister/apps/cli/werkmeister";
+  const forms = [
+    `Bash(${w} env WERKMEISTER_ROOT=* node --test:*)`,
+    `Bash(${w} --no-wait env WERKMEISTER_ROOT=* node --test:*)`,
+  ];
+  const allow = buildAllowRules("feat", ["svc"], { svc: { test: "npm test" } }, {}, w, [cli]);
+  assert.ok(!allow.some((r) => r.includes("node --test")), allow.join("\n"));
   const root = workspace();
-  assert.deepEqual(workspaceAskRules(root), []);
+  const bin = path.join(dotDir(root), "bin");
+  assert.deepEqual(
+    workspaceAskRules(root),
+    forms.map((r) => r.replaceAll("/ws/w/.werkmeister/bin", bin)),
+  );
+});
+
+test("--exec-runs forms of the fixture wrapper and built CLI ask; only node --test without a built CLI (SW-473)", () => {
+  const root = workspace();
+  const nodeTest = (bin) => [
+    `Bash(${bin}/with-temp-home env WERKMEISTER_ROOT=* node --test:*)`,
+    `Bash(${bin}/with-temp-home --no-wait env WERKMEISTER_ROOT=* node --test:*)`,
+  ];
+  assert.deepEqual(workspaceAskRules(root), nodeTest(path.join(dotDir(root), "bin")));
   const cli = path.join(root, "werkmeister", "apps", "cli");
   fs.mkdirSync(cli, { recursive: true });
   fs.mkdirSync(path.join(root, "werkmeister", ".git"));
@@ -457,5 +474,6 @@ test("--exec-runs forms of the fixture wrapper and built CLI ask; none without a
     `Bash(${bin}/with-fixture-workspace --no-wait --exec-runs:*)`,
     `Bash(${bin}/with-temp-home ${cli}/werkmeister internal fixture --exec-runs:*)`,
     `Bash(${bin}/with-temp-home --no-wait ${cli}/werkmeister internal fixture --exec-runs:*)`,
+    ...nodeTest(bin),
   ]);
 });
