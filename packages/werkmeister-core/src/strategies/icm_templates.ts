@@ -188,11 +188,11 @@ const propose: Stage = {
         : "One commit per code repo touched, on that worktree's branch",
       "`output/pr-<worktree>.md` per repo",
     ],
-    humanCheck: `Read each \`pr-*.md\`. Set \`status: approved\` on each one to open — that flip is the approval. Then \`werkmeister pr open\`, run detached as \`_shared/pr-rules.md\` rule 3 shows, runs the gate and opens it. Merging is yours. After the release, \`werkmeister pr status\`, then ${v.group.length ? `close each member — \`werkmeister issue update <KEY> --status Done --comment <PR url>\` for ${keys(v.group)} — then ` : ""}the post-mortem (\`postmortem\` skill), then ask the person before \`werkmeister workspace close\`. Code written after a PR merged (e.g. found at release) is a follow-up: \`werkmeister pr new <worktree> --slug <slug>\`. ${CHAT_APPROVAL}`,
+    humanCheck: `Read each \`pr-*.md\`. Set \`status: approved\` on each one to open — that flip is the approval. Then \`werkmeister pr open\`, run detached as \`_shared/pr-rules.md\` rule 3 shows, runs the gate and opens it. Merging is yours. After the release, \`werkmeister pr status\`, then ${v.group.length ? `check each member reads Done — \`werkmeister issue view <KEY>\` for ${keys(v.group)}; \`pr status\` moves them with the workspace's issue, so move one by hand only if it didn't — then ` : ""}the post-mortem (\`postmortem\` skill), then ask the person before \`werkmeister workspace close\`. Code written after a PR merged (e.g. found at release) is a follow-up: \`werkmeister pr new <worktree> --slug <slug>\`. ${CHAT_APPROVAL}`,
     selfCheck:
       "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `werkmeister pr open` detached, as `_shared/pr-rules.md` rule 3 shows. Stop at the PR URL. Merging is the person's." +
       (v.group.length
-        ? ` When the PR ships, close each member (\`werkmeister issue update <KEY> --status Done --comment <PR url>\` for ${keys(v.group)}) before the post-mortem.`
+        ? ` When the PR ships, check each member reads Done (\`werkmeister issue view <KEY>\` for ${keys(v.group)}) before the post-mortem; \`pr status\` moves them with the workspace's issue, so move one by hand only if it didn't.`
         : ""),
   }),
 };

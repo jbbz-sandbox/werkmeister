@@ -33,8 +33,8 @@ import {
 } from "./config.js";
 import { GATE_COMPOSE_FILE, renderGateCompose } from "./generate.js";
 import { updateNoteStatus } from "./graduate.js";
-import { type IssueStatuses, issueStatuses, moveIssue } from "./issue_status.js";
-import { issueIdOf, issueTracker, projectOf } from "./issue_tracker.js";
+import { eachIssue, type IssueStatuses, issueStatuses, moveIssue } from "./issue_status.js";
+import { issueRefsOf, issueTracker, projectOf } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
 import {
   grantWaiters,
@@ -1509,17 +1509,16 @@ export async function openPrs(
         "  warning: this branch adds a SHA to .git-blame-ignore-revs — merge with a merge commit, not squash or rebase, and say so at the top of the PR body",
       );
     const wsCfg = loadConfigFile(ws, null);
-    const ref = issueIdOf(wsCfg);
-    if (ref) {
-      // A follow-up can open after the issue is Done; Done stays, the comment links the fix.
-      const followUp = all.some((g) => g !== f && g.dir === f.dir);
+    // A follow-up can open after the issue is Done; Done stays, the comment links the fix.
+    const followUp = all.some((g) => g !== f && g.dir === f.dir);
+    const moved = await eachIssue(issueRefsOf(wsCfg), (ref) => {
       const { tracker, statuses } = trackingOf(wsCfg, ref, deps);
-      const moved = await moveIssue(tracker, ref, "in_review", statuses, {
+      return moveIssue(tracker, ref, "in_review", statuses, {
         comment: `${followUp ? "Follow-up PR" : "PR"} opened: ${url}`,
         ...(followUp ? { alwaysComment: true } : {}),
       });
-      if (moved) lines.push(`  issue ${moved}`);
-    }
+    });
+    if (moved) lines.push(`  issue ${moved}`);
   }
   if (opened.length) {
     // SW-437: pr open starts no watcher; say whether the schedule will wake a terminal session.
@@ -1797,13 +1796,15 @@ async function moveIssueForPrs(
 ): Promise<string> {
   const anything = Object.values(seen).some((v) => v.length);
   const wsCfg = anything ? loadConfigFile(ws, null) : null;
-  const ref = issueIdOf(wsCfg);
-  if (!ref) return "";
+  const refs = issueRefsOf(wsCfg);
+  if (!refs.length) return "";
   const files = readPrFiles(ws);
   const state = lifecycleOf(ws).state;
-  const { tracker, statuses } = trackingOf(wsCfg, ref, deps);
   const move = (point: Parameters<typeof moveIssue>[2], comment: string, back = false) =>
-    moveIssue(tracker, ref, point, statuses, { comment, back });
+    eachIssue(refs, (ref) => {
+      const { tracker, statuses } = trackingOf(wsCfg, ref, deps);
+      return moveIssue(tracker, ref, point, statuses, { comment, back });
+    });
   // A multi-repo workspace is done only when every PR has settled.
   if (seen.shipped.length && state === "shipped")
     return move("done", shippedComment(files.filter((f) => statusOf(f) === "shipped")));
@@ -2805,34 +2806,37 @@ async function closeOutLocked(
     (life.state === "closed-out" && life.prs.some((p) => p.status === "abandoned"));
 
   const lines: string[] = [];
-  const ref = issueIdOf(cfg);
+  const refs = issueRefsOf(cfg);
   let issueLine = "none";
-  if (ref) {
-    const { tracker, statuses } = trackingOf(cfg, ref, deps);
+  if (refs.length) {
     // moveIssue never throws: a tracker refusal is a warning here, not a stopped close-out.
-    if (why) {
-      issueLine = await moveIssue(tracker, ref, "abandoned", statuses, {
-        comment: `Abandoned: ${why}`,
-        alwaysComment: true,
-      });
-    } else if (abandoned) {
-      // A retry: the first run already commented.
-      const current = (await tracker.fetchIssue(ref))?.status ?? "";
-      issueLine = `${ref} left ${current || "as is"} (abandoned)`;
-    } else if (noPr && life.state !== "closed-out") {
-      // alwaysComment: the issue may already be Done (SW-261 was), and the reason still belongs on it.
-      // Not on a retry, which would post it twice.
-      issueLine =
-        (await moveIssue(tracker, ref, "done", statuses, {
-          comment: `No PR needed: ${noPr}`,
+    issueLine = await eachIssue(refs, async (ref) => {
+      const { tracker, statuses } = trackingOf(cfg, ref, deps);
+      if (why)
+        return moveIssue(tracker, ref, "abandoned", statuses, {
+          comment: `Abandoned: ${why}`,
           alwaysComment: true,
-        })) || `${ref} left as is (no done status configured)`;
-    } else {
-      issueLine =
+        });
+      if (abandoned) {
+        // A retry: the first run already commented.
+        const current = (await tracker.fetchIssue(ref))?.status ?? "";
+        return `${ref} left ${current || "as is"} (abandoned)`;
+      }
+      if (noPr && life.state !== "closed-out")
+        // alwaysComment: the issue may already be Done (SW-261 was), and the reason still belongs on it.
+        // Not on a retry, which would post it twice.
+        return (
+          (await moveIssue(tracker, ref, "done", statuses, {
+            comment: `No PR needed: ${noPr}`,
+            alwaysComment: true,
+          })) || `${ref} left as is (no done status configured)`
+        );
+      return (
         (await moveIssue(tracker, ref, "done", statuses, {
           comment: shippedComment(readPrFiles(ws).filter((f) => statusOf(f) === "shipped")),
-        })) || `${ref} left as is (no done status configured)`;
-    }
+        })) || `${ref} left as is (no done status configured)`
+      );
+    });
     lines.push(`Issue: ${issueLine}`);
   }
 

@@ -188,8 +188,9 @@ function standardsRef(tier: Stage["standards"], r: Resolved): string {
 }
 
 // The first stage's start is the one point no code observes, so its contract runs the move (SW-27).
+// SW-500: its allow rule matches only the bare command; a chained call went to auto mode, which denied it.
 const START_ISSUE =
-  "Run `werkmeister issue start`: it moves the issue to In Progress, and does nothing when the issue is already past that or the tracker refuses. It also fetches each code worktree's base and fast-forwards a branch with no commits of its own; read its `Worktree:` lines. Also read its `CLI:` line: if the installed werkmeister is stale, stop and apply the fix it prints before step 1; if it could not check, carry on, but re-run `werkmeister issue start` before the next stage and stop there if it still could not check or reads stale.";
+  "Run `werkmeister issue start` alone, as its own Bash call: no `cd`, pipe, redirect or other command around it (the cwd is already the workspace), so its allow rule matches. It moves the issue, and each `group:` member, to In Progress, and does nothing when the issue is already past that or the tracker refuses. It also fetches each code worktree's base and fast-forwards a branch with no commits of its own; read its `Worktree:` lines. Also read its `CLI:` line: if the installed werkmeister is stale, stop and apply the fix it prints before step 1; if it could not check, carry on, but re-run `werkmeister issue start` the same way before the next stage and stop there if it still could not check or reads stale.";
 
 // SW-345: BRIEF.md held only its placeholder until stage 04, so every self-check had nothing to check against.
 const WRITE_BRIEF =

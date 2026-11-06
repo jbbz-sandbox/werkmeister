@@ -58,6 +58,17 @@ test("workspace.yml issue refs: issue_id, else the pre-rename keys", () => {
   assert.equal(it.issueIdOf(null), "");
 });
 
+test("issueRefsOf: the issue, then each group member once; none without an issue (SW-500)", () => {
+  assert.deepEqual(it.issueRefsOf({ issue_id: "P-1" }), ["P-1"]);
+  assert.deepEqual(it.issueRefsOf({ issue_id: "P-1", group: ["P-2", "P-1", " P-3 "] }), [
+    "P-1",
+    "P-2",
+    "P-3",
+  ]);
+  assert.deepEqual(it.issueRefsOf({ issue_id: "P-1", group: "P-2, P-3" }), ["P-1", "P-2", "P-3"]);
+  assert.deepEqual(it.issueRefsOf({ group: ["P-2"] }), []);
+});
+
 // The label stays "Issue" on every tracker (docs/ui-spec.md); the example names the format.
 test("the wizard's issue prompt takes the tracker's example and pattern", () => {
   const p = wizardPrompts();

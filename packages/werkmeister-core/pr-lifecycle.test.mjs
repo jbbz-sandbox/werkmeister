@@ -4504,3 +4504,70 @@ test("waitForHostLoad: WERKMEISTER_NO_WAIT=1 skips the gate's wait as --no-wait 
   }
   assert.deepEqual(falls.slept, []);
 });
+
+// SW-500: In Review at `pr open` and Done at ship cover the lead and each `group:` member.
+test("a grouped workspace's In Review and Done moves cover each member (SW-500)", async () => {
+  const group = (ws) =>
+    fs.appendFileSync(path.join(dotDir(ws), "workspace.yml"), "group:\n  - o/app#8\n  - o/app#9\n");
+  const refs = ["o/app#7", "o/app#8", "o/app#9"];
+
+  const opened = icmWorkspace();
+  group(opened);
+  try {
+    const tracker = issueAt("Open");
+    const url = "https://github.com/o/app/pull/9";
+    const r = await open(
+      opened,
+      deps([DIFF_API, [/^gh pr create/, { stdout: `${url}\n` }]], { tracker }),
+    );
+    assert.ok(r.ok, r.lines.join("\n"));
+    assert.deepEqual(
+      tracker.updates,
+      refs.map((ref) => [ref, "Peer Review", `PR opened: ${url}`]),
+    );
+  } finally {
+    clean(opened);
+  }
+
+  const shipped = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) },
+  });
+  group(shipped);
+  try {
+    const tracker = issueAt("Open", ["Peer Review"]);
+    await refreshPrStatus(
+      shipped,
+      deps(
+        [
+          prView({ state: "MERGED", mergeCommit: { oid: "abc" } }),
+          [/tag --contains abc/, { stdout: "v1.2.0\n" }],
+        ],
+        { tracker },
+      ),
+    );
+    assert.deepEqual(
+      tracker.updates,
+      refs.map((ref) => [ref, "closed", "Shipped: v1.2.0 — https://x/pr/9"]),
+    );
+  } finally {
+    clean(shipped);
+  }
+
+  const closing = icmWorkspace({
+    files: { app: prFile({ status: "shipped", extra: "url: https://x/pr/9\nmerge_sha: abc\n" }) },
+  });
+  group(closing);
+  try {
+    const tracker = issueAt("Open", ["Peer Review"]);
+    const r = await inWorkspacesRoot(closing, (name) =>
+      closeOut(name, {}, deps([[/ls-remote/, { code: 2 }]], { tracker })),
+    );
+    assert.deepEqual(
+      tracker.updates.map(([ref, status]) => [ref, status]),
+      refs.map((ref) => [ref, "closed"]),
+    );
+    assert.match(r.output, /o\/app#7 → closed; o\/app#8 → closed; o\/app#9 → closed/);
+  } finally {
+    clean(closing);
+  }
+});

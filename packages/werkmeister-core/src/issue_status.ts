@@ -10,7 +10,7 @@ import * as path from "node:path";
 
 import { load } from "./global_config.js";
 import {
-  issueIdOf,
+  issueRefsOf,
   issueTracker,
   loadIssueTracker,
   projectFor,
@@ -172,12 +172,29 @@ export async function startIssue(
   statuses?: IssueStatuses,
 ): Promise<string> {
   const cfg = loadConfigFile(ws, null);
-  const ref = issueIdOf(cfg);
-  if (!ref) return "no issue";
-  const at = { project: projectOf(cfg), text: ref };
-  tracker ??= issueTracker(at);
-  statuses ??= issueStatuses(at);
-  return moveIssue(tracker, ref, "in_progress", statuses, {
-    comment: `Work started: ${currentStage(ws)} in workspace ${path.basename(ws)}.`,
+  const refs = issueRefsOf(cfg);
+  if (!refs.length) return "no issue";
+  const comment = `Work started: ${currentStage(ws)} in workspace ${path.basename(ws)}.`;
+  return eachIssue(refs, (ref) => {
+    const at = { project: projectOf(cfg), text: ref };
+    return moveIssue(
+      tracker ?? issueTracker(at),
+      ref,
+      "in_progress",
+      statuses ?? issueStatuses(at),
+      {
+        comment,
+      },
+    );
   });
+}
+
+/** *move* for each ref, one at a time, as one `; `-joined line of the non-empty results. */
+export async function eachIssue(
+  refs: string[],
+  move: (ref: string) => Promise<string>,
+): Promise<string> {
+  const lines: string[] = [];
+  for (const ref of refs) lines.push(await move(ref));
+  return lines.filter(Boolean).join("; ");
 }
