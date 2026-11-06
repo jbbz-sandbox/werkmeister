@@ -40,6 +40,15 @@ it("--exec-runs is a fixture option only first, where the ask rule's prefix sees
   expect(later.steps?.[0]?.[0]).toBe("--exec-runs");
 });
 
+it("--pr-field sets only fields no command reads, keeping any = in the value (SW-514)", () => {
+  const r = parse(["--pr-field", "skip_release=a=b", "--pr-field", "release=none", "pr", "status"]);
+  expect(r.opts?.prFields).toEqual({ skip_release: "a=b", release: "none" });
+  expect(r.steps).toEqual([["pr", "status"]]);
+  // branch reaches `git push origin <branch>`: --receive-pack=<cmd> would run under the allow rule.
+  for (const f of ["branch=--receive-pack=touch x", "session_cwd=/", "status=open"])
+    expect(parse(["--pr-field", f, "pr", "gate"])).toEqual({ bad: "--pr-field" });
+});
+
 it("--services outside the current folder is refused before any fixture is made", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   try {

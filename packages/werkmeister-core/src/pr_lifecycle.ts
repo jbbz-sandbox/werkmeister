@@ -1590,6 +1590,7 @@ export async function refreshPrStatus(
           status: "merged",
           merge_sha: view.mergeCommit?.oid ?? "",
           ...(touchesFragment(view) ? { registry_sync: "pending" } : {}),
+          ...(shipsNothing(f, deps.repos[f.dir] ?? {}, view) ? { release: "none" } : {}),
         });
         seen.merged.push(url);
       } else if (view.state === "CLOSED") {
@@ -1694,6 +1695,17 @@ async function notShippedWhy(dir: string, f: PrFile, pattern: string, deps: Deps
     why += `; if it ships nothing, set \`release: none\` in ${path.basename(f.path)} and rerun \`werkmeister pr status\``;
   return why;
 }
+
+// skip_release alone also covers a changeset checked on the host (#145), so only a merged diff
+// with no changeset ships nothing (SW-514). gh lists at most 100 files: a list that long may hide one.
+const shipsNothing = (f: PrFile, repo: Record<string, unknown>, v: PrView): boolean =>
+  Boolean(reason(f.fm["skip_release"])) &&
+  !f.fm["release"] &&
+  repo["ship"] === "tag" &&
+  String(repo["release_check"] ?? "").includes("changeset") &&
+  v.files !== undefined &&
+  v.files.length < 100 &&
+  !v.files.some((x) => /^\.changeset\/(?!README\.md$)[^/]+\.md$/.test(x.path ?? ""));
 
 // The literal path: GitHub always reports `/`, while FRAGMENT_REL is built with path.join.
 const touchesFragment = (v: PrView): boolean =>
