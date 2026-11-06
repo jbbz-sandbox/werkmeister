@@ -129,6 +129,11 @@ test("deferring twice changes nothing more (SW-296)", () => {
   assert.equal(deferMachineSteps(once), once);
 });
 
+// SW-501: an agent read "the only real issue update is pr open's" as forbidding issue start.
+test("the run limits allow issue start's status move beside pr open's", () => {
+  assert.match(RUN_LIMITS, /status moves `werkmeister issue start` and `werkmeister pr open` make/);
+});
+
 test("the run limits name the commands the brief defers (SW-296)", () => {
   for (const cmd of [
     "`npm link`",
