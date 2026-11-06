@@ -64,8 +64,14 @@ test("init under the fixture writes the context and wrappers well inside the 10 
       initWorkspace({}, fx.workspace, { build: false }),
     );
     const ms = performance.now() - t0;
-    // Measured ~0.5 s; 2 s leaves room for a loaded host (SW-426).
-    assert.ok(ms < 2000, `init took ${Math.round(ms)} ms`);
+    // Measured ~0.5 s; 2 s leaves room for a busy host (SW-426). Over its core count (any of the
+    // 1/5/15-min loads) init took 2.2-3.5 s (SW-485), so the bound widens to 6 s,
+    // still well under the 10 s timeout the SW-218 regression waits out.
+    const overloaded = Math.max(...os.loadavg()) > os.cpus().length;
+    assert.ok(
+      ms < (overloaded ? 6000 : 2000),
+      `init took ${Math.round(ms)} ms (overloaded: ${overloaded})`,
+    );
     const bin = path.join(fx.workspace, ".werkmeister", "bin");
     assert.ok(fs.statSync(path.join(bin, "with-fixture-workspace")).mode & 0o100);
     assert.match(
