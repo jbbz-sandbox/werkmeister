@@ -796,7 +796,7 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 - `--issue-id <ref>`: Issue ID in this machine's issue tracker (see `werkmeister machine setup`) (env: WERKMEISTER_ISSUE_ID; config: issue_id).
 - `--project <name>`: The project (projects: in ~/.werkmeister/config.yaml) whose tracker holds the issue (env: WERKMEISTER_PROJECT; config: project).
 - `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search (env: WERKMEISTER_LABELS; config: labels).
-- `--group <keys>`: Comma-separated member issue keys of a grouped PR led by issue_id: the ICM contracts commit once per ticket (env: WERKMEISTER_GROUP; config: group).
+- `--group <keys>`: Comma-separated member issue keys of a grouped PR led by issue_id: one PR, one commit per ticket (env: WERKMEISTER_GROUP; config: group).
 - `--test-path <path>`: URL path for feature testing (env: WERKMEISTER_TEST_PATH; config: test_path).
 - `--description <text>`: Free-form description for the CLAUDE.md header (env: WERKMEISTER_DESCRIPTION; config: description).
 - `--starting-prompt <text>`: First instruction for the agent; persisted to .werkmeister/workspace.yml (env: WERKMEISTER_STARTING_PROMPT; config: starting_prompt).

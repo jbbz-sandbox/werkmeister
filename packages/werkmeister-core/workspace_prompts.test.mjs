@@ -130,6 +130,12 @@ test("autonomous resolves from the flag, the env var and workspace.yml, as true/
   }
 });
 
+// SW-468: group keys go through the tracker's parseRef, and the lead is dropped.
+test("group keys are normalised and never list the lead", () => {
+  assert.equal(resolveInputs({ issue_id: "SW-459", group: "sw-2,SW-459" }, root).group, "SW-2");
+  assert.equal(resolveInputs({ issue_id: "SW-459", group: "sw-459" }, root).group, "");
+});
+
 test("readAutonomous reads workspace.yml; absent is off", () => {
   assert.equal(readAutonomous(wsWith("autonomous: true\n")), true);
   assert.equal(readAutonomous(wsWith("autonomous: false\n")), false);
