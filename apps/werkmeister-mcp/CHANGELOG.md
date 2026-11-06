@@ -1,5 +1,17 @@
 # sandbox-mcp
 
+## 0.8.46
+
+### Patch Changes
+
+- e033938: SW-384: Codex sessions. A `harness: codex` workspace reads its sessions from `~/.codex/sessions`: the pane and dashboard show Working / Needs you / Done and the transcript, `claude-send` runs `codex exec [resume <id>]`, `claude-resume` and the pane's Continue / New Session open `codex`, and usage reads Codex's token counts. Machine-level asks (Jira fallback, refine) and PR reconcile stay on Claude.
+- 3484a52: SW-463: a `pr watch` wake held for an open but idle Claude session now reaches it without anyone typing. Workspace status rows list `heldWakes` (the sessions with a `wake-nudge-<id>.json`), and the werkmeister plugin's band submits one short prompt when its own session has one, no turn is running and Desktop's wrap_up box isn't waiting. The prompt's UserPromptSubmit hook then delivers and claims the wake as before.
+- Updated dependencies [e033938]
+- Updated dependencies [2cce430]
+- Updated dependencies [3484a52]
+  - werkmeister-core@0.79.0
+  - werkmeister-ui@0.5.92
+
 ## 0.8.45
 
 ### Patch Changes

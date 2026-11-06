@@ -1,5 +1,19 @@
 # vscode-plugin
 
+## 0.79.0
+
+### Minor Changes
+
+- e033938: SW-384: Codex sessions. A `harness: codex` workspace reads its sessions from `~/.codex/sessions`: the pane and dashboard show Working / Needs you / Done and the transcript, `claude-send` runs `codex exec [resume <id>]`, `claude-resume` and the pane's Continue / New Session open `codex`, and usage reads Codex's token counts. Machine-level asks (Jira fallback, refine) and PR reconcile stay on Claude.
+
+### Patch Changes
+
+- Updated dependencies [e033938]
+- Updated dependencies [2cce430]
+- Updated dependencies [3484a52]
+  - werkmeister-core@0.79.0
+  - werkmeister-ui@0.5.92
+
 ## 0.78.0
 
 ### Patch Changes
