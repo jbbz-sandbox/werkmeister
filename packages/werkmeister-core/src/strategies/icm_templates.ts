@@ -426,7 +426,8 @@ const refactor: Stage[] = [
         "List the files in scope and every caller outside it.",
         "State the invariants: observable behaviour that must be identical after the refactor.",
         "Name the existing tests that pin each invariant, and the gaps no test covers.",
-        "Write `output/scope.md`: steps 1–3, the sequence of small steps you propose, and a `status: proposed` line.",
+        // SW-467: the grouped 02_implement takes "its scope.md steps" per ticket, so scope.md nests them that way.
+        `Write \`output/scope.md\`: steps 1–3, the sequence of small steps you propose${v.group.length ? ` under one heading per ticket key (the workspace's issue, then ${keys(v.group)})` : ""}, and a \`status: proposed\` line.`,
       ],
       outputs: ["`output/scope.md`"],
       humanCheck: `Read \`output/scope.md\`. Correct the scope or invariants, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts without asking again. ${CHAT_APPROVAL}`,
