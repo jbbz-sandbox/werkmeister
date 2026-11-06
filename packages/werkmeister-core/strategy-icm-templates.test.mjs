@@ -364,6 +364,12 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     assert.match(implement, /commits in `origin\/main\.\.\.HEAD`/);
     // SW-466: each ticket's commit carries its own snapshot regeneration.
     assert.match(implement, /regenerate it in that ticket's commit/);
+    // SW-497: order across tickets is free; the spec does not fix it.
+    assert.match(implement, /Commit order across tickets is free/);
+    assert.match(
+      on.contracts[1],
+      /list one commit per ticket \(`<KEY> …`\) and what each holds, but do not fix their order/,
+    );
     assert.match(
       implement,
       /fold each fix into the commit of the ticket it belongs to \(`git commit --fixup <sha>`/,
@@ -427,6 +433,7 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     assert.match(off.contracts[2], /uncommitted changes, untracked files included/);
     assert.match(off.contracts[2], /^- Code changes, uncommitted/m);
     assert.match(off.contracts[3], /One commit per code repo touched/);
+    assert.doesNotMatch(off.contracts[1], /do not fix their order/);
     for (const c of [...on.contracts, ...off.contracts])
       assert.doesNotMatch(c, /once,? at the end/);
     for (const c of off.contracts)
