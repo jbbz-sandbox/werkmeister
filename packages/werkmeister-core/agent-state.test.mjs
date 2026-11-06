@@ -436,6 +436,40 @@ test("wake nudge: a write or a second hook landing mid-delivery is neither lost 
   }
 });
 
+test("wake nudge: a hook delivering while pr watch appends sends the held wake once (SW-475)", async () => {
+  const { deliverWake, writeWakeNudge } = await import("./dist/agent_state.js");
+  const { syncBuiltinESMExports } = await import("node:module");
+  const fsc = (await import("node:fs")).default;
+  const real = fsc.readFileSync;
+  const dir = workspace("l-race-writer", null);
+  const input = { hook_event_name: "PostToolUse", session_id: "s-1", cwd: dir };
+  writeWakeNudge(dir, "s-1", "A");
+  // Writer first: pr watch reads A, a hook delivers meanwhile, then pr watch writes back.
+  let nested = null;
+  let armed = true;
+  fsc.readFileSync = function (p, ...rest) {
+    const out = real.call(this, p, ...rest);
+    if (armed && String(p).includes("wake-nudge")) {
+      armed = false;
+      nested = deliverWake(input, dir);
+    }
+    return out;
+  };
+  syncBuiltinESMExports();
+  try {
+    writeWakeNudge(dir, "s-1", "B");
+  } finally {
+    fsc.readFileSync = real;
+    syncBuiltinESMExports();
+  }
+  const texts = [nested, deliverWake(input, dir)]
+    .filter(Boolean)
+    .map((o) => o.hookSpecificOutput.additionalContext);
+  const seen = JSON.stringify(texts);
+  assert.equal(texts.filter((t) => t.includes("A")).length, 1, `A once: ${seen}`);
+  assert.equal(texts.filter((t) => t.includes("B")).length, 1, `B once: ${seen}`);
+});
+
 test("status: a paused workspace reports when, what Resume brings back, and a pending nudge", async () => {
   const dir = workspace("m-status", null);
   writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: ["m-api"], was_working: true });
