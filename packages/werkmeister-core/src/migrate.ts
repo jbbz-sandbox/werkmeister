@@ -41,6 +41,7 @@ import {
 } from "./global_config.js";
 import {
   workspaceAllowRules,
+  workspaceAskRules,
   workspaceDenyRules,
   writePrGuardHook,
   writeWorkspaceHooks,
@@ -354,14 +355,17 @@ function workspaceStale(dir: string): boolean {
   // Never inited by this CLI: `workspace init` writes it, not migrate.
   if (!fs.existsSync(settingsFile)) return false;
   const settings = readJson(settingsFile);
-  const has = (key: "allow" | "deny") => new Set<string>(settings?.["permissions"]?.[key] ?? []);
+  const has = (key: "allow" | "deny" | "ask") =>
+    new Set<string>(settings?.["permissions"]?.[key] ?? []);
   const allow = has("allow");
   const deny = has("deny");
+  const ask = has("ask");
   const wrapper = tempHomeWrapper(dir);
   return (
     PRE_SW186_HOOK.test(fs.readFileSync(settingsFile, "utf8")) ||
     workspaceAllowRules(dir).some((r) => !allow.has(r)) ||
     workspaceDenyRules(dir).some((r) => !deny.has(r)) ||
+    workspaceAskRules(dir).some((r) => !ask.has(r)) ||
     (fs.existsSync(wrapper) && fs.readFileSync(wrapper, "utf8").includes(PRE_SW186_WAIT))
   );
 }

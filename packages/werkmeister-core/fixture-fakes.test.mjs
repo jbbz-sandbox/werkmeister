@@ -35,3 +35,27 @@ test("docker: running containers show only to the gate's Names ps", () => {
   assert.equal(run(f.docker, "rm", "x").status, 1);
   assert.match(fs.readFileSync(f.dockerLog, "utf8"), /^ps --format/);
 });
+
+test("docker exec: answers 0 by default; with execCwd runs the last argument there (SW-473)", () => {
+  const off = writeFakes(path.join(tmp, "exec-off"));
+  assert.equal(run(off.docker, "exec", "c", "sh", "-c", "false").status, 0);
+  const cwd = path.join(tmp, "exec-cwd");
+  fs.mkdirSync(cwd);
+  fs.writeFileSync(path.join(cwd, "marker"), "");
+  const on = writeFakes(path.join(tmp, "exec-on"), { execCwd: cwd });
+  const pass = run(
+    on.docker,
+    "exec",
+    "c",
+    "sh",
+    "-c",
+    "wrapper",
+    "sh",
+    "-c",
+    "test -f marker && echo ok",
+  );
+  assert.equal(pass.status, 0);
+  assert.equal(pass.stdout, "ok\n");
+  assert.equal(run(on.docker, "exec", "c", "sh", "-c", "exit 3").status, 3);
+  assert.equal(fs.readFileSync(on.dockerLog, "utf8").trim().split("\n").length, 2);
+});

@@ -29,6 +29,8 @@ export interface FakeWorld {
   rules?: unknown[];
   /** Containers the fake docker shows as running, to the gate's `ps --format {{.Names}}…` only. */
   running?: string[];
+  /** Set: `docker exec` runs its last argument (the gate row's command) with `sh -c` here and exits with its code. Absent: exit 0. */
+  execCwd?: string;
 }
 
 export interface Fakes {
@@ -43,7 +45,8 @@ export interface Fakes {
 // `pr list` prints nothing: pr open's --jq leaves no URL when no PR is open.
 // Only the gate's `ps --format {{.Names}}\t{{.State}}` sees running containers; every other `ps`
 // (-q/-aq by label) finds none, so no teardown of a pre-rename project runs on a fake hit.
-const FAKE_JS = `import * as fs from "node:fs";
+const FAKE_JS = `import { spawnSync } from "node:child_process";
+import * as fs from "node:fs";
 const [, , tool, dir, ...args] = process.argv;
 const worldFile = dir + "/world.json";
 const world = JSON.parse(fs.readFileSync(worldFile, "utf8"));
@@ -88,7 +91,10 @@ if (tool === "gh") {
       if (args.some((a) => a.includes("{{.Names}}"))) out((world.running ?? []).map((c) => c + "\\trunning\\n").join(""));
       break;
     case "inspect": out("false\\n"); break;
-    case "exec": case "stop": case "compose": case "network": break;
+    case "exec":
+      if (world.execCwd) process.exit(spawnSync("sh", ["-c", args.at(-1)], { cwd: world.execCwd, stdio: "inherit" }).status ?? 1);
+      break;
+    case "stop": case "compose": case "network": break;
     default: fail("fake docker: unhandled: " + args.join(" "));
   }
 }
