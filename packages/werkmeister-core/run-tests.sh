@@ -6,7 +6,8 @@ set -e
 cd "$(dirname "$0")"
 export WERKMEISTER_GH_BIN="$PWD/no-gh.sh"
 shard=${1:-}
-node --test --test-concurrency=2 ${shard:+--test-shard="$shard"} *.test.mjs
+# The container's CPU limit (cgroup-aware), at most 4 so a dev host isn't flooded; SW-101's fixed 2 fit a 1-CPU container (SW-406).
+node --test --test-concurrency="$(node -p 'Math.min(os.availableParallelism(), 4)')" ${shard:+--test-shard="$shard"} *.test.mjs
 if [ -z "$shard" ] || [ "${shard%/*}" = "${shard#*/}" ]; then
   for f in *.smoke.mjs; do node "$f"; done
 fi

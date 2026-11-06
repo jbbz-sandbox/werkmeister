@@ -146,6 +146,7 @@ beforeEach(() => {
   markerAtCall = [];
   reply = {};
   delete process.env.DOCKER_DELAY;
+  delete process.env.WERKMEISTER_TIMEOUT_SCALE;
   for (const f of [pausedFile, nudgeFile, claudeLog, path.join(dot, "agent-state.json")])
     fs.rmSync(f, { force: true });
 });
@@ -174,8 +175,10 @@ test("pause refuses twice and a feature with no slot", async () => {
 });
 
 // SW-299: a loaded host can make the label lookup's `docker ps` slow; that must not lose the workspace.
+// Timeouts at 0.1 scale: the 300 s cap is 30 s and the old 10 s cap 1 s, so a 1.1 s stub still catches a return to it (SW-406).
 test("a slow docker lookup still finds the workspace", async () => {
-  process.env.DOCKER_DELAY = "11";
+  process.env.DOCKER_DELAY = "1.1";
+  process.env.WERKMEISTER_TIMEOUT_SCALE = "0.1";
   assert.deepEqual((await pause("demo")).containers, ["demo-db", "demo-api", "demo-install"]);
 });
 
