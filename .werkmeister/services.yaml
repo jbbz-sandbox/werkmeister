@@ -101,7 +101,8 @@ services:
     image: node:22
     command: "cd apps/cli && exec pnpm run watch"
     memory_limit: 2G
-    memory_reservation: 1600M
+    # SW-283: cold gate row peaks at 948 MiB anon (2026-11-05); +15%, 64M steps.
+    memory_reservation: 1088M
     node_modules_volume: node-modules
     extra_volumes: &host_mounts
       - /var/run/docker.sock:/var/run/docker.sock
