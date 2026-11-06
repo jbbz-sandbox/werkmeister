@@ -219,4 +219,6 @@ test("--gate refuses a registry whose change would map to no service (SW-426)", 
     /--gate needs a `lib` service/,
   );
   assert.equal(fixturePreset({ gate: true }).running?.length, 1);
+  // SW-470: without --gate a broken registry reaches workspace init's own error.
+  assert.doesNotThrow(() => fixturePreset({ services: "{bad" }));
 });
