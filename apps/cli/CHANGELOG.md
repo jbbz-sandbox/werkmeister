@@ -1,5 +1,11 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.79.4
+
+### Patch Changes
+
+- 0c8ab20: A `pr watch` wake write that fails (disk full, permissions) no longer loses a wake already held for the session: the held wake is put back and the error still surfaces. (SW-502)
+
 ## 0.79.3
 
 ### Patch Changes
