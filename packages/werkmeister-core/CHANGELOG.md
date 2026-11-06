@@ -1,5 +1,12 @@
 # sandbox-core
 
+## 0.79.1
+
+### Patch Changes
+
+- 965fbfc: SW-406: the werkmeister-core gate tests run faster: the core container gets 3 CPUs, the core suite's test concurrency follows the container's CPU limit (at most 4), and the two slow compose-probe tests wait about 1 s instead of 11 s (`WERKMEISTER_TIMEOUT_SCALE`, test-only).
+- 5794317: SW-450: the pre-PR gate names the services a diff left untested (`tests: not touched, not run: …`), and a repo fragment's `repo:` block takes `path_mappings` for paths no service owns, so the werkmeister repo no longer tests all five services for a change under `apps/werkmeister-mcp`, `plugins`, `.github`, `.vscode` or `.claude`.
+
 ## 0.79.0
 
 ### Minor Changes
