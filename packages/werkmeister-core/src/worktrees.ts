@@ -38,6 +38,9 @@ const _RUNTIME_FILES = [
   ".werkmeister/last-exec",
   ".werkmeister/starts.json",
   ".werkmeister/token",
+  // Held pr watch wakes: SW-418's wake-nudge.json, SW-444's per-session file and its
+  // .claimed/.tmp leftovers. A glob; git rm --cached expands it as a pathspec too.
+  ".werkmeister/wake-nudge*",
 ];
 const _GITIGNORE_GENERATED = [
   "/.env",
