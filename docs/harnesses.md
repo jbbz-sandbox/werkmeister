@@ -167,3 +167,13 @@ sessions also implements `HarnessAdapter` (`harness/types.ts`) and adds it to
 `harnessFor`'s registry in `harness/layout.ts`; `harness/codex/adapter.ts` is the example. The Claude
 Code adapter in `harness/claude/` is the reference. The Codex adapter in `harness/codex/` shows the
 small case: it reuses `harness/claude/hooks_gen.ts`'s merge with its own file and event map.
+
+A run that adds or changes an adapter checks the installed harness, not only its
+docs, before the first decision is approved. Install or find the binary, record its
+version (`<bin> --version`), and check every CLI command, flag, plugin API and event
+name a decision relies on against it: `<bin> <cmd> --help` for commands and flags, a
+real plugin load for plugin APIs and event names. The run's `decisions.md` names the
+version checked and, beside each fact, the command that confirmed it. A fact only the
+docs support is marked `unverified: docs only` and no decision rests on it. If the
+binary cannot be installed, say so in the run's reviewer notes and mark every
+harness fact `unverified`.
