@@ -1,5 +1,14 @@
 # sandbox-core
 
+## 0.79.3
+
+### Patch Changes
+
+- fdc8418: SW-500, SW-501, SW-515: the ICM first-stage contract and `w9r-research` now say to run `werkmeister issue start` alone, as its own Bash call, so its allow rule matches. If that call is denied anyway, the agent records the denial, stops and tells the person. When the CLI reads stale, the agent tells the person to apply the printed fix and never runs it itself. `pr-rules` rule 3 runs `werkmeister pr open > .werkmeister/pr-open.log 2>&1` alone. The autonomous run limits allow `issue start`'s status move as well as `pr open`'s. In a grouped workspace every automatic issue move now covers the issue and each `group:` member: In Progress, In Review, Done and abandon. The grouped propose contract checks each member reads Done instead of closing it by hand.
+- 973a6e5: SW-508: standards links ignore `GIT_DIR`, `GIT_WORK_TREE` and `GIT_COMMON_DIR` inherited from a calling git (a `rebase --exec` step, a hook), so they name the standards tree's own repo, not the caller's.
+- 9e36c19: SW-510: a workspace's Claude settings no longer pre-approve `with-temp-home env WERKMEISTER_ROOT=* node --test:*` or its `--no-wait` twin, because `node --test <file>` runs any file, including one the agent just wrote. Both forms are now `ask` rules, and `machine migrate` moves them in existing workspaces. Tests run without a prompt through the registered test commands (`with-temp-home <test command>`), and the generated `werkmeister-context.md` now says so.
+- 4e4fc2a: `werkmeister pr status` now marks a merged PR that sets `skip_release` as shipped (`release: none`) on the first run when its diff has no `.changeset/*.md` and the repo's `release_check` is changesets'. Before this, a test-only PR waited for a release tag until `release: none` was set by hand. A PR with a changeset still waits for its tag (SW-514). `with-fixture-workspace` gains `--pr-field <key>=<value>` to add front matter to the seeded PR file.
+
 ## 0.79.2
 
 ### Patch Changes
