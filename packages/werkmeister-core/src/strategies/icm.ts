@@ -32,7 +32,15 @@ import {
   loadSandboxServiceConfigs,
 } from "../workspace_prompts.js";
 import { stageDecisions } from "./icm_decisions.js";
-import { type IcmVars, SELF_CHECK, type Stage, templateFor } from "./icm_templates.js";
+import {
+  type IcmVars,
+  prDir,
+  proposeDir,
+  SELF_CHECK,
+  type Stage,
+  stageDirs,
+  templateFor,
+} from "./icm_templates.js";
 import { renderIssueRef } from "./issue_section.js";
 import type { ContextStrategy, InitContext } from "./types.js";
 
@@ -54,10 +62,6 @@ function list(s: string | undefined): string[] {
     .filter((x) => x);
 }
 
-function stageDirs(stages: Stage[]): string[] {
-  return stages.map((s, i) => `${String(i + 1).padStart(2, "0")}_${s.name}`);
-}
-
 /**
  * Stage dirs on disk that this template would not render — a run started under
  * another stage set, e.g. `03_verify`/`04_ship` from before decision 11 renamed
@@ -72,17 +76,6 @@ function foreignStageDirs(root: string, stages: Stage[]): string[] {
     return [];
   }
   return onDisk.filter((d) => !own.includes(d)).sort();
-}
-
-/** The stage dir that holds PR files, or null for a template with no propose stage (spike). */
-function proposeDir(stages: Stage[]): string | null {
-  const i = stages.findIndex((s) => s.name === "propose");
-  return i < 0 ? null : stageDirs(stages)[i];
-}
-
-/** The stage dir whose output holds PR files: propose, else the last stage (spike, SW-83). */
-function prDir(stages: Stage[]): string {
-  return proposeDir(stages) ?? stageDirs(stages)[stages.length - 1];
 }
 
 /**
