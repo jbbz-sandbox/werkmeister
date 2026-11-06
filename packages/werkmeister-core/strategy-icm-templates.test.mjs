@@ -177,6 +177,12 @@ test("each template renders with no undefined and a route per stage", async () =
             `${wt}/${d}`,
           );
           assert.doesNotMatch(c, /buildAllowRules|\.werkmeister\/bin\/\*/, `${wt}/${d}`);
+          // SW-479: reaching the host daemon, the real ~/.werkmeister or another workspace is Must fix.
+          assert.match(
+            c,
+            /Always add: "any finding where the change can restart or write the host daemon, the real `~\/\.werkmeister` or another workspace, whether through an allow rule, a script or a test, is Must fix"/,
+            `${wt}/${d}`,
+          );
           // SW-449: a Should fix that shows the change's own text is false is fixed, not left.
           assert.match(
             c,
