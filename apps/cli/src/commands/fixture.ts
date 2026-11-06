@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--workspace <file>] [--services <file>] [--fragment <file>] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--pr-field <key>=<value>]... [--workspace <file>] [--services <file>] [--fragment <file>] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -17,7 +17,7 @@ import { fixturePreset, seedFixture } from "werkmeister-core/fixture_workspace";
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--workspace <file>] [--services <file>] [--fragment <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--pr-field <key>=<value>]... [--workspace <file>] [--services <file>] [--fragment <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -38,6 +38,7 @@ export function parse(argv: string[]) {
     daemon: false,
     execRuns: false,
     merged: false,
+    prFields: undefined as Record<string, string> | undefined,
     services: undefined as string | undefined,
     fragment: undefined as string | undefined,
     workspace: undefined as Record<string, unknown> | undefined,
@@ -52,7 +53,12 @@ export function parse(argv: string[]) {
     // First only, so the workspace's prefix ask rule sees it (workspaceAskRules); later, it is a werkmeister arg.
     else if (a === "--exec-runs" && i === 0) opts.execRuns = true;
     else if (a === "--merged") opts.merged = true;
-    else if (a === "--print" && argv[i + 1] !== undefined) print.push(argv[++i] as string);
+    else if (a === "--pr-field") {
+      // Only fields no command reads: branch, base, session… reach git and Claude from the allowed wrapper.
+      const m = /^(skip_release|skip_exercise|skip_review|release)=(.*)$/s.exec(argv[++i] ?? "");
+      if (!m) return { bad: a };
+      opts.prFields = { ...opts.prFields, [m[1] as string]: m[2] as string };
+    } else if (a === "--print" && argv[i + 1] !== undefined) print.push(argv[++i] as string);
     else if ((a === "--services" || a === "--fragment") && argv[i + 1] !== undefined) {
       const file = inside(process.cwd(), argv[++i] as string);
       if (!file || !fs.existsSync(file)) return { bad: a };
@@ -97,7 +103,9 @@ export async function run(argv: string[]): Promise<void> {
   if ("bad" in parsed || parsed.steps.some((s) => s.length === 0)) {
     if ("bad" in parsed)
       console.error(
-        `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" ? ", holding a YAML mapping" : ""}`,
+        parsed.bad === "--pr-field"
+          ? "--pr-field: skip_release, skip_exercise, skip_review or release =<value>, with --gate"
+          : `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" ? ", holding a YAML mapping" : ""}`,
       );
     console.error(USAGE);
     process.exitCode = 2;
@@ -107,6 +115,8 @@ export async function run(argv: string[]): Promise<void> {
   let seed: ReturnType<typeof fixturePreset>;
   try {
     seed = fixturePreset({ ...opts, daemon: undefined });
+    // Only --gate seeds a PR file, so the fields would otherwise vanish silently.
+    if (opts.prFields && !seed.prFile) throw new Error("--pr-field needs --gate");
   } catch (e) {
     console.error((e as Error).message);
     console.error(USAGE);

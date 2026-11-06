@@ -165,6 +165,55 @@ test("with merged the fake gh reports the PR merged, so a run reaches workspace 
   );
 });
 
+// SW-514: a ship: tag repo whose release check is changesets', as in werkmeister's own registry.
+const TAG_SERVICES = `services:
+  lib:
+    type: cli
+    repo: app
+    path: packages/lib
+    test: "true"
+repos:
+  app:
+    services: [lib]
+    path_mappings:
+      packages/lib: lib
+    ship: tag
+    release_tag: "v*"
+    release_check: pnpm changeset status --since=origin/main
+`;
+
+test("a merged skip_release PR with no changeset reads shipped (none) on the first pr status (SW-514)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      assert.equal(open.ok, true, open.lines.join("\n"));
+      const out = (await refreshPrStatus(fx.workspace)).lines.join("\n");
+      assert.match(out, /app: shipped \(none\) https:\/\/github\.com\/o\/app\/pull\/1/);
+      assert.doesNotMatch(out, /not shipped yet/);
+    },
+    { gate: true, merged: true, services: TAG_SERVICES, prFields: { skip_release: "tests only" } },
+  );
+});
+
+test("a merged PR without skip_release still waits for a tag containing its merge (SW-514)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      assert.equal(open.ok, true, open.lines.join("\n"));
+      const out = (await refreshPrStatus(fx.workspace)).lines.join("\n");
+      assert.match(out, /app: merged https:\/\/github\.com\/o\/app\/pull\/1/);
+      assert.match(out, /not shipped yet: no release tag contains 0000000; no tag matches v\* yet/);
+    },
+    { gate: true, merged: true, services: TAG_SERVICES },
+  );
+});
+
 test("init refuses a repo name that leaves repos_root, before touching any repo", async () => {
   await withFixtureWorkspace(
     async (fx) => {

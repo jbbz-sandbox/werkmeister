@@ -2071,6 +2071,49 @@ test("refreshPrStatus: ship: tag with release: none ships on merge without a tag
   }
 });
 
+test("refreshPrStatus: a merged skip_release PR ships (none) only when its diff has no changeset (SW-514)", async () => {
+  const SKIP = "url: https://x/pr/9\nskip_release: tests only\n";
+  const files = (n, ...paths) => [
+    ...paths.map((p) => ({ path: p })),
+    ...Array.from({ length: n }, (_, i) => ({ path: `test/${i}.mjs` })),
+  ];
+  const cases = [
+    ["tests only", SKIP, files(1, ".changeset/README.md"), REGISTRY.repos.app, "shipped"],
+    ["a changeset", SKIP, files(1, ".changeset/sw-1.md"), REGISTRY.repos.app, "merged"],
+    ["100 files may hide one", SKIP, files(100), REGISTRY.repos.app, "merged"],
+    ["no files listed", SKIP, undefined, REGISTRY.repos.app, "merged"],
+    ["no skip_release", "url: https://x/pr/9\n", files(1), REGISTRY.repos.app, "merged"],
+    ["release already set", `${SKIP}release: v1.0.0\n`, files(1), REGISTRY.repos.app, "merged"],
+    [
+      "another release tool",
+      SKIP,
+      files(1),
+      { ...REGISTRY.repos.app, release_check: "npm run release:check" },
+      "merged",
+    ],
+  ];
+  for (const [label, extra, prFiles, repo, want] of cases) {
+    const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra }) } });
+    try {
+      const view = { state: "MERGED", mergeCommit: { oid: "abc123" }, files: prFiles };
+      const d = deps(
+        [
+          [/^gh pr view/, { stdout: JSON.stringify(view) }],
+          [/tag --contains/, { stdout: "" }],
+        ],
+        { repos: { app: repo } },
+      );
+      const r = await refreshPrStatus(ws, d);
+      const fm = readPrFiles(ws)[0].fm;
+      assert.equal(fm.status, want, `${label}: ${r.lines.join("\n")}`);
+      if (label === "tests only") assert.equal(fm.release, "none");
+      if (label === "release already set") assert.equal(fm.release, "v1.0.0");
+    } finally {
+      clean(ws);
+    }
+  }
+});
+
 test("lifecycleOf: merged + release: none reads shipped after pr status, so close-out proceeds (SW-193)", async () => {
   const ws = icmWorkspace({
     files: { app: prFile({ status: "merged", extra: "merge_sha: abc\nrelease: none\n" }) },
