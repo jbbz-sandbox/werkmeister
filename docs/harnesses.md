@@ -39,17 +39,27 @@ has its own harness with hooks, `harness: codex` ([Codex](#codex)).
    (`overrides.mcp_port` in `~/.werkmeister/config.yaml` or `WERKMEISTER_MCP_PORT`
    changes the port).
 
-   - Codex CLI: `codex mcp add werkmeister --url http://127.0.0.1:3002/mcp`, or in
-     `~/.codex/config.toml` (or a trusted project's `.codex/config.toml`):
+   - Codex CLI: use `harness: codex` ([Codex](#codex)), which writes this registration for you
+     and adds the hooks. To register by hand, put it in the workspace's `.codex/config.toml`
+     (Codex reads it once the folder is trusted) and start Codex with the workspace's token,
+     `WERKMEISTER_MCP_TOKEN=$(cat .werkmeister/token) codex`:
 
      ```toml
      [mcp_servers.werkmeister]
      url = "http://127.0.0.1:3002/mcp"
+     # The workspace token scopes the session to this workspace; unset, Codex skips the server.
+     bearer_token_env_var = "WERKMEISTER_MCP_TOKEN"
      # Headless `codex exec` refuses tools that write unless the server is pre-approved,
      # and its 300 s default cuts off a first `up` while the worktree installs.
      default_tools_approval_mode = "approve"
      tool_timeout_sec = 1800
      ```
+
+     A global registration (`codex mcp add werkmeister --url http://127.0.0.1:3002/mcp`,
+     which writes `~/.codex/config.toml`) has no token, so every Codex session on the machine
+     acts as the host (step 1). Leave `default_tools_approval_mode` out there: pre-approved,
+     any session could run `close-out`, `down` or a Jira or GitHub write against any workspace
+     without a prompt.
 
    - Cursor: `.cursor/mcp.json` in the workspace:
 
