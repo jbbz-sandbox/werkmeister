@@ -104,11 +104,13 @@ export function fixturePreset({
   ...opts
 }: FixturePresets & FixtureOptions): FixtureOptions {
   const preset: FixtureOptions = {};
-  const lib = opts.services && YAML.parse(opts.services)?.services?.lib;
-  if (gate && opts.services && (lib?.repo !== "app" || lib?.path !== "packages/lib"))
-    throw new Error(
-      "--gate needs a `lib` service in repo `app` (at packages/lib) in the --services registry",
-    );
+  if (gate && opts.services) {
+    const lib = YAML.parse(opts.services)?.services?.lib;
+    if (lib?.repo !== "app" || lib?.path !== "packages/lib")
+      throw new Error(
+        "--gate needs a `lib` service in repo `app` (at packages/lib) in the --services registry",
+      );
+  }
   if (gate)
     Object.assign(preset, {
       repos: [{ name: "app", change: "packages/lib/index.js" }],
