@@ -729,7 +729,7 @@ Create a new workspace under $WERKMEISTER_WORKSPACES_ROOT (git worktrees on a \<
 - `--test-path <path>`: URL path for feature testing; passed through to init-workspace.
 - `--description <text>`: Free-form description for the CLAUDE.md header; passed through to init-workspace.
 - `--starting-prompt <text>`: First instruction for the agent; passed through to init-workspace.
-- `--work-type <type>`: Kind of work; seeds the first-phase handoff note. Passed through to init-workspace.
+- `--work-type <type>`: Kind of work; selects the ICM stages and seeds the JIT first-phase handoff note. Passed through to init-workspace.
 - `--context-strategy <id>`: Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
 - `--harness <id>`: Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks) or codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) (env: WERKMEISTER_HARNESS; config: harness).
 - `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
@@ -800,7 +800,7 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 - `--test-path <path>`: URL path for feature testing (env: WERKMEISTER_TEST_PATH; config: test_path).
 - `--description <text>`: Free-form description for the CLAUDE.md header (env: WERKMEISTER_DESCRIPTION; config: description).
 - `--starting-prompt <text>`: First instruction for the agent; persisted to .werkmeister/workspace.yml (env: WERKMEISTER_STARTING_PROMPT; config: starting_prompt).
-- `--work-type <type>`: Kind of work; seeds the first-phase handoff note (env: WERKMEISTER_WORK_TYPE; config: work_type).
+- `--work-type <type>`: Kind of work; selects the ICM stages and seeds the JIT first-phase handoff note (env: WERKMEISTER_WORK_TYPE; config: work_type).
 - `--context-strategy <id>`: Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
 - `--harness <id>`: Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks) or codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) (env: WERKMEISTER_HARNESS; config: harness).
 - `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
