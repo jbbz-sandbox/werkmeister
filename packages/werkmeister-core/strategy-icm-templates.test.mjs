@@ -166,6 +166,13 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /A library or CLI has no service to restart/, `${wt}/${d}`);
           assert.match(c, /as its Validation text in `werkmeister-context\.md`/, `${wt}/${d}`);
         }
+        // SW-506: the host-test step yields to a container recipe in the service's validate text.
+        if (c.includes("through `.werkmeister/bin/with-temp-home`, which gives"))
+          assert.match(
+            c,
+            /says to run in its container \(`docker exec`\), follow that text instead/,
+            `${wt}/${d}`,
+          );
         // SW-388: each build stage ends with the review step and lists review.md; spike has none.
         const build = { feature: "03_implement", refactor: "02_implement" }[wt] ?? "03_exercise";
         if (wt !== "spike" && d === build) {

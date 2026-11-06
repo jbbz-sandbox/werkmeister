@@ -71,7 +71,9 @@ const IMPLEMENT_STEPS = [
 // SW-316: a host run misses the container's env; the tests-only gate runs where pr open will.
 const HOST_TESTS =
   "Run the test command exactly as `../../.werkmeister/werkmeister-context.md` states it: through `.werkmeister/bin/with-temp-home`, which gives it a fresh temporary HOME — never hand-roll `HOME=…`. " +
-  "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. ";
+  "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. " +
+  // SW-506: werkmeister's host checkout has no node_modules; the recipe is its services.yaml text (SW-190), not this generic step.
+  "When a service's How-to-validate text in `werkmeister-context.md` says to run in its container (`docker exec`), follow that text instead: starting this workspace's own container with `werkmeister feature up --service <name>` is expected for it and allowed. ";
 const TEST_TAIL =
   "A subagent you brief to run tests or the CLI gets that wrapped command verbatim in its brief. " +
   // SW-125: a host-skipped test still asserted removed behaviour; only the gate's container run found it.
