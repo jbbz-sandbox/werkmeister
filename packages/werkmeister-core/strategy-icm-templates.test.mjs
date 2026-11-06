@@ -362,6 +362,8 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
       /one commit per ticket, for the workspace's issue and each member, `SW-2`, `SW-3`/,
     );
     assert.match(implement, /commits in `origin\/main\.\.\.HEAD`/);
+    // SW-466: each ticket's commit carries its own snapshot regeneration.
+    assert.match(implement, /regenerate it in that ticket's commit/);
     assert.match(
       implement,
       /fold each fix into the commit of the ticket it belongs to \(`git commit --fixup <sha>`/,
@@ -400,6 +402,7 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
         /For each ticket, take its `scope\.md` steps in order, then commit it before the next ticket; do not commit after every step\./,
       );
       assert.doesNotMatch(implement, /Take the steps in order\. After each one/);
+      for (const c of refactor.contracts) assert.doesNotMatch(c, /once,? at the end/);
     } finally {
       fs.rmSync(refactorRoot, { recursive: true, force: true });
     }
@@ -415,6 +418,7 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
       });
       assert.match(bug.contracts[1], /one commit per ticket/);
       assert.match(bug.contracts[2], /commits in `origin\/main\.\.\.HEAD`/);
+      for (const c of bug.contracts) assert.doesNotMatch(c, /once,? at the end/);
     } finally {
       fs.rmSync(bugRoot, { recursive: true, force: true });
     }
@@ -423,6 +427,8 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     assert.match(off.contracts[2], /uncommitted changes, untracked files included/);
     assert.match(off.contracts[2], /^- Code changes, uncommitted/m);
     assert.match(off.contracts[3], /One commit per code repo touched/);
+    for (const c of [...on.contracts, ...off.contracts])
+      assert.doesNotMatch(c, /once,? at the end/);
     for (const c of off.contracts)
       assert.doesNotMatch(c, /grouped PR|origin\/main\.\.\.HEAD|close each member/);
   } finally {
