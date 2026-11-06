@@ -174,36 +174,44 @@ test("werkmeister_issues_project sends werkmeister issues to that Jira project",
 });
 
 test("github checkAuth: signed in, signed out, no repo access", async () => {
-  await withSandboxHome(
-    async () => {
-      const t = it.issueTracker();
-      await withFakeGh({ auth: 0 }, async () =>
-        assert.deepEqual(await t.checkAuth(), { ok: true, who: "octo", fix: "" }),
-      );
-      await withFakeGh({ auth: 1 }, async () =>
-        assert.deepEqual(await t.checkAuth(), {
-          ok: false,
-          reason: "not signed in",
-          fix: "gh auth login",
-        }),
-      );
-    },
-    { config: "overrides:\n  issue_tracker: github\n" },
-  );
-  await withSandboxHome(
-    async () => {
-      const t = it.issueTracker();
-      await withFakeGh({ auth: 0, repoView: 1 }, async () =>
-        assert.deepEqual(await t.checkAuth(), {
-          ok: false,
-          who: "octo",
-          reason: "can't read acme/api",
-          fix: "gh auth refresh -s repo",
-        }),
-      );
-    },
-    { config: "overrides:\n  issue_tracker: github\n  github_org: acme\n" },
-  );
+  // SW-512: checkAuth's 15 s per-gh-call timeout; the fake gh is a node start, which took over 15 s at load ~270 on 12 cores.
+  const prevScale = process.env.WERKMEISTER_TIMEOUT_SCALE;
+  process.env.WERKMEISTER_TIMEOUT_SCALE = "4";
+  try {
+    await withSandboxHome(
+      async () => {
+        const t = it.issueTracker();
+        await withFakeGh({ auth: 0 }, async () =>
+          assert.deepEqual(await t.checkAuth(), { ok: true, who: "octo", fix: "" }),
+        );
+        await withFakeGh({ auth: 1 }, async () =>
+          assert.deepEqual(await t.checkAuth(), {
+            ok: false,
+            reason: "not signed in",
+            fix: "gh auth login",
+          }),
+        );
+      },
+      { config: "overrides:\n  issue_tracker: github\n" },
+    );
+    await withSandboxHome(
+      async () => {
+        const t = it.issueTracker();
+        await withFakeGh({ auth: 0, repoView: 1 }, async () =>
+          assert.deepEqual(await t.checkAuth(), {
+            ok: false,
+            who: "octo",
+            reason: "can't read acme/api",
+            fix: "gh auth refresh -s repo",
+          }),
+        );
+      },
+      { config: "overrides:\n  issue_tracker: github\n  github_org: acme\n" },
+    );
+  } finally {
+    if (prevScale === undefined) delete process.env.WERKMEISTER_TIMEOUT_SCALE;
+    else process.env.WERKMEISTER_TIMEOUT_SCALE = prevScale;
+  }
 });
 
 test("github updateIssue: a status label is created when the repo lacks it, then added (#156)", async () => {
