@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--services <file>] [--fragment <file>] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--services <file>] [--fragment <file>] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -17,7 +17,7 @@ import { startFakeDaemon } from "werkmeister-core/fixture_fakes";
 import { fixturePreset, seedFixture } from "werkmeister-core/fixture_workspace";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--services <file>] [--fragment <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--services <file>] [--fragment <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -31,11 +31,12 @@ export function inside(base: string, p: string): string | null {
   return r.startsWith(b + path.sep) ? r : null;
 }
 
-function parse(argv: string[]) {
+export function parse(argv: string[]) {
   const opts = {
     gate: false,
     bare: false,
     daemon: false,
+    execRuns: false,
     services: undefined as string | undefined,
     fragment: undefined as string | undefined,
   };
@@ -46,6 +47,8 @@ function parse(argv: string[]) {
     if (a === "--gate") opts.gate = true;
     else if (a === "--bare") opts.bare = true;
     else if (a === "--daemon") opts.daemon = true;
+    // First only, so the workspace's prefix ask rule sees it (workspaceAskRules); later, it is a werkmeister arg.
+    else if (a === "--exec-runs" && i === 0) opts.execRuns = true;
     else if (a === "--print" && argv[i + 1] !== undefined) print.push(argv[++i] as string);
     else if ((a === "--services" || a === "--fragment") && argv[i + 1] !== undefined) {
       const file = inside(process.cwd(), argv[++i] as string);

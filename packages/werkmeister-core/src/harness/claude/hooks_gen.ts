@@ -585,7 +585,8 @@ export function buildAllowRules(
     if (tempHome) rules.push(...rest.map((c) => `Bash(${c}:*)`));
   }
   if (tempHome) for (const cli of builtClis) rules.push(`Bash(${tempHome} ${cli}:*)`);
-  // SW-292: its sibling runs only the workspace's own built CLI, in a fixture, so it is safe whole.
+  // SW-292: its sibling runs only the workspace's own built CLI, in a fixture, so it is safe whole;
+  // its --exec-runs form, which runs the registry's rows on the host, asks first (workspaceAskRules).
   if (tempHome && builtClis.length)
     rules.push(`Bash(${path.join(path.dirname(tempHome), "with-fixture-workspace")}:*)`);
   // The fixture form werkmeister-context.md recommends; never `Bash(${tempHome}:*)`, which runs anything.
@@ -634,9 +635,7 @@ export function workspaceAllowRules(
     .map((s) => s.trim())
     .filter(Boolean);
   const wrapper = tempHomeWrapper(workspaceRoot);
-  const builtClis = repoDirs(workspaceRoot)
-    .map((d) => path.join(d, "apps", "cli", "werkmeister"))
-    .filter((f) => fs.existsSync(f));
+  const builtClis = builtCliWrappers(workspaceRoot);
   // SW-398: the context file lists every service of the workspace's repos, so their test commands are allowed too.
   const repoNames = repoDirs(workspaceRoot).map((d) => path.basename(d));
   let hostServices: string[] = [];
@@ -660,6 +659,31 @@ export function workspaceAllowRules(
   return autonomous ? [...new Set([...rules, ...autonomousRules(feature, services)])] : rules;
 }
 
+function builtCliWrappers(workspaceRoot: string): string[] {
+  return repoDirs(workspaceRoot)
+    .map((d) => path.join(d, "apps", "cli", "werkmeister"))
+    .filter((f) => fs.existsSync(f));
+}
+
+/**
+ * SW-473: `--exec-runs` runs the registry's rows on the host, so its forms of the pre-approved fixture
+ * wrapper and built CLI ask first. The CLI takes it only as the first fixture option, so a prefix catches it.
+ */
+export function workspaceAskRules(workspaceRoot: string): string[] {
+  const builtClis = builtCliWrappers(workspaceRoot);
+  if (!builtClis.length) return [];
+  const tempHome = tempHomeWrapper(workspaceRoot);
+  const fixture = path.join(path.dirname(tempHome), "with-fixture-workspace");
+  return [
+    `Bash(${fixture} --exec-runs:*)`,
+    `Bash(${fixture} --no-wait --exec-runs:*)`,
+    ...builtClis.flatMap((cli) => [
+      `Bash(${tempHome} ${cli} internal fixture --exec-runs:*)`,
+      `Bash(${tempHome} --no-wait ${cli} internal fixture --exec-runs:*)`,
+    ]),
+  ];
+}
+
 /** The deny rules this workspace should have: AUTONOMOUS_DENY while `autonomous` is on. */
 export function workspaceDenyRules(
   workspaceRoot: string,
@@ -671,6 +695,7 @@ export function workspaceDenyRules(
 interface PermissionsRecord {
   allow: string[];
   deny: string[];
+  ask: string[];
   model: string | null;
 }
 
@@ -680,14 +705,15 @@ const _strings = (v: unknown): string[] =>
 function _readRecord(recordPath: string): PermissionsRecord {
   try {
     const data = JSON.parse(fs.readFileSync(recordPath, "utf8"));
-    if (!_isDict(data)) return { allow: [], deny: [], model: null };
+    if (!_isDict(data)) return { allow: [], deny: [], ask: [], model: null };
     return {
       allow: _strings(data.allow),
       deny: _strings(data.deny),
+      ask: _strings(data.ask),
       model: typeof data.model === "string" ? data.model : null,
     };
   } catch {
-    return { allow: [], deny: [], model: null };
+    return { allow: [], deny: [], ask: [], model: null };
   }
 }
 
@@ -696,6 +722,7 @@ function _writeRecord(recordPath: string, record: PermissionsRecord): void {
   const body = {
     ...(record.allow.length ? { allow: record.allow } : {}),
     ...(record.deny.length ? { deny: record.deny } : {}),
+    ...(record.ask.length ? { ask: record.ask } : {}),
     ...(record.model ? { model: record.model } : {}),
   };
   const previous = _readRecord(recordPath);
@@ -720,14 +747,15 @@ export function writeWorkspacePermissions(
   workspaceRoot: string,
   allow: string[],
   deny: string[] = [],
+  ask: string[] = [],
 ): string {
   const settingsPath = _settingsPath(workspaceRoot);
   const settings = _readSettings(settingsPath);
   if (settings === null) return settingsPath;
   const permissions = settings["permissions"] ?? {};
   if (!_isDict(permissions)) return settingsPath;
-  const lists = { allow, deny };
-  const keys = ["allow", "deny"] as const;
+  const lists = { allow, deny, ask };
+  const keys = ["allow", "deny", "ask"] as const;
   if (keys.some((k) => !Array.isArray(permissions[k] ?? []))) return settingsPath;
 
   const recordPath = permissionsRecord(workspaceRoot);
@@ -759,9 +787,9 @@ export function writeWorkspacePermissions(
   return settingsPath;
 }
 
-/** Remove every allow and deny rule werkmeister added, keeping the person's. */
+/** Remove every allow, deny and ask rule werkmeister added, keeping the person's. */
 export function removeWorkspacePermissions(workspaceRoot: string): string {
-  return writeWorkspacePermissions(workspaceRoot, [], []);
+  return writeWorkspacePermissions(workspaceRoot, [], [], []);
 }
 
 /**
@@ -808,6 +836,7 @@ export function writeWorkspaceSettings(workspaceRoot: string): void {
     workspaceRoot,
     workspaceAllowRules(workspaceRoot),
     workspaceDenyRules(workspaceRoot),
+    workspaceAskRules(workspaceRoot),
   );
   writeWorkspaceModel(workspaceRoot, readModel(workspaceRoot));
   writeAutoStopHook(workspaceRoot, readAutoStop(workspaceRoot));

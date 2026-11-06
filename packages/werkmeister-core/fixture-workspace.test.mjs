@@ -94,6 +94,31 @@ test("the gate fixture's one-file change runs lib's test in its container, logge
   );
 });
 
+test("with execRuns the gate's lint and test rows pass or fail on the registry's commands (SW-473)", async () => {
+  const gate = (lint, libTest) =>
+    withFixtureWorkspace(
+      async (fx) => {
+        await withReporter(collectingReporter(), () =>
+          initWorkspace({}, fx.workspace, { build: false }),
+        );
+        return gatePrs(fx.workspace, undefined, undefined, { wait: false });
+      },
+      {
+        gate: true,
+        execRuns: true,
+        services: `services:\n  lib: { type: cli, repo: app, path: packages/lib, test: "${libTest}" }\nrepos:\n  app: { services: [lib], lint: "${lint}", path_mappings: { packages/lib: lib } }\n`,
+      },
+    );
+  const pass = await gate("true", "test -f packages/lib/index.js");
+  assert.equal(pass.ok, true, pass.lines.join("\n"));
+  const badLint = await gate("false", "true");
+  assert.equal(badLint.ok, false);
+  assert.match(badLint.lines.join("\n"), /✗ lint: false → exit 1/);
+  const badTest = await gate("true", "false");
+  assert.equal(badTest.ok, false);
+  assert.match(badTest.lines.join("\n"), /✗ test lib: false → exit 1/);
+});
+
 test("caller-exported Jira credentials don't reach a fixture run", async () => {
   const prev = process.env.JIRA_API_TOKEN;
   Object.assign(process.env, {

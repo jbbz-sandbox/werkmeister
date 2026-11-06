@@ -9,7 +9,7 @@ import * as path from "node:path";
 
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 
-import { inside, run } from "../../commands/fixture.js";
+import { inside, parse, run } from "../../commands/fixture.js";
 
 let tmp: string;
 beforeAll(() => {
@@ -30,6 +30,14 @@ it("keeps paths under the base and refuses absolute, .. and symlinks out", () =>
   expect(inside(ws, "../secret")).toBeNull();
   expect(inside(ws, "link")).toBeNull();
   expect(inside(ws, ".")).toBeNull();
+});
+
+it("--exec-runs is a fixture option only first, where the ask rule's prefix sees it (SW-473)", () => {
+  const first = parse(["--exec-runs", "--gate", "pr", "gate"]);
+  expect(first.opts?.execRuns).toBe(true);
+  const later = parse(["--gate", "--exec-runs", "pr", "gate"]);
+  expect(later.opts?.execRuns).toBe(false);
+  expect(later.steps?.[0]?.[0]).toBe("--exec-runs");
 });
 
 it("--services outside the current folder is refused before any fixture is made", async () => {

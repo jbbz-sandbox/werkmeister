@@ -16,6 +16,7 @@ import {
   READ_ONLY_GIT_RULES,
   removeWorkspacePermissions,
   workspaceAllowRules,
+  workspaceAskRules,
   writeWorkspacePermissions,
 } from "./dist/harness/claude/hooks_gen.js";
 
@@ -432,4 +433,29 @@ test("SW-398: a chained stage test command gets the wrapped first segment and a 
   assert.ok(rules.includes(`Bash(${w} pnpm turbo run test:*)`));
   assert.ok(rules.includes("Bash(pnpm --filter x run docs:links:*)"));
   assert.ok(!rules.some((r) => r.includes("docker exec")), "host-only service: no container rule");
+});
+
+test("ask rules land beside allow, are recorded, and removal drops them (SW-473)", () => {
+  const root = workspace({ permissions: { ask: ["mine"] } });
+  writeWorkspacePermissions(root, ["a"], [], ["q"]);
+  assert.deepEqual(readSettings(root).permissions, { ask: ["mine", "q"], allow: ["a"] });
+  assert.deepEqual(readRecord(root), { allow: ["a"], ask: ["q"] });
+  removeWorkspacePermissions(root);
+  assert.deepEqual(readSettings(root).permissions, { ask: ["mine"] });
+});
+
+test("--exec-runs forms of the fixture wrapper and built CLI ask; none without a built CLI (SW-473)", () => {
+  const root = workspace();
+  assert.deepEqual(workspaceAskRules(root), []);
+  const cli = path.join(root, "werkmeister", "apps", "cli");
+  fs.mkdirSync(cli, { recursive: true });
+  fs.mkdirSync(path.join(root, "werkmeister", ".git"));
+  fs.writeFileSync(path.join(cli, "werkmeister"), "");
+  const bin = path.join(dotDir(root), "bin");
+  assert.deepEqual(workspaceAskRules(root), [
+    `Bash(${bin}/with-fixture-workspace --exec-runs:*)`,
+    `Bash(${bin}/with-fixture-workspace --no-wait --exec-runs:*)`,
+    `Bash(${bin}/with-temp-home ${cli}/werkmeister internal fixture --exec-runs:*)`,
+    `Bash(${bin}/with-temp-home --no-wait ${cli}/werkmeister internal fixture --exec-runs:*)`,
+  ]);
 });
