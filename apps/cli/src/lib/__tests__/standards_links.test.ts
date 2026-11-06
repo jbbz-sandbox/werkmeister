@@ -33,13 +33,26 @@ function makeTree(remote: string | null): string {
   return dir;
 }
 
+// Run under `git rebase --exec` or a hook, an inherited GIT_DIR would point the
+// fixtures' `git init` at the real repo and re-init it (SW-508).
+const GIT_REPO_VARS = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"];
+const savedGitEnv: Record<string, string | undefined> = {};
+
 beforeEach(() => {
+  for (const k of GIT_REPO_VARS) {
+    savedGitEnv[k] = process.env[k];
+    delete process.env[k];
+  }
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "std-links-"));
   process.env.WERKMEISTER_CONFIG_FILE = path.join(tmp, "config.yaml");
 });
 afterEach(() => {
   delete process.env.WERKMEISTER_CONFIG_FILE;
   fs.rmSync(tmp, { recursive: true, force: true });
+  for (const k of GIT_REPO_VARS) {
+    if (savedGitEnv[k] === undefined) delete process.env[k];
+    else process.env[k] = savedGitEnv[k];
+  }
 });
 
 describe("standardsSource", () => {
@@ -59,6 +72,40 @@ describe("standardsSource", () => {
   it("is null when the tree is not a checkout — a package or a plain directory", () => {
     makeTree(null);
     expect(standardsSource()).toBeNull();
+  });
+
+  // SW-508: `git rebase --exec` exports GIT_DIR, which beats `git -C` and made a
+  // plain tree link into whatever repo the command ran in.
+  describe("ignores repo-discovery variables inherited from a calling git", () => {
+    let other: string;
+    beforeEach(() => {
+      other = fs.mkdtempSync(path.join(tmp, "other-"));
+      execFileSync("git", ["init", "-q"], { cwd: other });
+      execFileSync("git", ["remote", "add", "origin", "git@github.com:acme/other.git"], {
+        cwd: other,
+      });
+    });
+
+    for (const [name, value] of [
+      ["GIT_DIR", () => path.join(other, ".git")],
+      ["GIT_WORK_TREE", () => other],
+      ["GIT_COMMON_DIR", () => path.join(other, ".git")],
+    ] as const) {
+      it(`${name}: a checkout still reports its own remote and prefix`, () => {
+        makeTree("git@github.com:acme/eng-standards.git");
+        process.env[name] = value();
+        expect(standardsSource()).toEqual({
+          base: "https://github.com/acme/eng-standards",
+          prefix: "docs/standards",
+        });
+      });
+    }
+
+    it("GIT_DIR: a plain directory is still null", () => {
+      makeTree(null);
+      process.env.GIT_DIR = path.join(other, ".git");
+      expect(standardsSource()).toBeNull();
+    });
   });
 });
 
