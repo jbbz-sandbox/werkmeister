@@ -105,7 +105,9 @@ const groupStep = (v: IcmVars) =>
           "Take the tickets one at a time: make that ticket's changes and tests, run the diff check below on them, then commit on the worktree's branch with a message that starts with its key (`<KEY> <summary>`) before starting the next. " +
           "Each commit builds and passes the host tests on its own. " +
           // SW-466: SW-462's brief said to regenerate the snapshot once for the PR, so three commits failed it alone.
-          "When a ticket's change alters a generated snapshot (e.g. `strategy-jit.snapshot.json`), regenerate it in that ticket's commit, so the commit passes the snapshot test alone; a brief that says to regenerate once for the whole PR does not override this.",
+          "When a ticket's change alters a generated snapshot (e.g. `strategy-jit.snapshot.json`), regenerate it in that ticket's commit, so the commit passes the snapshot test alone; a brief that says to regenerate once for the whole PR does not override this. " +
+          // SW-497: a scripted reorder to match the spec dropped a commit (sw-406); rebase-and-merge keeps any order.
+          "Commit order across tickets is free; a ticket whose change depends on another's evidence (a measurement) can come last. Never reorder commits to match the spec.",
       ]
     : [];
 
@@ -244,7 +246,7 @@ const feature: Stage[] = [
       doNotLoad:
         "source files already summarised in `inventory.md` (if it looks wrong, fix `inventory.md` and tell the person), `.werkmeister/*.yml`, other stages.",
       process: [
-        "Write `output/spec.md`: what changes, file by file; the interfaces or schemas added; the tests that will prove it; what is explicitly out of scope.",
+        `Write \`output/spec.md\`: what changes, file by file; the interfaces or schemas added; the tests that will prove it; what is explicitly out of scope.${v.group.length ? " This is a grouped PR: list one commit per ticket (`<KEY> …`) and what each holds, but do not fix their order." : ""}`,
         "If the change has a machine-checkable artifact (a schema, an API document, a migration), write it in the repo and validate it with a command that needs no new dependency. Record the exact command in `spec.md`.",
         "Map each acceptance criterion in `BRIEF.md` to the step or test in `spec.md` that satisfies it. A criterion with no mapping is a defect in this stage.",
         // SW-288: a ticket-vs-standard conflict surfaced only in implement, after the code was written.
