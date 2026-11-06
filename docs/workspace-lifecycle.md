@@ -229,7 +229,7 @@ A `docker exec` typed by hand in a terminal outside Claude is not seen.
 
 `auto_stop` (a SessionEnd hook, `werkmeister internal session-end`) is on by default for `autonomous` workspaces. Set `auto_stop: false` in `.werkmeister/workspace.yml` to turn it off.
 
-A grouped PR covers several tickets in one workspace and one PR. Give the member keys (the lead is `issue_id`) before the run starts: `--group SW-2,SW-3` on `werkmeister workspace new` or `werkmeister workspace init`, the create form's **Grouped PR members** field, or `WERKMEISTER_GROUP`. Each lands in `.werkmeister/workspace.yml` as `group: [SW-2, SW-3]`; editing that by hand and rerunning `werkmeister workspace init` works too. The ICM build stages then commit once per ticket and review the range `origin/main...HEAD`, and `propose` keeps the per-ticket commits, asks for rebase and merge rather than squash, and closes each member after the release. Init rewrites the stage contracts, so set `group` before stage work begins.
+A grouped PR covers several tickets in one workspace and one PR. Give the member keys (the lead is `issue_id`) before the run starts: `--group SW-2,SW-3` on `werkmeister workspace new` or `werkmeister workspace init`, the create form's **Grouped PR members** field, or `WERKMEISTER_GROUP`. Each lands in `.werkmeister/workspace.yml` as `group: [SW-2, SW-3]`; editing that by hand and rerunning `werkmeister workspace init` works too. The ICM build stages then commit once per ticket and review the range `origin/main...HEAD`, and `propose` keeps the per-ticket commits, asks for rebase and merge rather than squash, and checks each member reads Done after the release ([Issue status](#issue-status) moves them with the issue). Init rewrites the stage contracts, so set `group` before stage work begins.
 
 ## Pause and resume
 
@@ -251,7 +251,7 @@ A grouped PR covers several tickets in one workspace and one PR. Give the member
 
 ## Issue status
 
-The workspace's issue (`issue_id` in `workspace.yml`) moves by itself as the work does (SW-27). Each move happens at one lifecycle point and posts a short comment naming its trigger.
+The workspace's issue (`issue_id` in `workspace.yml`) moves by itself as the work does (SW-27). Each move happens at one lifecycle point and posts a short comment naming its trigger. In a grouped workspace (`group:` in `workspace.yml`) every move covers the issue and each member, with the same comment; a member already past the target is left alone, as the issue is (SW-500).
 
 | Lifecycle point | Point | Jira (default) | GitHub (default) | Comment |
 |---|---|---|---|---|

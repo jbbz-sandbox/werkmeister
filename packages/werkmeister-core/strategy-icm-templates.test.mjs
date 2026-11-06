@@ -398,7 +398,7 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     assert.match(propose, /Rebase and merge, not squash/);
     assert.match(
       propose,
-      /close each member — `werkmeister issue update <KEY> --status Done --comment <PR url>` for `SW-2`, `SW-3`/,
+      /check each member reads Done — `werkmeister issue view <KEY>` for `SW-2`, `SW-3`/,
     );
     assert.match(on.pipeline, /one per ticket in a grouped PR/);
     // SW-460: a grouped refactor nests scope.md's steps inside each ticket's commit.
@@ -426,7 +426,7 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     }
 
     const auto = await initIcm(root, standardsDir, "true", { group: "SW-2" });
-    assert.match(auto.contracts.at(-1), /When the PR ships, close each member/);
+    assert.match(auto.contracts.at(-1), /When the PR ships, check each member reads Done/);
 
     const bugRoot = fs.mkdtempSync(path.join(os.tmpdir(), "icm-group-bugfix-"));
     try {
@@ -449,7 +449,7 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     for (const c of [...on.contracts, ...off.contracts])
       assert.doesNotMatch(c, /once,? at the end/);
     for (const c of off.contracts)
-      assert.doesNotMatch(c, /grouped PR|origin\/main\.\.\.HEAD|close each member/);
+      assert.doesNotMatch(c, /grouped PR|origin\/main\.\.\.HEAD|each member reads Done/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(standardsDir, { recursive: true, force: true });

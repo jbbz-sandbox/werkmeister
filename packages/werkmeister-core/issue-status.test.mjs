@@ -224,3 +224,36 @@ test("startIssue: names the first stage without output; no issue, no move", asyn
     fs.rmSync(ws, { recursive: true, force: true });
   }
 });
+
+// SW-500: a grouped workspace's moves cover the lead and each `group:` member.
+test("startIssue: a grouped workspace moves the lead and each member; one past it stays", async () => {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "issue-start-"));
+  try {
+    fs.mkdirSync(dotDir(ws), { recursive: true });
+    fs.writeFileSync(
+      path.join(dotDir(ws), "workspace.yml"),
+      "feature: f\nissue_id: X-1\ngroup:\n  - X-2\n  - X-3\n",
+    );
+    const at = { "X-1": "To Do", "X-2": "To Do", "X-3": "Done" };
+    const updates = [];
+    const t = {
+      fetchIssue: async (ref) => ({
+        ref,
+        status: at[ref],
+        statusCategory: at[ref] === "Done" ? "done" : "new",
+      }),
+      updateIssue: async (ref, u) => updates.push([ref, u.status, u.comment]),
+    };
+    assert.equal(
+      await startIssue(ws, t, JIRA),
+      "X-1 → In Progress; X-2 → In Progress; X-3 already Done",
+    );
+    const comment = `Work started: research phase in workspace ${path.basename(ws)}.`;
+    assert.deepEqual(updates, [
+      ["X-1", "In Progress", comment],
+      ["X-2", "In Progress", comment],
+    ]);
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+});

@@ -161,6 +161,15 @@ export function issueIdOf(data: Record<string, unknown> | null | undefined): str
   return str(data?.issue_id) || str(data?.jira_id) || str(data?.github_issue);
 }
 
+/** The issue refs a workspace's status moves cover: its issue, then each `group:` member (SW-500). */
+export function issueRefsOf(data: Record<string, unknown> | null | undefined): string[] {
+  const lead = issueIdOf(data);
+  if (!lead) return [];
+  const group = data?.group;
+  const members = Array.isArray(group) ? group : String(group ?? "").split(",");
+  return [...new Set([lead, ...members.map((m) => String(m).trim()).filter(Boolean)])];
+}
+
 /** A workspace .env's issue ref: `ISSUE_ID`, else the pre-rename `JIRA_ID` / `GITHUB_ISSUE`; "" when none. */
 export function issueIdOfMeta(meta: Record<string, string>): string {
   return str(meta["ISSUE_ID"]) || str(meta["JIRA_ID"]) || str(meta["GITHUB_ISSUE"]);
