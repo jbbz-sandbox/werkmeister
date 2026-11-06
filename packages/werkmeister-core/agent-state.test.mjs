@@ -470,6 +470,46 @@ test("wake nudge: a hook delivering while pr watch appends sends the held wake o
   assert.equal(texts.filter((t) => t.includes("B")).length, 1, `B once: ${seen}`);
 });
 
+test("wake nudge: a failed write keeps the held wake deliverable (SW-502)", async () => {
+  const { deliverWake, writeWakeNudge, wakeNudgePath } = await import("./dist/agent_state.js");
+  const { syncBuiltinESMExports } = await import("node:module");
+  const fsc = (await import("node:fs")).default;
+  const real = fsc.writeFileSync;
+  const dir = workspace("l-failed-write", null);
+  const input = { hook_event_name: "PostToolUse", session_id: "s-1", cwd: dir };
+  const failWrites = (on) => {
+    fsc.writeFileSync = on
+      ? (p, ...rest) => {
+          if (String(p).includes("wake-nudge")) throw new Error("ENOSPC");
+          return real.call(fsc, p, ...rest);
+        }
+      : real;
+    syncBuiltinESMExports();
+  };
+  // No wake held: the error propagates and nothing is left behind.
+  failWrites(true);
+  try {
+    assert.throws(() => writeWakeNudge(dir, "s-1", "X"), /ENOSPC/);
+  } finally {
+    failWrites(false);
+  }
+  assert.equal(fsc.existsSync(wakeNudgePath(dir, "s-1")), false);
+  // A wake is held: a failed append restores it.
+  writeWakeNudge(dir, "s-1", "A");
+  failWrites(true);
+  try {
+    assert.throws(() => writeWakeNudge(dir, "s-1", "B"), /ENOSPC/);
+  } finally {
+    failWrites(false);
+  }
+  const out = deliverWake(input, dir);
+  assert.ok(out?.hookSpecificOutput.additionalContext.includes("A"), JSON.stringify(out));
+  assert.deepEqual(
+    fsc.readdirSync(path.dirname(wakeNudgePath(dir, "s-1"))).filter((n) => n.endsWith(".claimed")),
+    [],
+  );
+});
+
 test("status: a paused workspace reports when, what Resume brings back, and a pending nudge", async () => {
   const dir = workspace("m-status", null);
   writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: ["m-api"], was_working: true });

@@ -359,10 +359,16 @@ export function writeWakeNudge(root: string, session: string, message: string, n
   } catch {
     /* nothing held */
   }
-  writeAtomic(file, {
-    message: before ? `${before}\n\n${message}` : message,
-    at: now.toISOString(),
-  });
+  try {
+    writeAtomic(file, {
+      message: before ? `${before}\n\n${message}` : message,
+      at: now.toISOString(),
+    });
+  } catch (e) {
+    // Put the held wake back (SW-502) so pendingWake and deliverWake still find it.
+    if (before !== null) fs.renameSync(claimed, file);
+    throw e;
+  }
   fs.rmSync(claimed, { force: true });
 }
 
