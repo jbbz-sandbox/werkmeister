@@ -272,6 +272,29 @@ test("resumeAndNudge: an open claude process with no record gets a pending nudge
   assert.equal(await claimResumeNudge("demo-ws"), RESUME_NUDGE);
 });
 
+// SW-488: in a `harness: codex` workspace the open session is a `codex` process, not `claude`.
+test("resumeAndNudge: an open codex process in a codex workspace gets a pending nudge", {
+  skip: noProcTools && "no ps/lsof",
+}, async (t) => {
+  paused(true);
+  const yml = path.join(dot, "workspace.yml");
+  fs.writeFileSync(yml, "feature: demo\nharness: codex\n");
+  t.after(() => fs.writeFileSync(yml, "feature: demo\n"));
+  // A missed guard would run `codex exec resume`: never the real one.
+  const prevBin = process.env.CODEX_BIN;
+  process.env.CODEX_BIN = path.join(bin, "claude");
+  t.after(() =>
+    prevBin === undefined ? delete process.env.CODEX_BIN : (process.env.CODEX_BIN = prevBin),
+  );
+  const procDir = fs.mkdtempSync(path.join(dir, "proc-"));
+  fs.symlinkSync("/bin/sleep", path.join(procDir, "codex"));
+  const child = spawn(path.join(procDir, "codex"), ["30"], { cwd: path.join(ws, ".werkmeister") });
+  t.after(() => child.kill());
+  assert.equal((await resumeAndNudge("demo-ws", ws, "demo")).nudge, "pending");
+  assert.equal(readLog(), "", "no headless codex beside the open one");
+  assert.equal(await claimResumeNudge("demo-ws"), RESUME_NUDGE);
+});
+
 test("resumeAndNudge: a live session gets a pending nudge, claimed once", async () => {
   paused(true);
   fs.writeFileSync(
