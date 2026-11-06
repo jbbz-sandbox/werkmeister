@@ -212,6 +212,12 @@ exports[`command spellings > ["logs","f","api"] 1`] = `
 }
 `;
 
+exports[`command spellings > ["machine","tokens","--remove"] 1`] = `
+{
+  "remove": true,
+}
+`;
+
 exports[`command spellings > ["migrate","--check","--workspaces"] 1`] = `
 {
   "check": true,

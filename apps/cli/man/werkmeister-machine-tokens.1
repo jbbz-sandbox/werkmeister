@@ -1,0 +1,30 @@
+.TH WERKMEISTER-MACHINE-TOKENS 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-machine\-tokens \- List daemon tokens with no workspace; \-\-remove deletes them
+.SH SYNOPSIS
+\fBwerkmeister machine tokens\fR
+.SH OPTIONS
+.TP
+\fB\-\-remove\fR
+Delete the stale tokens (default: list only)
+.SH DESCRIPTION
+.PP
+\fBWhat it does:\fR
+.IP 1. 3
+Lists the files in \fB~/.werkmeister/tokens\fR whose name is not a folder under the workspaces root (\fBpaths.workspaces_root\fR)
+.IP 2. 3
+With \fB\-\-remove\fR, deletes them. A workspace's own token is never touched
+.PP
+Without \fB\-\-remove\fR nothing changes. If the workspaces root cannot be read or holds no workspace folder, nothing is removed and the command exits 1.
+.PP
+\fBWhen to use:\fR
+.IP \(bu 3
+Once after upgrading past 0.74.0: core tests that ran before SW\-433 left tokens there (see the release notes for the name prefixes)
+.IP \(bu 3
+After deleting a workspace folder by hand
+.PP
+A removed token is minted again by the next \fBwerkmeister workspace init\fR for that workspace.
+.PP
+A workspace that lives outside the workspaces root counts as stale: keep \fBpaths.workspaces_root\fR correct before using \fB\-\-remove\fR.
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

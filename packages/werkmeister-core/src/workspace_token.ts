@@ -49,3 +49,38 @@ export function mintWorkspaceToken(name: string, workspaceRoot: string): string 
 export function revokeWorkspaceToken(name: string): void {
   fs.rmSync(path.join(tokensDir(), name), { force: true });
 }
+
+/**
+ * Token names with no workspace folder under *workspacesRoot* (SW-446): the
+ * leftovers of tests that ran before SW-433 and of workspaces removed by hand.
+ * A root that cannot be read, or holds no workspace folder while tokens exist,
+ * throws: a wrong root would otherwise make every live token look stale.
+ */
+export function staleTokens(workspacesRoot: string): string[] {
+  const live = new Set(
+    fs
+      .readdirSync(workspacesRoot, { withFileTypes: true })
+      .filter(
+        (e) => e.isDirectory() || (e.isSymbolicLink() && isDir(path.join(workspacesRoot, e.name))),
+      )
+      .map((e) => e.name),
+  );
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(tokensDir());
+  } catch {
+    // no tokens folder: nothing is stale
+  }
+  if (names.length && !live.size) {
+    throw new Error(`no workspace folders found under ${workspacesRoot}`);
+  }
+  return names.filter((n) => !live.has(n)).sort();
+}
+
+function isDir(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
+}

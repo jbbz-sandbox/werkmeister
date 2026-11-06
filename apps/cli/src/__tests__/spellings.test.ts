@@ -235,6 +235,10 @@ const CASES: [string[], string[]][] = [
     ["machine", "clean", "--dry-run"],
   ],
   [
+    ["machine", "tokens", "--remove"],
+    ["machine", "tokens", "--remove"],
+  ],
+  [
     ["stats", "--collect", "5"],
     ["machine", "stats", "--collect", "5"],
   ],

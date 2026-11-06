@@ -1274,6 +1274,29 @@ With `--all`, it first stops all active features (equivalent to running `werkmei
 - Before a fresh start: `werkmeister machine clean --all`
 - To check what would be cleaned: `werkmeister machine clean --dry-run`
 
+#### werkmeister machine tokens
+
+List daemon tokens with no workspace; --remove deletes them
+
+`werkmeister machine tokens`
+
+- `--remove`: Delete the stale tokens (default: list only)
+
+**What it does:**
+
+1. Lists the files in `~/.werkmeister/tokens` whose name is not a folder under the workspaces root (`paths.workspaces_root`)
+2. With `--remove`, deletes them. A workspace's own token is never touched
+
+Without `--remove` nothing changes. If the workspaces root cannot be read or holds no workspace folder, nothing is removed and the command exits 1.
+
+**When to use:**
+- Once after upgrading past 0.74.0: core tests that ran before SW-433 left tokens there (see the release notes for the name prefixes)
+- After deleting a workspace folder by hand
+
+A removed token is minted again by the next `werkmeister workspace init` for that workspace.
+
+A workspace that lives outside the workspaces root counts as stale: keep `paths.workspaces_root` correct before using `--remove`.
+
 #### werkmeister machine stats
 
 Show Docker container resource usage (CPU, memory)
