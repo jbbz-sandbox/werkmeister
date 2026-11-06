@@ -163,7 +163,7 @@ const propose: Stage = {
     ],
     doNotLoad: "`_shared/standards.md` (no code is written here), source files, `.werkmeister/`.",
     process: [
-      "Walk every acceptance criterion in `BRIEF.md`. For each, write a row whose result cell is exactly PASS or FAIL, with the file and line in a prior `output/` that proves it in a separate evidence column. A FAIL routes back to the owning stage — do not fix it here.",
+      "Walk every acceptance criterion in `BRIEF.md`. For each, write a row whose result cell is exactly PASS or FAIL (MANUAL for a criterion only the reviewer can check, e.g. it needs a real PR or the desktop app, with why in the evidence; never PASS for a check nobody ran), with the file and line in a prior `output/` that proves it in a separate evidence column. A FAIL routes back to the owning stage — do not fix it here.",
       v.group.length
         ? // Lint before the fold, so a lint fix lands in a commit and the gate's clean row holds.
           `The commits are already made, one per ticket: keep them, never squash to one per repo. For a repo with \`ship: tag\` and a \`release_check\` in the registry, write the release entry it needs (e.g. a changeset). Run ${LINT} Then fold everything uncommitted into its ticket's commit (${FOLD}), the release entry into the workspace issue's, and check that \`git log --oneline origin/main..HEAD\` in each worktree shows one commit per ticket (the workspace's issue and ${keys(v.group)}), each message starting with its key.`

@@ -631,6 +631,38 @@ test("gate: an exercise result cell of `FAIL — why`, or neither PASS nor FAIL,
   }
 });
 
+test("gate: a MANUAL acceptance row passes and is named; FAIL still blocks; exercise takes no MANUAL (SW-155)", async () => {
+  const body = (cell) =>
+    `| criterion | result | evidence |\n|---|---|---|\n| works | PASS | x |\n| set_monitor in desktop | ${cell} | needs a real PR |\n`;
+  const manual = icmWorkspace({ files: { app: prFile({ body: body("MANUAL") }) } });
+  try {
+    const g = await gate(manual, deps([DIFF_API]));
+    assert.deepEqual(failed(g), []);
+    assert.equal(
+      g.checks.find((c) => c.name === "acceptance").detail,
+      "all PASS; MANUAL, for the reviewer: set_monitor in desktop",
+    );
+  } finally {
+    clean(manual);
+  }
+  const withFail = icmWorkspace({
+    files: { app: prFile({ body: `${body("MANUAL")}| other | FAIL | y |\n` }) },
+  });
+  try {
+    assert.deepEqual(failed(await gate(withFail, deps([DIFF_API]))), ["acceptance", "tests"]);
+  } finally {
+    clean(withFail);
+  }
+  const exercise = icmWorkspace({ exercise: "| check | result |\n|---|---|\n| x | MANUAL |\n" });
+  try {
+    const g = await gate(exercise, deps([DIFF_API]));
+    assert.deepEqual(failed(g), ["exercise", "tests"]);
+    assert.match(g.checks.find((c) => c.name === "exercise").detail, /neither PASS nor FAIL/);
+  } finally {
+    clean(exercise);
+  }
+});
+
 /** An ICM workspace inited with the SW-388 review step; *review* is its review.md, null for none. */
 function reviewWorkspace(review, opts = {}) {
   const ws = icmWorkspace(opts);
