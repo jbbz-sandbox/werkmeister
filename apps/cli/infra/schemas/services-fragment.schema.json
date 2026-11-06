@@ -50,6 +50,11 @@
           "type": "array",
           "items": { "type": "string" },
           "description": "Path prefixes (a directory or a file, from the repo root) whose changes touch no service, e.g. `docs`, `.changeset`, `README.md`. The pre-PR gate runs no service tests for them; any other path outside every service's `path` touches every service."
+        },
+        "path_mappings": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Extra repo paths → the service whose test covers them, for paths no service's `path:` owns; each service's `path:` is added on top (SW-450)."
         }
       },
       "if": { "properties": { "ship": { "const": "tag" } }, "required": ["ship"] },
