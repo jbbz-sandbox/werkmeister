@@ -339,11 +339,19 @@ export function resolveInputs(
       }
     }
   }
+  // A function, so a run with neither field never hits projectFor's unknown-project warning.
+  const tracker = () => issueTracker({ project: resolved.project, text: resolved.issue_id ?? "" });
   if (resolved.issue_id)
-    resolved.issue_id =
-      issueTracker({ project: resolved.project, text: resolved.issue_id }).parseRef(
-        resolved.issue_id,
-      ) ?? resolved.issue_id;
+    resolved.issue_id = tracker().parseRef(resolved.issue_id) ?? resolved.issue_id;
+  // SW-468: members as the tracker spells them, minus the lead, so no contract lists it as its own member.
+  if (resolved.group) {
+    const t = tracker();
+    const members = [...new Set(resolved.group.split(",").map((k) => t.parseRef(k) ?? k))].filter(
+      (k) => k !== resolved.issue_id,
+    );
+    // Empty, not deleted: init then writes `group: []` over a lead-only list instead of keeping it.
+    resolved.group = members.join(",");
+  }
   if (resolved.autonomous) resolved.autonomous = String(isTrue(resolved.autonomous));
   if (resolved.auto_stop) resolved.auto_stop = String(isTrue(resolved.auto_stop));
 

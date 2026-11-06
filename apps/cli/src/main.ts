@@ -1192,8 +1192,8 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "--group <keys>",
-          "Comma-separated member issue keys of a grouped PR led by issue_id: the ICM " +
-            "contracts commit once per ticket (env: WERKMEISTER_GROUP; config: group).",
+          "Comma-separated member issue keys of a grouped PR led by issue_id: one PR, one " +
+            "commit per ticket (env: WERKMEISTER_GROUP; config: group).",
         )
         .option(
           "--test-path <path>",
