@@ -9,7 +9,7 @@ import path from "node:path";
 import { runCapture, shellQuote } from "../../tool_bins.js";
 import { signalFrom } from "../sessions.js";
 import { runTurn } from "../turn.js";
-import type { SessionSignal, TurnOptions, TurnResult, TurnState } from "../types.js";
+import type { HarnessId, SessionSignal, TurnOptions, TurnResult, TurnState } from "../types.js";
 import { resolveClaudeBin } from "./cli.js";
 import { type ClaudeMessage, parseSessionLines } from "./transcript.js";
 
@@ -127,17 +127,20 @@ export function relayPickedUp(
 }
 
 /**
- * Whether an interactive `claude` (not a `-p` turn) runs with its cwd inside *ws*: the hooks'
- * record can miss an open session, and a headless `--resume` beside it forks the transcript (SW-397).
+ * Whether an interactive session of *harness* (`claude` not in a `-p` turn, `codex` not in `exec`) runs with its
+ * cwd inside *ws*: the hooks' record can miss an open session, and a headless resume beside it forks it (SW-397, SW-488).
  * shortcut: Desktop sessions (the app's own cwd) and hosts without `ps`/`lsof` are not seen; they rely
  * on the record. Read /proc on Linux if a host without lsof needs it.
  */
-export async function claudeOpenIn(ws: string): Promise<boolean> {
+export async function claudeOpenIn(ws: string, harness: HarnessId): Promise<boolean> {
+  const bin = harness === "codex" ? "codex" : "claude";
+  // A `codex` with flags before `exec` counts as open: a pending nudge, never a fork.
+  const headless = harness === "codex" ? /^ (exec|e)( |$)/ : /(^| )(-p|--print)( |$)/;
   const ps = await runCapture("ps", ["-axo", "pid=,args="]).catch(() => null);
   const pids = (ps?.stdout ?? "")
     .split("\n")
     .map((l) => l.trim().match(/^(\d+) (\S+)(.*)$/))
-    .filter((m) => m && path.basename(m[2]) === "claude" && !/(^| )(-p|--print)( |$)/.test(m[3]))
+    .filter((m) => m && path.basename(m[2]) === bin && !headless.test(m[3]))
     .map((m) => m?.[1]);
   if (!pids.length) return false;
   const root = await fs.realpath(ws).catch(() => ws);

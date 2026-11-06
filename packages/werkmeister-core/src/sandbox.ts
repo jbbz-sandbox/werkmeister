@@ -2759,7 +2759,7 @@ export async function resumeAndNudge(
     info("Session: it was not mid-turn, so nothing to continue");
     return { ...result, nudge: "none" };
   }
-  if (liveSessions(ws).length || (await claudeOpenIn(ws))) {
+  if (liveSessions(ws).length || (await claudeOpenIn(ws, harnessIdOf(ws)))) {
     writeNudge(ws, RESUME_NUDGE);
     info(
       'Session: a live session will get "continue" (Desktop via the pane; in a terminal, say it)',
