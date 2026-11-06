@@ -983,6 +983,7 @@ export function registerWorkspaceTools(server: McpServer): void {
             }),
             paused: z.object({ at: z.string(), containers: z.array(z.string()) }).nullable(),
             resumeNudge: z.boolean(),
+            heldWakes: z.array(z.object({ session: z.string(), at: z.string() })),
           }),
         ),
         host: z.record(z.string(), z.unknown()).optional(),

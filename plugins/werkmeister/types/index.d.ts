@@ -53,6 +53,8 @@ export type WorkspaceRow = {
   paused: { at: string; containers: string[] } | null;
   /** Resume left a "continue" for this workspace's live session, for the pane to send. */
   resumeNudge: boolean;
+  /** Sessions with a `pr watch` wake held for them (SW-418), and when each file last changed. */
+  heldWakes: { session: string; at: string }[];
   /** The desktop-app session whose cwd lies in this workspace. */
   /** `pinned`: the session is pinned in the app's sidebar. */
   session: {
@@ -203,6 +205,12 @@ declare module "claude-code" {
       formBusy: "" | "fetch" | "create" | "refine";
       /** The Create tab's last-clicked text field, by key: the one drawn with a cursor. */
       focusedField: string;
+      /** A main-loop model turn is running, from turn.start to turn.complete (SW-463). */
+      turnRunning: boolean;
+      /** Desktop's wrap_up box asked the person something; their next prompt answers it. It outlives its turn. */
+      wrapUpOpen: boolean;
+      /** The `at` of the held wake the band last prompted this session for; '' when none. */
+      wakePrompted: string;
     };
   }
 }
