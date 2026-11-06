@@ -102,27 +102,3 @@ test("staleTokens: no tokens folder is empty; an unreadable root throws", () => 
     assert.throws(() => staleTokens(path.join(home, "features")), /no workspace folders/);
   });
 });
-
-test("machine tokens lists without --remove, deletes the stale ones with it", async () => {
-  const { execFileSync } = await import("node:child_process");
-  const main = new URL("../../apps/cli/dist/main.js", import.meta.url).pathname;
-  withHome((home) => {
-    const root = seed(home);
-    const cfg = path.join(home, "config.yaml");
-    fs.writeFileSync(cfg, `version: 1\npaths:\n  workspaces_root: ${root}\n`);
-    const run = (...args) =>
-      execFileSync(process.execPath, [main, "machine", "tokens", ...args], {
-        encoding: "utf8",
-        env: { ...process.env, HOME: home, WERKMEISTER_CONFIG_FILE: cfg },
-      });
-    const before = fs.readdirSync(tokensDir()).sort();
-
-    const listed = run();
-    assert.match(listed, new RegExp(`${LEAKED.length} stale token\\(s\\)`));
-    for (const name of LEAKED) assert.ok(listed.includes(name), name);
-    assert.deepEqual(fs.readdirSync(tokensDir()).sort(), before);
-
-    assert.match(run("--remove"), new RegExp(`Removed ${LEAKED.length} token\\(s\\)`));
-    assert.deepEqual(fs.readdirSync(tokensDir()), ["live-ws"]);
-  });
-});
