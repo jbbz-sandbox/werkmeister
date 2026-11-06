@@ -14,6 +14,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
   containerTestCommand,
+  serviceNoTests,
   serviceTestCommand,
   type ValidationRow,
   validationRows,
@@ -324,6 +325,8 @@ function testCommandLine(
   archetypes: ArchetypeRegistry,
 ): string {
   const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
+  const noTests = serviceNoTests(servicesConfig[svc]);
+  if (noTests) return `- \`${svc}\`: no tests (registry: ${noTests})`;
   return cmd
     ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, cmd)}\``
     : `- \`${svc}\`: no test command registered (add \`test:\` to its registry entry)`;

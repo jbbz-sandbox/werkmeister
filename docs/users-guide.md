@@ -1688,7 +1688,7 @@ Each service can carry two related keys. They do different jobs, and a change ne
 
 | Missing | What shows up |
 |---|---|
-| `test:` | The How to validate table shows `—`. The gate fails `test <service>` unless the PR file sets `skip_tests: { <service>: <reason> }`, which is accepted for a service with no test command or a container the gate could not start. |
+| `test:` | The How to validate table shows `—`. The gate fails `test <service>` unless the PR file sets `skip_tests: { <service>: <reason> }`, which is accepted for a service with no test command or a container the gate could not start. A service that has no tests at all sets `test: none` (or `test: "none: <reason>"`) instead: it beats the archetype's template, the gate reports `test <service>` skipped with that reason, and `werkmeister-context.md` shows `no tests (registry: <reason>)`. |
 | `validate:`, service has a `feature_router:` | "URL health check (see Quick Health Checks)": the proxy, cookie and health-check sections of `werkmeister-context.md` are the validation. |
 | `validate:`, no `feature_router:` | "No validation guidance registered in services.yaml; say so instead of inventing one". Add a `validate:` value rather than leave agents to guess. |
 
