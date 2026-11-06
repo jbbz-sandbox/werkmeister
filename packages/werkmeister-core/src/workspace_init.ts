@@ -522,6 +522,10 @@ function reconcileWorktrees(workspaceRoot: string, desiredRepos: string[], force
   const toCreate = desired.filter((r) => !present.has(r));
   const toRemove = [...present].filter((r) => !desiredSet.has(r)).sort();
 
+  // A `../` name would add a worktree and branch in a repo outside repos_root.
+  const escaping = desired.filter((r) => path.basename(r) !== r || r === "." || r === "..");
+  if (escaping.length)
+    fail(`Repo name(s) must be a folder directly under ${reposRoot}: ${escaping.join(", ")}.`);
   const missingSrc = toCreate.filter((r) => !isDir(path.join(reposRoot, r)));
   if (missingSrc.length) {
     fail(

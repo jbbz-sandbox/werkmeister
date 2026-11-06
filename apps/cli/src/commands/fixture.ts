@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--services <file>] [--fragment <file>] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--workspace <file>] [--services <file>] [--fragment <file>] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -12,12 +12,12 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import { startFakeDaemon } from "werkmeister-core/fixture_fakes";
 import { fixturePreset, seedFixture } from "werkmeister-core/fixture_workspace";
+import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--services <file>] [--fragment <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--workspace <file>] [--services <file>] [--fragment <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -39,6 +39,7 @@ export function parse(argv: string[]) {
     execRuns: false,
     services: undefined as string | undefined,
     fragment: undefined as string | undefined,
+    workspace: undefined as Record<string, unknown> | undefined,
   };
   const print: string[] = [];
   let i = 0;
@@ -54,6 +55,14 @@ export function parse(argv: string[]) {
       const file = inside(process.cwd(), argv[++i] as string);
       if (!file || !fs.existsSync(file)) return { bad: a };
       opts[a === "--services" ? "services" : "fragment"] = fs.readFileSync(file, "utf8");
+    } else if (a === "--workspace" && argv[i + 1] !== undefined) {
+      const file = inside(process.cwd(), argv[++i] as string);
+      let yml: unknown = null;
+      try {
+        if (file && fs.existsSync(file)) yml = YAML.parse(fs.readFileSync(file, "utf8"));
+      } catch {}
+      if (!yml || typeof yml !== "object" || Array.isArray(yml)) return { bad: a };
+      opts.workspace = yml as Record<string, unknown>;
     } else break;
   }
   const steps: string[][] = [[]];
@@ -84,7 +93,10 @@ function show(label: string, file: string): void {
 export async function run(argv: string[]): Promise<void> {
   const parsed = parse(argv);
   if ("bad" in parsed || parsed.steps.some((s) => s.length === 0)) {
-    if ("bad" in parsed) console.error(`${parsed.bad}: a file under the current folder`);
+    if ("bad" in parsed)
+      console.error(
+        `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" ? ", holding a YAML mapping" : ""}`,
+      );
     console.error(USAGE);
     process.exitCode = 2;
     return;

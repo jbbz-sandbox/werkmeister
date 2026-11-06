@@ -538,3 +538,18 @@ export function templateFor(workType: string): Stage[] {
   const wt = workType.trim().toLowerCase();
   return Object.hasOwn(ICM_TEMPLATES, wt) ? ICM_TEMPLATES[wt] : ICM_TEMPLATES["feature"];
 }
+
+export function stageDirs(stages: Stage[]): string[] {
+  return stages.map((s, i) => `${String(i + 1).padStart(2, "0")}_${s.name}`);
+}
+
+/** The stage dir that holds PR files, or null for a template with no propose stage (spike). */
+export function proposeDir(stages: Stage[]): string | null {
+  const i = stages.findIndex((s) => s.name === "propose");
+  return i < 0 ? null : stageDirs(stages)[i];
+}
+
+/** The stage dir whose output holds PR files: propose, else the last stage (spike, SW-83). */
+export function prDir(stages: Stage[]): string {
+  return proposeDir(stages) ?? stageDirs(stages)[stages.length - 1];
+}

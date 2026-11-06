@@ -51,3 +51,33 @@ it("--services outside the current folder is refused before any fixture is made"
     process.exitCode = 0;
   }
 });
+
+it("--workspace takes only a YAML mapping under the current folder (SW-464)", async () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmp);
+  for (const [name, body] of [
+    ["list.yml", "- a\n"],
+    ["scalar.yml", "x\n"],
+    ["bad.yml", "{bad"],
+  ] as const)
+    fs.writeFileSync(path.join(tmp, name), body);
+  try {
+    for (const args of [
+      ["--workspace", "list.yml"],
+      ["--workspace", "scalar.yml"],
+      ["--workspace", "bad.yml"],
+      ["--workspace", "/etc/hosts"],
+    ]) {
+      error.mockClear();
+      await run([...args, "--version"]);
+      expect(process.exitCode).toBe(2);
+      expect(error.mock.calls[0]?.[0]).toMatch(
+        /--workspace: a file under the current folder, holding a YAML mapping/,
+      );
+    }
+  } finally {
+    cwd.mockRestore();
+    error.mockRestore();
+    process.exitCode = 0;
+  }
+});

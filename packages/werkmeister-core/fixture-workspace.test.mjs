@@ -119,6 +119,38 @@ test("with execRuns the gate's lint and test rows pass or fail on the registry's
   assert.match(badTest.lines.join("\n"), /✗ test lib: false → exit 1/);
 });
 
+test("a grouped icm gate fixture passes pr gate with no hand edits (SW-464)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      assert.match(
+        fs.readFileSync(path.join(fx.workspace, ".werkmeister", "workspace.yml"), "utf8"),
+        /group:\n\s+- SW-2/,
+      );
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const { ok, lines } = await gatePrs(fx.workspace, undefined, undefined, { wait: false });
+      const out = lines.join("\n");
+      assert.equal(ok, true, out);
+      assert.match(out, /✓ merge:/);
+      assert.match(out, /✓ exercise: stages\/04_propose\/output\/exercise\.md/);
+    },
+    { gate: true, workspace: { group: ["SW-2"], context_strategy: "icm" } },
+  );
+});
+
+test("init refuses a repo name that leaves repos_root, before touching any repo", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await assert.rejects(
+        withReporter(collectingReporter(), () => initWorkspace({}, fx.workspace, { build: false })),
+        /must be a folder directly under .*: \.\.\/outside/,
+      );
+    },
+    { workspace: { repos: "app,../outside" } },
+  );
+});
+
 test("caller-exported Jira credentials don't reach a fixture run", async () => {
   const prev = process.env.JIRA_API_TOKEN;
   Object.assign(process.env, {
