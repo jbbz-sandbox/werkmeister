@@ -349,11 +349,21 @@ export function heldWakes(root: string): { session: string; at: string }[] {
 export function writeWakeNudge(root: string, session: string, message: string, now = new Date()) {
   if (!SESSION_ID.test(session)) return;
   const file = wakeNudgePath(root, session);
-  const before = readWakeNudge(file);
+  // Claimed like deliverWake does (SW-475): a hook firing meanwhile finds no file, so it can't
+  // deliver what this write puts back. Writers are serialized by the pr-watch lock.
+  const claimed = `${file}.${process.pid}-${now.getTime()}.claimed`;
+  let before: string | null = null;
+  try {
+    fs.renameSync(file, claimed);
+    before = readWakeNudge(claimed);
+  } catch {
+    /* nothing held */
+  }
   writeAtomic(file, {
     message: before ? `${before}\n\n${message}` : message,
     at: now.toISOString(),
   });
+  fs.rmSync(claimed, { force: true });
 }
 
 /**
