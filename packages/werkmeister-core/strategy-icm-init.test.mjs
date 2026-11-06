@@ -7,7 +7,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
-import { buildPrGuardEntry, READ_ONLY_GIT_RULES } from "./dist/harness/claude/hooks_gen.js";
+import {
+  buildPrGuardEntry,
+  READ_ONLY_GIT_RULES,
+  workspaceAskRules,
+} from "./dist/harness/claude/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { RUN_LIMITS } from "./dist/run_start.js";
 import { PLACEHOLDER_BRIEF_RE } from "./dist/strategies/icm.js";
@@ -112,7 +116,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
       JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")),
       {
         hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
-        permissions: { allow: READ_ONLY_GIT_RULES },
+        permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
       },
     );
     assert.ok(!fs.existsSync(path.join(root, ".werkmeister", "notes")));

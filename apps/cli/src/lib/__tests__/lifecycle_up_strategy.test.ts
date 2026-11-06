@@ -15,6 +15,7 @@ import {
   buildPrGuardEntry,
   READ_ONLY_GIT_RULES,
   SESSION_START_COMMAND,
+  workspaceAskRules,
 } from "werkmeister-core/hooks_gen";
 import type { Reporter } from "werkmeister-core/reporter";
 import { withReporter } from "werkmeister-core/reporter";
@@ -88,7 +89,7 @@ describe("lifecycle.up in an icm workspace", () => {
     );
     expect(settings).toEqual({
       hooks: withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
-      permissions: { allow: READ_ONLY_GIT_RULES },
+      permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
     });
   });
 
@@ -116,7 +117,7 @@ describe("lifecycle.up in an icm workspace", () => {
     );
     expect(settings).toEqual({
       hooks: withAgentState({ SessionStart: [hand], PreToolUse: [buildPrGuardEntry()] }),
-      permissions: { allow: READ_ONLY_GIT_RULES },
+      permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
     });
   });
 });

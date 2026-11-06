@@ -12,6 +12,7 @@ import {
   PRE_TOOL_USE_GATE_COMMAND,
   READ_ONLY_GIT_RULES,
   SESSION_START_COMMAND,
+  workspaceAskRules,
 } from "./dist/harness/claude/hooks_gen.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { strategyById } from "./dist/strategies/index.js";
@@ -54,7 +55,7 @@ test("keeps the hand-added hook, drops the managed ones and .gate", async () => 
     );
     assert.deepEqual(settings, {
       hooks: await withAgentState({ SessionStart: [HAND], PreToolUse: [buildPrGuardEntry()] }),
-      permissions: { allow: READ_ONLY_GIT_RULES },
+      permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
     });
     assert.ok(!fs.existsSync(path.join(root, ".werkmeister", ".gate")));
     assert.match(log, /werkmeister notes context/);
@@ -75,7 +76,7 @@ test("only JIT hooks: settings.json keeps just the PR guard", async () => {
     );
     assert.deepEqual(settings, {
       hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
-      permissions: { allow: READ_ONLY_GIT_RULES },
+      permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
     });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -105,7 +106,7 @@ test("a workspace with no .claude/ gets the PR guard and the allow rules, once, 
     );
     assert.deepEqual(settings, {
       hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
-      permissions: { allow: READ_ONLY_GIT_RULES },
+      permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
     });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });

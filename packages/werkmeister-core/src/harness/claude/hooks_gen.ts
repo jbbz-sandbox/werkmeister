@@ -589,9 +589,7 @@ export function buildAllowRules(
   // its --exec-runs form, which runs the registry's rows on the host, asks first (workspaceAskRules).
   if (tempHome && builtClis.length)
     rules.push(`Bash(${path.join(path.dirname(tempHome), "with-fixture-workspace")}:*)`);
-  // The fixture form werkmeister-context.md recommends; never `Bash(${tempHome}:*)`, which runs anything.
-  if (tempHome && rules.length)
-    rules.push(`Bash(${tempHome} env WERKMEISTER_ROOT=* node --test:*)`);
+  // Never `Bash(${tempHome}:*)` nor its `node --test` form: both run any file (SW-510, workspaceAskRules).
   // SW-367: each wrapped form again with the wrapper's --no-wait flag first.
   const wrapped = `Bash(${tempHome} `;
   if (tempHome)
@@ -668,11 +666,16 @@ function builtCliWrappers(workspaceRoot: string): string[] {
 /**
  * SW-473: `--exec-runs` runs the registry's rows on the host, so its forms of the pre-approved fixture
  * wrapper and built CLI ask first. The CLI takes it only as the first fixture option, so a prefix catches it.
+ * SW-510: `node --test <file>` through the temp-HOME wrapper runs any file, one the agent just wrote too.
  */
 export function workspaceAskRules(workspaceRoot: string): string[] {
-  const builtClis = builtCliWrappers(workspaceRoot);
-  if (!builtClis.length) return [];
   const tempHome = tempHomeWrapper(workspaceRoot);
+  const nodeTest = [
+    `Bash(${tempHome} env WERKMEISTER_ROOT=* node --test:*)`,
+    `Bash(${tempHome} --no-wait env WERKMEISTER_ROOT=* node --test:*)`,
+  ];
+  const builtClis = builtCliWrappers(workspaceRoot);
+  if (!builtClis.length) return nodeTest;
   const fixture = path.join(path.dirname(tempHome), "with-fixture-workspace");
   return [
     `Bash(${fixture} --exec-runs:*)`,
@@ -681,6 +684,7 @@ export function workspaceAskRules(workspaceRoot: string): string[] {
       `Bash(${tempHome} ${cli} internal fixture --exec-runs:*)`,
       `Bash(${tempHome} --no-wait ${cli} internal fixture --exec-runs:*)`,
     ]),
+    ...nodeTest,
   ];
 }
 
