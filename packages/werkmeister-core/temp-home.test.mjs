@@ -241,7 +241,7 @@ test("killing the wrapper during its host-load wait stops the wait too (SW-456)"
   const pidFile = path.join(root, "wait.pid");
   fs.writeFileSync(
     path.join(stub, "werkmeister"),
-    `#!/bin/sh\necho $$ > "${pidFile}"\nexec sleep 30\n`,
+    `#!/bin/sh\necho $$ > "${pidFile}"\nexec sleep 300\n`,
     {
       mode: 0o755,
     },
@@ -257,8 +257,10 @@ test("killing the wrapper during its host-load wait stops the wait too (SW-456)"
     const stat = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout;
     return stat.trim() !== "" && !stat.trim().startsWith("Z");
   };
+  // SW-507: wall-clock, not a poll count: on a loaded host the spawns took over 5 s (11 s at load 389 on 12 cores). 60 s stays far under the stub's 300 s.
   const until = async (ok) => {
-    for (let i = 0; i < 50 && !ok(); i++) await new Promise((r) => setTimeout(r, 100));
+    for (const end = Date.now() + 60_000; !ok() && Date.now() < end; )
+      await new Promise((r) => setTimeout(r, 100));
     return ok();
   };
   const child = spawn(bin, ["true"], {
