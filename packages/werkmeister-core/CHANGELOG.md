@@ -1,5 +1,28 @@
 # sandbox-core
 
+## 0.79.2
+
+### Patch Changes
+
+- b5aa231: SW-464: `with-fixture-workspace --workspace <file>` (and `withFixtureWorkspace(fn, { workspace })`) merges a YAML mapping into the fixture's workspace.yml, e.g. `group`, `work_type`, `context_strategy`. Under `context_strategy: icm`, the `--gate` preset writes its PR file, exercise.md and review.md where the icm strategy reads them, so a grouped icm fixture passes `pr gate` with no hand edits.
+- 0ff080d: SW-466, SW-497, SW-467, SW-479, SW-465, SW-468: grouped ICM contracts tell the agent to regenerate a changed generated snapshot (e.g. `strategy-jit.snapshot.json`) inside each ticket's commit, and that commit order across tickets is free (the grouped 02_spec no longer fixes it). The grouped refactor 01_scope lists its steps under each ticket key. Every build stage's review brief rates a finding that can restart or write the host daemon, the real `~/.werkmeister` or another workspace as Must fix. `--group` keys are normalised by the tracker's `parseRef`, and the lead's own key is dropped (a lead-only list writes `group: []`). The `--work-type` help says it selects the ICM stages, and the `workspace init --group` help says "one PR, one commit per ticket".
+- c40c1a9: `with-temp-home` waits at most 90 s for host load (was 10 min), so an agent's foreground call no longer times out before its command starts; `pr gate` keeps its 10 min budget (SW-469).
+- 491f366: SW-470: the fixture parses a `--services` registry only under `--gate`, so a YAML error without it reaches `workspace init`'s own error.
+- 97b0b89: SW-473: `with-fixture-workspace --exec-runs` (and `withFixtureWorkspace(fn, { execRuns: true })`) makes the fixture's fake docker run each `docker exec` command with `sh -c` in the fixture's code repo and return its exit code, so a fixture `pr gate` passes or fails on the registry's `lint` and a service's `test:`. Without it the fake still logs each exec and answers 0. `--exec-runs` must come first, and a workspace's Claude settings get `ask` rules for it (beside the wrapper's allow rule), because it runs the registry's rows on the host; `machine migrate` adds them to existing workspaces. The fixture also blanks `GITHUB_TOKEN`.
+- 1cb2086: SW-475: `pr watch` claims a held wake by rename before appending to it, the way the hook claims it before delivering, so a hook that delivers while `pr watch` writes no longer hands the session the same wake twice.
+- ff8cbb8: SW-476: a held `pr watch` wake (`.werkmeister/wake-nudge*`: the per-session file, a `.claimed` leftover, or the older `wake-nudge.json`) is git-ignored on the workspace record branch, so a record commit never takes it. `feature up` adds the rule to an older workspace and untracks one already committed.
+- c21edc6: SW-482: the fixture's fake gh answers `gh pr view`, and `with-fixture-workspace --merged` (or `withFixtureWorkspace(fn, { merged: true })`) makes it report the PR merged, so a fixture run goes `workspace init → pr open → pr status → workspace close` with exit 0.
+- 4a0a958: SW-488: Resume's open-session guard matches the workspace's harness, so in a `harness: codex` workspace an open interactive `codex` gets a pending "continue" instead of a headless `codex exec resume` beside it.
+- d68fa02: SW-489: `pr watch`'s wake finds the folder a session started in through the workspace's harness, so a `harness: codex` session started in a code worktree records `session_cwd` at `pr open` and is resumed from there, not from the workspace root.
+- e644b9c: PR rules and gate fixes (SW-494 group):
+
+  - SW-494: a `pr watch` conflict wake tells the session to rebase onto `origin/<base>` (never merge it in), to take the base's copy of a conflicting generated file and regenerate it, and prints the person's `git -C <worktree> push --force-with-lease=<branch>:<old sha>` filled in; `pr-rules.md` rule 5 says the same.
+  - SW-493: a chat reply of "continue" counts as approval, beside "decided", "approved" and "proceed".
+  - SW-116: `pr-rules.md` says `pr open` runs the gate itself, so `pr gate` is only for checking without opening.
+  - SW-155: the PR file's acceptance table takes `MANUAL` for a criterion only the reviewer can check; the gate passes it and lists it.
+  - SW-119: a registry `test: none` (or `test: "none: <reason>"`) marks a service with no tests; the gate reports it skipped with the reason.
+  - SW-490: `pr gate` fails while a decided question in `decisions.md` promises a follow-up and names no issue key.
+
 ## 0.79.1
 
 ### Patch Changes
