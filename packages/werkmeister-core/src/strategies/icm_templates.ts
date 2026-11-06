@@ -112,6 +112,10 @@ const groupStep = (v: IcmVars) =>
     : [];
 
 // SW-388: in sw-386 a must-fix passed the tests, the exercise and the gate; only a separate review caught it.
+// SW-505: sw-469 wrote review.md as prose and lost a gate pass; the gate reads the `result` column of every table.
+const REVIEW_FORMAT =
+  "a `| criterion | result | evidence |` table whose result cell is exactly `PASS` or `FAIL` — nothing else in the cell — with the proof in the evidence column";
+
 const reviewStep = (rerun: string, group: string[]) =>
   "Review the diff: for each code worktree you touched, start a fresh subagent and brief it with only the worktree path and " +
   `"run the \`ponytail:ponytail-review\` skill over this worktree's ${
@@ -127,8 +131,8 @@ const reviewStep = (rerun: string, group: string[]) =>
   "Fix every **Must fix** finding in place, and any **Should fix** finding that shows the change's own docs, comments, help text or changeset state something false (fix the code, or reword that text so it is true), " +
   `${group.length ? `fold each fix into the commit of the ticket it belongs to (${FOLD}), ` : ""}then ${rerun}. Leave the other **Should fix** and **Nice to have** findings as they are. ` +
   "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
-  "a `| check | result | evidence |` table with one row per worktree whose result cell is exactly `PASS` (no Must fix left open) or `FAIL` — nothing else in the cell. " +
-  "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`.";
+  `${REVIEW_FORMAT}, with one row per worktree (\`PASS\` means no Must fix left open). ` +
+  "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`; a file of prose alone fails with `has no PASS row`.";
 const implementReview = (v: IcmVars) => reviewStep("rerun the host test step above", v.group);
 
 // SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
@@ -293,7 +297,7 @@ const feature: Stage[] = [
           ? "Code changes, one commit per ticket (`<KEY> …`), on the worktree's branch — the next stage keeps them"
           : "Code changes, uncommitted — the next stage commits after the person reads the diff",
         "`output/exercise.md`",
-        "`output/review.md`",
+        "`output/review.md`: a `| criterion | result | evidence |` table, result exactly `PASS` or `FAIL`",
       ],
       humanCheck: v.group.length
         ? "Read each ticket's commit (`git log -p origin/main..HEAD` in each worktree). Run the tests yourself. Edit the code in place if something is off and fold it into that ticket's commit — the next stage keeps the commits as they are."
@@ -397,7 +401,7 @@ const bugfix: Stage[] = [
       ],
       outputs: [
         "`output/exercise.md`",
-        "`output/review.md`",
+        "`output/review.md`: a `| criterion | result | evidence |` table, result exactly `PASS` or `FAIL`",
         v.group.length
           ? "Code changes from Must fix findings, folded into their tickets' commits"
           : "Code changes from Must fix findings, uncommitted",
@@ -469,7 +473,7 @@ const refactor: Stage[] = [
           ? "Code changes, one commit per ticket (`<KEY> …`)"
           : "Code changes, uncommitted",
         "`output/exercise.md`",
-        "`output/review.md`",
+        "`output/review.md`: a `| criterion | result | evidence |` table, result exactly `PASS` or `FAIL`",
       ],
       humanCheck: `Read the diff against \`scope.md\`. Anything outside scope goes back.${v.group.length ? " Read it per commit: `git log -p origin/main..HEAD`." : ""}`,
     }),
