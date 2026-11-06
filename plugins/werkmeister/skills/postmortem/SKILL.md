@@ -39,9 +39,15 @@ the workspace root, unless the person says to skip it
    what could have been done differently plus the action that makes it stick
    (step 6). The person accepts, edits or rejects each. Batch them in one
    question where the asking tool allows. Ask even in an `autonomous` run:
-   close-out is the person's step.
+   close-out is the person's step. For a minor problem with an adequate
+   workaround, or one a retry clears (a flaky test that passes when rerun, a
+   gate row that passes on a second `pr open`), propose a known-issue row
+   (step 4) rather than a tracker issue; propose an issue when it cost real
+   time, could lose data, is a security gap, or keeps recurring.
 4. **Triage each `left:` row,** one question per row, in order. Ask even in an
-   `autonomous` run. Show the finding, its file and its `left:` reason, then offer:
+   `autonomous` run. Show the finding, its file and its `left:` reason, then offer
+   these, recommending **known issue** for a minor finding with an adequate
+   workaround or a retry (step 3 says when to file instead):
    - **file:** a tracker issue through the workspace's `issues-report.md`
      (search first, as it says). The body names the workspace and the PR URL
      (the PR file's `url:`); relate it to the workspace's issue where the filing
@@ -87,6 +93,10 @@ the workspace root, unless the person says to skip it
       werkmeister: another developer's Claude, or yours on another machine, never
       sees it. Never use it for a lesson about how werkmeister works. Never a
       note inside the workspace: it is removed at close-out.
+
+   **Known issue** (a row in `../KNOWN-ISSUES.md`, as in step 4) is the action
+   for a minor problem with an adequate workaround or retry (step 3), in place
+   of the ranks above.
 
    **Already enforced by `<check>`** (for example `name:check`) is also an action
    when a shipped check already catches the problem: confirm it does, name the
