@@ -7,11 +7,14 @@ description: "Begin the research/planning phase in a workspace. Use when explori
 
 - **Step 0 — start the issue, then read workspace notes.** Run `werkmeister issue start` alone,
   as its own Bash call: no `cd`, pipe, redirect or other command around it (the cwd is already
-  the workspace), so its allow rule matches. It moves the workspace's issue, and each `group:`
+  the workspace), so its allow rule matches. If the call is denied anyway (a permission or
+  auto-mode refusal), do not carry on: write the denial and its message into an `attempt` note,
+  stop, and tell the person to run `werkmeister issue start` before anything is drafted. It moves the workspace's issue, and each `group:`
   member, to In Progress the first time, and does nothing once
   it is past that or when the tracker refuses. It also fetches each code worktree's base and
   fast-forwards a branch with no commits of its own; read its `Worktree:` lines. Also read its `CLI:` line: if the installed werkmeister is
-  stale, stop and apply the fix it prints before going on; if it could not check, carry on, but re-run `werkmeister issue start` the same way before
+  stale, stop and tell the person to apply the fix it prints (it changes the shared checkout; never run it
+  yourself) before going on; if it could not check, carry on, but re-run `werkmeister issue start` the same way before
   you change code and stop there if it still could not check or reads stale. Read relevant `finding` and `attempt` notes in
   `.werkmeister/notes/` (skip `status: superseded`); never redo answered
   questions or failed approaches. Continue if empty.
