@@ -1,5 +1,13 @@
 # sandbox-core
 
+## 0.79.4
+
+### Patch Changes
+
+- c9af0ba: SW-503: the grouped-PR stage contracts put each ticket's release entry in that ticket's own commit, so reverting one member keeps the others' notes.
+- 53f0dc8: SW-505: the stage 03 contract says `output/review.md` must be a `| criterion | result | evidence |` table with PASS/FAIL result cells, so a prose review no longer costs a gate pass.
+- 357d007: SW-506: the host test step in the ICM implement contract yields to a service's own `docker exec` recipe; the werkmeister repo's cli `validate:` text now says to build, test and run `with-fixture-workspace` through `docker exec` after `feature up`.
+
 ## 0.79.3
 
 ### Patch Changes
