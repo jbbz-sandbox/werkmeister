@@ -674,8 +674,16 @@ test("the first stage contract, and only it, starts the issue when there is one 
         contract("01_research"),
         /issue start` alone, as its own Bash call: no `cd`, pipe, redirect or other command around it/,
       );
+      // SW-515: a denied start stops the run instead of drafting on a stale tree.
+      assert.match(
+        contract("01_research"),
+        /denied anyway .*do not carry on: write the denial .*stop, and tell the person/,
+      );
       assert.match(contract("01_research"), /^1\. List what exists/m, "step numbers are kept");
-      assert.match(contract("01_research"), /`CLI:` line.*stale, stop and apply the fix/);
+      assert.match(
+        contract("01_research"),
+        /`CLI:` line.*stale, stop and tell the person to apply the fix it prints .*never run it yourself/,
+      );
       // SW-410: an unchecked fetch is re-checked before the next stage, not passed over.
       assert.match(contract("01_research"), /could not check.*re-run `werkmeister issue start`/);
       assert.doesNotMatch(contract("01_research"), /say so and continue/);
