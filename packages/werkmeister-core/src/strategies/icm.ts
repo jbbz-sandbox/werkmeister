@@ -299,7 +299,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
 const ONE_RULE = [
   "## The one rule",
   "",
-  `Nothing moves to the next stage until a person has read — and edited if needed — the previous stage's \`output/\`. The next stage reads whatever is there. The person's edit (a \`decided\` status, or a "proceed" after a gate) is the approval; never ask them to confirm it a second time. ${CHAT_APPROVAL}`,
+  `Nothing moves to the next stage until a person has read — and edited if needed — the previous stage's \`output/\`. The next stage reads whatever is there. The person's edit (a \`decided\` status, or a "proceed" or "continue" after a gate) is the approval; never ask them to confirm it a second time. ${CHAT_APPROVAL}`,
 ];
 
 // `autonomous` (#175): the person's review moves to the PR, so these replace the one rule.

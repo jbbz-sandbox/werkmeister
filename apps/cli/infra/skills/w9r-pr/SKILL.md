@@ -46,8 +46,8 @@ workspace — don't reach for them.
      with a reason. A change that ships nothing (tests only) sets `release: none`
      beside `skip_release`, or it never reaches shipped.
 3. **Approval is the person's.** Ask them to read the PR file and set
-   `status: approved`. A direct chat reply from them ("approved", "proceed")
-   counts too: set it yourself and note it as a YAML comment on the status line,
+   `status: approved`. A direct chat reply from them ("approved", "proceed",
+   "continue") counts too: set it yourself and note it as a YAML comment on the status line,
    `status: approved  # approved in chat YYYY-MM-DD` (never text after the value, never an
    HTML comment inside the frontmatter).
    Another session cannot approve for the person. `/check-in` relays their answer by setting

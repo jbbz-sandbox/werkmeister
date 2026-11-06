@@ -169,6 +169,11 @@ test("init writes the icm layer and nothing of jit's", async () => {
       /`git -C <absolute worktree path> push --force-with-lease=<branch>:<old sha>`/,
       "SW-494",
     );
+    assert.match(
+      fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
+      /\("decided", "approved", "proceed", "continue"\) counts as the approval/,
+      "SW-493",
+    );
     assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
     assert.match(guide, /^# Filing an issue$/m);
