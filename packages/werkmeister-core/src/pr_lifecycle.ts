@@ -1823,7 +1823,7 @@ interface PrView {
 export type WakeEvent =
   | { kind: "check"; name: string; cause: string }
   | { kind: "review"; quote: string }
-  | { kind: "conflict"; base: string; moved: string };
+  | { kind: "conflict"; base: string; moved: string; dir: string; branch: string; head: string };
 
 const FAILED_RUN = new Set(["FAILURE", "TIMED_OUT", "STARTUP_FAILURE"]);
 const FAILED_STATUS = new Set(["FAILURE", "ERROR"]);
@@ -1847,6 +1847,16 @@ const indent = (s: string) =>
     .map((l) => `    ${l}`)
     .join("\n");
 
+// SW-494: a merge from the base leaves GitHub unable to rebase-merge, and the agent can't force-push.
+const conflictSteps = (e: Extract<WakeEvent, { kind: "conflict" }>) =>
+  [
+    `  Rebase, never merge ${e.base} in (GitHub can't rebase-merge a branch with a merge from its base):`,
+    `    git -C ${e.dir} fetch origin ${e.base} && git -C ${e.dir} rebase origin/${e.base}`,
+    `  A conflict in a generated file (a snapshot, a lockfile): take ${e.base}'s copy and regenerate it; never hand-merge it.`,
+    "  You can't force-push: give the person",
+    `    git -C ${e.dir} push --force-with-lease=${e.branch || "<branch>"}:${e.head || "<old sha>"}`,
+  ].join("\n");
+
 /** One message for every new event on a PR; each block opens with SW-160's sentence. */
 export function wakeMessage(url: string, events: WakeEvent[]): string {
   const blocks = [
@@ -1865,7 +1875,7 @@ export function wakeMessage(url: string, events: WakeEvent[]): string {
     ...events.flatMap((e) =>
       e.kind === "conflict"
         ? [
-            `PR ${url} conflicts with ${e.base}, resolve it.${e.moved ? `\n  Base moved:\n${indent(e.moved)}` : ""}`,
+            `PR ${url} conflicts with ${e.base}, resolve it.${e.moved ? `\n  Base moved:\n${indent(e.moved)}` : ""}\n${conflictSteps(e)}`,
           ]
         : [],
     ),
@@ -2024,7 +2034,14 @@ async function wakeEvents(
       fetched.code === 0
         ? await deps.run("git", ["-C", dir, "log", "--oneline", "-10", `HEAD..origin/${base}`])
         : null;
-    events.push({ kind: "conflict", base, moved: log?.code === 0 ? log.stdout.trim() : "" });
+    events.push({
+      kind: "conflict",
+      base,
+      moved: log?.code === 0 ? log.stdout.trim() : "",
+      dir,
+      branch: String(f.fm["branch"] ?? ""),
+      head: view.headRefOid ?? "",
+    });
     claim["notified_conflict"] = "true";
   } else if (view.mergeable === "MERGEABLE" && flagged) claim["notified_conflict"] = undefined;
 

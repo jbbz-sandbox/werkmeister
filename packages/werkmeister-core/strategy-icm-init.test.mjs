@@ -158,6 +158,17 @@ test("init writes the icm layer and nothing of jit's", async () => {
       .match(/^5\. .*$/m)[0];
     assert.match(rule5, /`werkmeister pr watch` wakes the session that opened the PR/);
     assert.doesNotMatch(rule5, /set_monitor|<pr-created>/, "no desktop Auto-fix (SW-160)");
+    assert.match(
+      rule5,
+      /rebase onto `origin\/<base>`; never merge the base into the branch/,
+      "SW-494",
+    );
+    assert.match(rule5, /take the base's copy and regenerate it/, "SW-494");
+    assert.match(
+      rule5,
+      /`git -C <absolute worktree path> push --force-with-lease=<branch>:<old sha>`/,
+      "SW-494",
+    );
     assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
     assert.match(guide, /^# Filing an issue$/m);
