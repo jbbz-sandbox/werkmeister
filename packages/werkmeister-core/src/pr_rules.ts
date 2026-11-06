@@ -81,7 +81,7 @@ Lifecycle: \`working → ready → pr-open → merged → shipped → closed-out
 
 | Command | Does |
 |---|---|
-| \`werkmeister pr gate [repo]\` | run the gate, change nothing |
+| \`werkmeister pr gate [repo]\` | run the gate, change nothing; \`pr open\` runs it too and opens nothing when it fails, so use this only to check without opening |
 | \`werkmeister pr open [repo]\` | gate, push, open the PR, record its URL; \`pr watch\` then watches it (rule 5) |
 | \`werkmeister pr status\` | record merged / shipped / closed from GitHub and release tags |
 | \`werkmeister pr new <worktree> --slug <slug>\` | after that worktree's PR merged: cut a fresh branch from base and write a draft follow-up PR file |
