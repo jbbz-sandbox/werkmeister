@@ -193,6 +193,13 @@ const PRS_POLL = { plugin: "werkmeister", key: "prsPoll" } as const;
 const LEGEND = { plugin: "werkmeister", key: "legend" } as const;
 const COLLAPSED = { plugin: "werkmeister", key: "collapsed" } as const;
 const WIDE = { plugin: "werkmeister", key: "wide" } as const;
+const TURN_RUNNING = { plugin: "werkmeister", key: "turnRunning" } as const;
+const WRAP_UP_OPEN = { plugin: "werkmeister", key: "wrapUpOpen" } as const;
+const WAKE_PROMPTED = { plugin: "werkmeister", key: "wakePrompted" } as const;
+/** Desktop's end-of-turn box (werkmeister-core's WRAP_UP): its `ask` waits on the person after the turn ends. */
+const WRAP_UP_TOOL = "mcp__ccd_turn__wrap_up";
+export const HELD_WAKE_PROMPT =
+  "pr watch held a PR update for this session while it was busy; it follows as context.";
 // The engine caps a dock at 45% of the terminal's columns, so asking for more takes the cap.
 const DOCK_MAX_COLUMNS = 1000;
 
@@ -606,6 +613,7 @@ type StatusResult = {
     crashLoops?: WorkspaceRow["crashLoops"];
     paused?: WorkspaceRow["paused"];
     resumeNudge?: boolean;
+    heldWakes?: WorkspaceRow["heldWakes"];
   }[];
 };
 type SessionInfo = {
@@ -691,6 +699,7 @@ export function buildRows(
       crashLoops: s?.crashLoops ?? [],
       paused: s?.paused ?? null,
       resumeNudge: s?.resumeNudge ?? false,
+      heldWakes: s?.heldWakes ?? [],
       session: sessionFor(w.path, allPaths, sessions),
     };
   });
@@ -1622,12 +1631,40 @@ async function bandTick($: EngineInterface, root: string): Promise<void> {
       core<ListResult>($, "list-workspaces"),
       core<StatusResult>($, "workspace-status"),
     ]);
-    await $.state.set(BAND_ROW, buildRows(list, status, []).find((r) => r.path === root) ?? null);
+    const row = buildRows(list, status, []).find((r) => r.path === root) ?? null;
+    await $.state.set(BAND_ROW, row);
+    await promptHeldWake($, row);
   } catch {
     // Keep the last card; the next tick tries again.
   } finally {
     bandTicking = false;
   }
+}
+
+/**
+ * An idle session fires no hook, so a `pr watch` wake held for it (SW-418) would wait for the person to type
+ * (SW-463). One prompt makes its UserPromptSubmit hook deliver and claim the wake. Not while a turn runs or
+ * the wrap_up box waits: the turn's own hooks deliver it, and a prompt would answer the box. Not while paused:
+ * the pause gate would refuse it. Once per wake file version, so a prompt whose hook doesn't claim the file is
+ * never resent, while a newer wake gets its own.
+ */
+async function promptHeldWake($: EngineInterface, row: WorkspaceRow | null): Promise<void> {
+  if (!row?.heldWakes.length || row.paused) return;
+  const self = await $.session.id();
+  const wake = row.heldWakes.find((w) => w.session === self);
+  if (!wake) return;
+  const [prompted, turn, asked] = await Promise.all([
+    $.state.get(WAKE_PROMPTED),
+    $.state.get(TURN_RUNNING),
+    $.state.get(WRAP_UP_OPEN),
+  ]);
+  if (prompted.value === wake.at || turn.value || asked.value) return;
+  await $.state.set(WAKE_PROMPTED, wake.at);
+  // Not awaited: the submitted prompt's turn must not hold the band's next poll.
+  void $.prompt.submit({ text: HELD_WAKE_PROMPT }).catch(async (e: Error) => {
+    $.ui.log(`Held PR wake not prompted: ${e.message}`);
+    await $.state.set(WAKE_PROMPTED, "");
+  });
 }
 
 /** Polls for the AbovePrompt band; kept apart from the pane's timers, so closing the pane leaves these running. */
@@ -1742,6 +1779,7 @@ export const register: Register = (on) => {
   // A relayed message, a background notification or a slash command is gone for good when refused,
   // and its sender never learns (SW-348): only the person's own typed prompt is refused, once.
   on("prompt.submit", async ($, e, next) => {
+    await $.state.set(WRAP_UP_OPEN, false);
     const typed = (e.origin.kind === "composer" || e.origin.kind === "bridge") && !e.command;
     if (!typed) return next(e);
     const { value } = await $.state.get(RELINKED);
@@ -1752,6 +1790,24 @@ export const register: Register = (on) => {
         "werkmeister was re-linked at session start, so this session still runs the old werkmeister " +
         `MCP server and skill list. ${RESTART} This message shows once.`,
     };
+  });
+
+  on("turn.start", async ($, e, next) => {
+    if (e.agentId === undefined) {
+      await $.state.set(TURN_RUNNING, true);
+      // A turn began however the box was left, so it no longer waits on the person.
+      await $.state.set(WRAP_UP_OPEN, false);
+    }
+    return next(e);
+  });
+  on("turn.complete", async ($, e, next) => {
+    if (e.agentId === undefined) await $.state.set(TURN_RUNNING, false);
+    return next(e);
+  });
+  on("tool.call", { tool: WRAP_UP_TOOL }, async ($, e, next) => {
+    const ask = (e as unknown as { ask?: unknown }).ask;
+    if (typeof ask === "string" && ask.trim()) await $.state.set(WRAP_UP_OPEN, true);
+    return next(e);
   });
 
   on("command.run", { command: "workspaces" }, async ($) => {

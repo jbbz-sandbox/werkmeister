@@ -323,6 +323,28 @@ const pendingWake = (root: string, session: unknown) =>
   SESSION_ID.test(session) &&
   fs.existsSync(wakeNudgePath(root, session));
 
+/**
+ * Each session with a held wake in *root* and when its file last changed, for the band to prompt when
+ * idle (SW-463); `at` tells a new wake from one already prompted for.
+ */
+export function heldWakes(root: string): { session: string; at: string }[] {
+  let names: string[];
+  try {
+    names = fs.readdirSync(dotDir(root));
+  } catch {
+    return [];
+  }
+  return names.flatMap((n) => {
+    const session = n.match(/^wake-nudge-(.+)\.json$/)?.[1];
+    if (!session || !SESSION_ID.test(session)) return [];
+    try {
+      return [{ session, at: fs.statSync(wakeNudgePath(root, session)).mtime.toISOString() }];
+    } catch {
+      return []; // claimed since the listing
+    }
+  });
+}
+
 /** Queue *message* for *session*'s next hook event, after any it hasn't had yet. */
 export function writeWakeNudge(root: string, session: string, message: string, now = new Date()) {
   if (!SESSION_ID.test(session)) return;

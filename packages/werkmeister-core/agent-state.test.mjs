@@ -449,6 +449,21 @@ test("status: a paused workspace reports when, what Resume brings back, and a pe
   assert.equal(other.resumeNudge, false);
 });
 
+test("status: heldWakes lists each session with a held wake, not a claimed or malformed file (SW-463)", async () => {
+  const { writeWakeNudge, wakeNudgePath } = await import("./dist/agent_state.js");
+  const dir = workspace("m-wakes", null);
+  writeWakeNudge(dir, "s-1", "PR merged");
+  writeWakeNudge(dir, "s-2", "PR shipped");
+  write(`${wakeNudgePath(dir, "s-3")}.123-456.claimed`, "{}");
+  write(wakeNudgePath(dir, "bad id"), "{}");
+  const s = (await getWorkspaceStatuses()).statuses.find((w) => w.name === "m-wakes");
+  assert.deepEqual(s.heldWakes.map((w) => w.session).sort(), ["s-1", "s-2"]);
+  const at = fs.statSync(wakeNudgePath(dir, "s-1")).mtime.toISOString();
+  assert.equal(s.heldWakes.find((w) => w.session === "s-1").at, at);
+  const other = (await getWorkspaceStatuses()).statuses.find((w) => w.name === "j-gate");
+  assert.deepEqual(other.heldWakes, []);
+});
+
 // SW-189: Codex has no Notification; its approval prompt is PermissionRequest.
 test("PermissionRequest marks needs-you with the tool's description, else the tool name", async () => {
   const { nextState } = await import("./dist/agent_state.js");

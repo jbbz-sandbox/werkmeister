@@ -8,6 +8,7 @@ import {
   buildRows,
   display,
   formFields,
+  HELD_WAKE_PROMPT,
   interceptControl,
   metaParts,
   optionGroups,
@@ -759,6 +760,7 @@ function sample(over: Partial<WorkspaceRow>): WorkspaceRow {
     crashLoops: [],
     paused: null,
     resumeNudge: false,
+    heldWakes: [],
     session: null,
     ...over,
   };
@@ -2955,6 +2957,127 @@ test("a session inside a workspace draws its card above the prompt, without butt
     expect(await ui.find({ key: "new:abc" })).toBeUndefined();
     await ui.unmount();
   }
+});
+
+/** A band session in abc whose status holds a `pr watch` wake for session `s-me` (SW-463). */
+const ENDED = { answer: "", durationMs: 1, isAborted: false, reason: "answer" as const };
+
+/**
+ * `hold(at)` writes (or rewrites) the wake after setup, as the band's first poll runs at session start;
+ * `hold(null)` is its claim. `pause()` pauses the workspace.
+ */
+function heldWakeSession(on: On, session = "s-me") {
+  let at: string | null = null;
+  let paused: { at: string; containers: string[] } | null = null;
+  const held = () => ({
+    ...STATUS,
+    statuses: STATUS.statuses.map((s) => ({
+      ...s,
+      paused: s.name === "abc" ? paused : null,
+      heldWakes: at && s.name === "abc" ? [{ session, at }] : [],
+    })),
+  });
+  const w = world(on, stubs({ [`${WS}/workspace-status`]: () => ok(held()) }));
+  const prompts: { text: string; origin: unknown }[] = [];
+  on("fs.list", () => ({ value: [] }));
+  on("fs.exists", (_$, e) => ({ value: e.path === "/ws/abc/.werkmeister/workspace.yml" }));
+  on("session.start", (_$, e) => ({ cwd: e.cwd }));
+  on("session.id", () => ({ value: "s-me" }));
+  on("turn.start", (_$, e) => ({ turnId: e.turnId }));
+  on("turn.complete", (_$, e) => ({ text: e.answer }));
+  on("tool.call", () => ({ result: "ok", text: "ok" }));
+  on("prompt.submit", (_$, e) => {
+    prompts.push({ text: e.text, origin: e.origin });
+    return { text: e.text };
+  });
+  const hold = (when: string | null = "2026-11-05T10:00:00.000Z") => {
+    at = when;
+  };
+  const pause = (on: boolean) => {
+    paused = on ? { at: "2026-11-05T09:00:00.000Z", containers: [] } : null;
+  };
+  return { w, prompts, hold, pause };
+}
+
+test("a held PR wake reaches this idle session as one plugin prompt within a band poll (SW-463)", async ($, on) => {
+  const { w, prompts, hold } = heldWakeSession(on);
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  hold();
+  await w.clock.advance(15000);
+  expect(prompts).toHaveLength(1);
+  expect(prompts[0]?.origin).toEqual({ kind: "plugin", name: "werkmeister" });
+  // The file stays until the prompt's UserPromptSubmit hook claims it: no second prompt meanwhile.
+  await w.clock.advance(15000);
+  expect(prompts).toHaveLength(1);
+});
+
+test("a newer held wake after the first was claimed gets its own prompt (SW-463)", async ($, on) => {
+  const { w, prompts, hold } = heldWakeSession(on);
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  hold("2026-11-05T10:00:00.000Z");
+  await w.clock.advance(15000);
+  // Claimed, then `pr watch` holds "released" before the next poll ever sees the folder empty.
+  hold("2026-11-05T10:00:10.000Z");
+  await w.clock.advance(15000);
+  expect(prompts).toHaveLength(2);
+});
+
+test("a wrap_up box left without a reply stops holding the wake back once a new turn starts (SW-463)", async ($, on) => {
+  const { w, prompts, hold } = heldWakeSession(on);
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  await $.tool.call({ tool: "mcp__ccd_turn__wrap_up", ask: "Approve the repro?" } as never);
+  await $.turn.start({ text: "", turnId: "t1" });
+  await $.turn.complete({ ...ENDED, turnId: "t1" });
+  hold();
+  await w.clock.advance(15000);
+  expect(prompts).toHaveLength(1);
+});
+
+test("a paused workspace's held wake waits for Resume, then gets one prompt (SW-463)", async ($, on) => {
+  const { w, prompts, hold, pause } = heldWakeSession(on);
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  pause(true);
+  hold();
+  await w.clock.advance(30000);
+  expect(prompts).toHaveLength(0);
+  pause(false);
+  await w.clock.advance(15000);
+  expect(prompts).toHaveLength(1);
+});
+
+test("a held PR wake sends no prompt while a turn runs; the turn's own hooks deliver it (SW-463)", async ($, on) => {
+  const { w, prompts, hold } = heldWakeSession(on);
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  await $.turn.start({ text: "work", turnId: "t1" });
+  hold();
+  // A subagent's turn ending is not the main loop's.
+  await $.turn.complete({ ...ENDED, turnId: "t2", agentId: "a1" });
+  await w.clock.advance(30000);
+  expect(prompts).toHaveLength(0);
+  await $.turn.complete({ ...ENDED, turnId: "t1" });
+  await w.clock.advance(15000);
+  expect(prompts).toHaveLength(1);
+});
+
+test("a held PR wake for another session in the workspace sends this one no prompt (SW-463)", async ($, on) => {
+  const { w, prompts, hold } = heldWakeSession(on, "s-other");
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  hold();
+  await w.clock.advance(30000);
+  expect(prompts).toHaveLength(0);
+});
+
+test("a held PR wake waits while Desktop's wrap_up box asks the person, then follows their reply (SW-463)", async ($, on) => {
+  const { w, prompts, hold } = heldWakeSession(on);
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  await $.tool.call({ tool: "mcp__ccd_turn__wrap_up", ask: "Approve the repro?" } as never);
+  hold();
+  await w.clock.advance(30000);
+  expect(prompts).toHaveLength(0);
+  // The reply's own UserPromptSubmit hook delivers the wake; a file still listed after it gets one prompt.
+  await $.prompt.submit(typed("decided"));
+  await w.clock.advance(15000);
+  expect(prompts.map((p) => p.text)).toEqual(["decided", HELD_WAKE_PROMPT]);
 });
 
 test("a session outside any workspace starts no band and reads no workspaces", async ($, on) => {

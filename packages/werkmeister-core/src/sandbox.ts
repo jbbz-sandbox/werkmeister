@@ -20,7 +20,14 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { parse as parseYaml } from "yaml";
-import { claimNudge, nudgePath, RESUME_NUDGE, readPaused, writeNudge } from "./agent_state.js";
+import {
+  claimNudge,
+  heldWakes,
+  nudgePath,
+  RESUME_NUDGE,
+  readPaused,
+  writeNudge,
+} from "./agent_state.js";
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
 import { extractJson, extractResult } from "./harness/claude/cli.js";
 import { type ClaudeSessionSignal, claudeOpenIn } from "./harness/claude/session.js";
@@ -1300,6 +1307,8 @@ export interface WorkspaceStatus {
   paused: { at: string; containers: string[] } | null;
   /** Resume left a "continue" for a live session; the pane delivers it to Desktop. */
   resumeNudge: boolean;
+  /** Sessions with a `pr watch` wake held for them (SW-418) and the file's mtime; each one's band prompts it when idle. */
+  heldWakes: { session: string; at: string }[];
 }
 
 /** An ICM workspace's current stage: 1-based `index` of `total`, `name` without its `NN_` prefix. */
@@ -1494,6 +1503,7 @@ export async function getWorkspaceStatuses(): Promise<{
         harness: harnessId,
         paused,
         resumeNudge: existsSync(nudgePath(dir)),
+        heldWakes: heldWakes(dir),
         claude,
         model,
         stage: await icmStage(dir),
