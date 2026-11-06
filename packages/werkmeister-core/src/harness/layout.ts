@@ -5,7 +5,7 @@
  * neither caller names a harness.
  */
 import { SandboxError } from "../errors.js";
-import { warn } from "../reporter.js";
+import { success, warn } from "../reporter.js";
 // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { readWorkspaceField } from "../workspace_prompts.js";
 // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
@@ -13,6 +13,8 @@ import { claudeAdapter } from "./claude/index.js";
 import { codexAdapter } from "./codex/adapter.js";
 import { codexLayout } from "./codex/index.js";
 import { mcpLayout } from "./mcp/index.js";
+import { opencodeAdapter } from "./opencode/index.js";
+import { opencodeLayout } from "./opencode/layout.js";
 import { HARNESS_IDS, type HarnessAdapter, type HarnessId, type HarnessLayout } from "./types.js";
 
 export const claudeLayout: HarnessLayout = {
@@ -28,6 +30,7 @@ const REGISTRY: Record<HarnessId, HarnessLayout> = {
   claude: claudeLayout,
   mcp: mcpLayout,
   codex: codexLayout,
+  opencode: opencodeLayout,
 };
 
 export function harnessLayoutById(id: HarnessId): HarnessLayout {
@@ -55,6 +58,7 @@ const ADAPTERS: Record<HarnessId, HarnessAdapter> = {
   claude: claudeAdapter,
   mcp: claudeAdapter,
   codex: codexAdapter,
+  opencode: opencodeAdapter,
 };
 
 /** The `harness:` of *workspaceRoot*; an unknown value reads as claude, so one bad workspace.yml can't fail the status sweep. */
@@ -71,9 +75,17 @@ export function harnessFor(workspaceRoot: string): HarnessAdapter {
   return ADAPTERS[harnessIdOf(workspaceRoot)];
 }
 
-/** True when the workspace's harness takes hooks; otherwise says why none were written, never silently. */
+/**
+ * True when the workspace takes Claude Code hooks, which the caller then writes. A harness
+ * with its own hook files gets them written here and answers false, so no caller writes
+ * `.claude/settings.json` for it; either way says what does not run, never silently.
+ */
 export function hooksAvailable(workspaceRoot: string): boolean {
   const { id, hooks } = harnessLayoutFor(workspaceRoot);
-  if (!hooks.available) warn(`hooks: unavailable on ${id} (${hooks.reason})`);
-  return hooks.available;
+  if (hooks.available === true) return true;
+  if (hooks.available === "own") {
+    success(`Wrote ${hooks.write(workspaceRoot)}`);
+    warn(`hooks: partial on ${id} (${hooks.missing} do not run)`);
+  } else warn(`hooks: unavailable on ${id} (${hooks.reason})`);
+  return false;
 }

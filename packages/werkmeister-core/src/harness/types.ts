@@ -10,10 +10,20 @@
 import type { AgentState } from "../agent_state.js";
 
 /** First entry is the default; a workspace.yml without `harness:` reads as claude. */
-export const HARNESS_IDS = ["claude", "mcp", "codex"] as const;
+export const HARNESS_IDS = ["claude", "mcp", "codex", "opencode"] as const;
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
-export type HooksSupport = { available: true } | { available: false; reason: string };
+/** `true`: Claude-shaped hook files (`.claude/settings.json`, `.codex/hooks.json`). `"own"`: the harness writes its own hook files. */
+export type HooksSupport =
+  | { available: true }
+  | { available: false; reason: string }
+  | {
+      available: "own";
+      /** Writes the harness's hook files; returns the main one's path. */
+      write(workspaceRoot: string): string;
+      /** The werkmeister hooks this harness cannot run, for the printed line and the `hooks` tool. */
+      missing: string;
+    };
 
 /** Where one harness reads werkmeister's context layer (proposal § 4.3 projection rows). */
 export interface HarnessLayout {

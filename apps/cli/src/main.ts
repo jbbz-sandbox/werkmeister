@@ -854,8 +854,9 @@ const SPECS: CommandSpec[] = [
           new Option(
             "--harness <id>",
             "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), " +
-              "mcp (AGENTS.md, .agents/skills, no hooks) or codex (AGENTS.md, .agents/skills, " +
-              ".codex/hooks.json, .codex/config.toml) (env: WERKMEISTER_HARNESS; config: harness).",
+              "mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, " +
+              ".codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, " +
+              "opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).",
           ).choices([...HARNESS_IDS]),
         )
         .option(
@@ -1226,8 +1227,9 @@ const SPECS: CommandSpec[] = [
           new Option(
             "--harness <id>",
             "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), " +
-              "mcp (AGENTS.md, .agents/skills, no hooks) or codex (AGENTS.md, .agents/skills, " +
-              ".codex/hooks.json, .codex/config.toml) (env: WERKMEISTER_HARNESS; config: harness).",
+              "mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, " +
+              ".codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, " +
+              "opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).",
           ).choices([...HARNESS_IDS]),
         )
         .option(

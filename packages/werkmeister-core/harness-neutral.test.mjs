@@ -14,8 +14,18 @@ import { runTurn, turnEvents, turnStatus } from "./dist/harness/turn.js";
 const IDLE = { state: "idle", startedAt: null, exitCode: null, error: null };
 const src = (f) => fs.readFileSync(path.join(import.meta.dirname, "src", "harness", f), "utf-8");
 
-test("the neutral modules import nothing from harness/claude", () => {
-  for (const f of ["types.ts", "turn.ts", "sessions.ts", "stub/index.ts"]) {
+test("the neutral modules and the opencode adapter import nothing from harness/claude", () => {
+  for (const f of [
+    "types.ts",
+    "turn.ts",
+    "sessions.ts",
+    "stub/index.ts",
+    "opencode/index.ts",
+    "opencode/layout.ts",
+    "opencode/hooks.ts",
+    "opencode/session.ts",
+    "opencode/transcript.ts",
+  ]) {
     assert.doesNotMatch(src(f), /from\s+["'][^"']*claude/, f);
   }
 });
