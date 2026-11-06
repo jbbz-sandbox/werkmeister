@@ -170,6 +170,13 @@ test("each template renders with no undefined and a route per stage", async () =
         const build = { feature: "03_implement", refactor: "02_implement" }[wt] ?? "03_exercise";
         if (wt !== "spike" && d === build) {
           assert.match(c, /`ponytail:ponytail-review`/, `${wt}/${d}`);
+          // SW-505: the gate reads review.md as a result table; say so where it is named.
+          assert.match(
+            c,
+            /`\| criterion \| result \| evidence \|`[^\n]*`PASS` or `FAIL`/,
+            `${wt}/${d}`,
+          );
+          assert.match(c, /has no PASS row/, `${wt}/${d}`);
           // SW-431: the brief asks what a newly pre-approved command can reach, in generic text (SW-143).
           assert.match(
             c,
@@ -189,7 +196,11 @@ test("each template renders with no undefined and a route per stage", async () =
             /and any \*\*Should fix\*\* finding that shows the change's own docs, comments, help text or changeset state something false \(fix the code, or reword that text so it is true\)/,
             `${wt}/${d}`,
           );
-          assert.match(c, /## Outputs[\s\S]*^- `output\/review\.md`$/m, `${wt}/${d}`);
+          assert.match(
+            c,
+            /## Outputs[\s\S]*^- `output\/review\.md`: a `\| criterion \| result \| evidence \|` table, result exactly `PASS` or `FAIL`$/m,
+            `${wt}/${d}`,
+          );
           if (d.endsWith("_implement")) {
             // SW-430: host tests → review and fix → the gate, once → exercise.md.
             const order = [
