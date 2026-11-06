@@ -174,6 +174,11 @@ test("init writes the icm layer and nothing of jit's", async () => {
       /\("decided", "approved", "proceed", "continue"\) counts as the approval/,
       "SW-493",
     );
+    assert.match(
+      fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
+      /^\| `werkmeister pr gate \[repo\]` \| run the gate, change nothing; `pr open` runs it too and opens nothing when it fails, so use this only to check without opening \|$/m,
+      "SW-116",
+    );
     assert.ok(!fs.existsSync(path.join(root, "_shared", "bug-report.md")));
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
     assert.match(guide, /^# Filing an issue$/m);
