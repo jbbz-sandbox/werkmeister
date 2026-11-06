@@ -56,6 +56,8 @@ services:
     test: "pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp"
     # SW-143: the ICM exercise step defers to this text for a CLI, so the whole recipe lives here.
     validate: &cli_validate >-
+      In this repo the host checkout has no node_modules (`tsc: command not found`, `ERR_MODULE_NOT_FOUND: dockerode`), so run every command below, the install, the build, the tests and `with-fixture-workspace`, through `docker exec -w /app/<path> <container> <command>` (container names are in `werkmeister-context.md`),
+      after `werkmeister feature up --service <name>`: starting this workspace's own container is expected for implement and exercise and allowed. The `with-temp-home` wrapper is the host form of the same test command; inside the container the HOME is already the container's.
       Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION),
       then `pnpm turbo run build --filter=werkmeister` before the first test: it builds the CLI, and `apps/cli/dist/main.js` bundles werkmeister-core, so building core alone leaves the CLI stale.
       Run it as `node apps/cli/dist/main.js`, not `node apps/cli/werkmeister` (a bash wrapper: `SyntaxError: Invalid or unexpected token`).
