@@ -494,6 +494,48 @@ function stagesCheck(ws: string): GateCheck {
   };
 }
 
+const ISSUE_KEY = /\b[A-Z][A-Z0-9]+-\d+\b|#\d+\b|\/issues\/\d+/;
+
+/** SW-490: a decided question that defers work to a follow-up must name its issue, or nobody files it. */
+function followUpsCheck(ws: string): GateCheck | null {
+  const stages = path.join(ws, "stages");
+  if (!fs.existsSync(stages)) return null;
+  const unnamed: string[] = [];
+  for (const d of fs.readdirSync(stages).sort()) {
+    const p = path.join(stages, d, "output", "decisions.md");
+    if (!fs.existsSync(p)) continue;
+    let heading = "";
+    let body: string[] = [];
+    const flush = () => {
+      const text = body.join("\n");
+      if (
+        /status:\s*decided/i.test(text) &&
+        /follow-?ups?\b/i.test(text) &&
+        !/\bno follow-?ups?\b/i.test(text) &&
+        // "PR file" and "snapshot file" are everywhere in these notes: only a filing or deferring verb counts.
+        /\b(filed?\s+(a|an|as|it|them)|defer(red)?)\b/i.test(text) &&
+        !ISSUE_KEY.test(`${heading}\n${text}`)
+      )
+        unnamed.push(`${d}: ${heading || "(no heading)"}`);
+    };
+    for (const line of fs.readFileSync(p, "utf8").split("\n")) {
+      if (HEADING.test(line.trim())) {
+        flush();
+        heading = line.trim();
+        body = [];
+      } else body.push(line);
+    }
+    flush();
+  }
+  return {
+    name: "follow-ups",
+    ok: unnamed.length === 0,
+    detail: unnamed.length
+      ? `decisions.md promises a follow-up with no issue key: ${unnamed.join("; ")} — file it (\`werkmeister issue create\`) and write its key there`
+      : "every promised follow-up names its issue",
+  };
+}
+
 function exerciseFile(ws: string): string | null {
   if (!fs.existsSync(path.join(ws, "stages"))) {
     const p = path.join(dotDir(ws), "notes", "exercise.md");
@@ -746,7 +788,8 @@ async function gateChecks(
   // SW-316: the lint and test rows only, on the uncommitted tree, so implement sees container-only failures.
   testsOnly = false,
 ): Promise<GateResult> {
-  const checks: GateCheck[] = testsOnly ? [] : [stagesCheck(ws)];
+  const followUps = testsOnly ? null : followUpsCheck(ws);
+  const checks: GateCheck[] = testsOnly ? [] : [stagesCheck(ws), ...(followUps ? [followUps] : [])];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
   const loadBudget = { leftMs: LOAD_WAIT_MS };
   let loadWait = wait;
