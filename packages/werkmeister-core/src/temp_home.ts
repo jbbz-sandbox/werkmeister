@@ -23,10 +23,10 @@ no_wait=\${WERKMEISTER_NO_WAIT:-}
 # changes so the real config's budget applies; no werkmeister on PATH, no wait.
 # In the background with a trap, so killing the wrapper ends the wait too (SW-456).
 [ -n "$no_wait" ] || ! command -v werkmeister >/dev/null 2>&1 || {
+  # Trap before the fork: $! is empty until the job exists, so no signal can land between them.
+  trap 'kill $! 2>/dev/null; exit 130' HUP INT TERM
   werkmeister internal wait-load >&2 &
-  wait_pid=$!
-  trap 'kill "$wait_pid" 2>/dev/null; exit 130' HUP INT TERM
-  wait "$wait_pid"
+  wait $!
 } || :
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
