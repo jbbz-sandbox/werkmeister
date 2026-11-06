@@ -55,6 +55,7 @@ afterEach(() => {
   delete process.env.HELD_PS;
   delete process.env.LEGACY_DOWN_EXIT;
   delete process.env.PS_DELAY;
+  delete process.env.WERKMEISTER_TIMEOUT_SCALE;
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -111,9 +112,11 @@ test("down --volumes takes the old stack's volumes too", async () => {
 });
 
 // SW-257: a loaded host can make the held-containers probe slow; that must not skip the teardown.
+// Timeouts at 0.1 scale: the 300 s cap is 30 s and the old 10 s cap 1 s, so a 1.1 s stub still catches a return to it (SW-406).
 test("a slow probe does not skip the old stack's teardown", async () => {
   process.env.HELD_PS = "abc123\n";
-  process.env.PS_DELAY = "11";
+  process.env.PS_DELAY = "1.1";
+  process.env.WERKMEISTER_TIMEOUT_SCALE = "0.1";
   await withReporter(collectingReporter(), () => down(true));
   assert.notEqual(legacyIndex(calls()), -1);
 });

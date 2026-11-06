@@ -1,7 +1,8 @@
 /**
  * Synchronous subprocess helpers over `spawnSync`.
  *
- * `timeout` is in SECONDS, not milliseconds.
+ * `timeout` is in SECONDS, not milliseconds. `WERKMEISTER_TIMEOUT_SCALE` multiplies it:
+ * test-only, so a slow-call test can wait a tenth as long (SW-406).
  *
  * Errors: a `ProcError` is thrown when
  *   - the executable is missing        (err.code === "ENOENT")
@@ -12,6 +13,9 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { toolBin } from "./tool_bins.js";
+
+const timeoutMs = (seconds: number): number =>
+  seconds * Number(process.env["WERKMEISTER_TIMEOUT_SCALE"] || 1) * 1000;
 
 export interface RunOptions {
   /** Throw a ProcError when the command exits non-zero. */
@@ -70,7 +74,7 @@ export function run(cmd: string[], opts: RunOptions = {}): RunResult {
     cwd: opts.cwd,
     env: opts.env,
     input: opts.input,
-    timeout: opts.timeout !== undefined ? opts.timeout * 1000 : undefined,
+    timeout: opts.timeout !== undefined ? timeoutMs(opts.timeout) : undefined,
     encoding: "utf8",
     stdio,
   });
@@ -157,7 +161,7 @@ export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<Run
       env: opts.env,
       stdio,
       signal: opts.signal,
-      timeout: opts.timeout !== undefined ? opts.timeout * 1000 : undefined,
+      timeout: opts.timeout !== undefined ? timeoutMs(opts.timeout) : undefined,
     });
 
     let stdout = "";
