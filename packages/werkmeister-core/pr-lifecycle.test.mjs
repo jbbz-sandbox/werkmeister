@@ -37,6 +37,7 @@ import {
   removalBlockers,
   runGate,
   waitForHostLoad,
+  waitForHostLoadNow,
   wakeMessage,
   watchPrs,
   writePrFields,
@@ -1736,6 +1737,13 @@ test("waitForHostLoad: with-temp-home's wait polls, caps at 10 min and says so u
   const capped = await withSandboxHome(() => waitForHostLoad(stuck, true, "with-temp-home"));
   assert.equal(stuck.slept.length, 40);
   assert.equal(capped, "ran with host load 90.0 over 8; the 10 min host-load wait is spent");
+});
+
+test("waitForHostLoadNow: with-temp-home's wait stops at 90 s, under an agent's 2 min Bash timeout (SW-469)", async () => {
+  const stuck = loaded([90]);
+  const note = await withSandboxHome(() => waitForHostLoadNow(stuck));
+  assert.equal(stuck.slept.length, 6);
+  assert.equal(note, "ran with host load 90.0 over 8; the 1.5 min host-load wait is spent");
 });
 
 test("waitForHostLoad: prints progress each minute and spends the budget it is given (SW-262)", async () => {
