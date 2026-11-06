@@ -4,7 +4,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { candidateServiceNames, serviceValidation, validationRows } from "./dist/archetypes.js";
+import {
+  candidateServiceNames,
+  serviceNoTests,
+  serviceTestCommand,
+  serviceValidation,
+  validationRows,
+} from "./dist/archetypes.js";
 import { loadServices } from "./dist/config.js";
 import { buildSandboxContextMd } from "./dist/harness/claude/claude_md.js";
 import { withSandboxHome } from "./fixtures.mjs";
@@ -19,6 +25,20 @@ test("serviceValidation: own beats archetype, archetype is the default, none is 
   assert.equal(serviceValidation({ archetype: "tool" }, ARCHS), "run the tests");
   assert.equal(serviceValidation({ archetype: "tool" }, { tool: {} }), null);
   assert.equal(serviceValidation(null, ARCHS), null);
+});
+
+test("test: none means no tests, with its reason, and beats the archetype's command (SW-119)", () => {
+  const archetypes = { web: { test: "npm test" } };
+  assert.equal(serviceNoTests({ test: "none" }), "test: none");
+  assert.equal(serviceNoTests({ test: "None: no test script" }), "no test script");
+  assert.equal(serviceNoTests({ test: "npm test" }), null);
+  assert.equal(serviceNoTests({ archetype: "web" }), null);
+  assert.equal(
+    serviceTestCommand("m", { archetype: "web", test: "none: no script" }, archetypes),
+    null,
+  );
+  assert.equal(serviceTestCommand("m", { archetype: "web" }, archetypes), "npm test");
+  assert.equal(serviceTestCommand("m", { test: "nonexistent-cmd" }, archetypes), "nonexistent-cmd");
 });
 
 test("candidateServiceNames: selected services win, repos are the fallback", () => {

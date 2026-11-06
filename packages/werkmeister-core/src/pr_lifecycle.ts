@@ -13,7 +13,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import YAML from "yaml";
 
 import { flagNeedsYou, writeWakeNudge } from "./agent_state.js";
-import { serviceTestCommand } from "./archetypes.js";
+import { serviceNoTests, serviceTestCommand } from "./archetypes.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import {
   type ArchetypeRegistry,
@@ -1116,6 +1116,11 @@ async function gateChecks(
   for (const svc of touched) {
     const cmd = serviceTestCommand(svc, services[svc], deps.archetypes);
     const why = reason(skips[svc]);
+    const noTests = serviceNoTests(services[svc]);
+    if (noTests) {
+      add(`test ${svc}`, true, `skipped: registry says no tests: ${noTests}`);
+      continue;
+    }
     if (!cmd) {
       add(
         `test ${svc}`,

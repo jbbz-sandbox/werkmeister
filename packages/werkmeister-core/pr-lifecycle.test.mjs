@@ -754,6 +754,27 @@ test("gate: a touched service with no test command fails unless skip_tests gives
   }
 });
 
+test("gate: a service whose registry says test: none is skipped with its reason, no skip_tests needed (SW-119)", async () => {
+  const diffLib = [/diff --name-only/, { stdout: "packages/lib/y.ts\n" }];
+  const ws = icmWorkspace();
+  try {
+    const services = {
+      ...REGISTRY.services,
+      lib: { type: "library", test: "none: no test script" },
+    };
+    const d = deps([diffLib], { services });
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.equal(
+      g.checks.find((c) => c.name === "test lib").detail,
+      "skipped: registry says no tests: no test script",
+    );
+    assert.ok(!d.calls.some((c) => /docker exec .*none/.test(c)), "never runs `none`");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gate: a failing release check fails unless skip_release gives a reason", async () => {
   const noChangeset = [/changeset status/, { code: 1, stderr: "no changesets were found" }];
   const ws = icmWorkspace();

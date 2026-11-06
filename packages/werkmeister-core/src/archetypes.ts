@@ -77,13 +77,21 @@ export function serviceTestCommand(
   svcDef: ServiceEntry | null | undefined,
   archetypes?: ArchetypeRegistry | null,
 ): string | null {
-  if (!isDict(svcDef)) return null;
+  if (!isDict(svcDef) || serviceNoTests(svcDef) !== null) return null;
   const own = svcDef["test"];
   if (own) return String(own);
   const arch = resolveServiceArchetype(svcDef, archetypes);
   const template = arch?.["test"];
   if (!template) return null;
   return String(template).split("{service}").join(svcName);
+}
+
+/** The reason a service's `test: none` / `test: "none: <reason>"` gives (SW-119), or null for any other value. */
+export function serviceNoTests(svcDef: ServiceEntry | null | undefined): string | null {
+  const m = isDict(svcDef)
+    ? /^none(?::\s*(.*))?$/i.exec(String(svcDef["test"] ?? "").trim())
+    : null;
+  return m ? m[1]?.trim() || "test: none" : null;
 }
 
 /**

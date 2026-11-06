@@ -503,6 +503,7 @@ export interface ServiceEntry {
   caches?: string[];
   /** Legacy form of `archetype:` — see archetypes.ts. */
   standards?: string[];
+  /** `none` or `none: <reason>` marks a service with no tests; the gate skips it (SW-119). */
   test?: string;
   validate?: string;
   internal_port?: number;

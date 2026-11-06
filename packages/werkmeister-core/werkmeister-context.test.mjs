@@ -97,6 +97,30 @@ test("each local service's test command runs in its container; none says so", as
   );
 });
 
+test("a service whose registry says test: none shows its reason, not a missing command (SW-119)", async () => {
+  await withSandboxHome(
+    async () => {
+      const out = buildSandboxContextMd(
+        "test",
+        1,
+        11100,
+        11119,
+        ["backend"],
+        loadServices(),
+        "",
+        {},
+      );
+      assert.match(out, /^- `backend`: no tests \(registry: no test script\)$/m);
+    },
+    {
+      services: SERVICES.replace(
+        "    k8s_forward_port: 9052\n",
+        '    k8s_forward_port: 9052\n    test: "none: no test script"\n',
+      ),
+    },
+  );
+});
+
 test("the host test command is stated through the temp-HOME wrapper; the container form is not (SW-124)", async () => {
   await withSandboxHome(
     async () => {
