@@ -409,6 +409,12 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
       );
       assert.doesNotMatch(implement, /Take the steps in order\. After each one/);
       for (const c of refactor.contracts) assert.doesNotMatch(c, /once,? at the end/);
+      // SW-467: 01_scope nests the steps under each ticket key.
+      const scope = refactor.contracts.find((c) => /^# 01_scope/m.test(c));
+      assert.match(
+        scope,
+        /under one heading per ticket key \(the workspace's issue, then `SW-2`, `SW-3`\)/,
+      );
     } finally {
       fs.rmSync(refactorRoot, { recursive: true, force: true });
     }
