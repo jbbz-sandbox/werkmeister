@@ -103,7 +103,9 @@ const groupStep = (v: IcmVars) =>
     ? [
         `This workspace is a grouped PR (\`group\` in \`workspace.yml\`): one commit per ticket, for the workspace's issue and each member, ${keys(v.group)}, so each can be reverted alone. ` +
           "Take the tickets one at a time: make that ticket's changes and tests, run the diff check below on them, then commit on the worktree's branch with a message that starts with its key (`<KEY> <summary>`) before starting the next. " +
-          "Each commit builds and passes the host tests on its own.",
+          "Each commit builds and passes the host tests on its own. " +
+          // SW-466: SW-462's brief said to regenerate the snapshot once for the PR, so three commits failed it alone.
+          "When a ticket's change alters a generated snapshot (e.g. `strategy-jit.snapshot.json`), regenerate it in that ticket's commit, so the commit passes the snapshot test alone; a brief that says to regenerate once for the whole PR does not override this.",
       ]
     : [];
 
@@ -454,7 +456,7 @@ const refactor: Stage[] = [
         `${v.group.length ? "For each ticket, take its `scope.md` steps in order, then commit it before the next ticket; do not commit after every step. After each step" : "Take the steps in order. After each one"}: ${diffCheck("scope.md")} ${HOST_TEST_STEP}`,
         implementReview(v),
         GATE_STEP,
-        `Reload and exercise the service once at the end: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
+        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
       ],
       outputs: [
