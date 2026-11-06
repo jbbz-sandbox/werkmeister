@@ -663,6 +663,42 @@ test("gate: a MANUAL acceptance row passes and is named; FAIL still blocks; exer
   }
 });
 
+test("gate: a decided follow-up with no issue key fails, naming it; a key or a proposed status passes (SW-490)", async () => {
+  const withDecisions = (text) => {
+    const ws = icmWorkspace();
+    fs.writeFileSync(path.join(ws, "stages", "01_research", "output", "decisions.md"), text);
+    return ws;
+  };
+  const q = (status, answer) => `## 11. Codex resume\nstatus: ${status}\n\n${answer}\n`;
+  const unnamed = withDecisions(
+    `# d\n\n${q("decided", "Out of scope; filed as a follow-up after approval.")}`,
+  );
+  try {
+    const g = await gate(unnamed, deps([DIFF_API]));
+    assert.deepEqual(failed(g), ["follow-ups", "tests"], "fails before any test command");
+    assert.match(
+      g.checks.find((c) => c.name === "follow-ups").detail,
+      /no issue key: 01_research: ## 11\. Codex resume — file it/,
+    );
+  } finally {
+    clean(unnamed);
+  }
+  for (const text of [
+    q("decided", "Out of scope; filed as a follow-up: SW-512."),
+    q("decided", "Deferred to a follow-up, https://github.com/o/app/issues/12."),
+    q("proposed", "Defer to a follow-up."),
+    q("decided", "No follow-up needed: the snapshot file is regenerated."),
+    q("decided", "The PR file covers it; the follow-up PR comes from pr new."),
+  ]) {
+    const ws = withDecisions(text);
+    try {
+      assert.deepEqual(failed(await gate(ws, deps([DIFF_API]))), [], text);
+    } finally {
+      clean(ws);
+    }
+  }
+});
+
 /** An ICM workspace inited with the SW-388 review step; *review* is its review.md, null for none. */
 function reviewWorkspace(review, opts = {}) {
   const ws = icmWorkspace(opts);

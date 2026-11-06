@@ -104,6 +104,7 @@ Code written after a worktree's PR merged, e.g. a problem found while cutting or
 | Check | Passes when |
 |---|---|
 | stages | ICM: every stage before the one holding PR files has output. JIT: no open decision notes. |
+| follow-ups | ICM only: no `status: decided` question in a stage's `decisions.md` says a follow-up is filed or deferred without naming its issue (`SW-123`, `#123` or an issues URL); the check lists each such heading (SW-490). |
 | acceptance | the PR body has a `PASS` table cell and no `FAIL` cell. The result cell holds exactly `PASS` or `FAIL`, with evidence in its own column: `\| criterion \| PASS \| evidence \|`. `\| criterion \| PASS: repro.md §1 \|` has no `PASS` cell. A `MANUAL` result (a criterion only the reviewer can check) passes, and the check lists each such row (SW-155); exercise and review tables take only `PASS` or `FAIL`. |
 | clean | `git status --porcelain` in the code worktree is empty |
 | lint | when the repo's registry `repo:` sets `lint`, that command exits 0, for any diff. It runs from the repo root in one of the repo's containers, like the release check. A failure shows its output as described below the table. No `lint` key means no row (SW-133). |
