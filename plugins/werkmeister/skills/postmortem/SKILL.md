@@ -39,15 +39,19 @@ the workspace root, unless the person says to skip it
    what could have been done differently plus the action that makes it stick
    (step 6). The person accepts, edits or rejects each. Batch them in one
    question where the asking tool allows. Ask even in an `autonomous` run:
-   close-out is the person's step. For a minor problem with an adequate
-   workaround, or one a retry clears (a flaky test that passes when rerun, a
-   gate row that passes on a second `pr open`), propose a known-issue row
-   (step 4) rather than a tracker issue; propose an issue when it cost real
-   time, could lose data, is a security gap, or keeps recurring.
+   close-out is the person's step. Decide file or known issue by cost, not by
+   whether a workaround exists. File a tracker issue, and propose fixing it,
+   when the problem costs time or efficiency and will happen again: a wait,
+   rerun or manual step every run hits is a cost every run pays, however easy
+   the workaround (a gate that waits on its own load, a flaky test that fails
+   one run in five). Also file when it could lose data or is a security gap.
+   Propose a known-issue row (step 4) only for a problem seen once or rarely
+   whose workaround costs next to nothing (a one-off network blip a rerun
+   cleared).
 4. **Triage each `left:` row,** one question per row, in order. Ask even in an
    `autonomous` run. Show the finding, its file and its `left:` reason, then offer
-   these, recommending **known issue** for a minor finding with an adequate
-   workaround or a retry (step 3 says when to file instead):
+   these, recommending **known issue** only for a rare finding with a
+   near-free workaround, and **file** when it will recur and cost time (step 3):
    - **file:** a tracker issue through the workspace's `issues-report.md`
      (search first, as it says). The body names the workspace and the PR URL
      (the PR file's `url:`); relate it to the workspace's issue where the filing
@@ -95,8 +99,8 @@ the workspace root, unless the person says to skip it
       note inside the workspace: it is removed at close-out.
 
    **Known issue** (a row in `../KNOWN-ISSUES.md`, as in step 4) is the action
-   for a minor problem with an adequate workaround or retry (step 3), in place
-   of the ranks above.
+   only for a rare problem with a near-free workaround (step 3), in place of
+   the ranks above; a recurring cost is filed and fixed through rank 1.
 
    **Already enforced by `<check>`** (for example `name:check`) is also an action
    when a shipped check already catches the problem: confirm it does, name the
