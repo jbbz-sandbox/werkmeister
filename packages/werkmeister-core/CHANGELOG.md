@@ -1,5 +1,11 @@
 # sandbox-core
 
+## 0.82.1
+
+### Patch Changes
+
+- 272cd4f: Create prints an info line naming the services it took from the issue text, and a `services` value passed blank (`""` or `[]`) is no longer overridden by that match (SW-413).
+
 ## 0.82.0
 
 ### Minor Changes
