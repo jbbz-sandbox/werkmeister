@@ -22,8 +22,10 @@ repo:
   # SW-226: --diagnostic-level=error keeps the exit code but prints only errors, so a format error is not buried under warnings.
   lint: pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
   # Changes here touch no service, so the gate runs no service tests for them.
-  # Anything else outside a service's `path` still touches every service.
-  no_service_paths: [docs, .changeset, .gitignore, README.md, .github, .vscode, .claude]
+  # scripts/: its tests and checks all run in the lint row above (licenses, docs:check, name:check); SW-563.
+  # Anything else outside a service's `path` still touches every service, and the gate's tests row names it.
+  # packages/werkmeister-ui stays unmapped on purpose: the dashboard, the MCP app and the vscode extension all import it.
+  no_service_paths: [docs, .changeset, .gitignore, README.md, .github, .vscode, .claude, scripts, bin, LICENSE, NOTICE, .git-blame-ignore-revs]
   # SW-450: paths no service owns by path, so a change there doesn't test all five.
   path_mappings:
     apps/werkmeister-mcp: cli # cli's row runs --filter=werkmeister-mcp
@@ -191,7 +193,7 @@ services:
     path: apps/werkmeister-dashboard
     type: web
     archetype: node-web
-    test: "pnpm turbo run test --continue --filter=werkmeister-dashboard"
+    test: "pnpm turbo run test --continue --filter=werkmeister-dashboard --filter=werkmeister-ui"
     validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-dashboard` before the first test. Then check the URL health (see Quick Health Checks)."
     internal_port: 3001
     port_offset: 5
