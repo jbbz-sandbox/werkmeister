@@ -1,5 +1,13 @@
 # sandbox-core
 
+## 0.81.1
+
+### Patch Changes
+
+- 532983f: SW-526: the generated ICM contracts' test step gives the background log pattern without a trailing `echo "exit $?"` (read the exit code from the job's completion notice) and keeps the echo for a foreground call.
+- 7689f33: SW-534: the implement-stage contract (feature and refactor) reruns the code review on the delta when the exercise changes code, and appends the result to review.md.
+- c04d525: SW-535: the 04_propose contract tells the agent to file each follow-up that decisions.md promises, and write its issue key there, before writing the PR file.
+
 ## 0.81.0
 
 ### Minor Changes
