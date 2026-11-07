@@ -113,6 +113,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^1\. List what exists.*grep tests and fixtures for that exact value and list the hits/m,
             `${wt}/${d}`,
           );
+        // SW-535: follow-ups promised in decisions.md are filed before the PR file.
+        if (d.endsWith("_propose"))
+          assert.match(
+            c,
+            /^\d+\. Before the PR file: .*file it through `\.\.\/\.\.\/_shared\/issues-report\.md`/m,
+            `${wt}/${d}`,
+          );
         // SW-415: a repo without repo.lint has no `&& <lint>` tail.
         if (d.endsWith("_propose"))
           assert.match(
