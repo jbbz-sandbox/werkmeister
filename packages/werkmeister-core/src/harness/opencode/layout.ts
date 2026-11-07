@@ -14,6 +14,7 @@ export const opencodeLayout: HarnessLayout = {
   skillsDir: ".agents/skills",
   hooks: { available: "own", write: writeOpencodeHooks, missing: OPENCODE_MISSING_HOOKS },
   agents: false,
+  questionTool: "question",
   notice: () =>
     "\n## Harness\n\n" +
     "This workspace was generated for OpenCode. Werkmeister's MCP server is registered in " +

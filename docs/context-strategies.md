@@ -10,6 +10,8 @@ Both strategies share one PR lifecycle — rules file, PR files, pre-PR gate, PR
 
 ### `autonomous` (#175)
 
+In an interactive icm workspace, every stage contract's `## Human check` is a gate: a status line in the stage's output (`decisions.md`, `spec.md`, `review.md`, a bugfix `fix.md`, a `pr-*.md`) that the person flips, by editing it or by answering in chat. The check asks its questions through the harness's question tool, `HarnessLayout.questionTool`: `AskUserQuestion` on `claude`, `question` on `opencode`. It asks at most 4 questions per call, in batches when there are more, each standing on its own, with the recommended option first. On `codex` and `mcp`, which have no such tool, it asks one numbered block at the end of the reply. The answer is written into the output as its status, noted `(approved in chat YYYY-MM-DD)` (SW-517).
+
 `autonomous: true` in `workspace.yml` (or `--autonomous`, `WERKMEISTER_AUTONOMOUS=1`, or the form's checkbox; off by default) lets a headless session started with `claude-send "start the run"` go from stage 01 to `werkmeister pr open` with no stop. The person's review moves to the PR; `werkmeister pr gate` still applies.
 
 - **icm**: each stage contract ends in `## Self-check` instead of `## Human check` — review `output/` once against `BRIEF.md` and the live issue, flip `status: proposed → decided`, and record each decision under `## Recommendations for reviewer` in the PR body. The propose stage's self-check sets the PR file to `status: approved` and runs `werkmeister pr open`. `CLAUDE.md`'s one rule becomes `## Stop points`: the PR URL, a question only a person can answer, or a gate failure outside the issue's scope. `_shared/pr-rules.md` says the agent approves.

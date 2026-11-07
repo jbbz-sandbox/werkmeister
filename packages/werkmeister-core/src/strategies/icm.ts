@@ -33,6 +33,7 @@ import {
 } from "../workspace_prompts.js";
 import { stageDecisions } from "./icm_decisions.js";
 import {
+  askLine,
   type IcmVars,
   prDir,
   proposeDir,
@@ -115,6 +116,7 @@ function vars(ctx: InitContext, stages: Stage[]): IcmVars {
     standards: "",
     autonomous: isTrue(ctx.inputs["autonomous"]),
     group: list(ctx.inputs["group"]),
+    questionTool: harnessLayoutFor(ctx.workspaceRoot).questionTool,
   };
 }
 
@@ -233,7 +235,7 @@ function renderContract(dir: string, stage: Stage, v: IcmVars, step0 = ""): stri
     "",
     ...(v.autonomous
       ? ["## Self-check", c.selfCheck ?? SELF_CHECK]
-      : ["## Human check", c.humanCheck]),
+      : ["## Human check", c.humanCheck, "", askLine(v.questionTool)]),
     "",
   ].join("\n");
 }

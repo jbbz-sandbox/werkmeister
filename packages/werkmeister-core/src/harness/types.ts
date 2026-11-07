@@ -35,6 +35,8 @@ export interface HarnessLayout {
   readonly hooks: HooksSupport;
   /** Whether `.claude/agents`-style subagent definitions are projected. */
   readonly agents: boolean;
+  /** The tool a human check asks its questions with (SW-517); absent → a plain-text block. */
+  readonly questionTool?: string;
   /** Appended to the instructions file; "" when the harness needs no note. */
   notice(): string;
 }

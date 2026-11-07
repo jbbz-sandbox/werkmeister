@@ -294,7 +294,7 @@ async function initIcm(root, standardsDir, autonomous, extra = {}) {
   const read = (rel) => fs.readFileSync(path.join(root, rel), "utf8");
   const stages = fs.readdirSync(path.join(root, "stages")).sort();
   return {
-    claude: read("CLAUDE.md"),
+    claude: read(fs.existsSync(path.join(root, "AGENTS.md")) ? "AGENTS.md" : "CLAUDE.md"),
     pipeline: read("CONTEXT.md"),
     prRules: read("_shared/pr-rules.md"),
     contracts: stages.map((d) => read(`stages/${d}/CONTEXT.md`)),
@@ -409,6 +409,49 @@ test("spec and implement gate on a status line, and the router enters on it read
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(standardsDir, { recursive: true, force: true });
+  }
+});
+
+// SW-517: every human check asks through the harness's question tool; without one, a numbered block.
+test("human checks ask through the harness's question tool, or a numbered block without one", async () => {
+  const human = (c) => c.slice(c.indexOf("## Human check"));
+  const tmp = () => [
+    fs.mkdtempSync(path.join(os.tmpdir(), "icm-ask-")),
+    fs.mkdtempSync(path.join(os.tmpdir(), "icm-ask-standards-")),
+  ];
+  const dirs = [];
+  try {
+    const [root, std] = tmp();
+    dirs.push(root, std);
+    const claude = await initIcm(root, std, "false");
+    assert.equal(claude.contracts.length, 4);
+    for (const c of claude.contracts)
+      assert.match(
+        human(c),
+        /Ask this check through `AskUserQuestion`: at most 4 questions per call/,
+      );
+
+    const [bugRoot, bugStd] = tmp();
+    dirs.push(bugRoot, bugStd);
+    const bugfix = await initIcm(bugRoot, bugStd, "false", { work_type: "bugfix" });
+    for (const c of bugfix.contracts) assert.match(human(c), /`AskUserQuestion`/);
+
+    const [codexRoot, codexStd] = tmp();
+    dirs.push(codexRoot, codexStd);
+    fs.mkdirSync(path.join(codexRoot, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(path.join(codexRoot, ".werkmeister", "workspace.yml"), "harness: codex\n");
+    const codex = await initIcm(codexRoot, codexStd, "false");
+    for (const c of codex.contracts) {
+      assert.match(human(c), /Ask this check as one numbered block at the end of your reply/);
+      assert.doesNotMatch(c, /AskUserQuestion/);
+    }
+
+    const [autoRoot, autoStd] = tmp();
+    dirs.push(autoRoot, autoStd);
+    const auto = await initIcm(autoRoot, autoStd, "true");
+    for (const c of auto.contracts) assert.doesNotMatch(c, /Ask this check/);
+  } finally {
+    for (const d of dirs) fs.rmSync(d, { recursive: true, force: true });
   }
 });
 

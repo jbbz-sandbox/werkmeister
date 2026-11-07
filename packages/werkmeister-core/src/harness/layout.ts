@@ -23,6 +23,7 @@ export const claudeLayout: HarnessLayout = {
   skillsDir: ".claude/skills",
   hooks: { available: true },
   agents: true,
+  questionTool: "AskUserQuestion",
   notice: () => "",
 };
 
