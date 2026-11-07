@@ -49,6 +49,13 @@ it("--pr-field sets only fields no command reads, keeping any = in the value (SW
     expect(parse(["--pr-field", f, "pr", "gate"])).toEqual({ bad: "--pr-field" });
 });
 
+it("--issue takes only owner/repo#number, never a gh flag (SW-509)", () => {
+  expect(parse(["--issue", "o/app#1", "pr", "status"]).opts?.issue).toBe("o/app#1");
+  for (const f of ["SW-1", "o/app", "--repo/x#1", "-o/app#1", "o/app#1 --web"])
+    expect(parse(["--issue", f, "pr", "status"])).toEqual({ bad: "--issue" });
+  expect(parse(["--issue"])).toEqual({ bad: "--issue" });
+});
+
 it("--services outside the current folder is refused before any fixture is made", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   try {

@@ -8,6 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import { startIssue } from "./dist/issue_status.js";
 import { jiraCreds } from "./dist/jira-rest.js";
 import { closeOut, gatePrs, openPrs, refreshPrStatus } from "./dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
@@ -162,6 +163,55 @@ test("with merged the fake gh reports the PR merged, so a run reaches workspace 
       assert.match(fs.readFileSync(fx.dockerLog, "utf8"), /^compose .* down /m);
     },
     { gate: true, merged: true },
+  );
+});
+
+// SW-509: o/<repo>#N refs resolve to the fixture's GitHub project, so the fake gh logs every move.
+test("with issue, pr open, pr status and workspace close move it through the fake gh (SW-509)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      assert.equal(open.ok, true, open.lines.join("\n"));
+      await refreshPrStatus(fx.workspace);
+      const closed = collectingReporter();
+      await withReporter(closed, () => closeOut("demo", { skipPostmortem: "fixture" }));
+      const gh = fs.readFileSync(fx.ghLog, "utf8");
+      assert.match(gh, /^issue edit 1 -R o\/app --add-label status: in review$/m);
+      assert.match(gh, /^issue close 1 -R o\/app --reason completed$/m);
+      assert.match(gh, /^issue comment 1 -R o\/app --body /m);
+      assert.doesNotMatch(closed.text(), /no Jira REST credentials/);
+    },
+    { gate: true, merged: true, issue: "o/app#1" },
+  );
+});
+
+test("a grouped issue fixture shows a gh issue edit for the lead and each member (SW-509)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const edits = () =>
+        fs
+          .readFileSync(fx.ghLog, "utf8")
+          .split("\n")
+          .filter((l) => l.startsWith("issue edit "));
+      const heads = (n) =>
+        edits()
+          .slice(n)
+          .map((l) => l.split(" ")[2]);
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      await startIssue(fx.workspace);
+      assert.deepEqual(heads(0), ["1", "2", "3"]);
+      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      assert.equal(open.ok, true, open.lines.join("\n"));
+      assert.deepEqual(heads(3), ["1", "2", "3"]);
+      await refreshPrStatus(fx.workspace);
+      assert.match(fs.readFileSync(fx.ghLog, "utf8"), /^issue close 3 -R o\/app /m);
+    },
+    { gate: true, merged: true, issue: "o/app#1", workspace: { group: ["o/app#2", "o/app#3"] } },
   );
 });
 
