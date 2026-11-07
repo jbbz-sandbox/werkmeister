@@ -810,7 +810,7 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 - `--prune-context`: After a context_strategy change, delete the previous strategy's files that git tracks unmodified (anything else is kept and reported).
 - `--refresh-issue`: Re-fetch the workspace's issue into .werkmeister/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).
 
-Reconciles a workspace from its `.werkmeister/workspace.yml` and regenerates its context files. It adds a git worktree for each repo the config needs (its `repos` plus the repos owning its `services`) and removes worktrees for repos it dropped; a dirty worktree stops the run unless `--force`. Then it writes CLAUDE.md, `.env`, `compose.yml`, the `.claude/` skills and agents, `.mcp.json`, `.devcontainer/devcontainer.json` and `.werkmeister/*`.
+Reconciles a workspace from its `.werkmeister/workspace.yml` and regenerates its context files. It adds a git worktree for each repo the config needs (its `repos` plus the repos owning its `services`) and removes worktrees for repos it dropped; a dirty worktree stops the run unless `--force`. Then it writes CLAUDE.md, `.env`, `compose.yml`, the `.claude/` skills and agents, `.mcp.json`, `.devcontainer/devcontainer.json` (harness: claude only) and `.werkmeister/*`.
 
 It is idempotent: edit `workspace.yml` and rerun. It never prompts, and refuses to run in a bare folder; create a workspace with `werkmeister workspace new`.
 
@@ -1877,9 +1877,10 @@ MCP entry runs `werkmeister internal mcp` over stdio, and its skills shell out t
 no binary there, use the tools the HTTP server exposes instead. And the
 dashboard on 3001 is loopback-only and unauthenticated, so it is correctly unreachable.
 
-**0. The generated devcontainer.** `init-workspace` writes
-`<workspace>/.devcontainer/devcontainer.json`, which sets every item above: `~/features`
-(as the workspace mount) and `~/repos` bound at their host paths, `HOME` and the
+**0. The generated devcontainer.** On a `harness: claude` workspace, `init-workspace` writes
+`<workspace>/.devcontainer/devcontainer.json`; any other harness gets none, and a generated
+one left from before is removed, since it runs only Claude Code. The file sets every item
+above: `~/features` (as the workspace mount) and `~/repos` bound at their host paths, `HOME` and the
 `GIT_CONFIG_*` trio in `containerEnv`, `--add-host host.docker.internal:host-gateway` in
 `runArgs`, and a `postCreateCommand` that installs `claude` and runs
 `claude mcp add-json --scope user werkmeister` for `http://host.docker.internal:3002/mcp`

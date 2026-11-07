@@ -72,7 +72,8 @@ has its own harness with hooks, `harness: codex` ([Codex](#codex)).
    A harness running **inside a container** sends the workspace's token instead:
    `Authorization: Bearer $(cat .werkmeister/token)` (Codex: `bearer_token_env_var`),
    which scopes it to that one workspace. The devcontainer `workspace init` generates
-   does this for Claude Code.
+   does this for Claude Code, and only on a `harness: claude` workspace: on `mcp`, `codex`
+   and `opencode` it writes none and removes one it generated before.
 4. **Skills.** Codex reads `.agents/skills` from the repository root. A harness that
    reads another directory can point at it or copy it; `werkmeister skills check`
    and `werkmeister skills sync` keep the projected copy fresh wherever the layout puts it.

@@ -104,6 +104,7 @@ test("jit init on opencode: AGENTS.md, .agents/skills, plugin, opencode.json, no
     assert.match(agentsMd, /Session-start context and auto-stop do not run/);
     assert.ok(!fs.existsSync(path.join(root, "CLAUDE.md")), "CLAUDE.md written");
     assert.ok(!fs.existsSync(path.join(root, ".claude")), ".claude/ written");
+    assert.ok(!fs.existsSync(path.join(root, ".devcontainer")), "Claude devcontainer written");
     assert.ok(
       fs.readdirSync(path.join(root, ".agents", "skills")).some((s) => s.startsWith("w9r-")),
     );
