@@ -445,6 +445,40 @@ test("gate: an unmapped non-doc file still touches every service", async () => {
   }
 });
 
+test("gate: a start that failed, then succeeded as the gate's on-demand start, does not fail the gate (SW-552)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([], {
+      services: {
+        ...REGISTRY.services,
+        lib: { ...REGISTRY.services.lib, test: "npm test -w lib" },
+      },
+    });
+    // No container of the repo is running, so the gate must start lib itself.
+    const r = stubRun([
+      [/^docker ps/, { stdout: "" }],
+      [/diff --name-only/, { stdout: "packages/lib/x.ts\n" }],
+    ]);
+    d.run = r.run;
+    d.calls = r.calls;
+    let starts = 0;
+    d.startService = async (_ws, feature, service) => {
+      d.started.push(`${feature}-${service}`);
+      if (++starts === 1) throw new Error("No capacity to start lib for 'feat' after 10 min");
+    };
+    const g = await gate(ws, d);
+    assert.deepEqual(d.started, ["feat-lib", "feat-lib"]);
+    assert.deepEqual(failed(g), []);
+    assert.match(
+      g.checks.find((c) => c.name === "start lib").detail,
+      /second attempt.*No capacity/,
+    );
+    assert.ok(d.calls.includes("docker exec feat-lib sh -c npm test -w lib"));
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gate: changed files that map to no service fail a tests row unless skip_tests.tests gives a reason (SW-278)", async () => {
   const diff = [/diff --name-only/, { stdout: "src/x.ts\n" }];
   const noRepo = { repos: {} }; // no `repos:` entry for the worktree
