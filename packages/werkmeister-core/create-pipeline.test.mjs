@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { buildWorkspaceArgs, createWorkspace, prepareCreate } from "./dist/sandbox.js";
+import { resolveInputs } from "./dist/workspace_prompts.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
 const GH = "overrides:\n  issue_tracker: github\n";
@@ -102,6 +103,38 @@ test("an unattended create takes services the issue names verbatim, in its repos
           ),
         );
         assert.equal(mine.resolved.services, "backend", "a chosen services list is kept");
+      });
+    },
+    { config: GH },
+  );
+});
+
+test("a blank services value is not overridden by the issue match; an info line names matched ones (SW-413)", async () => {
+  await withSandboxHome(
+    async () => {
+      const body = "Service: {{frontend}}.";
+      await withFakeGh({ issue: { ...ISSUE, body } }, async () => {
+        const run = async (extra) => {
+          const reporter = collectingReporter();
+          const { resolved } = await withReporter(reporter, () =>
+            prepareCreate(
+              { issue_id: "o/r#5", repos: "demo-repo", ...extra },
+              { cwd: cwd(), distill: false },
+            ),
+          );
+          return { resolved, out: reporter.text() };
+        };
+        for (const blank of [{ services: "" }, { services: "  " }, { services: [] }]) {
+          const r = await run(blank);
+          assert.ok(!r.resolved.services, JSON.stringify(blank));
+          assert.doesNotMatch(r.out, /taken from the issue/);
+        }
+        // The CLI resolves first and hands prepareCreate the resolved object (`workspace.ts` run()).
+        const viaCli = await run(resolveInputs({ services: "" }, cwd()));
+        assert.ok(!viaCli.resolved.services, "a blank --services survives resolveInputs");
+        const absent = await run({});
+        assert.equal(absent.resolved.services, "frontend");
+        assert.match(absent.out, /Services taken from the issue text: frontend/);
       });
     },
     { config: GH },

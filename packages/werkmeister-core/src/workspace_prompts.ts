@@ -339,6 +339,10 @@ export function resolveInputs(
       }
     }
   }
+  // SW-413: a blank `services` passed on purpose stays as "" (not dropped), so prepareCreate can tell it from "not given".
+  const passed = args["services"];
+  if (!resolved.services && passed !== null && passed !== undefined && !String(passed).trim())
+    resolved.services = "";
   // A function, so a run with neither field never hits projectFor's unknown-project warning.
   const tracker = () => issueTracker({ project: resolved.project, text: resolved.issue_id ?? "" });
   if (resolved.issue_id)
