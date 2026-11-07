@@ -81,3 +81,23 @@ test("round-trips the URIs werkmeister-core builds", () => {
     slug: "my-repo-42",
   });
 });
+
+test("SW-499: remote_control=1 names the matched workspace, never the query", () => {
+  const rc = (query, matched, harness = "claude") =>
+    parseLaunchUri("/claude", query, harness, "codex", matched).command;
+  assert.equal(rc("workspace=ws&mode=new&remote_control=1", "ws"), "claude --remote-control 'ws'");
+  assert.equal(
+    rc("workspace=ws&mode=new&remote_control=1&prompt=hi", "ws"),
+    "claude --remote-control 'ws' 'hi'",
+  );
+  // The handler matches by exact name, so a crafted name has no match.
+  assert.throws(
+    () => rc("workspace=ws%27%3Brm%20-rf%20~&mode=new&remote_control=1", undefined),
+    /remote_control needs an existing workspace/,
+  );
+  const named = rc("workspace=evil&mode=new&remote_control=1", "ws");
+  assert.equal(named, "claude --remote-control 'ws'");
+  assert.doesNotMatch(named, /evil/);
+  assert.throws(() => rc("workspace=ws&mode=new&remote_control=yes", "ws"), /Bad remote_control/);
+  assert.equal(rc("workspace=ws&mode=new&remote_control=1", "ws", "codex"), "codex");
+});
