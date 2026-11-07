@@ -153,9 +153,10 @@ updates) a **"chore: version packages"** PR carrying the version bumps and
 release. So a release is one reviewable merge, and `main` never publishes by
 accident.
 
-`release` runs only after the same push's `test` and `core-test` jobs pass
-(`needs: [test, core-test]`), so
-nothing publishes untested; npm will not accept a re-publish of a
+`release` runs only once the commit is tested: by a green merge-queue run
+of that exact commit (the `queued` job checks, and the push then skips its
+own test jobs), or else by the push's own `test`, `core-test` and
+`node-floor` jobs. So nothing publishes untested; npm will not accept a re-publish of a
 version. The job publishes through npm trusted publishing (OIDC): npmjs.com
 trusts `.github/workflows/ci.yml` in this repo, so no npm token is stored anywhere.
 Changesets runs `pnpm publish`, which packs the tarball (turning `workspace:*`

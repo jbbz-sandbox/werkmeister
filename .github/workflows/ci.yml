@@ -15,7 +15,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # SW-477: main moves to the exact commit the merge queue tested, so a push the
+  # queue already passed skips the test jobs. A push that bypassed the queue, or
+  # a failed lookup (empty output), tests as before.
+  queued:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      tested: ${{ steps.check.outputs.tested }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n=$(gh api "repos/${{ github.repository }}/actions/runs?head_sha=${{ github.sha }}&event=merge_group&status=success" --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")] | length') || n=0
+          echo "tested=$([ "$n" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
   test:
+    needs: queued
+    # !cancelled(): `queued` is skipped on pull_request and merge_group, which would skip this too.
+    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -82,6 +101,8 @@ jobs:
   # 4-vCPU runner: 116s when it shared the runner with every other build. Two
   # shards on runners of their own, in parallel with `test`.
   core-test:
+    needs: queued
+    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -106,6 +127,8 @@ jobs:
   # SW-77: engines promises Node >=22, so the suites the gate names run on 22
   # itself. Everything else stays on 24, whose bundled npm the release needs.
   node-floor:
+    needs: queued
+    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -118,12 +141,15 @@ jobs:
           node-version: 22
       - run: pnpm turbo run test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core
 
-  # Gated on the test jobs rather than repeating their checks: a publish cannot
-  # be taken back, and this used to be a separate workflow that raced CI on
-  # every push.
+  # Gated on a green queue run of this commit or on this push's test jobs,
+  # rather than repeating their checks: a publish cannot be taken back, and this
+  # used to be a separate workflow that raced CI on every push.
   release:
-    needs: [test, core-test, node-floor]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [queued, test, core-test, node-floor]
+    if: >-
+      !cancelled() && github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      (needs.queued.outputs.tested == 'true' ||
+       (needs.test.result == 'success' && needs.core-test.result == 'success' && needs.node-floor.result == 'success'))
     # npm refuses a re-publish of a version, so two overlapping runs
     # would not race harmlessly — the loser fails.
     concurrency: release-${{ github.ref }}
@@ -166,6 +192,16 @@ jobs:
           path: .turbo/cache
           key: turbo-${{ runner.os }}-node24-${{ github.sha }}
           restore-keys: turbo-${{ runner.os }}-node24-
+      # With `test` skipped, nothing saves main's turbo cache, and PR runs restore
+      # from main's (a queue run's cache is unreachable, SW-423). Builds only:
+      # shortcut: test/typecheck results no longer replay on PRs; add them here if PR runs slow down.
+      - if: needs.queued.outputs.tested == 'true'
+        run: pnpm turbo run build
+      - if: needs.queued.outputs.tested == 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-node24-${{ github.sha }}
       # With changesets pending: opens/updates the version PR. With none pending
       # (i.e. that PR just merged): publishes and tags.
       - id: changesets
