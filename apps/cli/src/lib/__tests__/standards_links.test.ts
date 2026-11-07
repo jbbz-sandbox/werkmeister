@@ -33,26 +33,17 @@ function makeTree(remote: string | null): string {
   return dir;
 }
 
-// Run under `git rebase --exec` or a hook, an inherited GIT_DIR would point the
-// fixtures' `git init` at the real repo and re-init it (SW-508).
+// vitest.config.ts starts every worker without these; a case that sets one must not leak it.
 const GIT_REPO_VARS = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"];
-const savedGitEnv: Record<string, string | undefined> = {};
 
 beforeEach(() => {
-  for (const k of GIT_REPO_VARS) {
-    savedGitEnv[k] = process.env[k];
-    delete process.env[k];
-  }
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "std-links-"));
   process.env.WERKMEISTER_CONFIG_FILE = path.join(tmp, "config.yaml");
 });
 afterEach(() => {
   delete process.env.WERKMEISTER_CONFIG_FILE;
   fs.rmSync(tmp, { recursive: true, force: true });
-  for (const k of GIT_REPO_VARS) {
-    if (savedGitEnv[k] === undefined) delete process.env[k];
-    else process.env[k] = savedGitEnv[k];
-  }
+  for (const k of GIT_REPO_VARS) delete process.env[k];
 });
 
 describe("standardsSource", () => {

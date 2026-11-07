@@ -13,6 +13,7 @@
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { gitEnv } from "werkmeister-core/proc";
 
 export type BuildStamp = { sha: string; dirty: boolean };
 
@@ -44,6 +45,7 @@ export function staleBuildWarning(build: BuildStamp | undefined, repoRoot: strin
   try {
     head = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
       encoding: "utf8",
+      env: gitEnv(),
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
   } catch {
@@ -56,9 +58,7 @@ export function staleBuildWarning(build: BuildStamp | undefined, repoRoot: strin
     execFileSync(
       "git",
       ["-C", repoRoot, "diff", "--quiet", build.sha, head, "--", ...BUNDLE_SOURCES],
-      {
-        stdio: "ignore",
-      },
+      { env: gitEnv(), stdio: "ignore" },
     );
     return null;
   } catch {

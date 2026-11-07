@@ -5,6 +5,10 @@ import { defineConfig } from "vitest/config";
 // No daemon at DOCKER_HOST, so a Docker call a test forgot to mock fails in ms instead of waiting on the
 // host's loaded daemon: a sync `docker ps` blocking a fork past vitest's fixed 60 s worker RPC timeout
 // fails a green run, and an unbounded dockerode `df` hangs a case to testTimeout (SW-158).
+// Started by a calling git (rebase --exec, a hook), these point every fixture `git init` at
+// the real repo; deleted here, in the main process, so no worker inherits them (SW-520).
+for (const v of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete process.env[v];
+
 export default defineConfig({
   test: {
     testTimeout: 60_000,

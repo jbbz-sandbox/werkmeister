@@ -62,12 +62,9 @@ function httpsRemote(url: string): string {
  * `serviceRepoBase()`: a guessed URL that 404s is worse than no link.
  */
 export function standardsSource(dir: string = standardsDirPath()): StandardsSource | null {
-  // A calling git (rebase --exec, hooks) exports these, and they beat `-C`: the
-  // links would name the caller's repo instead of the tree's (SW-508).
-  const { GIT_DIR, GIT_WORK_TREE, GIT_COMMON_DIR, ...env } = process.env;
   const git = (...args: string[]): string => {
     try {
-      const res = run(["git", "-C", dir, ...args], { capture: true, env, timeout: _GIT_TIMEOUT });
+      const res = run(["git", "-C", dir, ...args], { capture: true, timeout: _GIT_TIMEOUT });
       return res.status === 0 ? res.stdout.trim() : "";
     } catch {
       return "";

@@ -12,7 +12,14 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
-import { toolBin } from "./tool_bins.js";
+import { gitEnv, toolBin } from "./tool_bins.js";
+
+export { gitEnv };
+
+const spawnEnv = (
+  cmd: string[],
+  env: NodeJS.ProcessEnv | undefined,
+): NodeJS.ProcessEnv | undefined => (cmd[0] === "git" ? gitEnv(env) : env);
 
 const timeoutMs = (seconds: number): number =>
   seconds * Number(process.env["WERKMEISTER_TIMEOUT_SCALE"] || 1) * 1000;
@@ -72,7 +79,7 @@ export function run(cmd: string[], opts: RunOptions = {}): RunResult {
 
   const res = spawnSync(toolBin(cmd[0]), cmd.slice(1), {
     cwd: opts.cwd,
-    env: opts.env,
+    env: spawnEnv(cmd, opts.env),
     input: opts.input,
     timeout: opts.timeout !== undefined ? timeoutMs(opts.timeout) : undefined,
     encoding: "utf8",
@@ -158,7 +165,7 @@ export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<Run
 
     const child = spawn(toolBin(cmd[0]), cmd.slice(1), {
       cwd: opts.cwd,
-      env: opts.env,
+      env: spawnEnv(cmd, opts.env),
       stdio,
       signal: opts.signal,
       timeout: opts.timeout !== undefined ? timeoutMs(opts.timeout) : undefined,

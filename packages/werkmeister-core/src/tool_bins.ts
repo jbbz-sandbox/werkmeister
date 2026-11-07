@@ -42,6 +42,15 @@ export async function isFile(p: string): Promise<boolean> {
  * Exported for the same reason as {@link sandbox.resolveSandboxBin}: callers that spawn // name-check: ignore
  * the CLI themselves need this env, not a hand-rolled approximation of it.
  */
+// A calling git (rebase --exec, hooks) exports these, and they beat `git -C <dir>`:
+// the call would act on the caller's repo instead of <dir> (SW-520).
+const GIT_REPO_VARS = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"];
+
+/** *env* without the variables that point git at a repo other than its cwd / `-C`. */
+export function gitEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([k]) => !GIT_REPO_VARS.includes(k)));
+}
+
 export function childEnv(): NodeJS.ProcessEnv {
   const extra = [
     path.join(os.homedir(), ".local", "bin"),
@@ -53,7 +62,8 @@ export function childEnv(): NodeJS.ProcessEnv {
   ];
   const current = process.env.PATH ? process.env.PATH.split(path.delimiter) : [];
   const merged = [...new Set([...extra, ...current])].join(path.delimiter);
-  return { ...process.env, PATH: merged };
+  // Every child is aimed at a workspace dir, never at the repo of a git that started us.
+  return gitEnv({ ...process.env, PATH: merged });
 }
 
 /** `gh`, or $WERKMEISTER_GH_BIN (tests point it at a fake); under WERKMEISTER_FIXTURE a stub that fails (SW-177). */
