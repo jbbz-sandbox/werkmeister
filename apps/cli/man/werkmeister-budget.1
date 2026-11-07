@@ -5,7 +5,7 @@ werkmeister\-budget \- The scheduler's budget, the slots held and the features W
 \fBwerkmeister budget\fR [command]
 .SH DESCRIPTION
 .PP
-Shows the scheduler's budget and who is using it: the memory and CPUs a feature's containers may take in total (\fBbudget:\fR in \fB~/.werkmeister/config.yaml\fR, else the Docker engine's memory less 1 GiB and every CPU), the host\-load ceiling \fBwith\-temp\-home\fR waits under, whether a person's \fBfeature up\fR may preempt an autonomous run, the features holding a slot, and the features \fBWaiting\fR for room in the order they will start.
+Shows the scheduler's budget and who is using it: the memory and CPUs a feature's containers may take in total (\fBbudget:\fR in \fB~/.werkmeister/config.yaml\fR, else the Docker engine's memory less 1 GiB and every CPU), the host\-load ceiling \fBwith\-temp\-home\fR waits under, whether a start that doesn't fit may stop features whose session is idle or waiting on a person (and a person's \fBfeature up\fR a working autonomous one), the features holding a slot, and the features \fBWaiting\fR for room in the order they will start.
 .PP
 It reads only: with the host daemon up it asks the daemon for the queue, otherwise it reads \fB~/.werkmeister/scheduler/\fR itself.
 .SH EXAMPLES

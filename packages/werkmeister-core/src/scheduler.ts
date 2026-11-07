@@ -12,7 +12,7 @@ export interface Cost {
 }
 
 export interface Budget extends Cost {
-  /** A person's `up` may stop an autonomous feature to make room. */
+  /** A start that doesn't fit may stop features nobody is in; a person's may also stop working ones. */
   preempt: boolean;
 }
 
@@ -78,8 +78,19 @@ export function admit(budget: Budget, running: Lease[], queue: string[], req: Re
   const nobodyAhead = ahead === -1 ? queue.length === 0 : ahead === 0;
   if (fits({ memory: 0, cpus: 0 }) && (req.byPerson || nobodyAhead)) return { kind: "admit" };
 
-  if (req.byPerson && budget.preempt) {
-    const candidates = RANK_ORDER.flatMap((r) => running.filter((l) => l.rank === r && !l.busy));
+  // An idle or human-check lease (a session parked on a question) has nobody in it, so a service start
+  // that doesn't fit takes it (SW-546); only a person's start takes a working one. A plain `up` not by a
+  // person (a grant's re-up of a victim) keeps waiting, or two preempted features would evict each other.
+  if (budget.preempt && (req.byPerson || (req.services && nobodyAhead))) {
+    const ranks = req.byPerson ? RANK_ORDER : RANK_ORDER.slice(0, 2);
+    // Never its own lease (stopping what it runs to start one more service of it), nor one that
+    // frees nothing (containers with no reservation or CPU limit): stopped for no gain.
+    const candidates = ranks.flatMap((r) =>
+      running.filter(
+        (l) =>
+          l.rank === r && !l.busy && l.feature !== req.feature && (l.cost.memory || l.cost.cpus),
+      ),
+    );
     const victims: string[] = [];
     const freed = { memory: 0, cpus: 0 };
     for (const l of candidates) {

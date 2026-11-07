@@ -23,11 +23,16 @@ vi.mock("werkmeister-core/slots", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/slots")>()),
   getSlot: vi.fn(async () => 1),
 }));
+vi.mock("werkmeister-core/reporter", async (orig) => ({
+  ...(await orig<typeof import("werkmeister-core/reporter")>()),
+  info: vi.fn(),
+}));
 
 import { readWaiting } from "werkmeister-core/agent_state";
 import { composeStop, getContainerStatus } from "werkmeister-core/compose";
 import { admitOrQueue, admitServiceStart } from "werkmeister-core/lifecycle";
 import { run } from "werkmeister-core/proc";
+import { info } from "werkmeister-core/reporter";
 import { enqueue, readQueue, writeLeases } from "werkmeister-core/scheduler_state";
 
 const G = 2 ** 30;
@@ -93,6 +98,7 @@ describe("admitServiceStart", () => {
 
   it("waits in the queue with its position, then starts once room frees", async () => {
     const other = workspace("other", { autonomous: true });
+    session(other); // working: SW-546 would otherwise take an idle holder's lease
     const mine = workspace("mine", { autonomous: true });
     fs.writeFileSync(path.join(mine, "compose.yml"), ON_DEMAND);
     writeLeases({ mine: { slot: 2, workspace: mine } });
@@ -111,6 +117,7 @@ describe("admitServiceStart", () => {
 
   it("fails NO_CAPACITY after the wait and leaves the queue", async () => {
     const other = workspace("other", { autonomous: true });
+    session(other); // working: SW-546 would otherwise take an idle holder's lease
     const mine = workspace("mine", { autonomous: true });
     fs.writeFileSync(path.join(mine, "compose.yml"), ON_DEMAND);
     busy(other, 8);
@@ -124,8 +131,24 @@ describe("admitServiceStart", () => {
     expect(readWaiting(mine)).toBeNull();
   });
 
-  it("never preempts, even from a person's workspace: it waits instead", async () => {
+  // The hooks' record of *ws*'s one session (SW-182): working, or parked on a question.
+  const session = (ws: string, ask?: string) => {
+    const at = new Date().toISOString();
+    fs.mkdirSync(path.join(ws, ".werkmeister", "sessions"), { recursive: true });
+    fs.writeFileSync(
+      path.join(ws, ".werkmeister", "sessions", "s1.json"),
+      JSON.stringify({
+        status: "busy",
+        at,
+        last: at,
+        ...(ask && { ask: { kind: "question", what: ask, at } }),
+      }),
+    );
+  };
+
+  it("never stops a working feature, even from a person's workspace: it waits instead", async () => {
     const other = workspace("other", { autonomous: true });
+    session(other);
     const mine = workspace("mine", { autonomous: false });
     fs.writeFileSync(path.join(mine, "compose.yml"), ON_DEMAND);
     writeLeases({ other: { slot: 1, workspace: other } });
@@ -138,8 +161,28 @@ describe("admitServiceStart", () => {
     expect(readQueue()).toEqual([]);
   });
 
+  // SW-546: a person's workspace parked on a question box holds its full reservation at 0% use.
+  it("stops a feature whose session is waiting on a person, queues it as preempted, and starts", async () => {
+    const other = workspace("other", { autonomous: false });
+    session(other, "Approve the fix?");
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), ON_DEMAND);
+    writeLeases({ other: { slot: 1, workspace: other } });
+    busy(other, 8);
+    vi.mocked(composeStop).mockClear();
+    await admitServiceStart("mine", mine, "api", { sleep: async () => {}, waitMs: 0 });
+    expect(composeStop).toHaveBeenCalledWith("other");
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining("Stopped 'other' to make room: its session is waiting on a person"),
+    );
+    expect(readQueue()).toEqual(["other"]);
+    expect(readWaiting(other)).toMatchObject({ position: 1, reason: "preempted" });
+    expect(readWaiting(mine)).toBeNull();
+  });
+
   it("refuses while the feature is queued to come back whole (preempted), leaving its place", async () => {
     const other = workspace("other", { autonomous: true });
+    session(other); // working: SW-546 would otherwise take an idle holder's lease
     const mine = workspace("mine", { autonomous: true });
     fs.writeFileSync(path.join(mine, "compose.yml"), ON_DEMAND);
     writeLeases({ mine: { slot: 2, workspace: mine } });
@@ -154,6 +197,7 @@ describe("admitServiceStart", () => {
 
   it("a service already running costs nothing again", async () => {
     const other = workspace("other", { autonomous: true });
+    session(other); // working: SW-546 would otherwise take an idle holder's lease
     const mine = workspace("mine", { autonomous: true });
     fs.writeFileSync(path.join(mine, "compose.yml"), ON_DEMAND);
     busy(other, 8);

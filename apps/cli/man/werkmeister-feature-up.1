@@ -25,7 +25,7 @@ Resolves the workspace (\fB\-\-workspace\fR, else \fBpaths.workspaces_root\fR fr
 .IP 3. 3
 Allocates a slot (1–12) if the feature doesn't already have one
 .IP 4. 3
-When the workspace has local services, checks the host's memory and CPU budget (\fBwerkmeister budget status\fR). If the feature doesn't fit it waits in a queue and starts when another feature stops; a feature a person starts may instead stop idle ones to make room (\fBbudget.preempt: false\fR turns that off)
+When the workspace has local services, checks the host's memory and CPU budget (\fBwerkmeister budget status\fR). If the feature doesn't fit it waits in a queue and starts when another feature stops. A service start that doesn't fit may instead stop features whose session is idle or waiting on a person, oldest first, and says which; a feature a person starts may also stop working autonomous ones (\fBbudget.preempt: false\fR turns both off)
 .IP 5. 3
 Generates per\-feature files in the feature's workspace:
 .IP \(bu 6
