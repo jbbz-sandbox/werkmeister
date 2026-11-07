@@ -104,6 +104,7 @@ import {
   requestAdmission,
   type Starting,
   serviceStarts,
+  setupsCurrent,
 } from "./scheduler_state.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import {
@@ -408,6 +409,11 @@ async function prepareSlot(
  * compose.yml carries those behind the `on-demand` profile. *composeName* is
  * the gate's own render of a branch's settings (SW-118) when not compose.yml.
  *
+ * *skipCurrentSetups* (the gate, SW-541) starts it `--no-deps` when its setup's install is
+ * already current: compose would re-run it, and after an edit rebuild every package, while the
+ * gate's own test command builds what it tests. `feature up --service` keeps the re-run, so a
+ * service started alone after a pull gets a fresh dist/.
+ *
  * Throws `INSIDE_OWN_CONTAINER`, `NO_COMPOSE`, `MISSING_SECRETS`, `SLOT_ALLOC`
  * or `COMPOSE_UP_FAILED`.
  */
@@ -416,6 +422,7 @@ export async function startService(
   workspace: string,
   service: string,
   composeName: string = COMPOSE_FILE,
+  { skipCurrentSetups = false }: { skipCurrentSetups?: boolean } = {},
 ): Promise<void> {
   refuseInsideOwnContainer(feature, "pr gate");
   migrateWorkspaceCompose(workspace);
@@ -432,10 +439,12 @@ export async function startService(
   // compose refuses to start a service whose `.env.<svc>` is missing.
   writeServiceSecretEnvs(workspace, [service], config.services);
   await prepareSlot(feature, workspace, config, readServicesFromWorkspace(workspace));
-  await admitServiceStart(feature, workspace, service);
+  const noDeps =
+    skipCurrentSetups && (await setupsCurrent(path.join(workspace, composeName), service));
+  await admitServiceStart(feature, workspace, service, { noDeps });
   requireSharedNetwork();
   const started = await withStartRecord(workspace, "gate", () =>
-    composeUpServiceAsync(feature, service, path.join(workspace, composeName)),
+    composeUpServiceAsync(feature, service, path.join(workspace, composeName), noDeps),
   );
   if (!started) {
     // A timed-out or cancelled up leaves the container Created, never started (SW-86).
@@ -465,12 +474,15 @@ export async function admitServiceStart(
   {
     sleep = delay,
     waitMs = SERVICE_WAIT_MS,
-  }: { sleep?: (ms: number) => Promise<unknown>; waitMs?: number } = {},
+    noDeps = false,
+  }: { sleep?: (ms: number) => Promise<unknown>; waitMs?: number; noDeps?: boolean } = {},
 ): Promise<void> {
   const up = new Set(
     (await getContainerStatus(feature)).filter((c) => c.status === "running").map((c) => c.service),
   );
-  const services = serviceStarts(workspace, service).filter((s) => !up.has(s));
+  const services = (noDeps ? [service] : serviceStarts(workspace, service)).filter(
+    (s) => !up.has(s),
+  );
   if (!services.length) return;
   // A plain `up` or a preemption queued this feature; the grant brings it back whole.
   const queued = readWaiting(workspace);

@@ -53,7 +53,9 @@ take_install_slot() {
 # SW-362: pnpm never skips: its own up-to-date check takes seconds and restores
 # a package missing under the volume, which the stamps cannot see. The build
 # always runs: turbo restores it from the shared TURBO_CACHE_DIR, and dist/ may
-# be stale after a pull.
+# be stale after a pull. SW-541: the pr gate's starts read the worktree stamp
+# and pass --no-deps while it matches, so the gate skips this script; keep the
+# stamp format in step with setupsCurrent.
 # SW-85: each package's own node_modules is in the worktree, not the volume, so
 # a second stamp in the worktree (.turbo/ is git-ignored on every branch) must
 # match too: a worktree re-created on a kept volume has none, and reinstalls.

@@ -12,6 +12,7 @@
  * from Docker on every decision, because `up` exits once containers start.
  */
 
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
 import * as path from "node:path";
@@ -154,9 +155,12 @@ export function hostLoadLimit(cores: number): number {
 
 type ComposeService = Record<string, any>;
 
-function composeServices(workspace: string): Record<string, ComposeService> {
+function composeServices(
+  workspace: string,
+  composePath = path.join(workspace, COMPOSE_FILE),
+): Record<string, ComposeService> {
   try {
-    const doc = YAML.parse(fs.readFileSync(path.join(workspace, COMPOSE_FILE), "utf8"));
+    const doc = YAML.parse(fs.readFileSync(composePath, "utf8"));
     return isDict(doc?.services) ? (doc.services as Record<string, ComposeService>) : {};
   } catch {
     return {};
@@ -179,13 +183,69 @@ export function featureCost(workspace: string, services?: string[]): Cost {
   return cost;
 }
 
+const dependsOn = (svc: ComposeService | undefined): string[] => {
+  const deps = svc?.["depends_on"];
+  return Array.isArray(deps) ? deps.map(String) : isDict(deps) ? Object.keys(deps) : [];
+};
+
 /** *service* and what compose starts with it (its `depends_on`, the install among them). */
 export function serviceStarts(workspace: string, service: string): string[] {
-  const deps = composeServices(workspace)[service]?.["depends_on"];
-  return [
-    service,
-    ...(Array.isArray(deps) ? deps.map(String) : isDict(deps) ? Object.keys(deps) : []),
-  ];
+  return [service, ...dependsOn(composeServices(workspace)[service])];
+}
+
+/**
+ * Whether every `depends_on` of *service* is a setup one-shot whose install already
+ * succeeded for the current lockfile and Node major (SW-541), so `up --no-deps` may
+ * skip it: compose re-runs an exited one-shot on every `up <svc>`, and that re-ran
+ * the whole build at 2 CPUs after each edit. A runtime dep (a database) keeps deps.
+ */
+export async function setupsCurrent(composePath: string, service: string): Promise<boolean> {
+  const services = composeServices(path.dirname(composePath), composePath);
+  const deps = dependsOn(services[service]);
+  if (!deps.length || !deps.every((d) => installStamped(services[d]))) return false;
+  for (const d of deps) {
+    // The stamp is in the worktree; node_modules is a volume `down -v` removes with the
+    // container, and a build that fails after the stamp leaves a non-zero exit.
+    const name = services[d]?.["container_name"];
+    const state = name
+      ? await docker()
+          .getContainer(String(name))
+          .inspect()
+          .then(
+            (c) => c.State,
+            () => null,
+          )
+      : null;
+    if (state?.Status !== "exited" || state.ExitCode !== 0) return false;
+  }
+  return true;
+}
+
+/** The worktree stamp startup.sh writes after a successful install (SW-33, SW-85) matches now. */
+function installStamped(svc: ComposeService | undefined): boolean {
+  if (svc?.["labels"]?.["com.werkmeister.role"] !== "setup") return false;
+  const major = /^node:(\d+)/.exec(String(svc["image"] ?? ""))?.[1];
+  const mount = (svc["volumes"] ?? []).map(String).find((v: string) => v.endsWith(":/app"));
+  if (!major || !mount) return false;
+  const wt = mount.slice(0, -":/app".length);
+  // `cat package-lock.json pnpm-lock.yaml | sha256sum`, then `node -v | cut -d. -f1`.
+  const lock = Buffer.concat(
+    ["package-lock.json", "pnpm-lock.yaml"].flatMap((f) => {
+      try {
+        return [fs.readFileSync(path.join(wt, f))];
+      } catch {
+        return [];
+      }
+    }),
+  );
+  const want = `${createHash("sha256").update(lock).digest("hex")} v${major}`;
+  try {
+    return (
+      fs.readFileSync(path.join(wt, ".turbo/.werkmeister-install-hash"), "utf8").trim() === want
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** A start of named services, held by the process polling for it (SW-540). */

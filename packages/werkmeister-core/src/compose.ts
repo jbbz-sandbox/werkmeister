@@ -500,15 +500,17 @@ export async function composeUpAsync(feature: string, signal?: AbortSignal): Pro
  * Start one service and wait until it runs (healthy, when it has a healthcheck).
  *
  * Its setup service's `service_completed_successfully` holds the start until the
- * install finishes. An on-demand service starts without its profile enabled,
- * because it is named (SW-34).
+ * install finishes; *noDeps* skips that, for an install already current (SW-541).
+ * An on-demand service starts without its profile enabled, because it is named (SW-34).
  */
 export async function composeUpServiceAsync(
   feature: string,
   service: string,
   composePath: string,
+  noDeps = false,
 ): Promise<boolean> {
-  const result = await runComposeAsync(feature, ["up", "-d", "--wait", service], {
+  const args = ["up", "-d", "--wait", ...(noDeps ? ["--no-deps"] : []), service];
+  const result = await runComposeAsync(feature, args, {
     capture: true,
     composePath,
     timeout: COMPOSE_UP_TIMEOUT_S,

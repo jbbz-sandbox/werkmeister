@@ -258,7 +258,7 @@ export function defaultDeps(): Deps {
       return { lines: [...lines, ...granted.map((f) => `${f}: started from the waiting queue`)] };
     },
     startService: (ws, feature, service, composeName) =>
-      startService(feature, ws, service, composeName),
+      startService(feature, ws, service, composeName, { skipCurrentSetups: true }),
     portHolders: (ws, feature, services) => portHolders(feature, ws, services),
     gateCompose: (ws, feature, services) =>
       renderGateCompose(
@@ -1107,7 +1107,8 @@ async function gateChecks(
   if (alreadyUp.length) {
     // A kept container's rows run only after its setup one-shot ran again: `up` of a running
     // service leaves it as is and re-runs the exited one-shot, whose install re-checks the
-    // node_modules volume (SW-362). An `up` above, even a failed one, already covered it.
+    // node_modules volume (SW-362), unless that install is current for its lockfile (SW-541).
+    // An `up` above, even a failed one, already covered it.
     const kept = [...testedIds, ...repoServices].find((s) =>
       alreadyUp.includes(containerOf(feature, s)),
     );
@@ -1127,7 +1128,7 @@ async function gateChecks(
       !frozen.length,
       frozen.length
         ? `kept (${alreadyUp.join(", ")} already up; ${frozen.join(", ")} paused)`
-        : `kept (${alreadyUp.join(", ")} already running${rerun ? ", setup one-shot re-run" : ""})`,
+        : `kept (${alreadyUp.join(", ")} already running${rerun ? ", setup one-shot re-run unless current" : ""})`,
     );
   }
   if (needsContainer && !repoServices.some(containerFor)) {
