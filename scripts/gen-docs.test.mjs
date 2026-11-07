@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, utimesSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { cliGuide, fill, mcpTools, roff, withMan } from "./gen-docs.mjs";
+import { cliGuide, fill, mcpTools, newerThanBuild, roff, withMan } from "./gen-docs.mjs";
 
 test("fill rewrites each region's body and nothing else, idempotently", () => {
   const once = fill("a\n<!-- generated:x -->\nold\n<!-- /generated -->\nb", { x: "| t |" }).text;
@@ -106,4 +109,14 @@ test("withMan lists every page and leaves the rest of package.json alone", () =>
     man: ["./man/werkmeister.1", "./man/werkmeister-up.1"],
     files: [],
   });
+});
+
+test("newerThanBuild names only the files modified after the build", () => {
+  const dir = mkdtempSync(join(tmpdir(), "docs-gen-"));
+  const [main, old, edited] = ["main.js", "old.help.md", "edited.help.md"].map((f) => join(dir, f));
+  for (const f of [main, old, edited]) writeFileSync(f, "");
+  utimesSync(old, 1000, 1000);
+  utimesSync(main, 2000, 2000);
+  utimesSync(edited, 3000, 3000);
+  assert.deepEqual(newerThanBuild(main, [old, edited]), [edited]);
 });
