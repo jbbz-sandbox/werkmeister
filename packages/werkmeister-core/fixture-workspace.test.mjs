@@ -92,9 +92,9 @@ test("the gate fixture's one-file change runs lib's test in its container, logge
       assert.equal(ok, true, lines.join("\n"));
       const calls = fs.readFileSync(fx.dockerLog, "utf8").split("\n");
       const execs = calls.filter((c) => c.startsWith("exec "));
-      // The gate wraps the test in an inline with-temp-home (SW-329); the test command comes last.
       assert.equal(execs.length, 1, calls.join("\n"));
-      assert.match(execs[0], /^exec demo-lib sh -c .* sh -c true$/);
+      // Logged as container + row command, not the inlined script (SW-511).
+      assert.match(execs[0], /^exec demo-lib true$/);
     },
     { gate: true },
   );
