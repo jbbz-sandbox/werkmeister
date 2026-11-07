@@ -1116,7 +1116,7 @@ test("gate: stops nothing when the repo's containers already run; one `up` re-ru
     // Only the kept row (SW-355), never a started-and-stopped one.
     assert.deepEqual(
       g.checks.filter((c) => c.name === "containers").map((c) => c.detail),
-      ["kept (feat-api already running, setup one-shot re-run)"],
+      ["kept (feat-api already running, setup one-shot re-run unless current)"],
     );
   } finally {
     clean(ws);
@@ -4487,7 +4487,10 @@ test("gate: prints a containers row when a running container is kept (SW-355, SW
     assert.deepEqual(running.started, ["feat-api"]);
     const row = g.checks.find((c) => c.name === "containers");
     assert.equal(row.ok, true);
-    assert.equal(row.detail, "kept (feat-api already running, setup one-shot re-run)");
+    assert.equal(
+      row.detail,
+      "kept (feat-api already running, setup one-shot re-run unless current)",
+    );
 
     // Nothing running: the started-and-stopped row stays, and no kept row.
     const none = deps([DIFF_API]);

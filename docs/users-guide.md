@@ -1759,8 +1759,12 @@ the pieces that are not obvious from the demo services:
   the lockfile and Node major version match the stamp in the node_modules volume. It also
   mounts `~/repos` with git's `safe.directory`, so turbo hashes inputs the same way the app
   containers do. Installs are queued host-wide through `~/.werkmeister/locks`, at most
-  `WERKMEISTER_INSTALL_SLOTS` (default 2) at a time, and builds run one at a time. To force a
-  reinstall, run `werkmeister feature down -v`. After upgrading, run `werkmeister registry` so the new
+  `WERKMEISTER_INSTALL_SLOTS` (default 2) at a time, and builds run one at a time. The PR
+  gate's service starts don't re-run it once it has succeeded for the current lockfile and
+  Node major: they start the service with `--no-deps` (SW-541), and the gate's own `turbo run
+  test` builds what it tests. `werkmeister feature up`, with or without `--service`, still
+  re-runs it, so a service started after a pull gets a fresh build. To force a reinstall, run
+  `werkmeister feature down -v`. After upgrading, run `werkmeister registry` so the new
   command reaches `~/.werkmeister/services.yaml`.
 - **Shared build and package caches (SW-69).** The registry's built-in `turbo` and
   `pnpm-store` caches attach to `werkmeister-install` and the four services because the repo has
