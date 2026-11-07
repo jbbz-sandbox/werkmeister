@@ -51,6 +51,13 @@ test("an already-running feature is admitted however full the budget", () => {
   assert.deepEqual(admit(budget, [lease("a", 4, 4)], [], req("a", 4, 4)), { kind: "admit" });
 });
 
+// SW-540: a gate start prices only the service it adds, so the running feature must still fit it.
+test("a service start for an already-running feature still has to fit", () => {
+  const start = { ...req("a", 1, 1), services: ["api"] };
+  assert.deepEqual(admit(budget, [lease("a", 3, 4)], [], start), { kind: "wait", position: 1 });
+  assert.deepEqual(admit(budget, [lease("a", 3, 3)], [], start), { kind: "admit" });
+});
+
 test("someone ahead in the queue: wait with a position, even when it fits", () => {
   assert.deepEqual(admit(budget, [], ["x", "y"], req("b", 1, 1)), { kind: "wait", position: 3 });
   assert.deepEqual(admit(budget, [], ["x", "b"], req("b", 1, 1)), { kind: "wait", position: 2 });

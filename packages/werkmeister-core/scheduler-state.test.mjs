@@ -8,7 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { readWaiting, waitingPath } from "./dist/agent_state.js";
+import { readWaiting, waitingPath, writeWaiting } from "./dist/agent_state.js";
 import { grantWaiters, runningFeatures } from "./dist/lifecycle.js";
 import {
   enqueue,
@@ -18,6 +18,7 @@ import {
   portHolders,
   readQueue,
   requestAdmission,
+  serviceStarts,
   writeLeases,
 } from "./dist/scheduler_state.js";
 import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
@@ -126,6 +127,91 @@ test("no room: the feature queues and gets waiting.json; room: it leaves both", 
     assert.deepEqual(await requestAdmission("f", ws, false, [], budget), { kind: "admit" });
     assert.deepEqual(readQueue(), []);
     assert.equal(fs.existsSync(waitingPath(ws)), false);
+  });
+});
+
+// SW-540: since SW-342 every service is on-demand when workspace.yml has no `services:`;
+// costing them 0 admitted a wave of 8 onto 12 cores (host load 760).
+test("a feature whose services are all on-demand does not cost 0 at admission", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(
+      home,
+      `services:
+  api:
+    profiles: ["on-demand"]
+    deploy:
+      resources:
+        limits: { cpus: "3", memory: 2G }
+        reservations: { memory: 768M }
+`,
+    );
+    const budget = { memory: 8 * G, cpus: 4, preempt: true };
+    const full = [{ feature: "x", cost: { memory: G, cpus: 4 }, rank: "idle", busy: false }];
+    // The gate starting `api` asks for that service by name.
+    const starting = { services: ["api"] };
+    assert.deepEqual(await requestAdmission("f", ws, false, full, budget, starting), {
+      kind: "wait",
+      position: 1,
+    });
+    assert.deepEqual(readWaiting(ws), { position: 1, reason: "waiting for capacity", ...starting });
+  });
+});
+
+test("a named start prices those services, on-demand or not; serviceStarts adds depends_on", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(
+      home,
+      COMPOSE.replace(
+        "  later:\n",
+        "  later:\n    depends_on: { setup: { condition: service_completed_successfully } }\n",
+      ),
+    );
+    assert.deepEqual(featureCost(ws, ["later"]), { memory: G, cpus: 1 });
+    assert.deepEqual(featureCost(ws, ["later", "setup"]), { memory: G + 512 * 2 ** 20, cpus: 3 });
+    assert.deepEqual(serviceStarts(ws, "later"), ["later", "setup"]);
+    assert.deepEqual(serviceStarts(ws, "api"), ["api"]);
+  });
+});
+
+test("a service waiter whose poll stopped leaves the queue and its waiting.json; a live one stays (SW-540)", async () => {
+  await withHome(async (home) => {
+    const dead = workspace(home, COMPOSE);
+    const mine = path.join(home, "mine");
+    fs.mkdirSync(path.join(mine, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), COMPOSE);
+    writeLeases({ dead: { slot: 1, workspace: dead } });
+    await enqueue("dead", dead);
+    writeWaiting(dead, { position: 1, reason: "waiting for capacity", services: ["api"] });
+    const budget = { memory: 8 * G, cpus: 8, preempt: true };
+    // Fresh: its poll may still come back, so it keeps the head and mine waits.
+    assert.deepEqual(await requestAdmission("mine", mine, false, [], budget), {
+      kind: "wait",
+      position: 2,
+    });
+    // Two minutes without a poll rewriting it: the gate was killed.
+    const old = new Date(Date.now() - 120_000);
+    fs.utimesSync(waitingPath(dead), old, old);
+    assert.deepEqual(await requestAdmission("mine", mine, false, [], budget), { kind: "admit" });
+    assert.deepEqual(readQueue(), []);
+    assert.equal(readWaiting(dead), null);
+  });
+});
+
+// SW-540: during a wave the queue is no longer empty; a start of nothing must not join it.
+test("a request that starts nothing admits and leaves the queue and waiting.json alone", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, 'services:\n  api:\n    profiles: ["on-demand"]\n');
+    await enqueue("ahead", ws);
+    const gateWait = {
+      position: 1,
+      reason: "waiting for capacity",
+      services: ["api"],
+    };
+    writeWaiting(ws, gateWait);
+    const budget = { memory: G, cpus: 1, preempt: true };
+    assert.deepEqual(await requestAdmission("f", ws, false, [], budget), { kind: "admit" });
+    assert.deepEqual(readQueue(), ["ahead"]);
+    assert.deepEqual(readWaiting(ws), gateWait);
   });
 });
 
