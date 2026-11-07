@@ -49,6 +49,7 @@ test("jit init on the mcp harness: AGENTS.md, .agents/skills, no .claude/, hooks
     assert.match(agentsMd, /http:\/\/127\.0\.0\.1:\d+\/mcp/);
     assert.ok(!fs.existsSync(path.join(root, "CLAUDE.md")), "CLAUDE.md written");
     assert.ok(!fs.existsSync(path.join(root, ".claude")), ".claude/ written");
+    assert.ok(!fs.existsSync(path.join(root, ".devcontainer")), "Claude devcontainer written");
     const skills = fs.readdirSync(path.join(root, ".agents", "skills"));
     assert.ok(
       skills.some((s) => s.startsWith("w9r-")),

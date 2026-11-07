@@ -44,13 +44,17 @@ import {
   loadServices,
 } from "./config.js";
 import { daemonPort } from "./daemon_client.js";
-import { writeWorkspaceDevcontainer } from "./devcontainer_gen.js";
+import {
+  DEVCONTAINER_FILE,
+  removeGeneratedDevcontainer,
+  writeWorkspaceDevcontainer,
+} from "./devcontainer_gen.js";
 import { SandboxError } from "./errors.js";
 import { writeFixtureWrapper } from "./fixture_workspace.js";
 import { workspaceUnder } from "./gate.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { candidateWorkspaceRoots, loadPaths, loadWorkspaceRepo } from "./global_config.js";
-import { parseHarnessId } from "./harness/layout.js";
+import { harnessLayoutFor, parseHarnessId } from "./harness/layout.js";
 import { HARNESS_IDS } from "./harness/types.js";
 import {
   fetchIssueSnapshot,
@@ -829,15 +833,24 @@ export async function initWorkspace(
   }
   mintWorkspaceToken(workspaceName, workspaceRoot);
   success(`Workspace token: ${path.relative(workspaceRoot, workspaceTokenFile(workspaceRoot))}`);
-  const devcontainerPath = writeWorkspaceDevcontainer({
-    workspaceName,
-    workspaceRoot,
-    workspacesRoot: resolveWorkspacesRoot(),
-    reposRoot: resolveReposRoot(),
-    home: os.homedir(),
-    port: daemonPort(),
-  });
-  success(`Wrote ${path.relative(workspaceRoot, devcontainerPath)}`);
+  // The devcontainer installs and registers Claude Code only; a Codex one waits on SW-384 (SW-483).
+  const harnessId = harnessLayoutFor(workspaceRoot).id;
+  if (harnessId === "claude") {
+    const devcontainerPath = writeWorkspaceDevcontainer({
+      workspaceName,
+      workspaceRoot,
+      workspacesRoot: resolveWorkspacesRoot(),
+      reposRoot: resolveReposRoot(),
+      home: os.homedir(),
+      port: daemonPort(),
+    });
+    success(`Wrote ${path.relative(workspaceRoot, devcontainerPath)}`);
+  } else {
+    if (removeGeneratedDevcontainer(workspaceRoot)) {
+      info(`Removed the generated ${DEVCONTAINER_FILE} (harness: ${harnessId})`);
+    }
+    info(`No ${DEVCONTAINER_FILE}: the generated one runs Claude Code, not ${harnessId}`);
+  }
 
   // 6e. Plugin-version guard. Never blocks.
   for (const warning of pluginDriftWarnings()) {

@@ -89,3 +89,22 @@ export function writeWorkspaceDevcontainer(opts: DevcontainerOptions): string {
   fs.writeFileSync(file, HEADER + JSON.stringify(buildDevcontainer(opts), null, 2) + "\n");
   return file;
 }
+
+/** Deletes a devcontainer this generator wrote (a person's own file has no HEADER and stays); true when it removed one. */
+export function removeGeneratedDevcontainer(workspaceRoot: string): boolean {
+  const file = path.join(workspaceRoot, DEVCONTAINER_FILE);
+  let text: string;
+  try {
+    text = fs.readFileSync(file, "utf8");
+  } catch {
+    return false;
+  }
+  if (!text.startsWith(HEADER)) return false;
+  fs.rmSync(file);
+  try {
+    fs.rmdirSync(path.dirname(file));
+  } catch {
+    // Not empty: the person keeps whatever else is in .devcontainer/.
+  }
+  return true;
+}
