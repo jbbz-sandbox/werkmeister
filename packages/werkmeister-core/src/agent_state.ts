@@ -554,6 +554,9 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
   const paused = fs.existsSync(pausedPath(root));
   const waiting = paused ? null : readWaiting(root);
   if (!paused && !waiting) return null;
+  // A service start's wait (SW-540) is this session's own job: the person must be able to prompt it
+  // and it must be able to run the tool that stops the wait (SW-545). Only a whole-feature queue holds it.
+  if (waiting?.services) return null;
   const reason = waiting
     ? `Waiting for capacity (position ${waiting.position}). End your turn now; it starts when another feature stops.`
     : PAUSED_REASON;
@@ -581,6 +584,34 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
     default:
       return null;
   }
+}
+
+/**
+ * Context for a UserPromptSubmit while this session's own service start waits for capacity (SW-540), else
+ * null. Not a gate (SW-545): the prompt goes on to be recorded, so the session still reads as working.
+ */
+export function serviceWaitContext(input: Record<string, any>, root: string): string | null {
+  if (input["hook_event_name"] !== "UserPromptSubmit") return null;
+  const waiting = readWaiting(root);
+  if (!waiting?.services) return null;
+  // The poll rewrites the file every 15 s; a killed one leaves it behind (no finally on SIGTERM), and the
+  // scheduler drops such a waiter after 60 s, so an older file is a dead wait, not a live one.
+  if (Date.now() - fs.statSync(waitingPath(root)).mtimeMs > 60_000) return null;
+  return (
+    `This session's own service start is waiting for capacity (position ${waiting.position}): ` +
+    `${waiting.services.join(", ")}. The werkmeister command that started it (pr gate, pr open or ` +
+    "feature up --service), usually a background job in this session, polls every 15 s for up to " +
+    "10 min and goes on by itself when room frees. To stop the wait, stop that job (TaskStop, or kill " +
+    "its pid; never pkill)."
+  );
+}
+
+/** *wake*'s UserPromptSubmit output with *context* in front: the hook prints one JSON object. */
+function withContext(wake: object | null, context: string): object {
+  const prior = (wake as { hookSpecificOutput?: { additionalContext?: string } } | null)
+    ?.hookSpecificOutput?.additionalContext;
+  const additionalContext = prior ? `${context}\n\n${prior}` : context;
+  return { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext } };
 }
 
 /** Apply one hook event to its session's record in the workspace holding its cwd. Returns the file written, or null. */
@@ -633,7 +664,9 @@ export function main(): void {
     if (root && parsed["hook_event_name"] === "UserPromptSubmit")
       fs.rmSync(nudgePath(root), { force: true });
     const wake = root ? deliverWake(parsed, root) : null;
-    if (wake) console.log(JSON.stringify(wake));
+    const wait = root ? serviceWaitContext(parsed, root) : null;
+    if (wait) console.log(JSON.stringify(withContext(wake, wait)));
+    else if (wake) console.log(JSON.stringify(wake));
     // A blocked Stop isn't the end of the turn, so it records nothing, like the pause gate.
     if (wake && parsed["hook_event_name"] === "Stop") return;
     record(parsed);
