@@ -251,9 +251,11 @@ jobs:
   # branch rules, and the environment claim it would add to the npm OIDC token).
   docs-deploy:
     needs: [release, docs-only]
+    # !cancelled(): the implicit success() also counts the test jobs a queued push skips (SW-477).
     if: >-
-      needs.release.outputs.published == 'true' ||
-      (needs.docs-only.outputs.changed == 'true' && needs.release.outputs.pending == 'false')
+      !cancelled() && needs.release.result == 'success' && needs.docs-only.result == 'success' &&
+      (needs.release.outputs.published == 'true' ||
+       (needs.docs-only.outputs.changed == 'true' && needs.release.outputs.pending == 'false'))
     concurrency: pages
     permissions:
       pages: write      # deploy-pages
