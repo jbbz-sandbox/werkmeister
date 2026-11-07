@@ -433,10 +433,10 @@ export const AUTONOMOUS_RULES = [
   ].flatMap((cmd) => cli(`${cmd}:*`)),
   "Bash(docker ps:*)",
   // Local build and test; no `npm install` or `pnpm add`, so a new dependency waits for a person.
-  ...["npm ci", "npm run", "npm test", "npx", "node", "python3"].map((cmd) => `Bash(${cmd}:*)`),
-  ...["install --frozen-lockfile", "run", "test", "exec", "turbo"].map(
-    (cmd) => `Bash(pnpm ${cmd}:*)`,
-  ),
+  // SW-521: no `node`, `npx`, `pnpm exec` or `python3`, which run any file with the real HOME;
+  // tests go through the registered wrapped and container forms (buildAllowRules).
+  ...["npm ci", "npm run", "npm test"].map((cmd) => `Bash(${cmd}:*)`),
+  ...["install --frozen-lockfile", "run", "test", "turbo"].map((cmd) => `Bash(pnpm ${cmd}:*)`),
   ...["ls", "cat", "grep", "find", "head", "tail", "sed", "diff", "wc", "test", "mkdir"].map(
     (cmd) => `Bash(${cmd}:*)`,
   ),

@@ -272,6 +272,33 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
   assert.ok(![...AUTONOMOUS_DENY, ...allowed].some((r) => r.includes("sandbox-tools")));
 });
 
+test("SW-521: autonomous rules never pre-approve an interpreter that runs any file with the real HOME", () => {
+  // A `Bash(x:*)` rule matches any command starting with `x`; deny outranks allow.
+  const matches = (rules, cmd) =>
+    rules.some((r) => {
+      const m = /^Bash\((.*?)(:\*)?\)$/.exec(r);
+      return m && (m[2] ? cmd.startsWith(m[1]) : cmd === m[1]);
+    });
+  // The settings.json list, and the one a headless wake passes as --allowedTools (session.ts).
+  // fhir's registered chain ends in a bare `node --test` segment, allowed as its own rule.
+  const chain = { svc: { test: "cd x && node --test" } };
+  const lists = [
+    autonomousRules("feat", ["api"]),
+    workspaceAllowRules(workspace(), true),
+    buildAllowRules("feat", ["svc"], chain, {}, "/ws/w/.werkmeister/bin/with-temp-home"),
+  ];
+  for (const allow of lists)
+    for (const cmd of [
+      "node x.mjs",
+      "node --test x.test.mjs",
+      "node -e 1",
+      "npx tsx x.ts",
+      "pnpm exec node x.mjs",
+      "python3 x.py",
+    ])
+      assert.ok(!matches(allow, cmd) || matches(AUTONOMOUS_DENY, cmd), cmd);
+});
+
 test("SW-186: each pre-rename spelling keeps its rule through the window, beside its noun-group twin", () => {
   for (const name of ["werkmeister", "w9r"]) {
     for (const [old, now] of [
