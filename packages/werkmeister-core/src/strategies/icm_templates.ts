@@ -90,6 +90,10 @@ const HOST_TEST_STEP = `${HOST_TESTS}Record its exit code. ${TEST_TAIL}`;
 const GATE_STEP =
   "Once the review's fixes are in, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record its exit code. A fix here reruns the host test step first.";
 
+// SW-534: sw-385's exercise on the real harness fixed ~40 lines after the review; they shipped unreviewed.
+const REVIEW_DELTA =
+  "If the exercise below changes code, rerun the review on that delta: a fresh subagent with the same brief, over the commits and changes made since the first review. Fix its **Must fix** findings, rerun the host test step, and append the result as new rows to `output/review.md`; the gate's review row covers them.";
+
 // SW-351: one of five parallel Edits reported success but never reached the file; tests did not cover it.
 const diffCheck = (doc: string) =>
   `Before running tests, read \`git diff\` in each repo you touched and tick off each edit \`${doc}\` settled against it: an edit reported as applied can be missing.`;
@@ -296,6 +300,7 @@ const feature: Stage[] = [
         HOST_TEST_STEP,
         implementReview(v),
         GATE_STEP,
+        REVIEW_DELTA,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
       ],
@@ -472,6 +477,7 @@ const refactor: Stage[] = [
         `${v.group.length ? "For each ticket, take its `scope.md` steps in order, then commit it before the next ticket; do not commit after every step. After each step" : "Take the steps in order. After each one"}: ${diffCheck("scope.md")} ${HOST_TEST_STEP}`,
         implementReview(v),
         GATE_STEP,
+        REVIEW_DELTA,
         `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
       ],
