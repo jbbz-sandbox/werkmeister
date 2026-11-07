@@ -1,5 +1,17 @@
 # sandbox-core
 
+## 0.81.0
+
+### Minor Changes
+
+- 4822338: SW-509: the fixture has a GitHub project for `o/<repo>#N` refs, so a seeded issue resolves to the fake gh. `with-fixture-workspace --issue o/app#1` (or `withFixtureWorkspace(fn, { issue })`, or `issue_id` / `group:` in a `--workspace` file) shows `issue start`, `pr open`, `pr status` and `workspace close` moves (`gh issue edit` / `close` / `comment`, for the lead and each member) in `--- gh calls`. Jira keys still resolve to Jira.
+
+### Patch Changes
+
+- 315ea0c: SW-483: `workspace init` writes `.devcontainer/devcontainer.json` only on a `harness: claude` workspace. On `mcp`, `codex` and `opencode` it writes none (the generated one installs and registers Claude Code only) and removes one it generated before; a hand-written file is kept.
+- 3ef569b: SW-511: the fixture's fake docker logs a gate `exec` as `exec <container> <row command>`, not the whole argv with the inlined `with-temp-home` script, so `--- docker calls` shows which lint or test command ran.
+- 8f25967: SW-520: every git call werkmeister makes drops `GIT_DIR`, `GIT_WORK_TREE` and `GIT_COMMON_DIR` inherited from a calling git (a `rebase --exec` step, a hook), so `git -C <dir>` acts on `<dir>` and not on the caller's repo. This covers `run`/`runAsync`, `runCapture` and every child started with `childEnv()` (handoff commit and push included), the `with-fixture-workspace` fixture, and the stale-build check. The test runners clear the same variables, so a suite started from `rebase --exec` can no longer re-init the real repo.
+
 ## 0.80.1
 
 ## 0.80.0
