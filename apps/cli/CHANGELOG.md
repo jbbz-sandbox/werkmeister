@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.82.2
+
+### Patch Changes
+
+- ac5a34c: SW-541: the pr gate's service starts no longer re-run `werkmeister-install` when it has already succeeded for the current lockfile and Node major. compose re-ran the exited install on every `up <svc>`, and after a source edit that rebuilt all seven packages at 2 CPUs before the gate's own tests built again. The gate now starts a service with `--no-deps` when every dependency is a setup service whose worktree stamp matches and whose container exited 0, and admission stops pricing that install. `feature up`, with or without `--service`, still re-runs the install, so a service started after a pull gets a fresh build. The shared turbo cache was not at fault: it restores 6 of 7 tasks on unchanged source; low counts came from edits between starts.
+- ce48d70: SW-542: `pr gate` and `pr open` no longer wait on host load before lint, each test and the release check. The 1-minute load counted the gate's own install and test rows (an idle 12-core Mac read 36–60 after its own rows, and in the hundreds during a macOS stall with every container idle), so a gate on an idle host waited 1.5–5 min on load it caused. The services a gate starts are already admitted against the budget (SW-540). `--no-wait` is still accepted and does nothing; `with-temp-home`'s own 90 s wait and the host-load line on a failed row are unchanged.
+
 ## 0.82.1
 
 ## 0.82.0
