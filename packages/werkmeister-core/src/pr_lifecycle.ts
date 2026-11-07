@@ -1154,6 +1154,12 @@ async function gateChecks(
         await deps.startService(ws, feature, pick);
         running.add(containerOf(feature, pick));
         started.push(containerOf(feature, pick));
+        // Its own start above failed on capacity that has since freed; this container runs the rows (SW-552).
+        const earlier = checks.find((c) => c.name === `start ${pick}` && !c.ok);
+        if (earlier) {
+          earlier.ok = true;
+          earlier.detail = `started on the second attempt (first: ${earlier.detail})`;
+        }
       } catch (e) {
         add(`start ${pick}`, false, e instanceof Error ? e.message : String(e));
       }
