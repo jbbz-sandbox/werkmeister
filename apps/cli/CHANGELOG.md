@@ -1,5 +1,15 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.83.3
+
+### Patch Changes
+
+- 421173b: SW-552: a `start <svc>` row the pr gate failed on capacity no longer fails the gate when the gate's later on-demand start of the same service succeeds in the same run; the row reads `started on the second attempt` with the first error. The capacity message has named the workspaces holding the room since SW-540.
+- 7f0c186: SW-554: a compose regeneration (`feature up`, the pr gate's `startService`, `workspace init`, the gate's compose.gate.yml) run inside a container now refuses with `INSIDE_CONTAINER` instead of writing the container's `/app` paths into the host-read file, which made the install run an empty script and exit 0. Docker's `/.dockerenv` is the test, so unsetting `WERKMEISTER_FEATURE` no longer gets past it; a relocated `WERKMEISTER_CONFIG_FILE` (every test and fixture) still writes.
+- a690187: SW-556: `werkmeister internal wait-load`, the host-load wait `with-temp-home` runs before its command, returns at once on macOS: the macOS load average counts idle daemons (450-550 on a quiet host) and never the Linux VM that runs the tests, so the wrapper waited, or refused with exit 75, while the VM idled. On Linux the 90 s wait is unchanged. `waitForHostLoad` and its unused budget parameters are folded into `waitForHostLoadNow`.
+- 4f00d68: SW-563: when a changed file under no `path_mappings` or `no_service_paths` entry makes the pr gate test every service, the passing `tests` row now names it (`every service: no path_mappings or no_service_paths entry for <file>`), so the folder gets mapped instead of starting every container again. The werkmeister repo's own fragment maps `scripts/`, `bin/` and the root licence files to no service (the lint row already runs their checks), and `werkmeister-dashboard`'s `test:` now runs werkmeister-ui's tests too.
+- b6eea34: SW-567: the CLI's bins and spellings tests and the MCP proxy test survive a loaded host. Every spawn of the built CLI is async with 180 s of headroom (one starved start took 90-97 s against 60 s), the proxy test's request timeout is explicit instead of the SDK's 60 s default, and a spellings spawn is killed 10 s before the test timeout, so a case can no longer outlive its timeout and write a duplicate snapshot entry that dirtied the worktree.
+
 ## 0.83.2
 
 ### Patch Changes
