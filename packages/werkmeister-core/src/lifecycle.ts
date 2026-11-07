@@ -181,7 +181,8 @@ export interface UpResult {
  *
  * With no room in the budget it queues the feature instead and returns with
  * `waiting` set; *byPerson* (default: the workspace is not autonomous) may stop
- * autonomous features to make room (SW-181).
+ * working autonomous features to make room (SW-181); any start that doesn't fit
+ * may stop features whose session is idle or waiting on a person (SW-546).
  */
 export async function up(
   feature: string,
@@ -879,8 +880,8 @@ const GRANTED_NUDGE =
  * preemption go to the feature nothing has touched longest. Null when Docker
  * can't be read.
  *
- * A non-autonomous workspace is a person's and is never preempted; nor is the
- * shared infra.
+ * A non-autonomous workspace is a person's and is never preempted, unless its
+ * session is parked on a question, permission or plan prompt (SW-546); nor is the shared infra.
  */
 export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | null {
   const found = runningFeatures(runCmd);
@@ -890,13 +891,15 @@ export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | 
     .map((f) => {
       const state = agentOf(readSessions(f.workspace));
       const rank: Rank =
-        f.feature === "infra" || !readAutonomous(f.workspace)
+        f.feature === "infra"
           ? "person"
-          : state?.agent === "working"
-            ? "working"
-            : state?.agent === "needs-you"
-              ? "human-check"
-              : "idle";
+          : state?.agent === "needs-you"
+            ? "human-check"
+            : !readAutonomous(f.workspace)
+              ? "person"
+              : state?.agent === "working"
+                ? "working"
+                : "idle";
       const busy =
         readPaused(f.workspace) !== null ||
         (mtimeMs(lastExecMarker(f.workspace)) ?? 0) > gateCutoff;
@@ -952,7 +955,12 @@ async function admitOrQueueHere(
       await stop(victim, { grant: false });
       const victimWs = readLeases()[victim]?.workspace || workspaceForFeature(victim);
       if (victimWs) await enqueue(victim, victimWs);
-      info(`Stopped '${victim}' to make room (preemption; budget.preempt: false turns it off)`);
+      const why = running.find((l) => l.feature === victim)?.rank;
+      info(
+        `Stopped '${victim}' to make room: its session is ` +
+          `${why === "human-check" ? "waiting on a person" : why === "working" ? "working" : "idle"} ` +
+          "(preemption; budget.preempt: false turns it off)",
+      );
     }
   }
   return null;

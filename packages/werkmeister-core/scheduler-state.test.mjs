@@ -146,7 +146,8 @@ test("a feature whose services are all on-demand does not cost 0 at admission", 
 `,
     );
     const budget = { memory: 8 * G, cpus: 4, preempt: true };
-    const full = [{ feature: "x", cost: { memory: G, cpus: 4 }, rank: "idle", busy: false }];
+    // Working, or the start would take its lease (SW-546) instead of showing the price.
+    const full = [{ feature: "x", cost: { memory: G, cpus: 4 }, rank: "working", busy: false }];
     // The gate starting `api` asks for that service by name.
     const starting = { services: ["api"] };
     assert.deepEqual(await requestAdmission("f", ws, false, full, budget, starting), {

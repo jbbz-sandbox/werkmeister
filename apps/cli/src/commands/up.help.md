@@ -7,7 +7,7 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 1. Loads the service registry and port configuration, and stops with a clear message if a secret one of the workspace's services needs is missing
 2. Resolves the workspace (`--workspace`, else `paths.workspaces_root` from the config, else the nearest enclosing repo's parent, else `~/workspace/`) and reads its local services from the `SERVICES=` line `werkmeister workspace init` wrote to the workspace `.env`
 3. Allocates a slot (1–12) if the feature doesn't already have one
-4. When the workspace has local services, checks the host's memory and CPU budget (`werkmeister budget status`). If the feature doesn't fit it waits in a queue and starts when another feature stops; a feature a person starts may instead stop idle ones to make room (`budget.preempt: false` turns that off)
+4. When the workspace has local services, checks the host's memory and CPU budget (`werkmeister budget status`). If the feature doesn't fit it waits in a queue and starts when another feature stops. A service start that doesn't fit may instead stop features whose session is idle or waiting on a person, oldest first, and says which; a feature a person starts may also stop working autonomous ones (`budget.preempt: false` turns both off)
 5. Generates per-feature files in the feature's workspace:
    - `compose.yml` — Docker Compose stack definition (workspace root)
    - `.env` — Environment variables with resolved service URLs (workspace root)

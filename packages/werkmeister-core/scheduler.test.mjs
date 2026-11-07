@@ -92,8 +92,41 @@ test("preempt: false makes a person wait too", () => {
   });
 });
 
-test("an autonomous request never preempts", () => {
+test("a plain up not by a person never preempts (a grant's re-up must not evict another victim)", () => {
   assert.equal(admit(budget, [lease("a", 4, 4, "idle")], [], req("b", 1, 1)).kind, "wait");
+});
+
+test("a service start never takes a working, person or busy lease, nor jumps the queue", () => {
+  const start = (feature, queue = []) =>
+    admit(budget, running, queue, { ...req(feature, 1, 1), services: ["api"] }).kind;
+  const running = [
+    lease("working", 2, 2, "working"),
+    lease("mine", 1, 1, "person"),
+    lease("gating", 1, 1, "human-check", true),
+  ];
+  assert.equal(start("s"), "wait");
+  running.push(lease("parked", 0, 0, "human-check")); // frees nothing, so still wait
+  assert.equal(start("s"), "wait");
+  // A zero-cost lease is never a victim, even when it is the oldest idle one.
+  assert.deepEqual(
+    admit(budget, [lease("free", 0, 0), lease("a", 4, 4)], [], {
+      ...req("s", 1, 1),
+      services: ["api"],
+    }),
+    { kind: "preempt", victims: ["a"] },
+  );
+  // Room only by evicting an idle one, but someone else is ahead: wait for its turn.
+  assert.equal(
+    admit(budget, [lease("a", 4, 4, "idle")], ["x"], { ...req("s", 1, 1), services: ["api"] }).kind,
+    "wait",
+  );
+  assert.deepEqual(
+    admit(budget, [lease("a", 4, 4, "idle")], ["s"], { ...req("s", 1, 1), services: ["api"] }),
+    {
+      kind: "preempt",
+      victims: ["a"],
+    },
+  );
 });
 
 test("pickSlot keeps a held slot, honours a free preferred one, else the lowest free", () => {
@@ -106,4 +139,18 @@ test("pickSlot keeps a held slot, honours a free preferred one, else the lowest 
   assert.equal(pickSlot("c", held, 4, 3), 2);
   assert.equal(pickSlot("c", held, 4, null), 2);
   assert.equal(pickSlot("c", new Map([[1, "a"]]), 1, null), null);
+});
+
+test("a service start preempts human-check and idle holders when it cannot fit (SW-546)", () => {
+  // Interactive runs parked on a question box hold 3 of 4 CPUs at 0% use; a gate's service start needs 3.
+  const running = [
+    lease("sw-541", 1, 1, "human-check"),
+    lease("sw-521", 1, 1, "human-check"),
+    lease("sw-526", 1, 1, "working"),
+  ];
+  const start = { ...req("sw-478", 3, 3), services: ["werkmeister-core"] };
+  assert.deepEqual(admit(budget, running, [], start), {
+    kind: "preempt",
+    victims: ["sw-541", "sw-521"],
+  });
 });
