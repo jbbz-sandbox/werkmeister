@@ -50,6 +50,27 @@ it("--tests reaches gateTests, not gatePrs (SW-316)", async () => {
   expect(gatePrs).not.toHaveBeenCalled();
 });
 
+it("open ends its output with its own exit line, for a pass and a failed gate (SW-527)", async () => {
+  vi.mocked(openPrs).mockResolvedValueOnce({ ok: true, lines: ["app: open u"] });
+  await run({ action: "open", repo: null, json: false });
+  expect(console.log).toHaveBeenLastCalledWith("app: open u\npr open: exit 0");
+  vi.mocked(openPrs).mockResolvedValueOnce({ ok: false, lines: ["app: gate FAILED"] });
+  await run({ action: "open", repo: null, json: false });
+  expect(console.log).toHaveBeenLastCalledWith("app: gate FAILED\npr open: exit 1");
+  expect(exit).toHaveBeenCalledWith(1);
+});
+
+it("the exit line is not added to --json output or to gate (SW-527)", async () => {
+  vi.mocked(openPrs).mockResolvedValueOnce({ ok: true, lines: ["app: open u"] });
+  await run({ action: "open", repo: null, json: true });
+  expect(JSON.parse(vi.mocked(console.log).mock.calls.at(-1)?.[0] as string).lines).toEqual([
+    "app: open u",
+  ]);
+  vi.mocked(gatePrs).mockResolvedValueOnce({ ok: true, lines: ["app: gate ok"] });
+  await run({ action: "gate", repo: null, json: false });
+  expect(console.log).toHaveBeenLastCalledWith("app: gate ok");
+});
+
 it("a failed gate exits 1", async () => {
   vi.mocked(gatePrs).mockResolvedValue({ ok: false, lines: ["app: gate FAILED"] });
   await run({ action: "gate", repo: null, json: false });
