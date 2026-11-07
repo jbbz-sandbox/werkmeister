@@ -1,5 +1,7 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.82.3
+
 ## 0.82.2
 
 ### Patch Changes
