@@ -83,8 +83,15 @@ function fakeDaemon() {
   return daemon;
 }
 
+// A starved proxy start outran the SDK's implicit 60 s request timeout (-32001) under host load (SW-567).
+class PatientClient extends Client {
+  request(req, schema, options) {
+    return super.request(req, schema, { timeout: 180_000, ...options });
+  }
+}
+
 async function startProxy(t, port, { cwd = wsDir, env = {}, capabilities = {} } = {}) {
-  const client = new Client({ name: "proxy.test", version: "0" }, { capabilities });
+  const client = new PatientClient({ name: "proxy.test", version: "0" }, { capabilities });
   const listChanged = [];
   client.setNotificationHandler(ToolListChangedNotificationSchema, () => {
     listChanged.push(Date.now());

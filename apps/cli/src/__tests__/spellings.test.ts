@@ -18,8 +18,13 @@ const MAIN = path.join(CLI_DIR, "dist/main.js");
 const run = promisify(execFile);
 
 // Async: 56 sync cases never yield the worker's event loop, and past 60 s vitest's RPC times out.
+// Killed 10 s before vitest's 180 s testTimeout: a case that outlived its timeout ran toMatchSnapshot
+// under the next case and wrote a duplicate ` 2` entry, dirtying the worktree (SW-567).
 async function parse(argv: string[]) {
-  const res = await run(process.execPath, [MAIN, "__parse", ...argv], { cwd: CLI_DIR });
+  const res = await run(process.execPath, [MAIN, "__parse", ...argv], {
+    cwd: CLI_DIR,
+    timeout: 170_000,
+  });
   return { ...JSON.parse(res.stdout), stderr: res.stderr };
 }
 
