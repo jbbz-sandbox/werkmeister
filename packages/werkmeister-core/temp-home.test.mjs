@@ -282,6 +282,8 @@ test("killing the wrapper during its host-load wait stops the wait too (SW-456)"
       `wait-load ${waitPid} still running after the wrapper was killed`,
     );
   } finally {
+    // SW-529: a failed "wait started" leaves the wrapper running; SIGTERM fires its trap, which ends the stub too. No-op once it has exited.
+    child.kill("SIGTERM");
     if (waitPid && alive(waitPid)) process.kill(waitPid);
     fs.rmSync(root, { recursive: true, force: true });
   }
