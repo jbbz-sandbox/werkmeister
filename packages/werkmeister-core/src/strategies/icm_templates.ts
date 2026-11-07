@@ -79,7 +79,8 @@ const TEST_TAIL =
   // SW-125: a host-skipped test still asserted removed behaviour; only the gate's container run found it.
   "A skipped test is not a pass: name each one with its skip reason, and run it where it can run (the workspace container) or say where it will (the gate, CI). " +
   // SW-334: `cmd1 && cmd2 > log` redirects only cmd2; the group sends the whole chain to the log.
-  'Redirect output to a file as one group, so every command in an `&&` chain lands there: `{ <test command>; } > <log> 2>&1; echo "exit $?"`. Trust the exit code, read back only the failing slice.';
+  // SW-526: a background job's notice carries the exit code; a trailing echo would make it always read 0.
+  'Redirect output to a file as one group, so every command in an `&&` chain lands there. For a background job (`run_in_background`) write background: `{ <test command>; } > <log> 2>&1` and read the exit code from the job\'s completion notice; for a foreground call write foreground: `{ <test command>; } > <log> 2>&1; echo "exit $?"`. Read back only the failing slice.';
 const TEST_STEP =
   HOST_TESTS +
   "Once it passes, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record both exit codes. " +

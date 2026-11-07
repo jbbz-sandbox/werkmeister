@@ -141,7 +141,13 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /without the container's env \(`HOST`, `WERKMEISTER_SLOT`/, `${wt}/${d}`);
           assert.match(c, /run `werkmeister pr gate --tests`/, `${wt}/${d}`);
           // SW-334: the redirect wraps the whole && chain, not its last command.
-          assert.ok(c.includes('`{ <test command>; } > <log> 2>&1; echo "exit $?"`'), `${wt}/${d}`);
+          // SW-526: a background job's notice carries the exit code, so its pattern has no trailing echo.
+          assert.ok(c.includes("background: `{ <test command>; } > <log> 2>&1`"), `${wt}/${d}`);
+          assert.match(c, /read the exit code from the job's completion notice/, `${wt}/${d}`);
+          assert.ok(
+            c.includes('foreground: `{ <test command>; } > <log> 2>&1; echo "exit $?"`'),
+            `${wt}/${d}`,
+          );
           // SW-351: the diff is read against the settled edits before the tests run.
           assert.match(
             c,
