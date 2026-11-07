@@ -443,3 +443,30 @@ test("SW-487: migrate adds the agent-state events a workspace hooked before them
   for (const e of ["PermissionRequest", "SubagentStart"])
     assert.ok(JSON.stringify(hooks[e] ?? []).includes("agent-state"), e);
 });
+
+// SW-521: an autonomous workspace inited while the interpreter rules were generated has nothing missing.
+test("SW-521: migrate drops the interpreter rules an older autonomous init recorded", async () => {
+  const { writeWorkspaceSettings } = await import("./dist/harness/claude/hooks_gen.js");
+  movedHome();
+  const ws = path.join(features, "demo");
+  write(path.join(ws, ".werkmeister", "workspace.yml"), "feature: demo\nautonomous: true\n");
+  write(path.join(ws, ".env"), "FEATURE=demo\n");
+  writeWorkspaceSettings(ws);
+  const old = ["Bash(node:*)", "Bash(npx:*)", "Bash(pnpm exec:*)", "Bash(python3:*)"];
+  const settingsFile = path.join(ws, ".claude", "settings.json");
+  const record = path.join(ws, ".werkmeister", "claude-permissions.json");
+  for (const file of [settingsFile, record]) {
+    const json = JSON.parse(fs.readFileSync(file, "utf8"));
+    const perms = file === record ? json : json.permissions;
+    perms.allow = [...perms.allow, ...old];
+    write(file, JSON.stringify(json));
+  }
+
+  const steps = await run();
+  assert.ok(
+    steps.every((s) => s.ok),
+    JSON.stringify(steps, null, 2),
+  );
+  const { permissions } = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  for (const r of old) assert.ok(!permissions.allow.includes(r), r);
+});

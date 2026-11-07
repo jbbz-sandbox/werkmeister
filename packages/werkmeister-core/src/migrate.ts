@@ -369,10 +369,15 @@ function workspaceStale(dir: string): boolean {
     Object.keys(hooks).some(agentState) &&
     !JSON.stringify(hooks).includes("WERKMEISTER_HOOK_HARNESS=codex") &&
     AGENT_STATE_EVENTS.some((e) => !agentState(e));
+  const wanted = workspaceAllowRules(dir);
+  // SW-521: a rule werkmeister recorded but no longer generates (`Bash(node:*)`) stays allowed until a refresh.
+  const recorded: string[] =
+    readJson(path.join(dotDir(dir), "claude-permissions.json"))?.["allow"] ?? [];
   return (
     missingEvents ||
     PRE_SW186_HOOK.test(fs.readFileSync(settingsFile, "utf8")) ||
-    workspaceAllowRules(dir).some((r) => !allow.has(r)) ||
+    wanted.some((r) => !allow.has(r)) ||
+    recorded.some((r) => !wanted.includes(r)) ||
     workspaceDenyRules(dir).some((r) => !deny.has(r)) ||
     workspaceAskRules(dir).some((r) => !ask.has(r)) ||
     (fs.existsSync(wrapper) && fs.readFileSync(wrapper, "utf8").includes(PRE_SW186_WAIT))
