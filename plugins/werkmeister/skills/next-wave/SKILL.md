@@ -56,18 +56,26 @@ werkmeister workspace new <slug> --issue-id <ref> --repos <repo> \
 
 `werkmeister workspace prompt --args --start <workspace dir>` prints the run's `title`, `model`, `prompt` and `background` as JSON: the same ones the pane's ▶ Start work sends, with the run limits (autonomous) or the interactive line already in `prompt`. An autonomous workspace's `BRIEF.md` carries the same limits from create. For an interactive one, append the decisions it must ask about to `prompt`.
 
-Every run starts with Remote Control on, so the person can follow and answer it from claude.ai/code or the Claude app. On macOS, start each one in its own Terminal window, **one at a time**, from a launcher in your scratchpad (`$S`). A `.command` file opens in Terminal and keeps the prompt's quotes and newlines intact:
+Every run starts with Remote Control on, so the person can follow and answer it from claude.ai/code or the Claude app. Start each one **one at a time**, where this session runs, picked the way core's `claudeLauncher` picks: a VS Code integrated terminal (`vscode`) when you run in one, else its own Terminal window (`terminal`). `WERKMEISTER_LAUNCHER=vscode|terminal` forces either. The prompt goes in a file in your scratchpad (`$S`), which keeps its quotes and newlines intact:
 
 ```bash
 D=<workspace dir>; W=$(basename "$D")
 werkmeister workspace prompt --args --start "$D" > "$S/$W.json"
 jq -r '[.background, .prompt] | map(select(.)) | join("\n\n")' "$S/$W.json" > "$S/$W.prompt"   # then append any interactive decisions
-m=$(jq -r '.model // empty' "$S/$W.json")
-printf '#!/bin/bash\ncd %q && exec claude "$(cat %q)" --remote-control %q%s\n' "$D" "$S/$W.prompt" "$W" "${m:+ --model $m}" > "$S/$W.command"
-chmod +x "$S/$W.command" && open -a Terminal "$S/$W.command"
+case "${WERKMEISTER_LAUNCHER:-}" in vscode|terminal) L=$WERKMEISTER_LAUNCHER ;;
+  *) [ "${CLAUDE_CODE_ENTRYPOINT:-}" = claude-vscode ] || [ "${TERM_PROGRAM:-}" = vscode ] && L=vscode || L=terminal ;; esac
+if [ "$L" = vscode ]; then
+  open "vscode://jbbz.werkmeister-vscode/claude?$(jq -rn --arg w "$W" --rawfile p "$S/$W.prompt" '"workspace=\($w|@uri)&mode=new&remote_control=1&prompt=\($p|@uri)"')"
+else
+  m=$(jq -r '.model // empty' "$S/$W.json")
+  printf '#!/bin/bash\ncd %q && exec claude "$(cat %q)" --remote-control %q%s\n' "$D" "$S/$W.prompt" "$W" "${m:+ --model $m}" > "$S/$W.command"
+  chmod +x "$S/$W.command" && open -a Terminal "$S/$W.command"
+fi
 ```
 
-Confirm each one with `pgrep -f -- "--remote-control $W"`. Under heavy load a window can take a minute to open. Report each session's Remote Control name (`$W`).
+`vscode` opens an integrated terminal named `claude <W>` in the workspace, with the model from its `.claude/settings.json`. `terminal` opens a `.command` file in Terminal.
+
+Confirm each one with `pgrep -f -- "--remote-control $W"`. Under heavy load a window can take a minute to open. If a `vscode` session opens without it, the installed werkmeister extension predates `remote_control` (SW-499): tell the person to update it (`packages/werkmeister-vscode/README.md` § Install) and to type `/remote-control` in that session. Report each session's Remote Control name (`$W`).
 
 When the person asks for Claude Desktop instead: `start_session` with `title`, `model`, `prompt` and `background` unchanged, `initiation: "user_asked"`, `cwd` = the workspace dir, `use_worktree: false`, `context: "fresh"`, one message each preceded by a bold title line, with a chapter marked first when starting two or more. It has no Remote Control option, so tell the person to type `/remote-control` in each session it opens.
 
@@ -83,6 +91,7 @@ Everything started carries the `focus` label (set at create, or `werkmeister wor
 | Starting a ticket that waits on an unmerged or unreleased one | Wasted run, or a PR built on stale main | Classify it Blocked |
 | Running headless (`claude-send`), or a launcher without Remote Control | Nothing to watch or answer from claude.ai/code or the app | The step 5 launcher with `--remote-control` |
 | Putting the prompt inline in `osascript … do script` | Its quotes and newlines break the command; the window runs nothing | The `.command` launcher in step 5 |
+| Putting a `claude …` command in the VS Code URI | The extension builds the command from the URI's fields and never runs shell text from it | `prompt=` and `remote_control=1`, as in step 5 |
 
 ## Stop when
 

@@ -3,6 +3,7 @@
  * URI werkmeister-core's `launcher.ts` builds. No `vscode` import, so `node --test`
  * covers it. A URI is untrusted input (any app or page can open one): only a
  * workspace *name* and a reconcile *slug* are accepted, never a path or a command.
+ * The Remote Control name is the matched workspace's, never the query's (SW-499).
  */
 
 /** POSIX single-quote escaping — the integrated terminal is a shell, not execFile. */
@@ -38,12 +39,16 @@ export function sessionCommand(
   return mode === "continue" ? "claude --continue" : `claude --resume ${session}`;
 }
 
-/** *harness* is the workspace's, looked up by the caller (the URI path stays `/claude` for every harness). */
+/**
+ * *harness* is the workspace's, looked up by the caller (the URI path stays `/claude` for every harness).
+ * *matchedName* is the name of the workspace the caller found for the query, if any.
+ */
 export function parseLaunchUri(
   uriPath: string,
   query: string,
   harness = "claude",
   codexLaunch = "codex",
+  matchedName?: string,
 ): Launch {
   const q = new URLSearchParams(query);
   if (uriPath === "/reconcile") {
@@ -61,6 +66,13 @@ export function parseLaunchUri(
   if (mode === "resume" && !SESSION_RE.test(session))
     throw new Error(`Bad session id: ${JSON.stringify(session)}`);
   let command = sessionCommand(harness, mode, session, codexLaunch);
+  const rc = q.get("remote_control");
+  if (rc !== null) {
+    if (rc !== "1") throw new Error(`Bad remote_control: ${JSON.stringify(rc)}`);
+    if (!matchedName) throw new Error("remote_control needs an existing workspace");
+    // Codex has no Remote Control.
+    if (harness === "claude") command += ` --remote-control ${shellQuote(matchedName)}`;
+  }
   const prompt = q.get("prompt");
   if (prompt) command += ` ${shellQuote(prompt)}`;
   return { kind: "claude", workspace, command };

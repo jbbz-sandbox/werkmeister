@@ -29,7 +29,7 @@ export function registerClaudeUriHandler(): vscode.Disposable {
           ? (await listWorkspaces()).workspaces.find((w) => w.name === name)
           : undefined;
         const harness = ws ? harnessIdOf(ws.path) : "claude";
-        const launch = parseLaunchUri(uri.path, uri.query, harness, CODEX_LAUNCH);
+        const launch = parseLaunchUri(uri.path, uri.query, harness, CODEX_LAUNCH, ws?.name);
         if (launch.kind === "reconcile") {
           const { dir, command } = reconcileLaunch(launch.slug);
           // Core wrote the context file there before opening the URI; a bare slug has nothing to run.
