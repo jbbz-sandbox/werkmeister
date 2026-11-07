@@ -185,6 +185,8 @@ const propose: Stage = {
         : "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit. " +
           // SW-399: a changeset written after the last lint run failed the gate only at `pr open`.
           `Before committing, run ${LINT}`,
+      // SW-535: sw-385 promised a follow-up in decisions.md; nothing said to file it, so the first `pr open` stopped at the gate.
+      "Before the PR file: for each follow-up a decided question in `decisions.md` promises, file it through `../../_shared/issues-report.md` and write its issue key beside that decision. The gate's follow-ups check stays as the backstop.",
       "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value). Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs (every table with a `result` column — the gate reads them all — has a result cell of exactly `PASS` and the output in its own column: a FAIL cell anywhere in the PR file stops the PR, so describe a pre-fix reproduction in prose, not as a FAIL row), the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub." +
         (v.group.length
           ? " Start the body with `Rebase and merge, not squash: one commit per ticket, each revertable alone.` and list each member under the summary."
