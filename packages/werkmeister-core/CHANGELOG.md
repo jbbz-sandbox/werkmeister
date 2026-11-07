@@ -1,5 +1,16 @@
 # sandbox-core
 
+## 0.82.0
+
+### Minor Changes
+
+- 4a6a8b3: SW-478: an approval given at the root `/check-in` now reaches a waiting workspace as a file it acts on, with no second prompt. The ICM spec, implement and review stages (feature `spec.md` and `review.md`, bugfix `fix.md` and `review.md`, refactor `review.md`) now start their output with `status: proposed`. Their human check flips it to `decided`, and the router enters the next stage when it reads `decided`, the way 01_research already did. The `check-in` tool's `gates` also lists a `pr-*.md` at `status: draft`. The `check-in` skill ships in the werkmeister plugin. Its gate-file row now covers PR approvals and stage "proceed"s, which before went back to the person to type again, and the reverted SW-309 pane-form row is gone. After upgrading, remove any hand-copied `check-in` skill from your workspaces root's `.claude/skills/`.
+- 28828ce: SW-517: every ICM stage's human check now asks through the harness's question tool, named by the new `HarnessLayout.questionTool`: `AskUserQuestion` on Claude Code, `question` on OpenCode. It asks at most 4 questions per call, in batches when there are more, each standing on its own, and the recommended option first. On `codex` and `mcp`, which have no such tool, it asks one numbered block at the end of the reply. The answer goes into the stage's output as its status, noted `(approved in chat YYYY-MM-DD)`. Autonomous self-checks are unchanged. Reaches a workspace at its next `workspace init`.
+
+### Patch Changes
+
+- 9e650ec: SW-495: the approval notes (`(approved in chat YYYY-MM-DD)`, `(approved via check-in YYYY-MM-DD)` and their PR-file YAML-comment forms) now come from one export, `APPROVAL_NOTE` in `pr_rules.ts`, which builds the generated approval text. A new test fails when the `w9r-pr` skill, `docs/workspace-lifecycle.md` or the plugin's `check-in` skill spells a note any other way. The generated text is unchanged.
+
 ## 0.81.1
 
 ### Patch Changes
