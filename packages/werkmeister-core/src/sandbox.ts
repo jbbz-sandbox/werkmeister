@@ -1100,9 +1100,20 @@ export async function prepareCreate(
   }
   if (!resolved.task && issue.title) resolved.task = issue.title;
   // SW-342: with no `services:` every service is on-demand and a plain `feature up` starts nothing.
-  if (!resolved.services && resolved.repos) {
+  // SW-413: a `services` passed but blank ("" or []) is a deliberate "none"; resolveInputs drops it, so read formData.
+  const rawServices = formData["services"];
+  const blankOnPurpose =
+    rawServices !== null &&
+    rawServices !== undefined &&
+    (Array.isArray(rawServices) ? rawServices : [rawServices]).every((v) => !String(v).trim());
+  if (!resolved.services && resolved.repos && !blankOnPurpose) {
     const named = servicesNamedIn(issue, resolved.repos.split(","));
-    if (named.length) resolved.services = named.join(",");
+    if (named.length) {
+      resolved.services = named.join(",");
+      info(
+        `Services taken from the issue text: ${resolved.services} (pass --services "" for none)`,
+      );
+    }
   }
 
   if (opts.distill !== false && (!resolved.description || !resolved.starting_prompt)) {
