@@ -2,6 +2,7 @@
 # Merge a PR through the repo's merge queue: wait for its checks, enqueue it,
 # wait for the merge. Auto-merge is off on the werkmeister repo, so
 # `gh pr merge` (plain or --auto) fails there; the queue takes the GraphQL enqueue.
+# The werkmeister version PR queues itself (.github/workflows/queue-version-pr.yml).
 # Usage: queue-pr.sh <pr> [owner/repo]
 # Exit 0 merged; 1 checks failed, the PR moved, it left the queue unmerged, or a wait timed out.
 set -uo pipefail

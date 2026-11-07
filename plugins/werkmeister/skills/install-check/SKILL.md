@@ -57,7 +57,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/install-check/queue-pr.sh" <pr> [owner/repo]
 
 It waits for the PR's checks (a bot-pushed branch lists none at first; that isn't a failure), refuses a PR whose checks failed or whose head moved meanwhile, queues it with the GraphQL `enqueuePullRequest`, and waits for `MERGED`. Exit 1 says why it stopped. It merges: run it only when the person asked for that PR to merge.
 
-- One at a time, in order. A merge to `main` force-pushes the Changesets version PR, and a push drops a PR from the queue. Queue the version PR last, after the others have merged.
+- One at a time, in order. A merge to `main` force-pushes the Changesets version PR, and a push drops a PR from the queue.
+- Don't queue the version PR: `.github/workflows/queue-version-pr.yml` queues it each time its CI goes green (SW-480). If it sits unqueued with green checks, read that workflow's latest run.
 - Run it in the background; a queue run takes minutes.
 
 ## Session start hook

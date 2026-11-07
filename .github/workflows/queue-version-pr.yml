@@ -1,0 +1,54 @@
+name: Queue version PR
+
+# SW-480: once CI is green on the Changesets version PR, put it in the merge
+# queue, so a merge to main reaches npm without a person's merge. The queue
+# still tests the version commit on merge_group, and release still runs only
+# from the push it lands. A later merge to main force-pushes the PR out of the
+# queue; its next green run queues it again. workflow_run always runs main's
+# copy of this file, never the PR's.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [changeset-release/main]
+
+concurrency: queue-version-pr
+
+jobs:
+  enqueue:
+    if: >-
+      vars.RELEASE_APP_ID != '' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ github.event.repository.name }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          # GraphQL gives a bot author's login as the bare App slug.
+          BOT: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          # shellcheck disable=SC2016 # $o, $r, $b are GraphQL variables, not shell
+          out=$(gh api graphql -f o="$OWNER" -f r="$NAME" -f b=changeset-release/main \
+            -f query='query($o:String!,$r:String!,$b:String!){repository(owner:$o,name:$r){mergeQueue(branch:"main"){entries{totalCount}} pullRequests(headRefName:$b,states:OPEN,first:5){nodes{number id headRefOid isInMergeQueue author{login}}}}}' \
+            --jq '.data.repository | .mergeQueue.entries.totalCount as $q | .pullRequests.nodes[] | select(.author.login == env.BOT) | "\(.number) \(.id) \(.headRefOid) \(.isInMergeQueue) \($q)"')
+          read -r number id head queued busy <<<"$out"
+          [ -n "${number:-}" ] || { echo "No open version PR by $BOT"; exit 0; }
+          # A push since this run means its checks were another commit's; that push's own run decides.
+          [ "$head" = "$SHA" ] || { echo "#$number moved past $SHA; skipping"; exit 0; }
+          [ "$queued" != "true" ] || { echo "#$number already queued"; exit 0; }
+          # Sharing a queue group with a PR that carries a changeset would land main with one
+          # pending, so release versions again instead of publishing. Each of those merges
+          # force-pushes this PR, and its next green run retries.
+          [ "$busy" = "0" ] || { echo "Merge queue holds $busy entries; #$number waits for its next green run"; exit 0; }
+          # shellcheck disable=SC2016
+          gh api graphql -f id="$id" \
+            -f query='mutation($id:ID!){enqueuePullRequest(input:{pullRequestId:$id}){mergeQueueEntry{position}}}'
+          echo "Queued #$number at $SHA"
