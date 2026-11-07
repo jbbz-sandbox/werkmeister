@@ -361,9 +361,14 @@ function workspaceStale(dir: string): boolean {
   const deny = has("deny");
   const ask = has("ask");
   const wrapper = tempHomeWrapper(dir);
+  const wanted = workspaceAllowRules(dir);
+  // SW-521: a rule werkmeister recorded but no longer generates (`Bash(node:*)`) stays allowed until a refresh.
+  const recorded: string[] =
+    readJson(path.join(dotDir(dir), "claude-permissions.json"))?.["allow"] ?? [];
   return (
     PRE_SW186_HOOK.test(fs.readFileSync(settingsFile, "utf8")) ||
-    workspaceAllowRules(dir).some((r) => !allow.has(r)) ||
+    wanted.some((r) => !allow.has(r)) ||
+    recorded.some((r) => !wanted.includes(r)) ||
     workspaceDenyRules(dir).some((r) => !deny.has(r)) ||
     workspaceAskRules(dir).some((r) => !ask.has(r)) ||
     (fs.existsSync(wrapper) && fs.readFileSync(wrapper, "utf8").includes(PRE_SW186_WAIT))
