@@ -15,6 +15,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  BUILD_FIRST,
   CLI_PACKAGE,
   cliReference,
   fill,
@@ -94,10 +95,8 @@ export function checkMan(pages, dir) {
   return [
     ...Object.entries(pages)
       .filter(([f, text]) => !have.includes(f) || readFileSync(join(dir, f), "utf8") !== text)
-      .map(([f]) => `${at(f)}: out of date, run \`pnpm run docs:gen\``),
-    ...have
-      .filter((f) => !(f in pages))
-      .map((f) => `${at(f)}: no such command, run \`pnpm run docs:gen\``),
+      .map(([f]) => `${at(f)}: out of date, ${BUILD_FIRST}`),
+    ...have.filter((f) => !(f in pages)).map((f) => `${at(f)}: no such command, ${BUILD_FIRST}`),
   ];
 }
 
@@ -194,7 +193,7 @@ export function checkGenerated(text, regions, report) {
     if (m[1] in regions && fill(m[0], regions).text !== m[0])
       report(
         text.slice(0, m.index).split("\n").length,
-        `generated region \`${m[1]}\` is out of date — run \`pnpm run docs:gen\``,
+        `generated region \`${m[1]}\` is out of date — ${BUILD_FIRST}`,
       );
 }
 
@@ -372,7 +371,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     ...checkMan(pages, MAN_DIR),
     ...(withMan(readFileSync(CLI_PACKAGE, "utf8"), pages) === readFileSync(CLI_PACKAGE, "utf8")
       ? []
-      : ["apps/cli/package.json: `man` doesn't list the man pages, run `pnpm run docs:gen`"]),
+      : [`apps/cli/package.json: \`man\` doesn't list the man pages, ${BUILD_FIRST}`]),
   ];
   for (const p of problems) console.error(p);
   console.log(`${docs.length} docs checked, ${problems.length} problem(s).`);

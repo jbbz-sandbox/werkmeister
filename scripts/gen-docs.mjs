@@ -8,7 +8,15 @@
  * Reads the built core and CLI, so run after `pnpm run build`.
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -87,11 +95,29 @@ export function mcpSource() {
     .join("\n");
 }
 
+export const BUILD_FIRST =
+  "run `pnpm turbo run build --filter=werkmeister` first, then `pnpm run docs:gen`";
+
+/** The `files` modified after `main` was built: the build predates them (SW-422). */
+export function newerThanBuild(main, files) {
+  const built = statSync(main).mtimeMs;
+  return files.filter((f) => statSync(f).mtimeMs > built);
+}
+
 /** The built CLI's commander model, from its `__reference` mode. */
 export function cliReference() {
   const main = join(ROOT, "apps/cli/dist/main.js");
-  if (!existsSync(main))
-    throw new Error("apps/cli/dist/main.js is missing — run `pnpm run build` first");
+  if (!existsSync(main)) throw new Error(`apps/cli/dist/main.js is missing — ${BUILD_FIRST}`);
+  // shortcut: only *.help.md is compared, not option text in main.ts; widen if that goes stale too.
+  const helps = execFileSync("git", ["ls-files", "*.help.md"], { cwd: ROOT, encoding: "utf8" })
+    .split("\n")
+    .filter(Boolean)
+    .map((f) => join(ROOT, f));
+  const stale = newerThanBuild(main, helps);
+  if (stale.length)
+    throw new Error(
+      `apps/cli/dist/main.js is older than ${stale.map((f) => f.slice(ROOT.length + 1)).join(", ")} — ${BUILD_FIRST}`,
+    );
   return JSON.parse(execFileSync(process.execPath, [main, "__reference"], { encoding: "utf8" }));
 }
 

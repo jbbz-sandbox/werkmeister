@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { checkDoc, checkMan, isIgnored, listFiles, slug } from "./check-docs.mjs";
+import { BUILD_FIRST } from "./gen-docs.mjs";
 
 const ctx = {
   cli: {
@@ -139,9 +140,9 @@ test("checkMan flags a stale, a missing and an orphaned man page", () => {
   assert.deepEqual(
     problems.map((p) => p.replace(/^.*\//, "")),
     [
-      "werkmeister.1: out of date, run `pnpm run docs:gen`",
-      "werkmeister-up.1: out of date, run `pnpm run docs:gen`",
-      "werkmeister-gone.1: no such command, run `pnpm run docs:gen`",
+      `werkmeister.1: out of date, ${BUILD_FIRST}`,
+      `werkmeister-up.1: out of date, ${BUILD_FIRST}`,
+      `werkmeister-gone.1: no such command, ${BUILD_FIRST}`,
     ],
   );
   assert.deepEqual(checkMan({ "werkmeister.1": "old\n", "werkmeister-gone.1": "x\n" }, dir), []);
