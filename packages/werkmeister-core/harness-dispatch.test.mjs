@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
-import { withFixtureWorkspace } from "./fixtures.mjs";
+import { withFixtureWorkspace, writeSessionState } from "./fixtures.mjs";
 
 const { harnessFor, harnessIdOf } = await import("./dist/harness/layout.js");
 
@@ -28,10 +28,7 @@ test("harnessFor follows workspace.yml; absent, mcp and junk read as claude", ()
 test("a codex workspace's status row carries harness and its hooks' agent state", () =>
   withFixtureWorkspace(async ({ workspace }) => {
     setHarness(workspace, "codex");
-    fs.writeFileSync(
-      path.join(workspace, ".werkmeister", "agent-state.json"),
-      JSON.stringify({ state: "needs-you", at: "2026-11-05T10:00:00Z", question: "Ship it?" }),
-    );
+    writeSessionState(workspace, "needs-you", { question: "Ship it?", at: "2026-11-05T10:00:00Z" });
     const { getWorkspaceStatuses } = await import("./dist/sandbox.js");
     const row = (await getWorkspaceStatuses()).statuses.find(
       (w) => w.name === path.basename(workspace),

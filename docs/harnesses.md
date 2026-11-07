@@ -86,6 +86,22 @@ has its own harness with hooks, `harness: codex` ([Codex](#codex)).
    opened any way but `werkmeister pr open`, and the Workspaces pane shows the
    session as idle because no agent-state hook reports it.
 
+## The agent-state record
+
+Every harness's hooks call `werkmeister internal agent-state`, which keeps one record per
+session in `.werkmeister/sessions/<session id>.json` (SW-487): busy or idle, the open tool
+call, running subagents, and what the session is waiting on the person for (a question, a
+permission or a plan). One file per session means a second session, a headless wake turn or a
+subagent can't overwrite another session's ask. A busy session silent for 30 minutes with no
+open process reads as **Session gone**. werkmeister-core's `workspaceState` builds the card's
+phase, activity and Needs-you list from these records and the workspace's other facts.
+
+On Claude Code the hook also listens to `PermissionRequest`, `PermissionDenied`,
+`PostToolUseFailure`, `SubagentStart`, `SubagentStop` and `StopFailure`. New workspaces get them
+from `workspace init`. For an existing one, run `werkmeister machine migrate`: it rewrites a
+workspace's agent-state hooks when any of these events is missing. Until then the card still
+works from the older events, without subagent activity.
+
 ## Codex
 
 `harness: codex` is the generic MCP layout plus Codex's hooks.
@@ -143,7 +159,8 @@ tools keep their `claude-*` names.
   unattended turn relies on the PreToolUse gate in `.codex/hooks.json`; the refused-calls
   list a waited turn returns is always empty.
 - **Working / Needs you / Done** comes from the agent-state hook, else from the session's
-  last line, as on Claude Code.
+  last line, as on Claude Code. Codex sends none of the SW-487 events (PermissionDenied,
+  subagents, StopFailure), so its card shows no subagent activity.
 - **`claude-resume`** and the pane's Continue / New Session open
   `WERKMEISTER_MCP_TOKEN=$(cat .werkmeister/token) codex` (`resume <id>`, `resume --last`).
 - **Usage** sums each session's last `token_count`. There is no USD estimate unless

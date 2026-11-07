@@ -20,6 +20,21 @@ type RepoPr = {
   state: "OPEN" | "MERGED" | "CLOSED" | null;
   ci: "pass" | "running" | "fail" | null;
 };
+type NeedItem = {
+  id: string;
+  kind: string;
+  what: string;
+  since: string | null;
+  action: string;
+  source: "session" | "gate" | "pr" | "lifecycle" | "containers" | "notice" | "text";
+  url?: string;
+  dismiss?: string;
+};
+type WorkspaceState = {
+  phase: { id: string; label: string; stage: string | null };
+  activity: { id: string; label: string; since: string | null; session: string | null };
+  needs: NeedItem[];
+};
 type WorkspaceStatus = {
   state: "up" | "partial" | "stopped" | "paused" | "down" | "unknown";
   services: { name: string; state: "healthy" | "starting" | "unhealthy" | "running" | "down" }[];
@@ -47,6 +62,8 @@ export interface DisplayInput {
   /** SW-70; optional so a core older than it still renders. */
   paused?: { at: string; containers: string[] } | null;
   crashLoops?: { service: string; restarts: number; lastLog: string | null }[];
+  /** SW-487; optional so a core older than it still renders. */
+  workspaceState?: WorkspaceState | null;
 }
 
 /** One project's share of the stats sweep (core `Usage`). */
@@ -82,6 +99,23 @@ export interface DisplayOptions {
   now?: Date;
   /** From the slower resources poll; omitted or null until one lands. */
   usage?: UsageInput | null;
+  /** The PR poll's needs-you items and phase detail (core `WorkspacePrs`), listed after the sweep's. */
+  prNeeds?: NeedItem[] | null;
+  phaseDetail?: string | null;
+}
+
+/** One Needs-you row: `● <what> · <since> — <action>`. */
+export interface NeedRow {
+  id: string;
+  what: string;
+  action: string;
+  /** `12 min ago`, or '' when the source has no time. */
+  since: string;
+  /** The reply-text guess, shown as one. */
+  guess: boolean;
+  url: string | null;
+  /** The stored notice id a ✕ clears; null when the item clears itself. */
+  dismiss: string | null;
 }
 
 export interface Text {
@@ -111,6 +145,12 @@ export interface WorkspaceDisplay {
   };
   needs: boolean;
   question: string | null;
+  /** SW-487: everything waiting on the person, oldest kinds first; empty with an older core. */
+  needsList: NeedRow[];
+  /** `Stage 2 of 4 · spec` / `PR open · waiting on review`; null with an older core. */
+  phase: Text | null;
+  /** `Running tests` and `4 min ago`; null with an older core. */
+  activity: (Text & { time: string }) | null;
   autonomous: { full: string; compact: string } | null;
   containers: Text;
   services: (Text & { name: string; glyph: string; codicon: string })[];
@@ -291,7 +331,11 @@ function primary(
 ): WorkspaceDisplay["primary"] {
   const cont = { action: "continue", label: `↗ Continue in ${where}`, destructive: false } as const;
   if (ws.paused) return { action: "resume", label: "▶ Resume", destructive: false };
-  if (ws.claude.agent === "needs-you") return cont;
+  // The session is what answers; a gate or PR item alone doesn't make Continue the next step.
+  const asked = ws.workspaceState
+    ? ws.workspaceState.needs.some((n) => n.source === "session" || n.source === "text")
+    : ws.claude.agent === "needs-you";
+  if (asked) return cont;
   if (lifecycle === "shipped")
     return { action: "close-out", label: "✓ Close out", destructive: true };
   if (ws.state === "down" || ws.state === "stopped")
@@ -299,11 +343,34 @@ function primary(
   return cont;
 }
 
+const ACTIVITY_TONE: Record<string, Tone> = {
+  gone: "err",
+  queued: "warn",
+  starting: "warn",
+  idle: "off",
+  paused: "off",
+};
+
+function needRows(ws: DisplayInput, opts: DisplayOptions, now: Date): NeedRow[] {
+  if (ws.paused) return [];
+  return [...(ws.workspaceState?.needs ?? []), ...(opts.prNeeds ?? [])].map((n) => ({
+    id: n.id,
+    what: n.what,
+    action: n.action,
+    since: ago(n.since, now),
+    guess: n.source === "text",
+    url: n.url ?? null,
+    dismiss: n.dismiss ?? null,
+  }));
+}
+
 export function displayModel(ws: DisplayInput, opts: DisplayOptions = {}): WorkspaceDisplay {
   const now = opts.now ?? new Date();
   const lifecycle = opts.lifecycle ?? null;
   const a = ws.paused ? PAUSED : AGENT[ws.claude.agent];
-  const needs = !ws.paused && ws.claude.agent === "needs-you";
+  const needsList = needRows(ws, opts, now);
+  const needs = !ws.paused && (ws.claude.agent === "needs-you" || needsList.length > 0);
+  const st = ws.workspaceState;
   const withPr = (opts.prs ?? []).filter((p): p is PrInput & { url: string } => p.url !== null);
   return {
     agent: {
@@ -312,7 +379,23 @@ export function displayModel(ws: DisplayInput, opts: DisplayOptions = {}): Works
       time: ws.paused ? `paused ${ago(ws.paused.at, now)}` : agentTime(ws, now),
     },
     needs,
-    question: needs ? ws.claude.question : null,
+    question: needs ? (needsList[0]?.what ?? ws.claude.question) : null,
+    needsList,
+    phase: st
+      ? {
+          text: [st.phase.label, st.phase.id === "pr-open" ? opts.phaseDetail : null]
+            .filter(Boolean)
+            .join(" · "),
+          tone: "off",
+        }
+      : null,
+    activity: st
+      ? {
+          text: st.activity.label,
+          tone: ACTIVITY_TONE[st.activity.id] ?? "ok",
+          time: ago(st.activity.since, now),
+        }
+      : null,
     autonomous: ws.autonomous ? { full: "⚙ Autonomous", compact: "⚙ Auto" } : null,
     containers: containers(ws),
     services: ws.services.map(({ name, state }) => {

@@ -16,7 +16,7 @@ import { opencodeResumeCommand, opencodeSendArgs } from "./dist/harness/opencode
 import { turnStatus } from "./dist/harness/turn.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { initWorkspace } from "./dist/workspace_init.js";
-import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+import { pinWerkmeisterRoot, withSandboxHome, writeSessionState } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
 process.env.WERKMEISTER_ROOT = path.join(import.meta.dirname, "..", "..", "apps", "cli");
@@ -428,13 +428,9 @@ esac`,
     assert.deepEqual(result, { denied: [] });
     assert.equal(turnStatus("oc-key").state, "done");
     // The headless turn's own `working` record (its Stop was lost on exit) reads as done.
-    fs.mkdirSync(path.join(root, ".werkmeister"), { recursive: true });
-    fs.writeFileSync(
-      path.join(root, ".werkmeister", "agent-state.json"),
-      JSON.stringify({ state: "working", at: new Date().toISOString() }),
-    );
+    writeSessionState(root, "working");
     assert.equal((await opencodeAdapter.agentSignal("oc-key", root, null)).signal.agent, "done");
-    fs.rmSync(path.join(root, ".werkmeister", "agent-state.json"));
+    fs.rmSync(path.join(root, ".werkmeister", "sessions"), { recursive: true });
     assert.deepEqual(fs.readFileSync(path.join(bin, "run.args"), "utf8").trim().split("\n"), [
       "run",
       "--format",
@@ -445,10 +441,7 @@ esac`,
     ]);
 
     assert.equal((await opencodeAdapter.agentSignal("idle-key", root, null)).signal.agent, "idle");
-    fs.writeFileSync(
-      path.join(root, ".werkmeister", "agent-state.json"),
-      JSON.stringify({ state: "needs-you", at: "2026-11-05T00:00:00.000Z", question: "Merge?" }),
-    );
+    writeSessionState(root, "needs-you", { question: "Merge?", at: "2026-11-05T00:00:00.000Z" });
     const { signal } = await opencodeAdapter.agentSignal("idle-key", root, null);
     assert.equal(signal.agent, "needs-you");
     assert.equal(signal.question, "Merge?");

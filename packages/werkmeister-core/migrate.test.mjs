@@ -421,3 +421,25 @@ test("SW-510: migrate moves the node --test rules from allow to ask", async () =
   );
   for (const r of nodeTest) assert.ok(permissions.ask.includes(r), r);
 });
+
+test("SW-487: migrate adds the agent-state events a workspace hooked before them is missing", async () => {
+  const { writeWorkspaceSettings } = await import("./dist/harness/claude/hooks_gen.js");
+  movedHome();
+  const ws = path.join(features, "demo");
+  write(path.join(ws, ".werkmeister", "workspace.yml"), "feature: demo\n");
+  write(path.join(ws, ".env"), "FEATURE=demo\n");
+  writeWorkspaceSettings(ws);
+  const settingsFile = path.join(ws, ".claude", "settings.json");
+  const json = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  for (const e of ["PermissionRequest", "SubagentStart"]) delete json.hooks[e];
+  write(settingsFile, JSON.stringify(json));
+
+  const steps = await run();
+  assert.ok(
+    steps.every((s) => s.ok),
+    JSON.stringify(steps, null, 2),
+  );
+  const { hooks } = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  for (const e of ["PermissionRequest", "SubagentStart"])
+    assert.ok(JSON.stringify(hooks[e] ?? []).includes("agent-state"), e);
+});

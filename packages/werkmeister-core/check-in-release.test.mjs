@@ -7,6 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
+import { writeSessionState } from "./fixtures.mjs";
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "check-in-release-"));
 const root = path.join(home, "features");
@@ -31,11 +32,7 @@ function workspace(name, fm, { labels = [], closedOut = false, agent, lastRole }
   fs.mkdirSync(out, { recursive: true });
   if (fm) fs.writeFileSync(path.join(out, "pr-app.md"), `---\n${fm}\n---\n# feat: x\n`);
   if (closedOut) fs.writeFileSync(path.join(dir, "closeout.md"), "closed\n");
-  if (agent)
-    fs.writeFileSync(
-      path.join(dir, ".werkmeister", "agent-state.json"),
-      JSON.stringify({ state: agent, at: new Date().toISOString() }),
-    );
+  if (agent) writeSessionState(dir, agent);
   if (lastRole) {
     const project = path.join(home, ".claude", "projects", dir.replace(/[^a-zA-Z0-9]/g, "-"));
     fs.mkdirSync(project, { recursive: true });

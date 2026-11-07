@@ -7,8 +7,10 @@ import type {
   InfraStatus,
   InterceptRow,
   InterceptsSnapshot,
+  NeedItem,
   RepoPr,
   ServiceHealth,
+  StateModel,
   WorkspaceResources,
   WorkspaceRow,
 } from "../types";
@@ -93,6 +95,7 @@ try {
     'intercept-start': async () => (await sibling('telepresence.js')).startIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }),
     'intercept-leave': async () => ({ left: await (await sibling('telepresence.js')).leaveIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }) }),
     'workspace-prs': () => core.getWorkspacePRs(),
+    'dismiss-notice': async () => (await sibling('agent_state.js')).clearNotice(await core.resolveWorkspaceDir(args.name), args.id),
     connect: async () => ({ ok: await (await import(pathToFileURL(join(dirname(file), 'infra.js')).href)).up() }),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
     'workspace-path': async () => ({ path: await core.resolveWorkspaceDir(args.name) }),
@@ -190,6 +193,9 @@ const INTERCEPTS = { plugin: "werkmeister", key: "intercepts" } as const;
 const INTERCEPT = "intercept:";
 const PRS = { plugin: "werkmeister", key: "prs" } as const;
 const PRS_POLL = { plugin: "werkmeister", key: "prsPoll" } as const;
+/** The PR poll's needs-you items and phase detail per workspace (core `WorkspacePrs`, SW-487). */
+const PR_NEEDS = { plugin: "werkmeister", key: "prNeeds" } as const;
+type PrExtra = { needs: NeedItem[]; phaseDetail: string | null };
 const LEGEND = { plugin: "werkmeister", key: "legend" } as const;
 const COLLAPSED = { plugin: "werkmeister", key: "collapsed" } as const;
 const WIDE = { plugin: "werkmeister", key: "wide" } as const;
@@ -614,6 +620,7 @@ type StatusResult = {
     paused?: WorkspaceRow["paused"];
     resumeNudge?: boolean;
     heldWakes?: WorkspaceRow["heldWakes"];
+    workspaceState?: StateModel | null;
   }[];
 };
 type SessionInfo = {
@@ -700,6 +707,7 @@ export function buildRows(
       paused: s?.paused ?? null,
       resumeNudge: s?.resumeNudge ?? false,
       heldWakes: s?.heldWakes ?? [],
+      workspaceState: s?.workspaceState ?? null,
       session: sessionFor(w.path, allPaths, sessions),
     };
   });
@@ -760,6 +768,7 @@ export function display(
   prs: RepoPr[] | null,
   now: Date,
   resources: WorkspaceResources | null = null,
+  extra: PrExtra | null = null,
 ): WorkspaceDisplay {
   return displayModel(r, {
     // Not `prs?.map`: null (lookup failed) must reach the model as null, not as undefined (no PRs).
@@ -775,6 +784,8 @@ export function display(
     lifecycle: r.lifecycle?.state ?? null,
     now,
     usage: r.project ? resources?.projects[r.project] : null,
+    prNeeds: extra?.needs ?? null,
+    phaseDetail: extra?.phaseDetail ?? null,
   });
 }
 
@@ -813,7 +824,12 @@ export function metaParts(d: WorkspaceDisplay, loaded: boolean): Part[] {
     { text: d.containers.text, tone: d.containers.tone },
     sep,
     ...prs,
-    ...(d.workflow.kind === "none" ? [] : [sep, { text: d.workflow.compact }]),
+    // SW-487: core's phase, with the PR poll's detail, once a core sends it.
+    ...(d.phase && d.phase.text !== "Building"
+      ? [sep, { text: d.phase.text }]
+      : d.workflow.kind === "none"
+        ? []
+        : [sep, { text: d.workflow.compact }]),
   ];
 }
 
@@ -860,6 +876,14 @@ function cardInfo(
             {d.agent.label}
           </Text>
         </Box>
+        {/* SW-487: what it is doing and since when; `agent.time` with an older core. */}
+        <Box key={`activity:${r.name}`}>
+          <Text color={d.activity ? TONE[d.activity.tone] : undefined} dimColor={!d.activity}>
+            {d.activity
+              ? [d.activity.text, d.activity.time].filter(Boolean).join(" · ")
+              : d.agent.time}
+          </Text>
+        </Box>
         {d.autonomous && (
           <Box key={`auto:${r.name}`}>
             <Text>{d.autonomous.compact}</Text>
@@ -885,7 +909,18 @@ function cardInfo(
         <Text color={TONE.err}>{d.crash.text}</Text>
       </Box>
     ),
-    d.question && (
+    ...d.needsList.map((n) => (
+      <Box key={`need:${r.name}:${n.id}`}>
+        <Text>
+          <Text color="warning">{"● "}</Text>
+          <Text>{n.guess ? `${n.what} (guess)` : n.what}</Text>
+          <Text dimColor>
+            {[n.since && ` · ${n.since}`, ` — ${n.action}`].filter(Boolean).join("")}
+          </Text>
+        </Text>
+      </Box>
+    )),
+    !d.needsList.length && d.question && (
       <Box key={`question:${r.name}`}>
         <Text>
           <Text color="warning">{"▸ asked: "}</Text>
@@ -1505,9 +1540,20 @@ async function prTick($: EngineInterface): Promise<void> {
   if (prTicking) return;
   prTicking = true;
   try {
-    const r = await core<{ name: string; repos: RepoPr[] }[]>($, "workspace-prs", {}, 120000);
+    const r = await core<({ name: string; repos: RepoPr[] } & Partial<PrExtra>)[]>(
+      $,
+      "workspace-prs",
+      {},
+      120000,
+    );
     const { value: poll } = await $.state.get(PRS_POLL);
     await $.state.set(PRS, Object.fromEntries(r.map((w) => [w.name, w.repos])));
+    await $.state.set(
+      PR_NEEDS,
+      Object.fromEntries(
+        r.map((w) => [w.name, { needs: w.needs ?? [], phaseDetail: w.phaseDetail ?? null }]),
+      ),
+    );
     if (poll === "failed") await $.state.set(PRS_POLL, "ok");
   } catch {
     // The failure may be this environment ending (a reload, a closed pane), which refuses the write too.
@@ -1875,6 +1921,7 @@ export const register: Register = (on) => {
     const { value: polled } = await $.state.get(PRS);
     const { value: prsPoll } = await $.state.get(PRS_POLL);
     const { value: resources = null } = await $.state.get(RESOURCES);
+    const prNeeds = (await $.state.get(PR_NEEDS)).value ?? {};
     const live = polled?.[raw.name] ?? [];
     const r = withLivePrs(raw, live);
     const d = display(
@@ -1882,6 +1929,7 @@ export const register: Register = (on) => {
       prsPoll === "failed" ? null : live,
       new Date(await $.clock.now()),
       resources,
+      prNeeds[raw.name] ?? null,
     );
     const els = $.ui.resolve(e);
     const { Box, Text } = els;
@@ -1927,6 +1975,7 @@ export const register: Register = (on) => {
     const { value: tracker = null } = await $.state.get(TRACKER);
     const { value: polled } = await $.state.get(PRS);
     const prs = polled ?? {};
+    const prNeeds = (await $.state.get(PR_NEEDS)).value ?? {};
     const { value: tab = "list" } = await $.state.get(TAB);
     const { value: focus = false } = await $.state.get(FOCUS);
     const { value: legend = false } = await $.state.get(LEGEND);
@@ -2177,7 +2226,13 @@ export const register: Register = (on) => {
 
     const canType = Input !== null;
     const card = (r: WorkspaceRow) => {
-      const d = display(r, prsPoll === "failed" ? null : (prs[r.name] ?? []), now, resources);
+      const d = display(
+        r,
+        prsPoll === "failed" ? null : (prs[r.name] ?? []),
+        now,
+        resources,
+        prNeeds[r.name] ?? null,
+      );
       const acts = actionsFor(r, d, canType);
       const label = (a: Action) =>
         a === "continue"
@@ -2235,6 +2290,22 @@ export const register: Register = (on) => {
           marginBottom={1}
         >
           {cardInfo(els, r, d, polled !== undefined || prsPoll === "failed")}
+          {d.needsList
+            .filter((n) => n.dismiss)
+            .map((n) => (
+              <Box key={`dismiss:${r.name}:${n.id}`}>
+                <Button
+                  key={`dismiss-btn:${r.name}:${n.id}`}
+                  plain
+                  label={`✕ Dismiss “${n.what.slice(0, 40)}”`}
+                  onPress={() =>
+                    void core($, "dismiss-notice", { name: r.name, id: n.dismiss }).catch(
+                      () => undefined,
+                    )
+                  }
+                />
+              </Box>
+            ))}
           {r.services.map((svc, i) => {
             const row = snap?.intercepts.find(
               (x) => x.feature === r.feature && x.service === svc.name,
@@ -2374,7 +2445,13 @@ export const register: Register = (on) => {
                 cardInfo(
                   els,
                   r,
-                  display(r, prsPoll === "failed" ? null : (prs[r.name] ?? []), now, resources),
+                  display(
+                    r,
+                    prsPoll === "failed" ? null : (prs[r.name] ?? []),
+                    now,
+                    resources,
+                    prNeeds[r.name] ?? null,
+                  ),
                   loaded,
                 )[0]
               }

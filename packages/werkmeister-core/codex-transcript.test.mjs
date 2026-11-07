@@ -6,6 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { writeSessionState } from "./fixtures.mjs";
 
 const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "codex-store-")));
 process.env.CODEX_HOME = path.join(root, "codex");
@@ -124,12 +125,12 @@ test("agentSignal: hooks' state wins, else the tail decides", async () => {
   assert.equal(tail.signal.agent, "needs-you");
   assert.equal(tail.signal.question, "Done. Shall I open the PR?");
 
-  const state = path.join(ws, ".werkmeister", "agent-state.json");
-  fs.writeFileSync(state, JSON.stringify({ state: "working", at: "2026-11-05T10:00:00Z" }));
+  const state = path.join(ws, ".werkmeister", "sessions");
+  writeSessionState(ws, "working");
   try {
     assert.equal((await codexAdapter.agentSignal("k-tail", ws, src)).signal.agent, "working");
   } finally {
-    fs.rmSync(state);
+    fs.rmSync(state, { recursive: true });
   }
   assert.equal((await codexAdapter.agentSignal("k-none", ws, null)).signal.agent, "idle");
 

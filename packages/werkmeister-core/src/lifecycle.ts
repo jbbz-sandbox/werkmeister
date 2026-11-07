@@ -28,10 +28,10 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
+  agentOf,
   clearPaused,
   clearWaiting,
   nudgePath,
-  readAgentState,
   readPaused,
   readSessions,
   readWaiting,
@@ -679,9 +679,16 @@ const STALE_SESSION_MS = 24 * 60 * 60_000;
 
 /** The open sessions in *workspaceRoot*, as Werkmeister's hooks recorded them. */
 export function liveSessions(workspaceRoot: string, now = Date.now()): LiveSession[] {
-  return Object.entries(readSessions(workspaceRoot))
-    .map(([sessionId, s]) => ({ sessionId, status: s.status, statusUpdatedAt: Date.parse(s.at) }))
-    .filter((s) => now - s.statusUpdatedAt < STALE_SESSION_MS);
+  return (
+    Object.entries(readSessions(workspaceRoot))
+      // `last` is the newest hook; older records have only `at`, when the status began.
+      .map(([sessionId, s]) => ({
+        sessionId,
+        status: s.status,
+        statusUpdatedAt: Date.parse(s.last ?? s.at),
+      }))
+      .filter((s) => now - s.statusUpdatedAt < STALE_SESSION_MS)
+  );
 }
 
 /** Ids of the sessions in *workspaceRoot* other than *sessionId*. */
@@ -881,13 +888,13 @@ export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | 
   const gateCutoff = Date.now() - idleStopMinutes() * 60_000;
   return found
     .map((f) => {
-      const state = readAgentState(f.workspace);
+      const state = agentOf(readSessions(f.workspace));
       const rank: Rank =
         f.feature === "infra" || !readAutonomous(f.workspace)
           ? "person"
-          : state?.state === "working"
+          : state?.agent === "working"
             ? "working"
-            : state?.state === "needs-you"
+            : state?.agent === "needs-you"
               ? "human-check"
               : "idle";
       const busy =
@@ -1110,7 +1117,7 @@ export async function pause(feature: string): Promise<PauseResult> {
   writePaused(workspace, {
     at: new Date().toISOString(),
     containers,
-    was_working: readAgentState(workspace)?.state === "working",
+    was_working: agentOf(readSessions(workspace))?.agent === "working",
   });
 
   info(`Pausing ${containers.length} container(s) for '${feature}' (slot ${slot})...`);

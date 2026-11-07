@@ -4,7 +4,13 @@
  * its session lines parse.
  */
 import fs from "node:fs/promises";
-import { type AgentState, asksQuestion, questionOf, readAgentState } from "../agent_state.js";
+import {
+  type AgentState,
+  agentOf,
+  asksQuestion,
+  questionOf,
+  readSessions,
+} from "../agent_state.js";
 import { turnStatus } from "./turn.js";
 import type { SessionMessage, SessionSignal } from "./types.js";
 
@@ -66,8 +72,8 @@ export async function signalFrom(
     lastActivity,
   });
   if (state === "running") return signal("working");
-  const recorded = readAgentState(dir);
-  if (recorded) return signal(recorded.state, recorded.at, recorded.question ?? null);
+  const recorded = agentOf(readSessions(dir));
+  if (recorded) return signal(recorded.agent, recorded.at, recorded.question);
   let last: SessionMessage | undefined;
   try {
     if (src?.sessionFile) last = parse(await readFileTail(src.sessionFile)).at(-1);

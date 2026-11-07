@@ -46,11 +46,12 @@ A person must tell, at a glance, for each workspace:
 | Are the containers healthy? | **Containers** | `N of M up`, `paused` or `down`, then one item per service: `● name` up · `○ name` down · `◐ name starting` · `▲ name unhealthy`. Docker unreachable: `Docker unreachable · retry` |
 | What PRs exist? | **PRs** | `repo#N` link, state badge, CI badge. `None yet`. Lookup failed: `PRs unavailable · retry` |
 | Where is the run? | **Workflow** | `Stage n of m · name` (ICM), `JIT · phase`, or the lifecycle step: `Ready to open PR` · `Awaiting release` · `Ready to close out` · `Closed out` · `Abandoned` |
-| What is the agent doing? | **Agent** + header chip | `◌ Working` · `● Needs you` · `✓ Done` · `Idle`, plus a time (`asked a question 12 min ago`). `⏸ Paused` (`paused 12 min ago`) replaces all four while the workspace is paused. `⚙ Autonomous` (compact: `⚙ Auto`) when the run is autonomous |
+| What is the agent doing? | **Agent** + header chip | `◌ Working` · `● Needs you` · `✓ Done` · `Idle`, plus a time (`asked a question 12 min ago`). `⏸ Paused` (`paused 12 min ago`) replaces all four while the workspace is paused. Beside the chip, the activity and since when: `Running tests · 4 min ago`, `Queued for CPU · position 2`, `Session gone · 40 min ago` (SW-487). `⚙ Autonomous` (compact: `⚙ Auto`) when the run is autonomous |
+| Does anything need me? | **Needs you** list | One line per item, `● <what> · <since> — <action>`: a question, a permission, a plan, a stage gate, CI failed, a conflict, changes requested, merge it, run the postmortem, close it, a crash loop, a dead session, a system notice. A reply-text guess ends `(guess)`; a stored notice has `✕ Dismiss`. Any item lights the card (rule 4) |
 
 - **Header:** name, agent chip, autonomous badge; then the work-type tag and the **task title from `workspace.yml`** (never the session title or a slice of the starting prompt); then the issue as `owner/repo#123`.
-- **Needs you** cards show the last question in the header, with the primary action.
-- The agent state comes from the persisted signal of SW-46, not from "the assistant spoke last".
+- **Needs you** cards list every item under the header, with the primary action. Continue leads only when a session asked; a gate or PR item keeps the lifecycle's action.
+- The model comes from werkmeister-core's `workspaceState` (SW-487): facts first (hook records per session, stage gates, PR and CI state, the capacity queue, containers, lifecycle files), the reply-text guess only where none exists.
 - Compact: name + chip on one line, then `containers 2 of 2 up · PRs werkmeister#231 Draft · CI running · stage 4/5 implement`. VS Code: label = name, description = `● Needs you · 2 of 2 up · stage 2/4 · #143`, tooltip = the four rows.
 
 ### Data
@@ -62,7 +63,8 @@ Every row reads werkmeister-core; no surface computes its own. The shapes and th
 | **Containers** | `getWorkspaceStatuses()` → `state`, `running` / `total`, and per-service health `services[] {name, state}` (`healthy` · `starting` · `unhealthy` · `running` · `down`) |
 | **PRs** | `getWorkspacePRs()` → per repo `url`, `state`, `ci` (`pass` · `running` · `fail` · null = no checks) and `failingChecks` |
 | **Workflow** | `stage {index, total, name}` (ICM) · `phase` (JIT, from the newest note) · `lifecycleOf()` for the lifecycle step |
-| **Agent** | `claude {state, agent, at, question}` (agent from the hooks' `agent-state.json`, SW-46), `lastActivity` (newest transcript's mtime), `autonomous`, `autoStop`, `model` |
+| **Agent** | `claude {state, agent, at, question}` (derived from `workspaceState`, kept for older readers), `lastActivity` (newest transcript's mtime), `autonomous`, `autoStop`, `model` |
+| **Needs you** · activity | `workspaceState {phase, activity, needs[]}` on `WorkspaceStatus` (hooks' `.werkmeister/sessions/<id>.json`, one per session); PR items and `phaseDetail` (`waiting on review`, `behind main`) on `getWorkspacePRs()`'s `needs` |
 
 ### Badges
 
