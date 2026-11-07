@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { claim, forget, release } from "../out/terminal-pool.js";
+import { claim, forget, release, takeGone } from "../out/terminal-pool.js";
 
 /** Stand-in terminals — the pool only ever compares them by identity. */
 const term = (name) => ({ name });
@@ -55,5 +55,28 @@ test("release and forget ignore a terminal the pool never handed out", () => {
   assert.notEqual(
     claim(slots, "/ws/a", () => term("logs")),
     mine,
+  );
+});
+
+test("SW-421: a gone workspace's terminals are taken, others and hand-opened ones stay", () => {
+  const pooled = term("werkmeister a");
+  const session = term("claude a");
+  const other = term("werkmeister b");
+  const slots = [
+    { term: pooled, cwd: "/ws/a", busy: false },
+    { term: session, cwd: "/ws/a", busy: true },
+    { term: other, cwd: "/ws/b", busy: false },
+  ];
+  const handOpened = term("zsh in /ws/a"); // never in slots, so never taken
+  const taken = takeGone(slots, (s) => s.cwd !== "/ws/a");
+  assert.deepEqual(taken, [pooled, session]);
+  assert.ok(!taken.includes(handOpened));
+  assert.deepEqual(
+    slots.map((s) => s.term),
+    [other],
+  );
+  assert.deepEqual(
+    takeGone(slots, () => true),
+    [],
   );
 });
