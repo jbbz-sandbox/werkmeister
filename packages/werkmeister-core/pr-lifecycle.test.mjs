@@ -435,10 +435,10 @@ test("gate: an unmapped non-doc file still touches every service", async () => {
       ["test api", "test lib"],
     );
     assert.deepEqual(failed(g), ["test lib"]);
-    assert.equal(
-      g.checks.find((c) => c.name === "tests"),
-      undefined,
-      "no not-touched row when every service runs",
+    // SW-563: the row says which file made every service run, so it gets mapped, not started again.
+    assert.deepEqual(
+      g.checks.filter((c) => c.name === "tests").map((c) => [c.ok, c.detail]),
+      [[true, "every service: no path_mappings or no_service_paths entry for package.json"]],
     );
   } finally {
     clean(ws);

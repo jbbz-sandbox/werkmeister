@@ -571,10 +571,10 @@ function reviewRequired(ws: string): boolean {
 }
 
 /**
- * Services whose files the branch changed, by longest prefix among `path_mappings` and
- * `no_service_paths` (which touch nothing, e.g. docs); any other file touches the whole repo.
+ * The longest `path_mappings` or `no_service_paths` prefix covering *file*: its service,
+ * `null` for a no-service path (e.g. docs), `undefined` when nothing covers it.
  */
-export function mapTouched(files: string[], repo: RepoEntry): string[] {
+function mappingFor(file: string, repo: RepoEntry): string | null | undefined {
   const mappings: [string, string | null][] = [
     ...Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>),
     ...((repo["no_service_paths"] ?? []) as string[]).map((p): [string, null] => [
@@ -582,16 +582,25 @@ export function mapTouched(files: string[], repo: RepoEntry): string[] {
       null,
     ]),
   ];
+  return mappings
+    .filter(([p]) => file === p || file.startsWith(p + "/"))
+    .sort((a, b) => b[0].length - a[0].length)[0]?.[1];
+}
+
+/** Services whose files the branch changed; a file no mapping covers touches the whole repo. */
+export function mapTouched(files: string[], repo: RepoEntry): string[] {
   const out = new Set<string>();
   for (const f of files) {
-    const hit = mappings
-      .filter(([p]) => f === p || f.startsWith(p + "/"))
-      .sort((a, b) => b[0].length - a[0].length)[0];
-    if (hit) {
-      if (hit[1] !== null) out.add(hit[1]);
-    } else for (const s of (repo["services"] ?? []) as string[]) out.add(s);
+    const hit = mappingFor(f, repo);
+    if (hit === undefined) for (const s of (repo["services"] ?? []) as string[]) out.add(s);
+    else if (hit !== null) out.add(hit);
   }
   return [...out].sort();
+}
+
+/** The changed files no mapping covers: each one makes the gate test every service (SW-563). */
+export function unmappedFiles(files: string[], repo: RepoEntry): string[] {
+  return files.filter((f) => mappingFor(f, repo) === undefined);
 }
 
 function readEnv(ws: string, key: string): string {
@@ -990,23 +999,26 @@ async function gateChecks(
   const files = diff.code === 0 ? diff.stdout.split("\n").filter(Boolean) : [];
   const touched = mapTouched(files, repo);
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
-  // Nothing touched yet files outside no_service_paths: the repo has no services to map to
+  const unmapped = unmappedFiles(files, repo);
+  const unmappedList = `${unmapped.slice(0, 5).join(", ")}${unmapped.length > 5 ? ", …" : ""}`;
+  // Nothing touched yet unmapped files: the repo has no services to map to
   // (no `repos:` entry), so zero tests would run unannounced (SW-278).
-  const noService = ((repo["no_service_paths"] ?? []) as string[]).map((p) =>
-    p.replace(/\/+$/, ""),
-  );
-  const unmapped = touched.length
-    ? []
-    : files.filter((f) => !noService.some((p) => f === p || f.startsWith(p + "/")));
-  if (unmapped.length) {
+  if (unmapped.length && !touched.length) {
     const why = reason(skips["tests"]);
     add(
       "tests",
       Boolean(why),
       why
         ? `skipped: ${why}`
-        : `no service maps to ${unmapped.slice(0, 5).join(", ")}${unmapped.length > 5 ? ", …" : ""} — ` +
+        : `no service maps to ${unmappedList} — ` +
             `add a \`repos: { ${file.dir}: { services, path_mappings } }\` registry entry, or \`skip_tests: { tests: <reason> }\``,
+    );
+  } else if (unmapped.length) {
+    // Name what made every service run, so the next such folder gets mapped, not started (SW-563).
+    add(
+      "tests",
+      true,
+      `every service: no path_mappings or no_service_paths entry for ${unmappedList}`,
     );
   }
   // Name what the diff left out, so a short gate isn't read as a skipped one (SW-450).
