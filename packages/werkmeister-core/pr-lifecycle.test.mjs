@@ -37,7 +37,6 @@ import {
   releaseVscodeSessions,
   removalBlockers,
   runGate,
-  waitForHostLoad,
   waitForHostLoadNow,
   wakeMessage,
   watchPrs,
@@ -1674,61 +1673,44 @@ test("runGate: never waits on host load; admission prices its starts (SW-542)", 
   }
 });
 
-test("waitForHostLoad: with-temp-home's wait polls, caps at 10 min and says so up front (SW-224, SW-262)", async () => {
+test("waitForHostLoadNow: with-temp-home's wait polls and says up front how long it may wait (SW-224, SW-262)", async () => {
   const lines = [];
   const reporter = { emit: (e) => lines.push(e.msg) };
   const falls = loaded([90, 90, 1]);
   const waited = await withSandboxHome(() =>
-    withReporter(reporter, () =>
-      waitForHostLoad(falls, true, "with-temp-home", "WERKMEISTER_NO_WAIT=1"),
-    ),
+    withReporter(reporter, () => waitForHostLoadNow(falls, "linux")),
   );
   assert.equal(waited, "waited 30 s for host load");
   assert.deepEqual(falls.slept, [15000, 15000]);
   assert.match(
     lines.join("\n"),
-    /waiting up to 10 min for host load 90\.0 to fall to 8 \(budget\.host_load\) before with-temp-home; WERKMEISTER_NO_WAIT=1 skips/,
+    /waiting up to 1\.5 min for host load 90\.0 to fall to 8 \(budget\.host_load\) before with-temp-home; --no-wait skips/,
   );
-  const stuck = loaded([90]);
-  const capped = await withSandboxHome(() => waitForHostLoad(stuck, true, "with-temp-home"));
-  assert.equal(stuck.slept.length, 40);
-  assert.equal(capped, "ran with host load 90.0 over 8; the 10 min host-load wait is spent");
 });
 
 test("waitForHostLoadNow: with-temp-home's wait stops at 90 s, under an agent's 2 min Bash timeout (SW-469)", async () => {
   const stuck = loaded([90]);
-  const note = await withSandboxHome(() => waitForHostLoadNow(stuck));
+  const note = await withSandboxHome(() => waitForHostLoadNow(stuck, "linux"));
   assert.equal(stuck.slept.length, 6);
   assert.equal(note, "ran with host load 90.0 over 8; the 1.5 min host-load wait is spent");
 });
 
-test("waitForHostLoad: prints progress each minute and spends the budget it is given (SW-262)", async () => {
+// SW-556: macOS's loadavg counts idle daemons in R state (450-550 on a quiet host) and never the
+// Linux VM that runs the tests, so with-temp-home has nothing to wait on there.
+test("waitForHostLoadNow: on macOS it returns at once, whatever loadavg reads (SW-556)", async () => {
+  const stuck = loaded([90]);
+  assert.equal(await withSandboxHome(() => waitForHostLoadNow(stuck, "darwin")), "");
+  assert.deepEqual(stuck.slept, []);
+});
+
+test("waitForHostLoadNow: prints progress at the minute, not at the end (SW-262)", async () => {
   const lines = [];
   const reporter = { emit: (e) => lines.push(e.msg) };
   const stuck = loaded([90]);
-  const budget = { leftMs: 150_000 };
-  const note = await withSandboxHome(() =>
-    withReporter(reporter, () => waitForHostLoad(stuck, true, "lint", "--no-wait", budget)),
-  );
-  assert.equal(stuck.slept.length, 10);
-  assert.equal(budget.leftMs, 0);
-  assert.match(
-    lines[0],
-    /^waiting up to 2\.5 min for host load 90\.0 to fall to 8 .* before lint; --no-wait skips$/,
-  );
+  await withSandboxHome(() => withReporter(reporter, () => waitForHostLoadNow(stuck, "linux")));
   assert.deepEqual(lines.slice(1), [
-    "still waiting for host load: 90.0 over 8, 60 s so far, up to 1.5 min left",
-    "still waiting for host load: 90.0 over 8, 120 s so far, up to 0.5 min left",
+    "still waiting for host load: 90.0 over 8, 60 s so far, up to 0.5 min left",
   ]);
-  assert.match(note, /the 10 min host-load wait is spent/);
-  lines.length = 0;
-  const again = loaded([90]);
-  const second = await withSandboxHome(() =>
-    withReporter(reporter, () => waitForHostLoad(again, true, "release", "--no-wait", budget)),
-  );
-  assert.deepEqual(again.slept, []);
-  assert.deepEqual(lines, []);
-  assert.equal(second, note);
 });
 
 test("refreshPrStatus: merged, then shipped once a release tag contains the merge", async () => {
@@ -4492,11 +4474,11 @@ test("gate: prints a containers row when a running container is kept (SW-355, SW
   }
 });
 
-test("waitForHostLoad: WERKMEISTER_NO_WAIT=1 skips the gate's wait as --no-wait does (SW-425)", async () => {
+test("waitForHostLoadNow: WERKMEISTER_NO_WAIT=1 skips the wait as --no-wait does (SW-425)", async () => {
   const falls = loaded([90, 1]);
   process.env.WERKMEISTER_NO_WAIT = "1";
   try {
-    assert.equal(await withSandboxHome(() => waitForHostLoad(falls, true, "lint")), "");
+    assert.equal(await withSandboxHome(() => waitForHostLoadNow(falls, "linux")), "");
   } finally {
     delete process.env.WERKMEISTER_NO_WAIT;
   }

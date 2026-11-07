@@ -177,7 +177,6 @@ export {
   readPrFiles,
   refreshPrStatus,
   runGate,
-  waitForHostLoad,
   waitForHostLoadNow,
   watchPrs,
   // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411

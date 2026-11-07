@@ -207,7 +207,7 @@ The defaults come from `docker info`, so a new machine needs no setup:
 | `memory` | the Docker engine's memory minus 1G |
 | `cpus` | the engine's CPU count |
 | `preempt` | `true`: a person's `up` may stop an autonomous feature to make room |
-| `host_load` | twice the host's CPU count: the gate waits before each check while the host's 1-minute load is above it, up to 10 minutes in all per gate run; `with-temp-home` waits the same way before its command, for up to 90 s; `0` turns the wait off |
+| `host_load` | twice the host's CPU count: the gate waits before each check while the host's 1-minute load is above it, up to 10 minutes in all per gate run; `with-temp-home` waits the same way before its command, for up to 90 s, except on macOS, whose load average is neither the test VM's nor usable (SW-556); `0` turns the wait off |
 
 Override any of them in `~/.werkmeister/config.yaml`:
 
@@ -219,7 +219,7 @@ budget:
   host_load: 24
 ```
 
-`host_load` limits the gate by live host load, not by reservations (SW-209): the gate's checks run inside a container that is already admitted, and agents' direct test runs happen on the host where no reservation sees them, so `.werkmeister/bin/with-temp-home` runs the same wait (`werkmeister internal wait-load`) before its command unless `WERKMEISTER_NO_WAIT=1` is set (SW-224). A failed gate check, and a failed `with-temp-home` run, end with the host load so a timeout under load reads as load.
+`host_load` limits the gate by live host load, not by reservations (SW-209): the gate's checks run inside a container that is already admitted, and agents' direct test runs happen on the host where no reservation sees them, so `.werkmeister/bin/with-temp-home` runs the same wait (`werkmeister internal wait-load`) before its command unless `WERKMEISTER_NO_WAIT=1` is set (SW-224), except on macOS, whose load average is no usable signal (SW-556). A failed gate check, and a failed `with-temp-home` run, end with the host load so a timeout under load reads as load.
 
 ### Measured on a 16 GB laptop
 
