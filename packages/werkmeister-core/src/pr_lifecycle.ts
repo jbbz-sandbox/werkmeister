@@ -736,8 +736,6 @@ async function mergeCheck(dir: string, file: PrFile, deps: Deps): Promise<string
 }
 
 const LOAD_POLL_MS = 15_000;
-// waitForHostLoad's default budget (SW-262); the gate itself no longer waits (SW-542).
-const LOAD_WAIT_MS = 10 * 60_000;
 // with-temp-home's own wait: under an agent's default 2 min Bash timeout, so the call can't time out before its command starts (SW-469).
 const WRAPPER_LOAD_WAIT_MS = 90_000;
 const LOAD_PROGRESS_MS = 60_000;
@@ -747,52 +745,34 @@ const readHostLoad = () => ({ load: os.loadavg(), cores: os.availableParallelism
 const minutes = (ms: number) => Number((ms / 60_000).toFixed(1));
 
 /**
- * Wait for host load under the limit before gate check *check*, spending *budget*; the note for its row, or "".
- * Says up front how long it may wait and prints progress each minute (SW-262, SW-266).
+ * The wait of `werkmeister internal wait-load`, which the generated with-temp-home runs first (SW-224):
+ * up to 90 s for the 1-minute load to fall under the limit, saying so up front and printing progress
+ * each minute (SW-262); the note for the wrapper's stderr, or "". The gate stopped waiting in SW-542.
+ * Not on macOS: its loadavg counts idle daemons in R state (450-550 on a quiet host) and never the
+ * Linux VM that runs the tests, so it is no signal to wait on and the wait was pure delay (SW-556).
  */
-export async function waitForHostLoad(
-  deps: Pick<Deps, "hostLoad" | "sleep">,
-  wait: boolean,
-  check: string,
-  skip = "--no-wait",
-  budget: { leftMs: number } = { leftMs: LOAD_WAIT_MS },
-  totalMs = LOAD_WAIT_MS,
+export async function waitForHostLoadNow(
+  deps: Pick<Deps, "hostLoad" | "sleep"> = { hostLoad: readHostLoad, sleep: (ms) => delay(ms) },
+  platform: NodeJS.Platform = process.platform,
 ): Promise<string> {
+  // WERKMEISTER_NO_WAIT skips it inside the command too, not only in with-temp-home's shell (SW-425).
+  if (platform === "darwin" || envVar("NO_WAIT")) return "";
   let { load, cores } = deps.hostLoad();
   const limit = hostLoadLimit(cores);
-  // WERKMEISTER_NO_WAIT skips it inside a command too, not only in with-temp-home's shell (SW-425).
-  if (!wait || envVar("NO_WAIT") || limit === 0 || load[0] <= limit) return "";
-  const spent = () =>
-    `ran with host load ${load[0].toFixed(1)} over ${limit}; the ${minutes(totalMs)} min host-load wait is spent`;
-  if (budget.leftMs <= 0) return spent();
+  if (limit === 0 || load[0] <= limit) return "";
   info(
-    `waiting up to ${minutes(budget.leftMs)} min for host load ${load[0].toFixed(1)} to fall to ${limit} (budget.host_load) before ${check}; ${skip} skips`,
+    `waiting up to ${minutes(WRAPPER_LOAD_WAIT_MS)} min for host load ${load[0].toFixed(1)} to fall to ${limit} (budget.host_load) before with-temp-home; --no-wait skips`,
   );
-  for (let waited = LOAD_POLL_MS; budget.leftMs > 0; waited += LOAD_POLL_MS) {
+  for (let waited = LOAD_POLL_MS; waited <= WRAPPER_LOAD_WAIT_MS; waited += LOAD_POLL_MS) {
     await deps.sleep(LOAD_POLL_MS);
-    budget.leftMs -= LOAD_POLL_MS;
     ({ load } = deps.hostLoad());
     if (load[0] <= limit) return `waited ${waited / 1000} s for host load`;
-    if (waited % LOAD_PROGRESS_MS === 0 && budget.leftMs > 0)
+    if (waited % LOAD_PROGRESS_MS === 0 && waited < WRAPPER_LOAD_WAIT_MS)
       info(
-        `still waiting for host load: ${load[0].toFixed(1)} over ${limit}, ${waited / 1000} s so far, up to ${minutes(budget.leftMs)} min left`,
+        `still waiting for host load: ${load[0].toFixed(1)} over ${limit}, ${waited / 1000} s so far, up to ${minutes(WRAPPER_LOAD_WAIT_MS - waited)} min left`,
       );
   }
-  return spent();
-}
-
-/** The gate's wait for `werkmeister internal wait-load`, which the generated with-temp-home runs first (SW-224). */
-export function waitForHostLoadNow(
-  deps: Pick<Deps, "hostLoad" | "sleep"> = { hostLoad: readHostLoad, sleep: (ms) => delay(ms) },
-): Promise<string> {
-  return waitForHostLoad(
-    deps,
-    true,
-    "with-temp-home",
-    "--no-wait",
-    { leftMs: WRAPPER_LOAD_WAIT_MS },
-    WRAPPER_LOAD_WAIT_MS,
-  );
+  return `ran with host load ${load[0].toFixed(1)} over ${limit}; the ${minutes(WRAPPER_LOAD_WAIT_MS)} min host-load wait is spent`;
 }
 
 async function gateChecks(
