@@ -22,6 +22,7 @@ werkmeister environment.
 | `feature-test` | Start a feature environment and open a headed Playwright browser for interactive testing. |
 | `starting-prompt` | Run the `starting_prompt` defined in the workspace's `.werkmeister/workspace.yml`. |
 | `install-check` | Check (and `--fix`) that the global `werkmeister`/`w9r`, its MCP server and this plugin all run from the repo checkout; the manual form of the session-start hook below. |
+| `check-in` | From the root session: cycle the workspaces, show each one waiting on a person as a card, and relay the answer. An approval goes in as the gate file's own status flip with the check-in note, so the workspace acts on it with no second prompt (SW-478). |
 | `postmortem` | Before close-out: gather every problem in the run, agree with the person what changes so it doesn't recur, write `postmortem.md` and act on each change (docs/workspace-lifecycle.md § Post-mortem). |
 
 ### Mods

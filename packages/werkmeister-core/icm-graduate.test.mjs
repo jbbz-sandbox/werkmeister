@@ -49,6 +49,8 @@ test("decided sections are decisions; proposed ones, code blocks and frontmatter
     "# Decisions\n\n## Which store?\n\nstatus: decided\n\nUse sqlite.\n\n" +
       "## Which port?\n\nstatus: proposed\n\n## Example\n\n```\nstatus: decided\n```\n",
   );
+  // SW-478: a stage's gate line above its headings is not a decision.
+  write("stages/02_spec/output/spec.md", "status: decided\n\n# Spec\n\nThe change.\n");
   write("stages/04_propose/output/pr-sandbox.md", "---\nstatus: decided\n---\n\n# PR\n");
   // SW-455: a check-in approval note after the status still counts.
   write(

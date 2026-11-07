@@ -278,6 +278,19 @@ const DIFF_API = [
   { stdout: "apps/api/x.ts\n" },
 ];
 
+// SW-478: check-in approves a PR by flipping the file with its note; the gate must read that as approved.
+test("gate passes on a PR file approved via check-in, the note a YAML comment", async () => {
+  const status = "approved  # approved via check-in 2026-11-06";
+  const ws = icmWorkspace({ files: { app: prFile({ status }) } });
+  try {
+    const g = await gate(ws, deps([DIFF_API]));
+    assert.deepEqual(failed(g), []);
+    assert.equal(readPrFiles(ws)[0].fm.status, "approved");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gate passes: tests, exercise, baseline, release check, approved", async () => {
   const ws = icmWorkspace();
   try {
