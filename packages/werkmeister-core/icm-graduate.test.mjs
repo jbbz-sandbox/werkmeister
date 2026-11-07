@@ -10,6 +10,7 @@ import * as path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 
 import { graduateNote, reconcileGraduating } from "./dist/graduate.js";
+import { APPROVAL_NOTE } from "./dist/pr_rules.js";
 import { strategyById } from "./dist/strategies/index.js";
 
 const icm = strategyById("icm").decisions;
@@ -55,7 +56,7 @@ test("decided sections are decisions; proposed ones, code blocks and frontmatter
   // SW-455: a check-in approval note after the status still counts.
   write(
     "stages/01_reproduce/output/repro.md",
-    "status: decided (approved via check-in 2026-11-05)\n\nNo heading above.\n",
+    `status: decided ${APPROVAL_NOTE.checkIn.replace("YYYY-MM-DD", "2026-11-05")}\n\nNo heading above.\n`,
   );
 
   const open = icm.open(ws);
