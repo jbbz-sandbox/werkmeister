@@ -13,6 +13,7 @@ import YAML from "yaml";
 import { containerOf } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { writeFakes } from "./fixture_fakes.js";
+import { gitEnv } from "./proc.js";
 import { prDir, stageDirs, templateFor } from "./strategies/icm_templates.js";
 
 export interface FixtureRepo {
@@ -138,7 +139,7 @@ function write(file: string, body: string, mode?: number): void {
 /** Seed a fixture under *root* (an empty folder, real path) and return where things are. */
 export function seedFixture(root: string, opts: FixtureOptions = {}): Fixture {
   const git = (cwd: string, ...args: string[]) =>
-    execFileSync("git", args, { cwd, stdio: "pipe", env: { ...process.env, ...GIT_ENV } });
+    execFileSync("git", args, { cwd, stdio: "pipe", env: { ...gitEnv(), ...GIT_ENV } });
   const repos = opts.repos ?? [{ name: "app" }];
 
   write(path.join(root, "services.yaml"), opts.services ?? SERVICES);
