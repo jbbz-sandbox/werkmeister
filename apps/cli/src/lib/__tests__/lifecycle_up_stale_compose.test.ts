@@ -55,10 +55,14 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../
 const quiet: Reporter = { passthrough: false, emit: () => {} };
 let root: string;
 let compose: string;
+const savedConfigFile = process.env.WERKMEISTER_CONFIG_FILE;
 
 beforeEach(() => {
   process.env.WERKMEISTER_ROOT = repoRoot;
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-stale-"));
+  // The registry is mocked, so only the relocated-config signal is needed: in the gate's
+  // container the generator refuses a compose write without it (SW-554).
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(root, "config.yaml");
   compose = path.join(root, COMPOSE_FILE);
   fs.writeFileSync(compose, "# from an older template\nservices: {}\n");
   // Slot 3 matches allocateSlot, so `up` takes the unchanged-slot path.
@@ -67,6 +71,8 @@ beforeEach(() => {
   fs.writeFileSync(path.join(root, ".werkmeister", "workspace.yml"), "context_strategy: icm\n");
 });
 afterEach(() => {
+  if (savedConfigFile === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+  else process.env.WERKMEISTER_CONFIG_FILE = savedConfigFile;
   fs.rmSync(root, { recursive: true, force: true });
 });
 
