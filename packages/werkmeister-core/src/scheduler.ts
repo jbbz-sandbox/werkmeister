@@ -31,6 +31,8 @@ export interface Request {
   feature: string;
   cost: Cost;
   byPerson: boolean;
+  /** Set for a start of these services (SW-540): *cost* is what they add to a running feature. */
+  services?: string[];
 }
 
 export type Decision =
@@ -62,7 +64,7 @@ const RANK_ORDER: Rank[] = ["idle", "human-check", "working"];
  * *queue* is the waiting features, first come first served.
  */
 export function admit(budget: Budget, running: Lease[], queue: string[], req: Request): Decision {
-  if (running.some((l) => l.feature === req.feature)) return { kind: "admit" };
+  if (!req.services && running.some((l) => l.feature === req.feature)) return { kind: "admit" };
 
   const used = running.reduce(
     (a, l) => ({ memory: a.memory + l.cost.memory, cpus: a.cpus + l.cost.cpus }),

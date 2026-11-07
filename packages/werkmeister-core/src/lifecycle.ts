@@ -26,6 +26,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import {
   clearPaused,
   clearWaiting,
@@ -33,6 +34,7 @@ import {
   readAgentState,
   readPaused,
   readSessions,
+  readWaiting,
   writeNudge,
   writePaused,
 } from "./agent_state.js";
@@ -92,7 +94,7 @@ import { workspaceServices } from "./registry_sync.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { withStartRecord } from "./resources.js";
 import type { Lease, Rank } from "./scheduler.js";
-import { schedulerOp } from "./scheduler_client.js";
+import { schedulerOp, waitingQueue } from "./scheduler_client.js";
 import {
   dequeue,
   enqueue,
@@ -100,6 +102,8 @@ import {
   readLeases,
   readQueue,
   requestAdmission,
+  type Starting,
+  serviceStarts,
 } from "./scheduler_state.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import {
@@ -427,9 +431,8 @@ export async function startService(
   requireSecrets(config.services, [service], workspace);
   // compose refuses to start a service whose `.env.<svc>` is missing.
   writeServiceSecretEnvs(workspace, [service], config.services);
-  // ponytail: no budget check here; the gate only adds services to a feature `up`
-  // already admitted. Admit per service if gates start whole features on their own.
   await prepareSlot(feature, workspace, config, readServicesFromWorkspace(workspace));
+  await admitServiceStart(feature, workspace, service);
   requireSharedNetwork();
   const started = await withStartRecord(workspace, "gate", () =>
     composeUpServiceAsync(feature, service, path.join(workspace, composeName)),
@@ -441,6 +444,80 @@ export async function startService(
       `Failed to start ${service}${state ? ` (left ${state})` : ""} — see the compose output above`,
       "COMPOSE_UP_FAILED",
     );
+  }
+}
+
+const SERVICE_POLL_MS = 15_000;
+const SERVICE_WAIT_MS = 10 * 60_000;
+
+/**
+ * Admit starting *service* (and what compose starts with it) against the budget,
+ * waiting in the queue up to 10 min (SW-540): since SW-342 these starts are the
+ * only ones, so skipping admission here let a wave of 8 onto 12 cores. A fixed
+ * poll, not a backoff: the queue is FIFO, so a sleeping head would idle freed room.
+ *
+ * Throws `NO_CAPACITY` when the wait is spent.
+ */
+export async function admitServiceStart(
+  feature: string,
+  workspace: string,
+  service: string,
+  {
+    sleep = delay,
+    waitMs = SERVICE_WAIT_MS,
+  }: { sleep?: (ms: number) => Promise<unknown>; waitMs?: number } = {},
+): Promise<void> {
+  const up = new Set(
+    (await getContainerStatus(feature)).filter((c) => c.status === "running").map((c) => c.service),
+  );
+  const services = serviceStarts(workspace, service).filter((s) => !up.has(s));
+  if (!services.length) return;
+  // A plain `up` or a preemption queued this feature; the grant brings it back whole.
+  const queued = readWaiting(workspace);
+  if (queued && !queued.services && (await waitingQueue()).includes(feature)) {
+    throw new SandboxError(
+      `'${feature}' is waiting for capacity (${queued.reason}, position ${queued.position}); ` +
+        `${service} was not started. It starts with the rest of the feature when room frees.`,
+      "NO_CAPACITY",
+    );
+  }
+  const starting: Starting = { services };
+  let admitted = false;
+  try {
+    for (let waited = 0; ; waited += SERVICE_POLL_MS) {
+      // Never byPerson: an agent's gate in a person's workspace must not stop another run's containers.
+      const position = await admitOrQueue(feature, workspace, false, starting);
+      if (position === null) {
+        admitted = true;
+        if (waited) await grantWaitersQuietly(); // room left over may fit the next waiter
+        return;
+      }
+      if (waited >= waitMs) {
+        const holders = (runningLeases() ?? [])
+          .map(
+            (l) =>
+              `${l.feature} (${l.cost.cpus} CPUs, ${(l.cost.memory / 2 ** 30).toFixed(1)} GiB)`,
+          )
+          .join(", ");
+        throw new SandboxError(
+          `No capacity to start ${services.join(", ")} for '${feature}' after ${waitMs / 60_000} min ` +
+            `(queue position ${position}); running: ${holders || "nothing werkmeister started"}. ` +
+            "Stop a feature or raise budget: in ~/.werkmeister/config.yaml, then retry.",
+          "NO_CAPACITY",
+        );
+      }
+      if (!waited) {
+        warn(
+          `Waiting for capacity to start ${services.join(", ")}: position ${position}, up to ${waitMs / 60_000} min`,
+        );
+      }
+      await sleep(SERVICE_POLL_MS);
+    }
+  } finally {
+    if (!admitted) {
+      await dequeue(feature);
+      clearWaiting(workspace);
+    }
   }
 }
 
@@ -821,11 +898,12 @@ export function admitOrQueue(
   feature: string,
   workspace: string,
   byPerson: boolean,
+  starting?: Starting,
 ): Promise<number | null> {
   return schedulerOp(
     "admit",
-    { feature, workspace, byPerson },
-    () => admitOrQueueHere(feature, workspace, byPerson),
+    { feature, workspace, byPerson, starting },
+    () => admitOrQueueHere(feature, workspace, byPerson, starting),
     // Preemption stops the victims' containers first.
     15 * 60_000,
   );
@@ -835,6 +913,7 @@ async function admitOrQueueHere(
   feature: string,
   workspace: string,
   byPerson: boolean,
+  starting?: Starting,
 ): Promise<number | null> {
   const running = runningLeases();
   // Docker unreadable: let compose up report it rather than queue on a guess.
@@ -845,6 +924,7 @@ async function admitOrQueueHere(
     byPerson,
     running,
     await loadBudget(),
+    starting,
   );
   if (decision.kind === "wait") return decision.position;
   if (decision.kind === "preempt") {
@@ -890,6 +970,8 @@ async function grantWaitersNow(): Promise<string[]> {
       await dequeue(feature);
       continue;
     }
+    // A service start's own poll admits it; `up` would start the wrong set and dequeue it.
+    if (readWaiting(workspace)?.services) continue;
     const r = await up(feature, workspace, { byPerson: false });
     if (r.waiting !== undefined) break;
     started.push(feature);

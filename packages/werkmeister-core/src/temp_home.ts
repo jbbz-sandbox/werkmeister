@@ -27,7 +27,8 @@ no_wait=\${WERKMEISTER_NO_WAIT:-}
   trap 'kill $! 2>/dev/null; exit 130' HUP INT TERM
   werkmeister internal wait-load >&2 &
   wait $!
-} || :
+# 75: the wait is spent and load is still over, so running would pile on (SW-540); any other failure runs.
+} || { s=$?; [ "$s" -ne 75 ] || exit 75; }
 tmp=$(mktemp -d) || exit 1
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' HUP INT TERM

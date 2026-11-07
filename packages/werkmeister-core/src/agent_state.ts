@@ -248,6 +248,8 @@ export function clearPaused(root: string): void {
 export interface WaitingFile {
   position: number;
   reason: string;
+  /** A service start blocked on capacity (SW-540): its own poll admits it, not the grant. */
+  services?: string[];
 }
 
 /** The waiting record, or null when there is none or it doesn't parse. */
@@ -255,7 +257,11 @@ export function readWaiting(root: string): WaitingFile | null {
   try {
     const o = JSON.parse(fs.readFileSync(waitingPath(root), "utf8"));
     if (!Number.isInteger(o?.position)) return null;
-    return { position: o.position, reason: String(o.reason ?? "") };
+    return {
+      position: o.position,
+      reason: String(o.reason ?? ""),
+      ...(Array.isArray(o.services) ? { services: o.services.map(String) } : {}),
+    };
   } catch {
     return null;
   }

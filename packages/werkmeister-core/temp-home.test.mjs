@@ -200,6 +200,19 @@ test("no werkmeister on PATH, or a failing wait-load, still runs the command (SW
   }
 });
 
+test("a spent host-load wait (wait-load exits 75) stops the wrapper before its command (SW-540)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const r = spawnSync(bin, ["sh", "-c", `echo "cmd" >> "${root}/calls"`], {
+      env: stubbedPath(root, 75),
+    });
+    assert.equal(r.status, 75);
+    assert.equal(calls(root), "werkmeister internal wait-load\n");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // SW-264: a temp HOME isolates files, not the daemon on :3002.
 test("WERKMEISTER_HOST defaults to an unreachable host; a caller's value is kept (SW-264)", () => {
   const { root, bin } = wrapper();

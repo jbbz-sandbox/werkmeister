@@ -18,7 +18,13 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
-import { clearWaiting, writeAtomic, writeWaiting } from "./agent_state.js";
+import {
+  clearWaiting,
+  readWaiting,
+  waitingPath,
+  writeAtomic,
+  writeWaiting,
+} from "./agent_state.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import { sandboxHome } from "./config.js";
 import { docker } from "./docker.js";
@@ -158,13 +164,13 @@ function composeServices(workspace: string): Record<string, ComposeService> {
 }
 
 /**
- * What `up` will start, from the workspace's compose file: the same numbers
- * Docker gets. Services behind a profile (`on-demand`) don't start on `up`.
+ * What starting *services* costs, or with none what `up` will start (services
+ * behind a profile, `on-demand`, don't start on `up`): the same numbers Docker gets.
  */
-export function featureCost(workspace: string): Cost {
+export function featureCost(workspace: string, services?: string[]): Cost {
   const cost = { memory: 0, cpus: 0 };
-  for (const svc of Object.values(composeServices(workspace))) {
-    if (!isDict(svc) || svc["profiles"]) continue;
+  for (const [name, svc] of Object.entries(composeServices(workspace))) {
+    if (!isDict(svc) || (services ? !services.includes(name) : svc["profiles"])) continue;
     const res = (svc as ComposeService)["deploy"]?.["resources"];
     const mem = res?.["reservations"]?.["memory"];
     if (mem !== undefined) cost.memory += parseSize(mem);
@@ -173,9 +179,43 @@ export function featureCost(workspace: string): Cost {
   return cost;
 }
 
+/** *service* and what compose starts with it (its `depends_on`, the install among them). */
+export function serviceStarts(workspace: string, service: string): string[] {
+  const deps = composeServices(workspace)[service]?.["depends_on"];
+  return [
+    service,
+    ...(Array.isArray(deps) ? deps.map(String) : isDict(deps) ? Object.keys(deps) : []),
+  ];
+}
+
+/** A start of named services, held by the process polling for it (SW-540). */
+export interface Starting {
+  services: string[];
+}
+
+/** Four of the start's 15 s polls, each of which rewrites its waiting.json. */
+const WAITER_STALE_MS = 60_000;
+
+/**
+ * *queue* without service waiters whose poll stopped (a killed gate); their waiting.json goes too.
+ * By the file's age, not a pid: a reused pid would look alive and hold the queue head forever.
+ */
+function withoutDeadWaiters(queue: string[]): string[] {
+  const leases = readLeases();
+  return queue.filter((f) => {
+    const ws = leases[f]?.workspace;
+    if (!ws || !readWaiting(ws)?.services) return true;
+    const at = fs.statSync(waitingPath(ws), { throwIfNoEntry: false })?.mtimeMs ?? 0;
+    if (Date.now() - at < WAITER_STALE_MS) return true;
+    clearWaiting(ws);
+    return false;
+  });
+}
+
 /**
  * Queue-or-admit *req* against *running*. On wait it joins the queue and gets
  * `waiting.json`; on admit it leaves both. The caller stops any victims.
+ * *starting* prices just those services, on top of what the feature already runs.
  */
 export function requestAdmission(
   feature: string,
@@ -183,21 +223,37 @@ export function requestAdmission(
   byPerson: boolean,
   running: Lease[],
   budget: Budget,
+  starting?: Starting,
 ): Promise<Decision> {
-  const cost = featureCost(workspace);
+  const cost = featureCost(workspace, starting?.services);
+  // Starts nothing (a plain `up` of an all-on-demand workspace): no room to wait for, and its
+  // gate may hold this feature's place in the queue, which an admit here would drop.
+  if (!cost.memory && !cost.cpus) return Promise.resolve({ kind: "admit" });
   return sandboxLock(
     "scheduler",
     async () => {
-      const queue = readQueue();
-      const d = admit(budget, running, queue, { feature, cost, byPerson });
+      const stored = readQueue();
+      const queue = withoutDeadWaiters(stored);
+      const d = admit(budget, running, queue, {
+        feature,
+        cost,
+        byPerson,
+        services: starting?.services,
+      });
+      let next = queue;
       if (d.kind === "wait") {
         // waiting.json first: if it can't be written, the queue must not move (SW-246).
-        writeWaiting(workspace, { position: d.position, reason: "waiting for capacity" });
-        if (!queue.includes(feature)) writeQueue([...queue, feature]);
+        writeWaiting(workspace, {
+          position: d.position,
+          reason: "waiting for capacity",
+          ...starting,
+        });
+        if (!queue.includes(feature)) next = [...queue, feature];
       } else {
-        if (queue.includes(feature)) writeQueue(queue.filter((f) => f !== feature));
+        next = queue.filter((f) => f !== feature);
         clearWaiting(workspace);
       }
+      if (next.join("\n") !== stored.join("\n")) writeQueue(next);
       return d;
     },
     { timeout: LOCK_TIMEOUT },

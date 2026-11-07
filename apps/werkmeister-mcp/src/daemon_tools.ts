@@ -220,6 +220,7 @@ export function registerSchedulerTool(server: McpServer): void {
         workspace: z.string().nullable().optional(),
         preferredSlot: z.number().int().nullable().optional(),
         byPerson: z.boolean().optional(),
+        starting: z.object({ services: z.array(z.string()) }).optional(),
       },
     },
     async (a): Promise<CallToolResult> =>
@@ -229,7 +230,7 @@ export function registerSchedulerTool(server: McpServer): void {
           allocate: () => allocateSlot(feature, a.preferredSlot, a.workspace),
           lease: () => slotLease(feature),
           release: () => releaseSlot(feature),
-          admit: () => admitOrQueue(feature, a.workspace ?? "", a.byPerson ?? false),
+          admit: () => admitOrQueue(feature, a.workspace ?? "", a.byPerson ?? false, a.starting),
           grant: () => grantWaiters(),
           "grant-later": () => grantInBackground(),
           queue: () => waitingQueue(),
