@@ -1595,7 +1595,7 @@ export interface CheckInRow {
   labels: string[];
   containers: WorkspaceStatus["state"];
   claude: ClaudeSessionSignal;
-  /** `stages/<stage>/output/*.md` files (relative to the workspace) with a line starting `status: proposed`. */
+  /** `stages/<stage>/output/*.md` files (relative to the workspace) with a line starting `status: proposed`, or a `pr-*.md` at `status: draft`. */
   gates: string[];
   /** mtime (ISO) of the newest session transcript, or null when there is none. */
   updatedAt: string | null;
@@ -1626,7 +1626,7 @@ export interface CheckInTriage {
   readyToClose: string[];
 }
 
-/** `stages/<stage>/output/*.md` files with a line starting `status: proposed`, relative to `dir`. */
+/** `stages/<stage>/output/*.md` files with a line starting `status: proposed` (a `pr-*.md`: `status: draft`), relative to `dir`. */
 async function proposedGates(dir: string): Promise<string[]> {
   const out: string[] = [];
   const stages = await fs.readdir(path.join(dir, "stages")).catch(() => [] as string[]);
@@ -1636,7 +1636,8 @@ async function proposedGates(dir: string): Promise<string[]> {
     for (const f of files.sort()) {
       if (!f.endsWith(".md")) continue;
       const text = await fs.readFile(path.join(dir, rel, f), "utf-8").catch(() => "");
-      if (/^status: proposed/m.test(text)) out.push(path.join(rel, f));
+      const gate = f.startsWith("pr-") ? /^status: draft/m : /^status: proposed/m;
+      if (gate.test(text)) out.push(path.join(rel, f));
     }
   }
   return out;

@@ -278,7 +278,7 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     "|---|---|---|",
     ...stages.map(
       (s, i) =>
-        `| ${i === 0 ? "starting the run" : (s.enter ?? `\`${dirs[i - 1]}\` output ${v.autonomous ? "self-checked" : "approved"}`)} | \`stages/${dirs[i]}/CONTEXT.md\` | ${v.autonomous ? "`output/` written and self-checked" : "a person has read `output/`"} |`,
+        `| ${i === 0 ? "starting the run" : (s.enter ?? enterRow(stages[i - 1], dirs[i - 1], v.autonomous))} | \`stages/${dirs[i]}/CONTEXT.md\` | ${v.autonomous ? "`output/` written and self-checked" : "a person has read `output/`"} |`,
     ),
     "| asked to open or create a PR — including `/create-pr` or `finishing-a-development-branch` | `_shared/pr-rules.md`, then `werkmeister pr open` (rule 5: `pr watch` is the auto-fix) | PR URL is in the PR file |",
     "| a PR merged or released, or asked to close out | `werkmeister pr status`, then the werkmeister `postmortem` skill (writes `postmortem.md`), then ask the person before `werkmeister workspace close` | `postmortem.md` written, then closed out after the person says yes |",
@@ -289,6 +289,12 @@ function renderClaudeMd(ctx: InitContext, stages: Stage[]): string {
     ...(v.autonomous ? stopPoints(stages) : ONE_RULE),
     "",
   ].join("\n");
+}
+
+function enterRow(prev: Stage, dir: string, autonomous: boolean): string {
+  if (prev.gate)
+    return `\`stages/${dir}/output/${prev.gate}\` reads \`status: decided\` — the flip *is* the approval, do not ask again`;
+  return `\`${dir}\` output ${autonomous ? "self-checked" : "approved"}`;
 }
 
 const ONE_RULE = [

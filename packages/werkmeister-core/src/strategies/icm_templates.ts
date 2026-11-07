@@ -44,8 +44,10 @@ export interface Stage {
   writes: string;
   /** CONTEXT.md "Human check" cell. */
   check: string;
-  /** CLAUDE.md route-table "If" cell; default "`<previous dir>` output approved". */
+  /** CLAUDE.md route-table "If" cell; default "`<previous dir>` output approved", or its {@link Stage.gate} reading decided. */
   enter?: string;
+  /** The `output/` file whose `status: proposed` line the human check flips, when the stage has no other gate. */
+  gate?: string;
   /** Which _shared/standards.md rows the contract names. */
   standards: "none" | "all";
   contract(v: IcmVars): Contract;
@@ -144,6 +146,11 @@ const NAME_HISTORY_STEP =
   "For each decision that renames, keeps or removes a name, a fallback or an alias, record its definition site (file and line) and the commit that introduced it (`git log -S <name>`, in the repo that defines it). " +
   'When that commit marks it as a transition or legacy alias, list "remove" as an option beside rename and keep.';
 
+// SW-478: a stage gate must be a status line, so /check-in can flip it with its note and the waiting session acts on the file.
+const statusGate = (file: string, read: string) =>
+  `${read} Then change \`status: proposed\` at the top of \`output/${file}\` to \`status: decided\`: that flip is the approval, and the next session starts without asking again. ${CHAT_APPROVAL}`;
+const FIRST_LINE = ", its first line `status: proposed`";
+
 export const SELF_CHECK =
   "Review `output/` once against `../../BRIEF.md` and the live issue (`werkmeister issue view`). " +
   "Flip every `status: proposed` to `status: decided` yourself, and record each decision — and anything you " +
@@ -239,6 +246,7 @@ const feature: Stage[] = [
   {
     name: "spec",
     job: "write the spec for the change",
+    gate: "spec.md",
     writes: "`output/spec.md`, any checkable artifact in the repo",
     check: "the spec covers every acceptance criterion",
     enter:
@@ -264,14 +272,17 @@ const feature: Stage[] = [
         // SW-111: SW-104's spec defined a config shape but not how a machine that already had one adds a second.
         "In `spec.md`, answer: how does an existing user turn this on? Name the setup or config path (a setup command, a config key or file) and the doc that describes it, or say none is needed. Map the answer to a criterion as in step 3; a missing answer is a defect in this stage.",
       ],
-      outputs: ["`output/spec.md`", "Any artifact from step 2, in the repo"],
-      humanCheck:
+      outputs: [`\`output/spec.md\`${FIRST_LINE}`, "Any artifact from step 2, in the repo"],
+      humanCheck: statusGate(
+        "spec.md",
         "Read `output/spec.md` against the brief. Edit it directly — the next stage builds whatever is on disk.",
+      ),
     }),
   },
   {
     name: "implement",
     job: "build it and prove it",
+    gate: "review.md",
     writes: "code diff, `output/exercise.md`, `output/review.md`",
     check: "read the diff and `review.md`; tests green",
     standards: "all",
@@ -301,11 +312,14 @@ const feature: Stage[] = [
           ? "Code changes, one commit per ticket (`<KEY> …`), on the worktree's branch — the next stage keeps them"
           : "Code changes, uncommitted — the next stage commits after the person reads the diff",
         "`output/exercise.md`",
-        "`output/review.md`: a `| criterion | result | evidence |` table, result exactly `PASS` or `FAIL`",
+        `\`output/review.md\`: a \`| criterion | result | evidence |\` table, result exactly \`PASS\` or \`FAIL\`${FIRST_LINE}`,
       ],
-      humanCheck: v.group.length
-        ? "Read each ticket's commit (`git log -p origin/main..HEAD` in each worktree). Run the tests yourself. Edit the code in place if something is off and fold it into that ticket's commit — the next stage keeps the commits as they are."
-        : "Read the diff. Run the tests yourself. Edit the code in place if something is off — the next stage commits what is on disk.",
+      humanCheck: statusGate(
+        "review.md",
+        v.group.length
+          ? "Read each ticket's commit (`git log -p origin/main..HEAD` in each worktree) and `review.md`. Run the tests yourself. Edit the code in place if something is off and fold it into that ticket's commit — the next stage keeps the commits as they are."
+          : "Read the diff and `review.md`. Run the tests yourself. Edit the code in place if something is off — the next stage commits what is on disk.",
+      ),
     }),
   },
   propose,
@@ -346,6 +360,7 @@ const bugfix: Stage[] = [
   {
     name: "fix",
     job: "fix it at the root cause",
+    gate: "fix.md",
     writes: "code diff, `output/fix.md`",
     check: "read the diff; the failing test now passes",
     enter:
@@ -373,14 +388,18 @@ const bugfix: Stage[] = [
         v.group.length
           ? "Code changes plus the test, one commit per ticket"
           : "Code changes plus the test, uncommitted",
-        "`output/fix.md`",
+        `\`output/fix.md\`${FIRST_LINE}`,
       ],
-      humanCheck: `${v.group.length ? "Read each ticket's commit (`git log -p origin/main..HEAD`)" : "Read the diff"}. Confirm the fix sits where \`repro.md\` put the root cause. Edit in place if not.`,
+      humanCheck: statusGate(
+        "fix.md",
+        `${v.group.length ? "Read each ticket's commit (`git log -p origin/main..HEAD`)" : "Read the diff"}. Confirm the fix sits where \`repro.md\` put the root cause. Edit in place if not.`,
+      ),
     }),
   },
   {
     name: "exercise",
     job: "prove it against the running service or the built CLI",
+    gate: "review.md",
     writes: "`output/exercise.md`, `output/review.md`",
     check: "the original reproduction no longer fails",
     standards: "all",
@@ -405,12 +424,15 @@ const bugfix: Stage[] = [
       ],
       outputs: [
         "`output/exercise.md`",
-        "`output/review.md`: a `| criterion | result | evidence |` table, result exactly `PASS` or `FAIL`",
+        `\`output/review.md\`: a \`| criterion | result | evidence |\` table, result exactly \`PASS\` or \`FAIL\`${FIRST_LINE}`,
         v.group.length
           ? "Code changes from Must fix findings, folded into their tickets' commits"
           : "Code changes from Must fix findings, uncommitted",
       ],
-      humanCheck: "Read `exercise.md` and `review.md`. A FAIL sends the run back to the fix stage.",
+      humanCheck: statusGate(
+        "review.md",
+        "Read `exercise.md` and `review.md`. A FAIL sends the run back to the fix stage.",
+      ),
     }),
   },
   propose,
@@ -446,6 +468,7 @@ const refactor: Stage[] = [
   {
     name: "implement",
     job: "refactor in green steps",
+    gate: "review.md",
     writes: "code diff, `output/exercise.md`, `output/review.md`",
     check: "read the diff and `review.md`; tests green at every step",
     enter:
@@ -477,9 +500,12 @@ const refactor: Stage[] = [
           ? "Code changes, one commit per ticket (`<KEY> …`)"
           : "Code changes, uncommitted",
         "`output/exercise.md`",
-        "`output/review.md`: a `| criterion | result | evidence |` table, result exactly `PASS` or `FAIL`",
+        `\`output/review.md\`: a \`| criterion | result | evidence |\` table, result exactly \`PASS\` or \`FAIL\`${FIRST_LINE}`,
       ],
-      humanCheck: `Read the diff against \`scope.md\`. Anything outside scope goes back.${v.group.length ? " Read it per commit: `git log -p origin/main..HEAD`." : ""}`,
+      humanCheck: statusGate(
+        "review.md",
+        `Read the diff against \`scope.md\`. Anything outside scope goes back.${v.group.length ? " Read it per commit: `git log -p origin/main..HEAD`." : ""}`,
+      ),
     }),
   },
   propose,

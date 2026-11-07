@@ -199,7 +199,9 @@ One lock file, `~/.werkmeister/pr-callbacks.lock`, lets one pass run at a time.
 
 ## Check-in
 
-The `check-in` MCP tool (behind the root `/check-in` skill) reports PR and release state for every workspace the label filter keeps, so the root session sees a release without anyone announcing it (SW-65).
+The `check-in` MCP tool (behind the plugin's `check-in` skill) reports PR and release state for every workspace the label filter keeps, so the root session sees a release without anyone announcing it (SW-65).
+
+Its `gates` are the files waiting on a person: an ICM stage output whose first status line reads `status: proposed` (`decisions.md`, `spec.md`, `review.md`, a bugfix `fix.md`), or a `pr-*.md` at `status: draft`. When the person approves one at check-in, the `check-in` skill in the werkmeister plugin flips that line itself with the check-in note, then tells the workspace session to re-read it. The session acts on the file, so the person answers once (SW-478).
 
 Before it reports, it ships merged PRs: for each kept workspace with a `merged` PR file it runs the `pr status` pass without `gh` — the same rule as [Ship detection](#ship-detection-registry-repo) (`git fetch --tags`, then `git tag --contains <merge_sha> --list <release_tag>`), recording `release`, moving the issue and committing the record as `pr status` does. Open → merged stays with `pr status` and the callback pass. A version-bump PR that merged before the changesets release job published its tag stays `merged`. It takes the callback lock above and skips the pass while another one holds it. A PR it ships still gets its callback message from the next pass.
 

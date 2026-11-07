@@ -126,3 +126,17 @@ test("a paused workspace is never a candidate or ready to close, whatever it las
   assert.ok(r.candidates.includes("g-live"));
   assert.ok(!r.readyToClose.includes("f-paused"));
 });
+
+test("a PR file at status: draft is a gate; once approved it is not (SW-478)", async () => {
+  // `focus`: earlier tests left some, so the sweep keeps focus workspaces only.
+  workspace("h-pr", { labels: ["focus"] });
+  const out = path.join(root, "h-pr", "stages", "02_plan", "output");
+  fs.writeFileSync(path.join(out, "pr-werkmeister.md"), "---\nstatus: draft\n---\n");
+  const gates = async () => (await checkInTriage()).workspaces.find((w) => w.name === "h-pr").gates;
+  assert.deepEqual(await gates(), [path.join("stages", "02_plan", "output", "pr-werkmeister.md")]);
+  fs.writeFileSync(
+    path.join(out, "pr-werkmeister.md"),
+    "---\nstatus: approved  # approved via check-in 2026-11-06\n---\n",
+  );
+  assert.deepEqual(await gates(), []);
+});

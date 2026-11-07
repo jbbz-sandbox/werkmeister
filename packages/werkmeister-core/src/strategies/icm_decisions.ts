@@ -95,6 +95,8 @@ function decidedSections(text: string, stem: string): Array<{ slug: string; body
     if (h) headings.push({ at: i, level: h[1].length, title: h[2] });
     else if (DECIDED.test(lines[i].trim())) owners.add(headings.length - 1);
   }
+  // SW-478: a gate line above the first heading (spec.md, review.md) owns no text of its own; it is not a decision.
+  if (headings.length) owners.delete(-1);
 
   const seen = new Map<string, number>();
   return [...owners].map((idx) => {
