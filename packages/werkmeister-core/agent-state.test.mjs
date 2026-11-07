@@ -473,7 +473,7 @@ test("pause gate: PreToolUse ends the turn and denies, UserPromptSubmit blocks, 
 });
 
 // SW-181: waiting.json holds the session the same way; paused wins when both exist.
-const { writeWaiting } = await import("./dist/agent_state.js");
+const { writeWaiting, serviceWaitContext, writeWakeNudge } = await import("./dist/agent_state.js");
 
 test("waiting gate: denies tool calls and blocks prompts with the queue position", () => {
   const dir = workspace("j-wait", null);
@@ -488,6 +488,28 @@ test("waiting gate: denies tool calls and blocks prompts with the queue position
   );
   writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: false });
   assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).stopReason, PAUSED_REASON);
+});
+
+// SW-545: a service start waiting for capacity (waiting.json with `services`, SW-540) is the session's
+// own job, so the person can still prompt it and it can still run tools to answer or stop the wait.
+test("waiting gate: a service-start wait lets prompts and tools through, naming the wait", () => {
+  const dir = workspace("j-wait-svc", null);
+  writeWaiting(dir, {
+    position: 1,
+    reason: "waiting for capacity",
+    services: ["docs-site", "werkmeister-install"],
+  });
+  assert.equal(pauseGate({ hook_event_name: "UserPromptSubmit" }, dir), null, "not blocked");
+  const ctx = serviceWaitContext({ hook_event_name: "UserPromptSubmit" }, dir);
+  assert.equal(serviceWaitContext({ hook_event_name: "PreToolUse" }, dir), null);
+  assert.match(ctx, /position 1/);
+  assert.match(ctx, /docs-site, werkmeister-install/);
+  assert.match(ctx, /stop/i, "says how to stop the wait");
+  assert.equal(pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir), null);
+  // A whole-feature queue (no services) still holds the session as before.
+  writeWaiting(dir, { position: 1, reason: "waiting for capacity" });
+  assert.equal(pauseGate({ hook_event_name: "UserPromptSubmit" }, dir).decision, "block");
+  assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).continue, false);
 });
 
 /** Run the hook entrypoint as Claude Code does: the event on stdin, the gate on stdout. */
@@ -519,6 +541,32 @@ test("pause gate: an unblocked prompt clears a stale resume nudge", () => {
   assert.equal(hook({ hook_event_name: "UserPromptSubmit", cwd: dir, session_id: "s" }), null);
   assert.equal(fs.existsSync(path.join(dir, ".werkmeister", "resume-nudge.json")), false);
   assert.equal(badge(dir).agent, "working");
+});
+
+// SW-545: the entry prints the wait as context, and the prompt still clears the nudge and is recorded.
+test("service-start wait: the hook entry adds context and records the prompt", () => {
+  const dir = workspace("l-wait-svc", null);
+  writeWaiting(dir, { position: 3, reason: "waiting for capacity", services: ["lib"] });
+  writeNudge(dir, "continue");
+  const out = hook({ hook_event_name: "UserPromptSubmit", cwd: dir, session_id: "s" });
+  assert.match(out.hookSpecificOutput.additionalContext, /position 3\): lib\./);
+  assert.equal(fs.existsSync(path.join(dir, ".werkmeister", "resume-nudge.json")), false);
+  assert.equal(readSessions(dir).s.status, "busy", "an unblocked prompt is recorded");
+  assert.equal(
+    hook({ hook_event_name: "PreToolUse", tool_name: "Bash", cwd: dir, session_id: "s" }),
+    null,
+  );
+  // A held wake on the same prompt rides along after the wait, in the one JSON object the hook prints.
+  writeWakeNudge(dir, "s", "PR merged.");
+  const both = hook({ hook_event_name: "UserPromptSubmit", cwd: dir, session_id: "s" });
+  assert.match(
+    both.hookSpecificOutput.additionalContext,
+    /position 3\): lib\.[\s\S]*\n\nPR merged\./,
+  );
+  // A poll that died (killed job) leaves the file behind; after 60 s it is no wait at all.
+  const stale = new Date(Date.now() - 61_000);
+  fs.utimesSync(path.join(dir, ".werkmeister", "waiting.json"), stale, stale);
+  assert.equal(hook({ hook_event_name: "UserPromptSubmit", cwd: dir, session_id: "s" }), null);
 });
 
 test("wake nudge: held until the session's next hook delivers it, once (SW-418)", () => {
