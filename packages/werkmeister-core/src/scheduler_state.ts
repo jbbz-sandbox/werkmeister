@@ -146,7 +146,7 @@ export async function loadBudget(
   return { memory, cpus, preempt: b["preempt"] !== false };
 }
 
-/** 1-min host load above which the gate waits (SW-209): `budget.host_load`, else 2 × cores; 0 is off. */
+/** 1-min host load above which with-temp-home waits (SW-209, SW-542): `budget.host_load`, else 2 × cores; 0 is off. */
 export function hostLoadLimit(cores: number): number {
   const cfg = loadGlobalConfig()["budget"];
   const v = isDict(cfg) ? Number(cfg["host_load"] ?? Number.NaN) : Number.NaN;

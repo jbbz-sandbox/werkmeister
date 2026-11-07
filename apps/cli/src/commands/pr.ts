@@ -59,11 +59,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       : args.action === "new"
         ? await newPr(ws, repo as string, args.slug as string)
         : args.action === "gate"
-          ? await (args.tests ? gateTests : gatePrs)(ws, repo, undefined, {
-              wait: args.wait !== false,
-            })
+          ? await (args.tests ? gateTests : gatePrs)(ws, repo)
           : args.action === "open"
-            ? await openPrs(ws, repo, undefined, { wait: args.wait !== false })
+            ? await openPrs(ws, repo)
             : { ok: true, ...(await refreshPrStatus(ws)) };
   // SW-527: a bare redirected `pr open > pr-open.log` has no echo, so the log ends with its own exit line.
   if (args.action === "open" && !args.json) result.lines.push(`pr open: exit ${result.ok ? 0 : 1}`);

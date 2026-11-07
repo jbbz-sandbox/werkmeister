@@ -89,7 +89,7 @@ test("the gate fixture's one-file change runs lib's test in its container, logge
       await withReporter(collectingReporter(), () =>
         initWorkspace({}, fx.workspace, { build: false }),
       );
-      const { ok, lines } = await gatePrs(fx.workspace, undefined, undefined, { wait: false });
+      const { ok, lines } = await gatePrs(fx.workspace);
       assert.equal(ok, true, lines.join("\n"));
       const calls = fs.readFileSync(fx.dockerLog, "utf8").split("\n");
       const execs = calls.filter((c) => c.startsWith("exec "));
@@ -108,7 +108,7 @@ test("with execRuns the gate's lint and test rows pass or fail on the registry's
         await withReporter(collectingReporter(), () =>
           initWorkspace({}, fx.workspace, { build: false }),
         );
-        return gatePrs(fx.workspace, undefined, undefined, { wait: false });
+        return gatePrs(fx.workspace);
       },
       {
         gate: true,
@@ -136,7 +136,7 @@ test("a grouped icm gate fixture passes pr gate with no hand edits (SW-464)", as
       await withReporter(collectingReporter(), () =>
         initWorkspace({}, fx.workspace, { build: false }),
       );
-      const { ok, lines } = await gatePrs(fx.workspace, undefined, undefined, { wait: false });
+      const { ok, lines } = await gatePrs(fx.workspace);
       const out = lines.join("\n");
       assert.equal(ok, true, out);
       assert.match(out, /✓ merge:/);
@@ -152,7 +152,7 @@ test("with merged the fake gh reports the PR merged, so a run reaches workspace 
       await withReporter(collectingReporter(), () =>
         initWorkspace({}, fx.workspace, { build: false }),
       );
-      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      const open = await openPrs(fx.workspace);
       assert.equal(open.ok, true, open.lines.join("\n"));
       const status = await refreshPrStatus(fx.workspace);
       assert.match(status.lines.join("\n"), /app: shipped https:\/\/github\.com\/o\/app\/pull\/1/);
@@ -238,7 +238,7 @@ test("a merged skip_release PR with no changeset reads shipped (none) on the fir
       await withReporter(collectingReporter(), () =>
         initWorkspace({}, fx.workspace, { build: false }),
       );
-      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      const open = await openPrs(fx.workspace);
       assert.equal(open.ok, true, open.lines.join("\n"));
       const out = (await refreshPrStatus(fx.workspace)).lines.join("\n");
       assert.match(out, /app: shipped \(none\) https:\/\/github\.com\/o\/app\/pull\/1/);
@@ -254,7 +254,7 @@ test("a merged PR without skip_release still waits for a tag containing its merg
       await withReporter(collectingReporter(), () =>
         initWorkspace({}, fx.workspace, { build: false }),
       );
-      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      const open = await openPrs(fx.workspace);
       assert.equal(open.ok, true, open.lines.join("\n"));
       const out = (await refreshPrStatus(fx.workspace)).lines.join("\n");
       assert.match(out, /app: merged https:\/\/github\.com\/o\/app\/pull\/1/);

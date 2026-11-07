@@ -1560,11 +1560,8 @@ const SPECS: CommandSpec[] = [
         if (has("slug"))
           cmd.option("--slug <slug>", "The follow-up's name, in its PR file and branch");
         if (has("no-pr")) cmd.option("--no-pr <reason>", "No PR — the fix is already on base");
-        if (has("wait"))
-          cmd.option(
-            "--no-wait",
-            "Don't wait for host load under budget.host_load before each check",
-          );
+        // SW-542: the gate no longer waits on host load; kept so scripts passing it still parse.
+        if (has("wait")) cmd.addOption(new Option("--no-wait").hideHelp());
         if (has("tests"))
           cmd.option(
             "--tests",

@@ -44,7 +44,7 @@ async function withGateFixture(fn, { origin, pushCode = 0, pushErr = "denied" } 
 
 test("a fixture with a local origin pushes there and opens through the fake gh", async () => {
   await withGateFixture(async (fx, deps, pushes) => {
-    const { ok, lines } = await openPrs(fx.workspace, undefined, deps, { wait: false });
+    const { ok, lines } = await openPrs(fx.workspace, undefined, deps);
     assert.equal(ok, true, lines.join("\n"));
     assert.deepEqual(pushes, [
       ["-C", fx.repo, "push", "--dry-run", "--no-verify", "origin", "me/demo"],
@@ -68,7 +68,7 @@ test("a fixture with a local origin pushes there and opens through the fake gh",
 test("a fixture whose origin is GitHub skips the push and the gate's dry run, and says so", async () => {
   await withGateFixture(
     async (fx, deps, pushes) => {
-      const { lines } = await openPrs(fx.workspace, undefined, deps, { wait: false });
+      const { lines } = await openPrs(fx.workspace, undefined, deps);
       assert.deepEqual(pushes, []);
       assert.ok(lines.includes("app: push skipped (fixture)"), lines.join("\n"));
       assert.match(lines.join("\n"), /✓ push: skipped \(fixture, origin is not local\)/);
@@ -81,7 +81,7 @@ test("outside a fixture the push to GitHub runs as before, and its failure ends 
   await withGateFixture(
     async (fx, deps, pushes) => {
       delete process.env.WERKMEISTER_FIXTURE;
-      const { ok, lines } = await openPrs(fx.workspace, undefined, deps, { wait: false });
+      const { ok, lines } = await openPrs(fx.workspace, undefined, deps);
       assert.equal(ok, false);
       assert.deepEqual(pushes, [
         ["-C", fx.repo, "push", "--dry-run", "--no-verify", "origin", "me/demo"],
@@ -103,7 +103,7 @@ test("a push GitHub refuses once with publickey is retried, and the PR opens (SW
             ? { code: 0, stdout: "https://github.com/o/app/pull/1\n", stderr: "" }
             : run(bin, args, cwd)
       )(deps.run);
-      const { ok, lines } = await openPrs(fx.workspace, undefined, deps, { wait: false });
+      const { ok, lines } = await openPrs(fx.workspace, undefined, deps);
       assert.equal(ok, true, lines.join("\n"));
       assert.equal(pushes.filter((a) => !a.includes("--dry-run")).length, 2);
     },
@@ -119,7 +119,7 @@ test("a push GitHub keeps refusing stops after 3 tries and points at GitHub's st
   await withGateFixture(
     async (fx, deps, pushes) => {
       delete process.env.WERKMEISTER_FIXTURE;
-      const { ok, lines } = await openPrs(fx.workspace, undefined, deps, { wait: false });
+      const { ok, lines } = await openPrs(fx.workspace, undefined, deps);
       assert.equal(ok, false);
       assert.equal(pushes.filter((a) => !a.includes("--dry-run")).length, 3);
       assert.match(lines.join("\n"), /push failed — git@github\.com: Permission denied/);

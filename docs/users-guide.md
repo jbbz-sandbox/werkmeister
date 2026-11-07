@@ -879,7 +879,7 @@ Opens PRs from a workspace and tracks them to a release. Each action:
 - `gate` runs the pre-PR gate for each PR file and changes nothing.
 - `gate --tests` runs only the gate's lint and test rows, in the workspace container, on each worktree's uncommitted tree (committed, staged, unstaged and untracked changes since its base). It needs no PR file and skips the PR-file, clean, baseline and release rows. It starts a container when none is running and stops it after. The implement stage runs it, so a failure that only happens with the container's env shows up before `pr open`.
 - `open` gates, pushes and opens a PR for each PR file at `status: approved`, and records its URL.
-- Before each gate check (lint, tests, release), `gate` and `open` wait while the host's 1-minute load is above `budget.host_load` in `~/.werkmeister/config.yaml` (default: 2 × CPUs; `0` turns it off), for up to 10 minutes in all across the run, saying up front how long they may wait and printing progress each minute, then run anyway. `--no-wait` or `WERKMEISTER_NO_WAIT=1` skips the wait. With tests on top, a gate under load can run well past a 10-minute tool call: run `pr open` detached, as rule 3 of `_shared/pr-rules.md` shows. `.werkmeister/bin/with-temp-home` runs a shorter wait (up to 90 s) before its command and exits 75 without running it if load is still over (`WERKMEISTER_NO_WAIT=1` skips it). Each service the gate starts waits up to 10 minutes for room in the budget, then fails with `NO_CAPACITY`. A failed check ends with the host load.
+- `gate` and `open` don't wait on host load before their checks (SW-542): the 1-minute load counts the gate's own install and test rows, and the services the gate starts are already admitted against the budget. `--no-wait` is still accepted and does nothing. With tests, a gate can run past a 10-minute tool call: run `pr open` detached, as rule 3 of `_shared/pr-rules.md` shows. `.werkmeister/bin/with-temp-home` runs a shorter wait (up to 90 s) before its command and exits 75 without running it if load is still over (`WERKMEISTER_NO_WAIT=1` skips it). Each service the gate starts waits up to 10 minutes for room in the budget, then fails with `NO_CAPACITY`. A failed check ends with the host load.
 - `status` records merged, shipped or closed from GitHub and the repo's release tags.
 - `adopt` records a PR opened outside the workspace.
 - `watch` resumes each opening session once its PR merges, ships or closes; `--install` schedules it.
@@ -906,7 +906,6 @@ Run the pre-PR gate
 
 `werkmeister pr gate [repo]`
 
-- `--no-wait`: Don't wait for host load under budget.host_load before each check
 - `--tests`: Only the lint and test rows, on the uncommitted tree, before a PR file exists
 - `--json`: Print the result as JSON
 
@@ -916,7 +915,6 @@ Gate, push and open each approved PR file
 
 `werkmeister pr open [repo]`
 
-- `--no-wait`: Don't wait for host load under budget.host_load before each check
 - `--json`: Print the result as JSON
 
 #### werkmeister pr status
@@ -1449,7 +1447,7 @@ The scheduler's budget, the slots held and the features Waiting for room
 
 `werkmeister budget [command]`
 
-Shows the scheduler's budget and who is using it: the memory and CPUs a feature's containers may take in total (`budget:` in `~/.werkmeister/config.yaml`, else the Docker engine's memory less 1 GiB and every CPU), the host-load ceiling the PR gate waits under, whether a person's `feature up` may preempt an autonomous run, the features holding a slot, and the features **Waiting** for room in the order they will start.
+Shows the scheduler's budget and who is using it: the memory and CPUs a feature's containers may take in total (`budget:` in `~/.werkmeister/config.yaml`, else the Docker engine's memory less 1 GiB and every CPU), the host-load ceiling `with-temp-home` waits under, whether a person's `feature up` may preempt an autonomous run, the features holding a slot, and the features **Waiting** for room in the order they will start.
 
 It reads only: with the host daemon up it asks the daemon for the queue, otherwise it reads `~/.werkmeister/scheduler/` itself.
 

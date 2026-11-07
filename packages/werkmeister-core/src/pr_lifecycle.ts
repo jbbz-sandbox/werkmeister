@@ -615,13 +615,13 @@ export async function runGate(
   ws: string,
   file: PrFile,
   deps: Deps = defaultDeps(),
-  { wait = true, testsOnly = false }: { wait?: boolean; testsOnly?: boolean } = {},
+  { testsOnly = false }: { testsOnly?: boolean } = {},
 ): Promise<GateResult> {
   const started: string[] = [];
   const recreated: string[] = [];
   let result!: GateResult;
   try {
-    result = await gateChecks(ws, file, deps, started, recreated, wait, testsOnly);
+    result = await gateChecks(ws, file, deps, started, recreated, testsOnly);
   } finally {
     fs.rmSync(path.join(ws, GATE_COMPOSE_FILE), { force: true });
     const feature = String(loadConfigFile(ws, null)["feature"] ?? readEnv(ws, "FEATURE")).trim();
@@ -727,7 +727,7 @@ async function mergeCheck(dir: string, file: PrFile, deps: Deps): Promise<string
 }
 
 const LOAD_POLL_MS = 15_000;
-// The whole gate run's wait, shared by every check, so lint + tests + release can't stack waits (SW-262).
+// waitForHostLoad's default budget (SW-262); the gate itself no longer waits (SW-542).
 const LOAD_WAIT_MS = 10 * 60_000;
 // with-temp-home's own wait: under an agent's default 2 min Bash timeout, so the call can't time out before its command starts (SW-469).
 const WRAPPER_LOAD_WAIT_MS = 90_000;
@@ -751,7 +751,7 @@ export async function waitForHostLoad(
 ): Promise<string> {
   let { load, cores } = deps.hostLoad();
   const limit = hostLoadLimit(cores);
-  // WERKMEISTER_NO_WAIT reaches the gate too, not only with-temp-home's own wait (SW-425).
+  // WERKMEISTER_NO_WAIT skips it inside a command too, not only in with-temp-home's shell (SW-425).
   if (!wait || envVar("NO_WAIT") || limit === 0 || load[0] <= limit) return "";
   const spent = () =>
     `ran with host load ${load[0].toFixed(1)} over ${limit}; the ${minutes(totalMs)} min host-load wait is spent`;
@@ -792,19 +792,16 @@ async function gateChecks(
   deps: Deps,
   started: string[],
   recreated: string[],
-  wait: boolean,
   // SW-316: the lint and test rows only, on the uncommitted tree, so implement sees container-only failures.
   testsOnly = false,
 ): Promise<GateResult> {
   const followUps = testsOnly ? null : followUpsCheck(ws);
   const checks: GateCheck[] = testsOnly ? [] : [stagesCheck(ws), ...(followUps ? [followUps] : [])];
   const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
-  const loadBudget = { leftMs: LOAD_WAIT_MS };
-  let loadWait = wait;
   // A failure ends with the host load, so a timeout under load reads as load (SW-209).
+  // No wait on host load first (SW-542): the 1-min load counts the gate's own install and
+  // rows and, on macOS, stalls no CPU shows; admission already priced these containers.
   const execCheck = async (name: string, container: string, cmd: string, tail: number) => {
-    touchExecMarker(ws);
-    const waited = await waitForHostLoad(deps, loadWait, name, "--no-wait", loadBudget);
     touchExecMarker(ws);
     // `docker ps` lists paused containers, and exec into one fails: that is no lint/test verdict (SW-391).
     const state = await deps.run("docker", ["inspect", "-f", "{{.State.Paused}}", container]);
@@ -817,7 +814,7 @@ async function gateChecks(
       return { code: 1, stdout: "", stderr: "" };
     }
     // The container's HOME is the real one, ~/.werkmeister mounted (SW-329). Inline, not the workspace's
-    // copy: docs-site doesn't mount the workspace; --no-wait: the gate has already waited.
+    // copy: docs-site doesn't mount the workspace; --no-wait: the gate never waits on load (SW-542).
     const res = await deps.run("docker", [
       "exec",
       container,
@@ -840,7 +837,6 @@ async function gateChecks(
       saved = `full log not saved: ${e instanceof Error ? e.message : String(e)}`;
     }
     if (res.code) lines.push(failedRowExcerpt(res.stdout + res.stderr, tail), saved);
-    if (waited) lines.push(waited);
     if (res.code) {
       const { load, cores } = deps.hostLoad();
       lines.push(loadNote(load, cores));
@@ -993,8 +989,6 @@ async function gateChecks(
   }
   const files = diff.code === 0 ? diff.stdout.split("\n").filter(Boolean) : [];
   const touched = mapTouched(files, repo);
-  // The wait keeps slow test suites from timing out under load; a diff that touches no service runs none (SW-303).
-  loadWait = wait && touched.length > 0;
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
   // Nothing touched yet files outside no_service_paths: the repo has no services to map to
   // (no `repos:` entry), so zero tests would run unannounced (SW-278).
@@ -1286,14 +1280,13 @@ export async function gatePrs(
   ws: string,
   only?: string,
   deps: Deps = defaultDeps(),
-  { wait = true }: { wait?: boolean } = {},
 ): Promise<{ ok: boolean; lines: string[] }> {
   const all = readPrFiles(ws);
   const files = selectFiles(ws, all, only, (f) => !superseded(f, all));
   const lines: string[] = [];
   let ok = true;
   for (const f of files) {
-    const g = await runGate(ws, f, deps, { wait });
+    const g = await runGate(ws, f, deps);
     ok &&= g.ok;
     lines.push(...formatGate(f.stem, g));
   }
@@ -1305,7 +1298,6 @@ export async function gateTests(
   ws: string,
   only?: string,
   deps: Deps = defaultDeps(),
-  { wait = true }: { wait?: boolean } = {},
 ): Promise<{ ok: boolean; lines: string[] }> {
   const all = readPrFiles(ws);
   let dirs = repoDirs(ws).map((d) => path.basename(d));
@@ -1328,7 +1320,7 @@ export async function gateTests(
       title: "",
       body: "",
     };
-    const g = await runGate(ws, file, deps, { wait, testsOnly: true });
+    const g = await runGate(ws, file, deps, { testsOnly: true });
     ok &&= g.ok;
     lines.push(...formatGate(dir, g));
   }
@@ -1382,7 +1374,6 @@ export async function openPrs(
   ws: string,
   only?: string,
   deps: Deps = defaultDeps(),
-  { wait = true }: { wait?: boolean } = {},
 ): Promise<{ ok: boolean; lines: string[] }> {
   const all = readPrFiles(ws);
   const files = selectFiles(ws, all, only, (f) => statusOf(f) === "approved");
@@ -1406,7 +1397,7 @@ export async function openPrs(
       );
       continue;
     }
-    const g = await runGate(ws, f, deps, { wait });
+    const g = await runGate(ws, f, deps);
     lines.push(...formatGate(f.stem, g));
     if (!g.ok) {
       ok = false;
