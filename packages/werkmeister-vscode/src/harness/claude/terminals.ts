@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as vscode from "vscode";
 import { CODEX_LAUNCH, listWorkspaces, reconcileLaunch } from "werkmeister-core";
 import { harnessIdOf } from "werkmeister-core/harness_layout";
+import { trackSessionTerminal } from "../../terminal.js";
 import { parseLaunchUri, type SessionMode, sessionCommand } from "./uri.js";
 
 /**
@@ -15,6 +16,7 @@ export function openClaudeTerminal(
   harness = "claude",
 ): void {
   const term = vscode.window.createTerminal({ name: `${harness} ${ws.name}`, cwd: ws.path });
+  trackSessionTerminal(term, ws.path);
   term.sendText(command, true);
   term.show();
 }

@@ -40,3 +40,12 @@ export function forget<T>(slots: Slot<T>[], term: T): void {
   const i = slots.findIndex((s) => s.term === term);
   if (i >= 0) slots.splice(i, 1);
 }
+
+/** Remove and return the terminals whose slot fails *keep*: their workspace closed out (SW-421). */
+export function takeGone<T>(slots: Slot<T>[], keep: (slot: Slot<T>) => boolean): T[] {
+  const gone: T[] = [];
+  for (let i = slots.length - 1; i >= 0; i--) {
+    if (!keep(slots[i])) gone.unshift(slots.splice(i, 1)[0].term);
+  }
+  return gone;
+}

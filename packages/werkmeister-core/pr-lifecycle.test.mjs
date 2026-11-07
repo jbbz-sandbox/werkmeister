@@ -34,6 +34,7 @@ import {
   prFileDir,
   readPrFiles,
   refreshPrStatus,
+  releaseVscodeSessions,
   removalBlockers,
   runGate,
   waitForHostLoad,
@@ -2875,19 +2876,41 @@ test("closeOut: the folder gone by the closeout.md write reports already closed 
 
 test("openTerminalSessions: TTY claude processes whose cwd is in the workspace", async () => {
   const ps =
-    "  11 ttys001  /usr/local/bin/claude\n  12 ??       claude\n  13 ttys002  claude\n  14 ttys003  zsh\n  15 ttys004  claude\n";
+    "  11   1 ttys001  /usr/local/bin/claude\n  12   1 ??       claude\n  13   1 ttys002  claude\n  14   1 ttys003  zsh\n  15   1 ttys004  claude\n";
   const lsof = "p11\nfcwd\nn/ws/a/repo\np13\nfcwd\nn/ws/ab\np15\nfcwd\nn/ws/a\n";
   const r = stubRun([
     [/^ps /, { stdout: ps }],
     [/^lsof /, { stdout: lsof, code: 1 }],
   ]);
-  const out = await openTerminalSessions("/ws/a", r.run);
+  const out = await openTerminalSessions("/ws/a", r.run, "/nonexistent");
   assert.deepEqual(out, [
     "terminal session: pid 11 on ttys001 in /ws/a/repo — /exit it",
     "terminal session: pid 15 on ttys004 in /ws/a — /exit it",
   ]);
   assert.ok(r.calls.includes("lsof -a -d cwd -Fpn -p 11,13,15"));
   assert.deepEqual(await openTerminalSessions("/ws/a", stubRun([[/^ps /, { code: 1 }]]).run), []);
+});
+
+test("SW-421: openTerminalSessions skips sessions the VS Code extension owns", async () => {
+  const owned = fs.mkdtempSync(path.join(os.tmpdir(), "vscode-terminals-"));
+  try {
+    fs.writeFileSync(path.join(owned, "500"), "/ws/a/repo");
+    fs.writeFileSync(path.join(owned, "700"), "/ws/b"); // the extension shell is in another workspace
+    const ps = "  11 500 ttys001  claude\n  15 600 ttys004  claude\n  16 700 ttys005  claude\n";
+    const r = stubRun([
+      [/^ps /, { stdout: ps }],
+      [/^lsof /, { stdout: "p15\nfcwd\nn/ws/a\np16\nfcwd\nn/ws/a\n" }],
+    ]);
+    assert.deepEqual(await openTerminalSessions("/ws/a", r.run, owned), [
+      "terminal session: pid 15 on ttys004 in /ws/a — /exit it",
+      "terminal session: pid 16 on ttys005 in /ws/a — /exit it",
+    ]);
+    assert.ok(r.calls.includes("lsof -a -d cwd -Fpn -p 15,16"));
+    releaseVscodeSessions("/ws/a", owned);
+    assert.deepEqual(fs.readdirSync(owned), ["700"]);
+  } finally {
+    fs.rmSync(owned, { recursive: true, force: true });
+  }
 });
 
 test("PR file: invalid YAML names the parser's error", () => {

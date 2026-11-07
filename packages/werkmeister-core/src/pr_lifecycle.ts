@@ -2633,18 +2633,56 @@ export function abandonWorkspace(ws: string, why: string): void {
   );
 }
 
+/** The VS Code extension's terminal.ts writes one file per session shell pid here, holding its cwd (SW-421). */
+const vscodeTerminalsDir = (): string => path.join(dotDir(os.homedir()), "vscode-terminals");
+
+const isIn = (ws: string, dir: string): boolean => dir === ws || dir.startsWith(ws + path.sep);
+
+/** Shell pid → cwd of the extension's session terminals whose cwd is in *ws*. */
+function vscodeSessionsIn(ws: string, dir: string): Map<string, string> {
+  const owned = new Map<string, string>();
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return owned;
+  }
+  for (const pid of names) {
+    try {
+      const cwd = fs.readFileSync(path.join(dir, pid), "utf8");
+      if (isIn(ws, cwd)) owned.set(pid, cwd);
+    } catch {}
+  }
+  return owned;
+}
+
+/**
+ * Close-out is finished with *ws*: drop its sessions' pid files, the extension's cue to close those
+ * terminals. Not sooner: close-out usually runs inside one of them, and still has branches to delete.
+ */
+export function releaseVscodeSessions(ws: string, dir: string = vscodeTerminalsDir()): void {
+  for (const pid of vscodeSessionsIn(ws, dir).keys())
+    fs.rmSync(path.join(dir, pid), { force: true });
+}
+
 /**
  * Running terminal `claude` sessions (a TTY, so not the desktop app's or VS Code's) whose cwd is in *ws*.
- * Nothing outside a terminal can end one, so close-out names them for the person to `/exit`.
+ * Nothing outside a terminal can end one, so close-out names them for the person to `/exit`. A session
+ * under a VS Code extension shell in *ws* is left out: the extension closes it after close-out (SW-421).
  */
-export async function openTerminalSessions(ws: string, run: Run = execRun): Promise<string[]> {
-  const ps = await run("ps", ["-axo", "pid=,tty=,comm="]);
+export async function openTerminalSessions(
+  ws: string,
+  run: Run = execRun,
+  ownedDir: string = vscodeTerminalsDir(),
+): Promise<string[]> {
+  const ps = await run("ps", ["-axo", "pid=,ppid=,tty=,comm="]);
   if (ps.code !== 0) return [];
+  const owned = vscodeSessionsIn(ws, ownedDir);
   const ttys = new Map<string, string>();
   for (const line of ps.stdout.split("\n")) {
-    const m = /^\s*(\d+)\s+(\S+)\s+(.+?)\s*$/.exec(line);
-    if (m && path.basename(m[3]) === "claude" && m[2] !== "??" && m[2] !== "?")
-      ttys.set(m[1], m[2]);
+    const m = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+?)\s*$/.exec(line);
+    if (m && path.basename(m[4]) === "claude" && m[3] !== "??" && m[3] !== "?" && !owned.has(m[2]))
+      ttys.set(m[1], m[3]);
   }
   if (!ttys.size) return [];
   const lsof = await run("lsof", ["-a", "-d", "cwd", "-Fpn", "-p", [...ttys.keys()].join(",")]);
@@ -2655,7 +2693,7 @@ export async function openTerminalSessions(ws: string, run: Run = execRun): Prom
     if (line.startsWith("p")) pid = line.slice(1);
     else if (line.startsWith("n") && ttys.has(pid)) {
       const cwd = line.slice(1);
-      if (cwd === ws || cwd.startsWith(ws + path.sep))
+      if (isIn(ws, cwd))
         out.push(`terminal session: pid ${pid} on ${ttys.get(pid)} in ${cwd} — /exit it`);
     }
   }
@@ -2857,6 +2895,7 @@ async function closeOutLocked(
     // Removed while the issue moved, by something outside this lock (`werkmeister feature drop`, rm).
     if ((e as NodeJS.ErrnoException).code !== "ENOENT" || fs.existsSync(ws)) throw e;
     lines.push(`'${name}' is already closed out or removed: ${ws} is gone.`);
+    releaseVscodeSessions(ws);
     return { command, output: lines.join("\n"), path: ws, terminals: [] };
   }
   const branches: Array<{ src: string; branch: string }> = [];
@@ -2899,5 +2938,6 @@ async function closeOutLocked(
     }
   }
   lines.push(...terminals);
+  releaseVscodeSessions(ws);
   return { command, output: lines.filter(Boolean).join("\n"), path: ws, terminals };
 }
