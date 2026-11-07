@@ -158,6 +158,22 @@ test("buildAllowRules: with a built CLI, the fixture wrapper is allowed whole (S
   assert.ok(!buildAllowRules("feat", [], {}, {}, tempHome, []).includes(fixture));
 });
 
+// SW-522's threat model (docs/context-strategies.md): only the registered test commands and the
+// workspace's own built CLI run unprompted; they may run agent-written code with the real HOME.
+test("buildAllowRules: the only pre-approved runners are the registered test command and the built CLI (SW-522)", () => {
+  const bin = "/ws/w/.werkmeister/bin";
+  const w = `${bin}/with-temp-home`;
+  const cli = "/ws/w/werkmeister/apps/cli/werkmeister";
+  const rules = buildAllowRules("feat", ["svc"], { svc: { test: "npm test" } }, {}, w, [cli]);
+  assert.deepEqual(rules.filter((r) => r.startsWith(`Bash(${bin}/`)).sort(), [
+    `Bash(${bin}/with-fixture-workspace:*)`,
+    `Bash(${w} --no-wait ${cli}:*)`,
+    `Bash(${w} --no-wait npm test:*)`,
+    `Bash(${w} ${cli}:*)`,
+    `Bash(${w} npm test:*)`,
+  ]);
+});
+
 test("buildAllowRules: an archetype's {service} template is expanded", () => {
   const rules = buildAllowRules(
     "feat",
