@@ -8,7 +8,7 @@
  */
 
 import { COMPOSE_FILE } from "../compose_file.js";
-import { CHAT_APPROVAL } from "../pr_rules.js";
+import { APPROVAL_NOTE, CHAT_APPROVAL } from "../pr_rules.js";
 
 export interface IcmVars {
   /** Path from one stage dir to another stage's dir, by stage name: `../01_research`. */
@@ -23,6 +23,8 @@ export interface IcmVars {
   autonomous: boolean;
   /** Member issue keys of a grouped PR (`group` in workspace.yml); empty when it is not one. */
   group: string[];
+  /** The harness's question tool (`HarnessLayout.questionTool`); absent → plain text. */
+  questionTool?: string;
 }
 
 export interface Contract {
@@ -155,6 +157,12 @@ const NAME_HISTORY_STEP =
 const statusGate = (file: string, read: string) =>
   `${read} Then change \`status: proposed\` at the top of \`output/${file}\` to \`status: decided\`: that flip is the approval, and the next session starts without asking again. ${CHAT_APPROVAL}`;
 const FIRST_LINE = ", its first line `status: proposed`";
+
+// SW-517: a check left as a sentence at the end of a long reply is easy to miss; the question tool makes it a prompt.
+export const askLine = (tool?: string) =>
+  tool
+    ? `Ask this check through \`${tool}\`: at most 4 questions per call (more than 4: batches of 4, one call after another), each standing on its own (what was checked, 2–3 concrete options with the exact wording or behaviour, the recommended one first; "Other" takes edits). Write each answer into the output file as its status, noted \`${APPROVAL_NOTE.chat}\` (a PR file: \`${APPROVAL_NOTE.chatPr}\`). A check left as a sentence at the end of a reply is not asked.`
+    : `Ask this check as one numbered block at the end of your reply: each question stands on its own, options lettered with the recommended one first, then "reply with the letters, or your edits". Write each answer into the output file as its status, noted \`${APPROVAL_NOTE.chat}\` (a PR file: \`${APPROVAL_NOTE.chatPr}\`).`;
 
 export const SELF_CHECK =
   "Review `output/` once against `../../BRIEF.md` and the live issue (`werkmeister issue view`). " +
