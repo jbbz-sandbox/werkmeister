@@ -96,7 +96,7 @@ it("runs init and the gate in a fixture, prints the context and fake calls, and 
 
   expect(run.stdout).toMatch(/app: gate passed/);
   expect(run.stdout).toMatch(/--- \.werkmeister\/werkmeister-context\.md\n[\s\S]*`lib`/);
-  expect(run.stdout).toMatch(/--- docker calls\n[\s\S]*^exec demo-lib sh -c .* sh -c true$/m);
+  expect(run.stdout).toMatch(/--- docker calls\n[\s\S]*^exec demo-lib true$/m);
   expect(fs.readdirSync(home)).toEqual([]);
   expect(engineHits).toBe(0);
   expect(daemonHits).toBe(0);

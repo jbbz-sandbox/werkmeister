@@ -52,7 +52,9 @@ import * as fs from "node:fs";
 const [, , tool, dir, ...args] = process.argv;
 const worldFile = dir + "/world.json";
 const world = JSON.parse(fs.readFileSync(worldFile, "utf8"));
-fs.appendFileSync(dir + "/" + (tool === "gh" ? "calls" : "docker-calls"), args.join(" ").replace(/\\n/g, " ") + "\\n");
+// A gate exec logs as \`exec <container> <row command>\`: the inlined with-temp-home script is ~1.5 KB a row (SW-511).
+const logged = tool === "docker" && args[0] === "exec" ? ["exec", args[1], args.at(-1)] : args;
+fs.appendFileSync(dir + "/" + (tool === "gh" ? "calls" : "docker-calls"), logged.join(" ").replace(/\\n/g, " ") + "\\n");
 const out = (s) => process.stdout.write(s);
 const fail = (msg) => { process.stderr.write(msg + "\\n"); process.exit(1); };
 const verb = args.slice(0, 2).join(" ");
