@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.83.1
+
+### Patch Changes
+
+- 64e8faa: SW-521: autonomous workspaces no longer pre-approve `node`, `npx`, `pnpm exec` or `python3`, which ran any file (one the agent just wrote included) with the real HOME, and they deny `node` and `python3` outright, so a registered test chain's bare `node --test` segment can't run an arbitrary file either. Headless runs test through the registered `with-temp-home <test command>` and container forms. `werkmeister machine migrate` now refreshes a workspace whose settings still hold a rule werkmeister no longer generates, so existing autonomous workspaces drop the old rules.
+- 0c6d2a3: SW-522: the threat model for pre-approved test and CLI rules is written down in `docs/context-strategies.md` and in the generated `werkmeister-context.md`: registered test commands and the workspace's own built CLI may run agent-written code with the real HOME, env, network, docker and gh; the temp HOME is not a sandbox. A test holds the generated rules to it.
+
 ## 0.83.0
 
 ### Minor Changes
