@@ -1613,7 +1613,7 @@ const testRow = (g) => g.checks.find((c) => c.name === "test api");
 test("runGate: a failed test row ends with the host load (SW-209)", async () => {
   const ws = icmWorkspace();
   try {
-    const host = loaded([1, 90]);
+    const host = loaded([90]);
     const timedOut = [
       /^docker exec .* npm test -w api/,
       { code: 1, stderr: "Test timed out in 60000ms" },
@@ -1658,74 +1658,16 @@ test("runGate: a paused container fails as paused, with no exec and no test verd
   }
 });
 
-test("runGate: over the load limit it waits, then runs and says how long (SW-209)", async () => {
+test("runGate: never waits on host load; admission prices its starts (SW-542)", async () => {
   const ws = icmWorkspace();
   try {
-    const host = loaded([90, 90, 1]);
-    const d = deps([DIFF_API], host);
-    const g = await gate(ws, d);
-    assert.deepEqual(host.slept.slice(0, 2), [15000, 15000]);
-    assert.ok(
-      d.calls.some((c) => /^docker exec .* npm test -w api/.test(c)),
-      d.calls.join("\n"),
-    );
-    assert.equal(testRow(g).ok, true);
-    assert.match(testRow(g).detail, /waited 30 s for host load/);
-    assert.doesNotMatch(testRow(g).detail, /host load \d/, "a passing row gets no load line");
-  } finally {
-    clean(ws);
-  }
-});
-
-test("runGate: one 10 min wait budget is shared across checks, then it runs anyway (SW-262)", async () => {
-  const ws = icmWorkspace();
-  try {
+    // Over the limit before every row, as after the gate's own install and test rows.
     const host = loaded([90]);
     const d = deps([DIFF_API], host);
-    const g = await gate(ws, d);
-    // 40 polls of 15 s for the whole run: the test spends it, the release check doesn't wait.
-    assert.equal(host.slept.length, 40);
-    assert.ok(
-      d.calls.some((c) => /^docker exec .* npm test -w api/.test(c)),
-      d.calls.join("\n"),
-    );
-    assert.equal(testRow(g).ok, true, "load never decides pass or fail");
-    const spent = /ran with host load 90\.0 over 8; the 10 min host-load wait is spent/;
-    assert.match(testRow(g).detail, spent);
-    assert.match(g.checks.find((c) => c.name === "release").detail, spent);
-  } finally {
-    clean(ws);
-  }
-});
-
-test("runGate: a docs-only diff under load runs lint and release without waiting (SW-303)", async () => {
-  const ws = icmWorkspace();
-  try {
-    const host = loaded([90]);
-    const d = deps([[DIFF_API[0], { stdout: "README.md\ndocs/x.md\n" }]], host);
     const g = await gate(ws, d);
     assert.deepEqual(host.slept, []);
-    const release = g.checks.find((c) => c.name === "release");
-    assert.equal(release.ok, true, release.detail);
-    assert.doesNotMatch(release.detail, /wait/);
-  } finally {
-    clean(ws);
-  }
-});
-
-test("runGate: --no-wait and host_load: 0 never sleep (SW-209)", async () => {
-  const ws = icmWorkspace();
-  try {
-    const noWait = loaded([90]);
-    await withSandboxHome(() =>
-      runGate(ws, readPrFiles(ws)[0], deps([DIFF_API], noWait), { wait: false }),
-    );
-    assert.deepEqual(noWait.slept, []);
-    const off = loaded([90]);
-    await withSandboxHome(() => runGate(ws, readPrFiles(ws)[0], deps([DIFF_API], off)), {
-      config: "budget:\n  host_load: 0\n",
-    });
-    assert.deepEqual(off.slept, []);
+    assert.equal(testRow(g).ok, true);
+    assert.doesNotMatch(testRow(g).detail, /waited .* for host load/);
   } finally {
     clean(ws);
   }

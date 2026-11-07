@@ -30,23 +30,23 @@ beforeEach(() => {
 it("open goes to openPrs for the workspace and the named repo", async () => {
   vi.mocked(openPrs).mockResolvedValue({ ok: true, lines: ["app: open u"] });
   await run({ action: "open", repo: "app", json: false });
-  expect(openPrs).toHaveBeenCalledWith("/features/ws", "app", undefined, { wait: true });
+  expect(openPrs).toHaveBeenCalledWith("/features/ws", "app");
   expect(exit).not.toHaveBeenCalled();
 });
 
-it("--no-wait reaches gatePrs and openPrs as { wait: false } (SW-209)", async () => {
+it("--no-wait is still accepted and changes nothing: the gate never waits on load (SW-542)", async () => {
   vi.mocked(gatePrs).mockResolvedValue({ ok: true, lines: [] });
   vi.mocked(openPrs).mockResolvedValue({ ok: true, lines: [] });
   await run({ action: "gate", repo: null, wait: false, json: false });
-  expect(gatePrs).toHaveBeenCalledWith("/features/ws", undefined, undefined, { wait: false });
+  expect(gatePrs).toHaveBeenCalledWith("/features/ws", undefined);
   await run({ action: "open", repo: "app", wait: false, json: false });
-  expect(openPrs).toHaveBeenCalledWith("/features/ws", "app", undefined, { wait: false });
+  expect(openPrs).toHaveBeenCalledWith("/features/ws", "app");
 });
 
 it("--tests reaches gateTests, not gatePrs (SW-316)", async () => {
   vi.mocked(gateTests).mockResolvedValue({ ok: true, lines: [] });
   await run({ action: "gate", repo: "app", tests: true, wait: false, json: false });
-  expect(gateTests).toHaveBeenCalledWith("/features/ws", "app", undefined, { wait: false });
+  expect(gateTests).toHaveBeenCalledWith("/features/ws", "app");
   expect(gatePrs).not.toHaveBeenCalled();
 });
 
@@ -74,7 +74,7 @@ it("the exit line is not added to --json output or to gate (SW-527)", async () =
 it("a failed gate exits 1", async () => {
   vi.mocked(gatePrs).mockResolvedValue({ ok: false, lines: ["app: gate FAILED"] });
   await run({ action: "gate", repo: null, json: false });
-  expect(gatePrs).toHaveBeenCalledWith("/features/ws", undefined, undefined, { wait: true });
+  expect(gatePrs).toHaveBeenCalledWith("/features/ws", undefined);
   expect(exit).toHaveBeenCalledWith(1);
 });
 

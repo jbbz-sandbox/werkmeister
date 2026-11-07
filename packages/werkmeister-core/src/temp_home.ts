@@ -15,7 +15,7 @@ export const TEMP_HOME_SCRIPT = `#!/bin/sh
 # Runs <cmd...> with HOME set to a fresh temporary directory, removed on exit,
 # so no test or CLI exercise reads or writes the real ~/.werkmeister.
 # --no-wait first does what WERKMEISTER_NO_WAIT=1 does, without an env assignment (SW-367),
-# and exports it, so a pr gate or pr open under it skips its own wait too (SW-425).
+# and exports it, so a with-temp-home nested under it skips its wait too (SW-425).
 [ "\${1:-}" != --no-wait ] || { export WERKMEISTER_NO_WAIT=1; shift; }
 no_wait=\${WERKMEISTER_NO_WAIT:-}
 [ "$#" -gt 0 ] || { echo "usage: with-temp-home [--no-wait] <cmd> [args...]" >&2; exit 2; }
