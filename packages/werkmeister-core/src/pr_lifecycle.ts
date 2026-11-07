@@ -12,7 +12,7 @@ import * as path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import YAML from "yaml";
 
-import { flagNeedsYou, writeWakeNudge } from "./agent_state.js";
+import { clearNotice, raiseNotice, writeWakeNudge } from "./agent_state.js";
 import { serviceNoTests, serviceTestCommand } from "./archetypes.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import {
@@ -1717,8 +1717,8 @@ async function syncRegistryOnMerge(ws: string, f: PrFile, deps: Deps): Promise<s
   const url = String(f.fm["url"] ?? "");
   const notice = `registry sync needed: ${f.dir} fragment changed in ${url}`;
   const fail = (why?: string): string[] => {
+    // The card reads `registry_sync: needed` itself (SW-487).
     writePrFields(f, { registry_sync: "needed" });
-    flagNeedsYou(ws, notice);
     return [why ? `${notice} (${why})` : notice];
   };
   if (!auto) return fail();
@@ -2183,7 +2183,6 @@ export async function claimCallbacks(
         const held = async () => {
           if (hostSession || !(await deps.sessionBusy(ws, session, sessionDir))) return false;
           lines.push(`${f.dir}: wake held, session ${session} in use`);
-          flagNeedsYou(ws, `waiting for your open session: ${message?.split("\n")[0]}`);
           // Only an open session fires hooks; one closed in the last minutes stays unclaimed for a headless pass.
           if (!liveSessions(ws).some((s) => s.sessionId === session)) return "wait";
           writeWakeNudge(ws, session, message as string);
@@ -2325,11 +2324,18 @@ export async function watchPrs(
       if (denied.length && (await fixLeftBehind(path.join(cb.ws, cb.dir), deps))) {
         const blocked = `auto-fix blocked: needs approval — ${denied.join("; ")}`;
         lines.push(`${cb.dir}: ${blocked}`);
-        flagNeedsYou(cb.ws, `${blocked} (${cb.url})`);
-      } else if (denied.length)
-        lines.push(
-          `${cb.dir}: auto-fix: ${denied.length} calls refused and retried — ${denied.join("; ")}`,
-        );
+        raiseNotice(cb.ws, `autofix-${cb.dir}`, {
+          what: blocked,
+          action: "Approve the refused calls, or run them yourself",
+          url: cb.url,
+        });
+      } else {
+        clearNotice(cb.ws, `autofix-${cb.dir}`);
+        if (denied.length)
+          lines.push(
+            `${cb.dir}: auto-fix: ${denied.length} calls refused and retried — ${denied.join("; ")}`,
+          );
+      }
     } catch (e) {
       lines.push(`${cb.dir}: could not resume session ${cb.session}: ${(e as Error).message}`);
     }
@@ -2510,6 +2516,9 @@ export function lifecycleOf(ws: string): {
     url: string | null;
     release: string | null;
     skip_release: boolean;
+    /** The merged PR changed its registry fragment and the sync hasn't run (SW-340). */
+    registry_sync: boolean;
+    path: string;
   }>;
 } {
   let files: PrFile[] = [];
@@ -2525,6 +2534,8 @@ export function lifecycleOf(ws: string): {
     url: f.fm["url"] ? String(f.fm["url"]) : null,
     release: f.fm["release"] ? String(f.fm["release"]) : null,
     skip_release: Boolean(reason(f.fm["skip_release"])),
+    registry_sync: f.fm["registry_sync"] === "needed",
+    path: f.path,
   }));
   const all = (set: Set<string>) => prs.every((p) => set.has(p.status));
   let state: Lifecycle;

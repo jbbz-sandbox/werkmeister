@@ -1,5 +1,5 @@
 // SW-46: a workspace's agent state — working / needs-you / done / idle — from the
-// state file Claude Code hooks write, else from the transcript tail.
+// session records Claude Code hooks write (one file per session since SW-487), else from the transcript tail.
 
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -53,16 +53,18 @@ test("no state file: the transcript tail tells done, needs-you, working and idle
   assert.equal("waiting" in c["a-done"], false, "agent replaces claude.waiting");
 });
 
-test("the hooks' state file wins over the transcript tail", async () => {
+test("the hooks' session record wins over the transcript tail", async () => {
   const dir = workspace("f-file", ["assistant", "Shipped."]);
   const at = "2026-10-19T12:00:00.000Z";
+  const ask = {
+    kind: "permission",
+    what: "Claude needs your permission to use Bash",
+    at,
+    source: "session",
+  };
   write(
-    path.join(dir, ".werkmeister", "agent-state.json"),
-    JSON.stringify({
-      state: "needs-you",
-      at,
-      question: "Claude needs your permission to use Bash",
-    }),
+    path.join(dir, ".werkmeister", "sessions", "s1.json"),
+    JSON.stringify({ status: "busy", at, last: at, ask }),
   );
   const c = (await byName())["f-file"];
   assert.equal(c.agent, "needs-you");
@@ -70,44 +72,54 @@ test("the hooks' state file wins over the transcript tail", async () => {
   assert.equal(c.question, "Claude needs your permission to use Bash");
 });
 
-test("an unreadable state file falls back to the transcript", async () => {
+test("an unreadable session record falls back to the transcript", async () => {
   const dir = workspace("g-junk", ["assistant", "Shipped."]);
-  write(path.join(dir, ".werkmeister", "agent-state.json"), "{not json");
+  write(path.join(dir, ".werkmeister", "sessions", "s1.json"), "{not json");
   assert.equal((await byName())["g-junk"].agent, "done");
 });
 
-const { record, readAgentState } = await import("./dist/agent_state.js");
+const { record, readSessions, agentOf, asksQuestion, nextSession } = await import(
+  "./dist/agent_state.js"
+);
+/** One session's record and the workspace badge, after its hooks. */
+const rec = (dir, id = "s") => readSessions(dir)[id];
+const badge = (dir) => agentOf(readSessions(dir));
 
-test("hooks: each event writes the state the pane shows, `at` only when it changes", () => {
+test("hooks: each event writes the session's state, `at` only when its status changes", () => {
   const dir = workspace("h-hooks", null);
   const cwd = path.join(dir, "sandbox", "packages");
   fs.mkdirSync(cwd, { recursive: true });
   const fire = (event, extra = {}, now = new Date()) =>
-    record({ hook_event_name: event, cwd, ...extra }, now);
+    record({ hook_event_name: event, cwd, session_id: "s", ...extra }, now);
   const t0 = new Date("2026-10-19T10:00:00Z");
 
   fire("UserPromptSubmit", {}, t0);
-  assert.deepEqual(readAgentState(dir), { state: "working", at: t0.toISOString() });
-  assert.equal(fire("PreToolUse", { tool_name: "Bash" }), null, "still working: no rewrite");
-  assert.equal(readAgentState(dir).at, t0.toISOString());
+  assert.deepEqual(rec(dir), { status: "busy", at: t0.toISOString(), last: t0.toISOString() });
+  fire("PreToolUse", { tool_name: "Bash", tool_input: { command: "pnpm test" } });
+  assert.equal(rec(dir).at, t0.toISOString(), "still busy: `at` holds");
+  assert.deepEqual([rec(dir).tool.name, rec(dir).tool.command], ["Bash", "pnpm test"]);
 
   fire("Notification", {
     notification_type: "permission_prompt",
     message: "Claude needs your permission to use Bash",
   });
-  assert.equal(readAgentState(dir).state, "needs-you");
-  assert.equal(readAgentState(dir).question, "Claude needs your permission to use Bash");
+  assert.deepEqual(
+    [rec(dir).ask.kind, rec(dir).ask.what, rec(dir).ask.source],
+    ["permission", "Claude needs your permission to use Bash", "session"],
+  );
   fire("PostToolUse", { tool_name: "Bash" });
-  assert.equal(readAgentState(dir).state, "working", "approved: back to work");
+  assert.equal(rec(dir).ask, undefined, "approved: back to work");
+  assert.equal(rec(dir).tool, undefined);
 
   fire("PreToolUse", {
     tool_name: "AskUserQuestion",
     tool_input: { questions: [{ question: "Which fix?" }] },
   });
-  assert.deepEqual(
-    [readAgentState(dir).state, readAgentState(dir).question],
-    ["needs-you", "Which fix?"],
-  );
+  assert.deepEqual([badge(dir).agent, badge(dir).question], ["needs-you", "Which fix?"]);
+  fire("PostToolUse", { tool_name: "AskUserQuestion" });
+  fire("PreToolUse", { tool_name: "ExitPlanMode" });
+  assert.equal(rec(dir).ask.kind, "plan");
+  fire("PostToolUse", { tool_name: "ExitPlanMode" });
 
   const transcript = path.join(dir, "t.jsonl");
   const say = (text) =>
@@ -120,14 +132,15 @@ test("hooks: each event writes the state the pane shows, `at` only when it chang
   say("Fixed it.\n\nShould I open the PR now?");
   fire("Stop", { transcript_path: transcript });
   assert.deepEqual(
-    [readAgentState(dir).state, readAgentState(dir).question],
-    ["needs-you", "Should I open the PR now?"],
+    [rec(dir).status, rec(dir).ask.what, rec(dir).ask.source],
+    ["idle", "Should I open the PR now?", "text"],
+    "a guessed question is marked as a guess",
   );
   say("Shipped: PR #12 is open.");
   fire("Stop", { transcript_path: transcript });
-  assert.deepEqual(readAgentState(dir).state, "done");
+  assert.equal(badge(dir).agent, "done");
   fire("Stop", { last_assistant_message: "Which one do **you** want?**" });
-  assert.equal(readAgentState(dir).state, "needs-you", "last_assistant_message wins when sent");
+  assert.equal(badge(dir).agent, "needs-you", "last_assistant_message wins when sent");
 
   fire("Stop", { last_assistant_message: "Done." });
   fire("Notification", {
@@ -135,21 +148,25 @@ test("hooks: each event writes the state the pane shows, `at` only when it chang
     message: "Claude is waiting for your input",
   });
   fire("Notification", { message: "Claude is waiting for your input" });
-  assert.equal(readAgentState(dir).state, "done", "the idle reminder after Stop is not a question");
+  assert.equal(badge(dir).agent, "done", "the idle reminder after Stop is not a question");
   fire("SessionEnd", { reason: "exit" });
-  assert.equal(
-    readAgentState(dir).state,
-    "done",
-    "a finished run stays done after its session closes",
-  );
-  fire("UserPromptSubmit");
-  fire("SessionEnd", { reason: "exit" });
-  assert.equal(readAgentState(dir).state, "idle", "a turn cut off by the exit is not live");
+  assert.equal(rec(dir), undefined, "a closed session leaves no record");
+});
+
+// SW-487 fault 1: the trailing-`?` test read "Want X? Say so." as done.
+test("asksQuestion: a question sentence anywhere in the last paragraph asks", () => {
+  assert.equal(asksQuestion("Want me to open the PR? Say so."), true);
+  assert.equal(asksQuestion("Which one do **you** want?**"), true);
+  assert.equal(asksQuestion("Done.\n\nPR #12 is open."), false);
+  assert.equal(asksQuestion("Any questions? None.\n\nShipped."), false, "only the last paragraph");
+  // Accepted miss: a rhetorical closing question still reads as one; the card marks it a guess.
+  assert.equal(asksQuestion("Who knew it was the cache all along?"), true);
 });
 
 test("hooks: a Desktop wrap_up ask is needs-you even when the closing message asks nothing", () => {
   const dir = workspace("h-wrap-up", null);
-  const fire = (event, extra = {}) => record({ hook_event_name: event, cwd: dir, ...extra });
+  const fire = (event, extra = {}) =>
+    record({ hook_event_name: event, cwd: dir, session_id: "s", ...extra });
   const wrapUp = (input) => {
     fire("PreToolUse", { tool_name: "mcp__ccd_turn__wrap_up", tool_input: input });
     fire("PostToolUse", { tool_name: "mcp__ccd_turn__wrap_up", tool_input: input });
@@ -161,18 +178,20 @@ test("hooks: a Desktop wrap_up ask is needs-you even when the closing message as
   fire("UserPromptSubmit");
   wrapUp({ recap: "Research is written.", ask: "Is the spec approved for 03_implement?" });
   assert.deepEqual(
-    [readAgentState(dir).state, readAgentState(dir).question],
+    [badge(dir).agent, badge(dir).question],
     ["needs-you", "Is the spec approved for 03_implement?"],
   );
 
   fire("UserPromptSubmit");
   wrapUp({ recap: "PR #12 is open." });
-  assert.equal(readAgentState(dir).state, "done", "a recap with no ask is a finished run");
+  assert.equal(badge(dir).agent, "done", "a recap with no ask is a finished run");
 });
 
-test("hooks: the permission prompt for a question keeps the question, not the prompt text", () => {
+// SW-487 fault 4: a new blocking prompt kept the previous question's text.
+test("hooks: the permission prompt for a question keeps the question; a later prompt says what it wants", () => {
   const dir = workspace("h-ask-permission", null);
-  const fire = (event, extra = {}) => record({ hook_event_name: event, cwd: dir, ...extra });
+  const fire = (event, extra = {}) =>
+    record({ hook_event_name: event, cwd: dir, session_id: "s", ...extra });
   const permission = (tool) =>
     fire("Notification", {
       notification_type: "permission_prompt",
@@ -186,31 +205,159 @@ test("hooks: the permission prompt for a question keeps the question, not the pr
   });
   permission("AskUserQuestion");
   assert.deepEqual(
-    [readAgentState(dir).state, readAgentState(dir).question],
-    ["needs-you", "Connect with --docker or host mode?"],
+    [rec(dir).ask.kind, rec(dir).ask.what],
+    ["question", "Connect with --docker or host mode?"],
   );
 
-  fire("PostToolUse", { tool_name: "AskUserQuestion" });
+  // No PostToolUse in between (the stale case): the next tool's prompt still replaces it.
   fire("PreToolUse", { tool_name: "Bash" });
   permission("Bash");
-  assert.equal(
-    readAgentState(dir).question,
-    "Claude needs your permission to use Bash",
-    "a plain permission prompt still says what it wants",
+  assert.deepEqual(
+    [rec(dir).ask.kind, rec(dir).ask.what],
+    ["permission", "Claude needs your permission to use Bash"],
   );
+  fire("PermissionRequest", { tool_name: "Bash", tool_input: { description: "Run tests" } });
+  assert.equal(
+    rec(dir).ask.what,
+    "Claude needs your permission to use Bash",
+    "deduped, not replaced",
+  );
+  fire("PermissionDenied", { tool_name: "Bash" });
+  assert.equal(rec(dir).ask, undefined, "a denied call waits on nothing");
 });
 
-test("hooks: outside a workspace, or on junk input, nothing is written", () => {
-  assert.equal(record({ hook_event_name: "Stop", cwd: os.tmpdir() }), null);
+test("hooks: outside a workspace, without a session id, or on junk input, nothing is written", () => {
+  assert.equal(record({ hook_event_name: "Stop", cwd: os.tmpdir(), session_id: "s" }), null);
   const dir = workspace("i-junk", null);
-  assert.equal(record({ hook_event_name: "SubagentStop", cwd: dir }), null);
-  assert.equal(readAgentState(dir), null);
+  assert.equal(record({ hook_event_name: "Stop", cwd: dir }), null, "no session id");
+  assert.equal(record({ hook_event_name: "Stop", cwd: dir, session_id: "../x" }), null);
+  assert.equal(record({ hook_event_name: "Nonsense", cwd: dir, session_id: "s" }), null);
+  assert.deepEqual(readSessions(dir), {});
+});
+
+// SW-487 fault 2: one record per workspace, so the last writer won.
+test("hooks: a second session or a subagent can't wipe a session's ask", async () => {
+  const dir = workspace("i-per-session", null);
+  const fire = (event, session_id, extra = {}) =>
+    record({ hook_event_name: event, cwd: dir, session_id, ...extra });
+  fire("UserPromptSubmit", "a");
+  fire("PreToolUse", "a", {
+    tool_name: "AskUserQuestion",
+    tool_input: { questions: [{ question: "Ship?" }] },
+  });
+  fire("UserPromptSubmit", "b");
+  fire("PreToolUse", "b", { tool_name: "Bash" });
+  fire("PostToolUse", "b", { tool_name: "Bash" });
+  fire("Stop", "b", { last_assistant_message: "Done." });
+  fire("SessionEnd", "b");
+  assert.equal(rec(dir, "a").ask.what, "Ship?", "b's turn and exit leave a alone");
+  assert.equal(rec(dir, "b"), undefined);
+
+  fire("SubagentStart", "a", { agent_id: "sub-1", agent_type: "Explore" });
+  fire("PreToolUse", "a", { agent_id: "sub-1", tool_name: "Read" });
+  fire("PostToolUse", "a", { agent_id: "sub-1", tool_name: "Read" });
+  assert.equal(rec(dir, "a").ask.what, "Ship?", "a subagent's tools are not the parent's");
+  assert.equal(rec(dir, "a").subagents, 1);
+  fire("SubagentStop", "a", { agent_id: "sub-1" });
+  assert.equal(rec(dir, "a").subagents, undefined);
+  // The real sequence for a background agent: started, then the parent's turn ends before it does.
+  fire("SubagentStart", "a", { agent_id: "bg-1" });
+  fire("Stop", "a", { last_assistant_message: "Started a background agent." });
+  const { workspaceState } = await import("./dist/workspace_state.js");
+  const blank = {
+    now: new Date(),
+    turnRunning: false,
+    processOpen: null,
+    paused: null,
+    waiting: null,
+    services: [],
+    crashLoops: [],
+    started: null,
+    lifecycle: "working",
+    postmortemAt: null,
+    releasedAt: null,
+    closedOut: false,
+    stage: null,
+    jitPhase: null,
+    gates: [],
+    heldWakes: [],
+    registrySync: [],
+    notices: {},
+    transcriptAsk: null,
+  };
+  assert.equal(workspaceState({ ...blank, sessions: readSessions(dir) }).activity.id, "subagent");
+  fire("SessionStart", "a");
+  assert.equal(rec(dir, "a").subagents, undefined, "a resumed session starts with none");
+});
+
+// SW-487 fault 7: an unlocked read-modify-write of one shared file lost updates.
+test("hooks: interleaved events from many sessions all land", () => {
+  const dir = workspace("i-many", null);
+  const ids = ["a", "b", "c", "d", "e"];
+  for (let i = 0; i < 50; i++) {
+    const id = ids[i % ids.length];
+    record({
+      hook_event_name: i < 45 ? "PreToolUse" : "Stop",
+      cwd: dir,
+      session_id: id,
+      tool_name: `T${i}`,
+    });
+  }
+  const all = readSessions(dir);
+  assert.deepEqual(Object.keys(all).sort(), ids);
+  for (const id of ids)
+    assert.equal(all[id].status, "idle", `${id}'s last event, Stop, is on disk`);
+});
+
+// SW-487 fault 5: a session that died without SessionEnd kept its state forever.
+test("agentOf: a busy session silent past SESSION_GONE_MS is no longer working", async () => {
+  const { SESSION_GONE_MS, sessionGone } = await import("./dist/agent_state.js");
+  const now = Date.parse("2026-11-06T12:00:00Z");
+  const at = (ms) => new Date(now - ms).toISOString();
+  const busy = (ms) => ({ status: "busy", at: at(ms), last: at(ms) });
+  assert.equal(sessionGone(busy(SESSION_GONE_MS - 60_000), now), false);
+  assert.equal(sessionGone(busy(SESSION_GONE_MS + 60_000), now), true);
+  assert.equal(sessionGone({ status: "idle", at: at(SESSION_GONE_MS * 10) }, now), false);
+  assert.equal(agentOf({ s: busy(SESSION_GONE_MS + 60_000) }, now).agent, "idle");
+  assert.equal(agentOf({ s: busy(60_000) }, now).agent, "working");
+});
+
+test("readSessions: pre-SW-487 agent-state.json sessions still count until their own file exists", () => {
+  const dir = workspace("i-legacy", null);
+  const at = "2026-11-01T10:00:00.000Z";
+  write(
+    path.join(dir, ".werkmeister", "agent-state.json"),
+    JSON.stringify({
+      state: "working",
+      at,
+      sessions: { old: { status: "busy", at }, both: { status: "busy", at } },
+    }),
+  );
+  record({ hook_event_name: "Stop", cwd: dir, session_id: "both" });
+  assert.equal(readSessions(dir).old.status, "busy");
+  assert.equal(readSessions(dir).both.status, "idle", "its own file wins");
+  record({ hook_event_name: "SessionEnd", cwd: dir, session_id: "both" });
+  assert.equal(
+    readSessions(dir).both,
+    undefined,
+    "an ended session doesn't come back from the old file",
+  );
+  record({ hook_event_name: "SessionEnd", cwd: dir, session_id: "old" });
+  assert.equal(readSessions(dir).old, undefined, "ending removes it from the old file");
+});
+
+test("nextSession: PermissionRequest asks with the tool's description, else the tool name", () => {
+  const now = new Date("2026-11-06T10:00:00Z");
+  const ask = (tool_input) =>
+    nextSession({ hook_event_name: "PermissionRequest", tool_name: "Bash", tool_input }, null, now)
+      .ask;
+  assert.equal(ask({ command: "rm -rf x", description: "Delete x" }).what, "Delete x");
+  assert.equal(ask({ command: "rm -rf x", description: null }).what, "Approve Bash?");
 });
 
 // SW-182: the liveness record idle-stop and the resume nudge read, not Claude's session files.
-const { readSessions } = await import("./dist/agent_state.js");
 
-test("hooks: each session id gets a busy/idle record beside the state; SessionEnd drops it", () => {
+test("hooks: each session id gets a busy/idle record; SessionEnd drops it", () => {
   const dir = workspace("i-sessions", null);
   const fire = (event, session_id, now) =>
     record({ hook_event_name: event, cwd: dir, session_id }, now);
@@ -218,16 +365,21 @@ test("hooks: each session id gets a busy/idle record beside the state; SessionEn
   const t1 = new Date("2026-10-29T10:05:00Z");
 
   fire("SessionStart", "a", t0);
-  assert.deepEqual(readSessions(dir), { a: { status: "idle", at: t0.toISOString() } });
-  assert.equal(readAgentState(dir), null, "a session start alone is no agent state");
-  fire("UserPromptSubmit", "a", t1);
-  assert.equal(fire("PreToolUse", "a", new Date()), null, "still busy: no rewrite");
-  fire("PreToolUse", "b", t1);
   assert.deepEqual(readSessions(dir), {
-    a: { status: "busy", at: t1.toISOString() },
-    b: { status: "busy", at: t1.toISOString() },
+    a: { status: "idle", at: t0.toISOString(), last: t0.toISOString() },
   });
-  assert.deepEqual(readAgentState(dir), { state: "working", at: t1.toISOString() });
+  assert.equal(badge(dir), null, "a session start alone is no agent state");
+  fire("UserPromptSubmit", "a", t1);
+  fire("PreToolUse", "b", t1);
+  assert.deepEqual(
+    [readSessions(dir).a.status, readSessions(dir).a.at, readSessions(dir).b.status],
+    ["busy", t1.toISOString(), "busy"],
+  );
+  assert.deepEqual(agentOf(readSessions(dir), t1.getTime()), {
+    agent: "working",
+    at: t1.toISOString(),
+    question: null,
+  });
 
   fire("Stop", "a", t1);
   assert.equal(readSessions(dir).a.status, "idle");
@@ -283,10 +435,28 @@ test("hooks: a headless turn ending on an open session's id keeps that session l
   );
 });
 
+test("hooks: a headless wake turn on an open session's id leaves its ask (SW-487)", () => {
+  const dir = workspace("i-wake-ask", null);
+  const fire = (event, extra = {}) =>
+    record({ hook_event_name: event, cwd: dir, session_id: "s", ...extra });
+  fire("UserPromptSubmit");
+  fire("Stop", { last_assistant_message: "Merge it now?" });
+  const was = process.env.CLAUDE_CODE_ENTRYPOINT;
+  process.env.CLAUDE_CODE_ENTRYPOINT = "sdk-cli";
+  try {
+    fire("UserPromptSubmit");
+    fire("PreToolUse", { tool_name: "Bash" });
+    fire("Stop", { last_assistant_message: "Fixed CI." });
+    fire("SessionEnd");
+  } finally {
+    if (was === undefined) delete process.env.CLAUDE_CODE_ENTRYPOINT;
+    else process.env.CLAUDE_CODE_ENTRYPOINT = was;
+  }
+  assert.equal(rec(dir).ask.what, "Merge it now?");
+});
+
 // SW-70: while `paused.json` exists the same hook holds the session.
-const { flagNeedsYou, pauseGate, PAUSED_REASON, writePaused, writeNudge } = await import(
-  "./dist/agent_state.js"
-);
+const { pauseGate, PAUSED_REASON, writePaused, writeNudge } = await import("./dist/agent_state.js");
 
 test("pause gate: PreToolUse ends the turn and denies, UserPromptSubmit blocks, the rest pass", () => {
   const dir = workspace("j-gate", null);
@@ -336,35 +506,29 @@ test("pause gate: the hook entry prints it from the code worktree and records no
   const dir = workspace("k-main", null);
   const cwd = path.join(dir, "sandbox", "apps");
   fs.mkdirSync(cwd, { recursive: true });
-  const before = JSON.stringify({ state: "done", at: "2026-10-22T09:00:00.000Z" });
-  write(path.join(dir, ".werkmeister", "agent-state.json"), before);
   writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: false });
-  assert.equal(hook({ hook_event_name: "PreToolUse", tool_name: "Edit", cwd }).continue, false);
-  assert.equal(hook({ hook_event_name: "UserPromptSubmit", cwd }).decision, "block");
-  assert.equal(
-    fs.readFileSync(path.join(dir, ".werkmeister", "agent-state.json"), "utf8"),
-    before,
-    "a blocked call must not read as working",
-  );
+  const s = { cwd, session_id: "s" };
+  assert.equal(hook({ hook_event_name: "PreToolUse", tool_name: "Edit", ...s }).continue, false);
+  assert.equal(hook({ hook_event_name: "UserPromptSubmit", ...s }).decision, "block");
+  assert.deepEqual(readSessions(dir), {}, "a blocked call must not read as working");
 });
 
 test("pause gate: an unblocked prompt clears a stale resume nudge", () => {
   const dir = workspace("l-nudge", null);
   writeNudge(dir, "continue");
-  assert.equal(hook({ hook_event_name: "UserPromptSubmit", cwd: dir }), null);
+  assert.equal(hook({ hook_event_name: "UserPromptSubmit", cwd: dir, session_id: "s" }), null);
   assert.equal(fs.existsSync(path.join(dir, ".werkmeister", "resume-nudge.json")), false);
-  assert.equal(readAgentState(dir).state, "working");
+  assert.equal(badge(dir).agent, "working");
 });
 
-test("wake nudge: kept needs-you until the session's next hook delivers it, once (SW-418)", () => {
+test("wake nudge: held until the session's next hook delivers it, once (SW-418)", () => {
   const dir = workspace("l-wake", null);
   const file = path.join(dir, ".werkmeister", "wake-nudge-s-1.json");
   const fire = (e, extra = {}) =>
     hook({ hook_event_name: e, cwd: dir, session_id: "s-1", ...extra });
   write(file, JSON.stringify({ message: "PR 9 conflicts with main, resolve it." }));
-  flagNeedsYou(dir, "waiting for your open session: PR 9 conflicts");
   assert.equal(fire("PreToolUse", { tool_name: "Bash" }), null);
-  assert.equal(readAgentState(dir).state, "needs-you", "its own activity doesn't erase the flag");
+  assert.ok(fs.existsSync(file), "its own PreToolUse doesn't take it");
   assert.equal(
     fire("PostToolUse", { session_id: "other", tool_name: "Bash" }),
     null,
@@ -379,7 +543,7 @@ test("wake nudge: kept needs-you until the session's next hook delivers it, once
   assert.equal(out.hookSpecificOutput.hookEventName, "PostToolUse");
   assert.match(out.hookSpecificOutput.additionalContext, /PR 9 conflicts with main/);
   assert.equal(fs.existsSync(file), false, "delivered once");
-  assert.equal(readAgentState(dir).state, "working");
+  assert.equal(badge(dir).agent, "working");
   write(file, JSON.stringify({ message: "PR 9 merged." }));
   assert.match(fire("UserPromptSubmit").hookSpecificOutput.additionalContext, /PR 9 merged/);
   write(file, JSON.stringify({ message: "PR 9 merged." }));
@@ -538,21 +702,6 @@ test("status: heldWakes lists each session with a held wake, not a claimed or ma
   assert.deepEqual(other.heldWakes, []);
 });
 
-// SW-189: Codex has no Notification; its approval prompt is PermissionRequest.
-test("PermissionRequest marks needs-you with the tool's description, else the tool name", async () => {
-  const { nextState } = await import("./dist/agent_state.js");
-  const ask = (tool_input) =>
-    nextState({ hook_event_name: "PermissionRequest", tool_name: "Bash", tool_input }, null);
-  assert.deepEqual(ask({ command: "rm -rf x", description: "Delete x" }), {
-    state: "needs-you",
-    question: "Delete x",
-  });
-  assert.deepEqual(ask({ command: "rm -rf x", description: null }), {
-    state: "needs-you",
-    question: "Approve Bash?",
-  });
-});
-
 // SW-189: Codex fails a PreToolUse hook whose output carries continue/stopReason, and runs the tool.
 test("pause gate on Codex: PreToolUse denies without continue or stopReason", () => {
   const dir = workspace("j-gate-codex", null);
@@ -567,4 +716,21 @@ test("pause gate on Codex: PreToolUse denies without continue or stopReason", ()
   } finally {
     delete process.env.WERKMEISTER_HOOK_HARNESS;
   }
+});
+
+// SW-487 fault 8: system notices shared needs-you with questions, and any tool call cleared them.
+test("notices: raised and cleared by their owner, never by a hook event", async () => {
+  const { raiseNotice, clearNotice, readNotices } = await import("./dist/agent_state.js");
+  const dir = workspace("n-notices", null);
+  raiseNotice(dir, "autofix-app", {
+    what: "auto-fix blocked",
+    action: "Approve",
+    url: "https://x/pr/1",
+  });
+  for (const e of ["UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"])
+    hook({ hook_event_name: e, cwd: dir, session_id: "s", tool_name: "Bash" });
+  assert.equal(readNotices(dir)["autofix-app"].what, "auto-fix blocked");
+  assert.equal(readNotices(dir)["autofix-app"].url, "https://x/pr/1");
+  clearNotice(dir, "autofix-app");
+  assert.deepEqual(readNotices(dir), {});
 });

@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { useDockerEngine } from "./fixtures.mjs";
+import { useDockerEngine, writeSessionState } from "./fixtures.mjs";
 
 useDockerEngine();
 
@@ -147,15 +147,18 @@ beforeEach(() => {
   reply = {};
   delete process.env.DOCKER_DELAY;
   delete process.env.WERKMEISTER_TIMEOUT_SCALE;
-  for (const f of [pausedFile, nudgeFile, claudeLog, path.join(dot, "agent-state.json")])
-    fs.rmSync(f, { force: true });
+  for (const f of [
+    pausedFile,
+    nudgeFile,
+    claudeLog,
+    path.join(dot, "agent-state.json"),
+    path.join(dot, "sessions"),
+  ])
+    fs.rmSync(f, { force: true, recursive: true });
 });
 
 test("pause freezes exactly the running containers, dependents first, after writing the record", async () => {
-  fs.writeFileSync(
-    path.join(dot, "agent-state.json"),
-    JSON.stringify({ state: "working", at: "2026-10-22T10:00:00.000Z" }),
-  );
+  writeSessionState(ws, "working");
   const r = await pause("demo");
   assert.deepEqual(r.containers, ["demo-db", "demo-api", "demo-install"]);
   assert.deepEqual(calls, ["pause demo-install", "pause demo-api", "pause demo-db"]);

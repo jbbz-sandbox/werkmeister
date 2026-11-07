@@ -6,6 +6,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
+import { writeSessionState } from "./fixtures.mjs";
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "check-in-home-"));
 const root = path.join(home, "features");
@@ -43,7 +44,7 @@ function say(dir, role) {
 
 const names = (r) => r.workspaces.map((w) => w.name);
 
-test("first run: skip dropped, gates read, candidates are where Claude spoke last", async () => {
+test("first run: skip dropped, gates read, candidates are where Claude spoke last or a gate waits", async () => {
   workspace("a-gate", { gate: "proposed" });
   workspace("b-decided", { gate: "decided", lastRole: "user" });
   workspace("c-waiting", { lastRole: "assistant" });
@@ -57,7 +58,12 @@ test("first run: skip dropped, gates read, candidates are where Claude spoke las
   assert.deepEqual(r.workspaces[0].gates, [path.join("stages", "02_plan", "output", "plan.md")]);
   assert.deepEqual(r.workspaces[1].gates, []);
   assert.ok(r.workspaces.every((w) => !w.changed));
-  assert.deepEqual(r.candidates, ["c-waiting"]);
+  // SW-487: a proposed gate is a needs-you item, so it is a candidate on the first run too.
+  assert.deepEqual(r.candidates, ["a-gate", "c-waiting"]);
+  assert.deepEqual(
+    r.workspaces[0].workspaceState.needs.map((n) => n.kind),
+    ["gate"],
+  );
   assert.ok(fs.existsSync(path.join(root, ".check-in-last")));
 });
 
@@ -110,10 +116,7 @@ test("a paused workspace is never a candidate or ready to close, whatever it las
   workspace("f-paused", { labels: ["focus"], gate: "proposed" });
   workspace("g-live", { labels: ["focus"], gate: "proposed" });
   const dot = path.join(root, "f-paused", ".werkmeister");
-  fs.writeFileSync(
-    path.join(dot, "agent-state.json"),
-    JSON.stringify({ state: "needs-you", at: new Date().toISOString(), question: "Which fix?" }),
-  );
+  writeSessionState(path.join(root, "f-paused"), "needs-you", { question: "Which fix?" });
   fs.writeFileSync(
     path.join(dot, "paused.json"),
     JSON.stringify({ at: new Date().toISOString(), containers: [], was_working: false }),

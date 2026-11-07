@@ -16,87 +16,128 @@ import { findRecordRoot } from "./pr_guard.js";
 
 export type AgentState = "working" | "needs-you" | "done" | "idle";
 
-/** `<dot-dir>/agent-state.json`. `at` is when `state` began, not the last hook. */
-export interface AgentStateFile {
-  state: AgentState;
-  at: string;
-  question?: string;
-  /** Set when `question` is a Desktop wrap_up ask, which outlasts its turn's Stop. */
-  via?: "wrap_up";
-}
-
-const STATES = new Set<AgentState>(["working", "needs-you", "done", "idle"]);
 // Tools that block on the person even though PreToolUse fired for them.
 const ASKS = new Set(["AskUserQuestion", "ExitPlanMode"]);
 // idle_prompt repeats a Stop that already happened; auth_success needs nothing.
 const BLOCKING_NOTIFICATIONS = new Set(["permission_prompt", "elicitation_dialog"]);
 
+/** What one session is waiting on the person for. `source: "text"` is the reply-text guess. */
+export interface SessionAsk {
+  kind: "question" | "permission" | "plan";
+  what: string;
+  at: string;
+  source: "session" | "text";
+  /** A Desktop wrap_up ask, which outlasts its turn's Stop. */
+  via?: "wrap_up";
+}
+
 /**
- * One open harness session, under `sessions.<session id>` in the same file (SW-182):
- * what idle-stop and the resume nudge read instead of Claude Code's own session files.
- * `at` is when `status` began.
+ * One harness session, in its own `<dot-dir>/sessions/<id>.json` (SW-487) so no two sessions
+ * share a file: one can't overwrite another's ask, and no lock is needed. `at` is when `status`
+ * began (SW-182); `last` is the newest hook event, for telling a crashed session from a quiet one.
  */
 export interface SessionRecord {
   status: "busy" | "idle";
   at: string;
   /** Written by a `claude -p` turn, which may only end its own record (SW-397). */
   headless?: true;
+  last?: string;
+  /** The open tool call; `command` is a Bash command's first 200 characters. */
+  tool?: { name: string; command?: string; at: string };
+  /** Subagents started and not yet stopped. */
+  subagents?: number;
+  ask?: SessionAsk;
+  /** The last turn reached Stop, so the session is done rather than never started. */
+  stopped?: true;
 }
 
-const stateFile = (root: string) => path.join(dotDir(root), "agent-state.json");
+/** Past this with no hook event, a busy session has crashed or been killed (SW-487 Q7). */
+export const SESSION_GONE_MS = 30 * 60_000;
 
-function readRaw(root: string): Record<string, any> | null {
+// The id comes from hook input and names a file.
+const SESSION_ID = /^[\w-]+$/;
+const legacyFile = (root: string) => path.join(dotDir(root), "agent-state.json");
+export const sessionsDir = (root: string) => path.join(dotDir(root), "sessions");
+const sessionPath = (root: string, id: string) => path.join(sessionsDir(root), `${id}.json`);
+
+function readJson(file: string): Record<string, any> | null {
   try {
-    const o = JSON.parse(fs.readFileSync(stateFile(root), "utf8"));
+    const o = JSON.parse(fs.readFileSync(file, "utf8"));
     return o && typeof o === "object" && !Array.isArray(o) ? o : null;
   } catch {
     return null;
   }
 }
 
-function stateOf(o: Record<string, any> | null): AgentStateFile | null {
-  if (!STATES.has(o?.state) || typeof o?.at !== "string") return null;
-  const file: AgentStateFile = { state: o.state, at: o.at };
-  if (typeof o.question === "string") file.question = o.question;
-  if (o.via === "wrap_up") file.via = "wrap_up";
-  return file;
-}
-
-function sessionsOf(o: Record<string, any> | null): Record<string, SessionRecord> {
-  const sessions: Record<string, SessionRecord> = {};
-  for (const [id, s] of Object.entries(o?.sessions ?? {}) as [string, any][])
-    if ((s?.status === "busy" || s?.status === "idle") && typeof s.at === "string")
-      sessions[id] = { status: s.status, at: s.at, ...(s.headless === true && { headless: true }) };
-  return sessions;
-}
-
-/** The recorded state, or null when there is none or it doesn't parse. */
-export function readAgentState(root: string): AgentStateFile | null {
-  return stateOf(readRaw(root));
-}
-
-/** The workspace's open sessions by id; empty when there are none or the file doesn't parse. */
-export function readSessions(root: string): Record<string, SessionRecord> {
-  return sessionsOf(readRaw(root));
-}
-
-// Claude Code's own busy/idle: busy from the prompt until Stop.
-const BUSY_EVENTS = new Set(["UserPromptSubmit", "PreToolUse", "PostToolUse"]);
-
-/** The session's status after *event*: null removes it, undefined leaves it as it is. */
-function nextSessionStatus(event: unknown): SessionRecord["status"] | null | undefined {
-  if (event === "SessionEnd") return null;
-  if (event === "SessionStart" || event === "Stop") return "idle";
-  return BUSY_EVENTS.has(event as string) ? "busy" : undefined;
+function sessionOf(s: any): SessionRecord | null {
+  if ((s?.status !== "busy" && s?.status !== "idle") || typeof s.at !== "string") return null;
+  const r: SessionRecord = { status: s.status, at: s.at };
+  if (s.headless === true) r.headless = true;
+  if (typeof s.last === "string") r.last = s.last;
+  if (typeof s.tool?.name === "string" && typeof s.tool.at === "string") r.tool = s.tool;
+  if (Number.isInteger(s.subagents) && s.subagents > 0) r.subagents = s.subagents;
+  if (typeof s.ask?.what === "string" && typeof s.ask.at === "string") r.ask = s.ask;
+  if (s.stopped === true) r.stopped = true;
+  return r;
 }
 
 /**
- * True when the message ends on a question mark, past closing markdown and quotes.
- * ponytail: trailing-`?` heuristic, so "Want X? Say so." reads as done; the
- * AskUserQuestion tool is the reliable signal when a run needs a real answer.
+ * The workspace's sessions by id; empty when there are none.
+ * shortcut: also reads the pre-SW-487 `agent-state.json` `sessions{}` for ids with no file of their
+ * own, so a session open across the upgrade still counts as live; drop with the VS Code/dashboard migration.
+ */
+export function readSessions(root: string): Record<string, SessionRecord> {
+  const out: Record<string, SessionRecord> = {};
+  for (const [id, s] of Object.entries(readJson(legacyFile(root))?.["sessions"] ?? {})) {
+    const r = sessionOf(s);
+    if (r) out[id] = r;
+  }
+  let names: string[] = [];
+  try {
+    names = fs.readdirSync(sessionsDir(root));
+  } catch {
+    /* no sessions yet */
+  }
+  for (const n of names) {
+    const id = n.match(/^([\w-]+)\.json$/)?.[1];
+    const r = id ? sessionOf(readJson(path.join(sessionsDir(root), n))) : null;
+    if (id && r) out[id] = r;
+  }
+  return out;
+}
+
+const lastOf = (s: SessionRecord) => Date.parse(s.last ?? s.at);
+export const sessionGone = (s: SessionRecord, now = Date.now()) =>
+  s.status === "busy" && now - lastOf(s) >= SESSION_GONE_MS;
+
+/**
+ * The one-word badge older readers show (VS Code, the dashboard, preemption), from the session
+ * records alone; null when no session has done anything yet, so the caller falls back to the transcript.
+ */
+export function agentOf(
+  sessions: Record<string, SessionRecord>,
+  now = Date.now(),
+): { agent: AgentState; at: string; question: string | null } | null {
+  const list = Object.values(sessions);
+  const ask = list
+    .flatMap((s) => (s.ask ? [s.ask] : []))
+    .sort((a, b) => a.at.localeCompare(b.at))[0];
+  if (ask) return { agent: "needs-you", at: ask.at, question: ask.what };
+  const busy = list.find((s) => s.status === "busy" && !sessionGone(s, now));
+  if (busy) return { agent: "working", at: busy.at, question: null };
+  const newest = list.sort((a, b) => lastOf(b) - lastOf(a))[0];
+  if (!newest) return null;
+  if (newest.stopped) return { agent: "done", at: newest.at, question: null };
+  return newest.status === "busy" ? { agent: "idle", at: newest.at, question: null } : null;
+}
+
+/**
+ * True when the message's last paragraph holds a sentence ending in a question mark, so
+ * "Want X? Say so." asks. shortcut: a rhetorical closing `?` still reads as a question; it is
+ * shown as a guess, and AskUserQuestion is the reliable signal.
  */
 export function asksQuestion(text: string): boolean {
-  return /\?[\s*_`'")\]]*$/.test(text);
+  return /\?(?=[\s*_`'")\]]|$)/.test(questionOf(text));
 }
 
 /** The message's last paragraph, which is where its question sits, capped for a card. */
@@ -136,30 +177,85 @@ function lastAssistantText(transcript: string): string | null {
   return null;
 }
 
-type Next = Omit<AgentStateFile, "at"> | null;
+/** A permission prompt for an AskUserQuestion or ExitPlanMode call is that question, not news. */
+const askingTool = (s: SessionRecord) =>
+  s.ask?.kind !== "permission" && s.tool !== undefined && ASKS.has(s.tool.name);
 
-/** The state this hook event moves to, or null to leave the file as it is. */
-export function nextState(input: Record<string, any>, current: AgentStateFile | null): Next {
-  switch (input["hook_event_name"]) {
+/**
+ * The session's record after this hook event: null removes it, undefined leaves it as it is.
+ * *foreign* is a headless turn on an interactive session's id, which counts for busy/idle only.
+ */
+export function nextSession(
+  input: Record<string, any>,
+  current: SessionRecord | null,
+  now: Date,
+  opts: { headless?: boolean; foreign?: boolean } = {},
+): SessionRecord | null | undefined {
+  const event = input["hook_event_name"];
+  const at = now.toISOString();
+  const s: SessionRecord = current ? { ...current } : { status: "idle", at };
+  if (!opts.foreign) {
+    if (opts.headless) s.headless = true;
+    else delete s.headless;
+  }
+  s.last = at;
+  const status = (to: SessionRecord["status"]) => {
+    if (s.status !== to) Object.assign(s, { status: to, at });
+  };
+  // Subagent hooks carry the parent's session id plus agent_id (SW-443): never the parent's state.
+  if (event === "SubagentStart" || event === "SubagentStop") {
+    const n = (s.subagents ?? 0) + (event === "SubagentStart" ? 1 : -1);
+    if (n > 0) s.subagents = n;
+    else delete s.subagents;
+    return s;
+  }
+  if (input["agent_id"]) return current ? s : undefined;
+  const tool = String(input["tool_name"] ?? "");
+  const turnOnly = opts.foreign; // its prompt and tools belong to the fork, not the open session
+  switch (event) {
+    case "SessionStart":
+      status("idle");
+      // A new or resumed session has no subagents yet; a missed SubagentStop must not stick.
+      if (!turnOnly) for (const k of ["tool", "ask", "stopped", "subagents"] as const) delete s[k];
+      return s;
     case "UserPromptSubmit":
-      return { state: "working" };
-    case "PostToolUse":
-      // wrap_up returns at once; its ask still waits on the person.
-      return input["tool_name"] === WRAP_UP && current?.via === "wrap_up"
-        ? null
-        : { state: "working" };
+      status("busy");
+      if (!turnOnly) for (const k of ["tool", "ask", "stopped"] as const) delete s[k];
+      return s;
     case "PreToolUse": {
-      const tool = String(input["tool_name"] ?? "");
-      const ask = input["tool_input"]?.["ask"];
-      if (tool === WRAP_UP && typeof ask === "string" && ask.trim())
-        return { state: "needs-you", question: ask.trim(), via: "wrap_up" };
-      if (!ASKS.has(tool)) return { state: "working" };
-      const asked = input["tool_input"]?.["questions"]?.[0]?.["question"];
-      return {
-        state: "needs-you",
-        question: typeof asked === "string" ? asked : "Approve the plan?",
+      status("busy");
+      if (turnOnly) return s;
+      delete s.stopped;
+      const command = input["tool_input"]?.["command"];
+      s.tool = {
+        name: tool,
+        ...(typeof command === "string" && { command: command.slice(0, 200) }),
+        at,
       };
+      const wrapAsk = input["tool_input"]?.["ask"];
+      if (tool === WRAP_UP && typeof wrapAsk === "string" && wrapAsk.trim())
+        s.ask = { kind: "question", what: wrapAsk.trim(), at, source: "session", via: "wrap_up" };
+      else if (tool === "AskUserQuestion") {
+        const q = input["tool_input"]?.["questions"]?.[0]?.["question"];
+        s.ask = {
+          kind: "question",
+          what: typeof q === "string" ? q : "Answer the question",
+          at,
+          source: "session",
+        };
+      } else if (tool === "ExitPlanMode")
+        s.ask = { kind: "plan", what: "Approve the plan?", at, source: "session" };
+      else delete s.ask;
+      return s;
     }
+    case "PostToolUse":
+    case "PostToolUseFailure":
+      status("busy");
+      if (turnOnly) return s;
+      delete s.tool;
+      // wrap_up returns at once; its ask still waits on the person.
+      if (!(tool === WRAP_UP && s.ask?.via === "wrap_up")) delete s.ask;
+      return s;
     case "Notification": {
       const type = input["notification_type"];
       const message = String(input["message"] ?? "");
@@ -168,36 +264,53 @@ export function nextState(input: Record<string, any>, current: AgentStateFile | 
         typeof type === "string"
           ? BLOCKING_NOTIFICATIONS.has(type)
           : !/waiting for your input/i.test(message);
-      if (!blocks) return null;
-      // The prompt to approve AskUserQuestion follows its PreToolUse: keep the real question.
-      if (current?.state === "needs-you" && current.question) return null;
-      return { state: "needs-you", question: message || undefined };
+      if (!blocks || turnOnly || askingTool(s) || s.ask?.kind === "permission") return undefined;
+      s.ask = {
+        kind: type === "elicitation_dialog" ? "question" : "permission",
+        what: message || "Approve the tool call?",
+        at,
+        source: "session",
+      };
+      return s;
     }
     case "PermissionRequest": {
-      // Codex's approval prompt; it has no Notification event (SW-189).
+      // Claude Code's and Codex's approval prompt; Notification may also fire for it (deduped here).
+      if (turnOnly || askingTool(s) || s.ask?.kind === "permission") return undefined;
       const described = input["tool_input"]?.["description"];
-      return {
-        state: "needs-you",
-        question:
+      s.ask = {
+        kind: "permission",
+        what:
           typeof described === "string" && described.trim()
             ? described.trim()
-            : `Approve ${String(input["tool_name"] ?? "the tool call")}?`,
+            : `Approve ${tool || "the tool call"}?`,
+        at,
+        source: "session",
       };
+      return s;
     }
-    case "Stop": {
+    case "PermissionDenied":
+      if (s.ask?.kind === "permission") delete s.ask;
+      return s;
+    case "Stop":
+    case "StopFailure": {
+      status("idle");
+      if (turnOnly) return s;
+      delete s.tool;
+      s.stopped = true;
       let text: string | null = null;
       if (typeof input["last_assistant_message"] === "string")
         text = input["last_assistant_message"];
       else if (typeof input["transcript_path"] === "string")
         text = lastAssistantText(input["transcript_path"]);
-      if (text && asksQuestion(text)) return { state: "needs-you", question: questionOf(text) };
-      return current?.via === "wrap_up" ? null : { state: "done" };
+      if (text && asksQuestion(text))
+        s.ask = { kind: "question", what: questionOf(text), at, source: "text" };
+      else if (s.ask?.via !== "wrap_up") delete s.ask;
+      return s;
     }
     case "SessionEnd":
-      // A turn cut off by the exit is not live any more; done and needs-you still hold.
-      return current?.state === "working" ? { state: "idle" } : null;
+      return opts.foreign ? s : null;
     default:
-      return null;
+      return undefined;
   }
 }
 
@@ -285,19 +398,6 @@ export function readNudge(root: string): string | null {
   }
 }
 
-/** Set `needs-you` with *question*, keeping the session records; the session's next hook event replaces it. */
-export function flagNeedsYou(root: string, question: string, now = new Date()): void {
-  const raw = readRaw(root);
-  if (stateOf(raw)?.question === question) return;
-  writeAtomic(stateFile(root), {
-    ...raw,
-    state: "needs-you",
-    at: now.toISOString(),
-    question,
-    via: undefined,
-  });
-}
-
 export function writeNudge(root: string, message: string, now = new Date()): void {
   writeAtomic(nudgePath(root), { message, at: now.toISOString() });
 }
@@ -309,12 +409,51 @@ export function claimNudge(root: string): string | null {
   return message;
 }
 
+/** A system notice for the card, apart from any session's ask (SW-487): only its resolver or the person clears it. */
+export interface Notice {
+  what: string;
+  action: string;
+  at: string;
+  url?: string;
+}
+
+const noticesPath = (root: string) => path.join(dotDir(root), "notices.json");
+
+export function readNotices(root: string): Record<string, Notice> {
+  const out: Record<string, Notice> = {};
+  for (const [id, n] of Object.entries(readJson(noticesPath(root)) ?? {}) as [string, any][])
+    if (typeof n?.what === "string" && typeof n.at === "string")
+      out[id] = {
+        what: n.what,
+        action: String(n.action ?? ""),
+        at: n.at,
+        ...(n.url && { url: String(n.url) }),
+      };
+  return out;
+}
+
+// shortcut: read-modify-write; pr watch writes under its lock, but a dismiss from the pane can race it. Lock if a notice is lost.
+export function raiseNotice(
+  root: string,
+  id: string,
+  n: Omit<Notice, "at">,
+  now = new Date(),
+): void {
+  const all = readNotices(root);
+  if (all[id]?.what === n.what) return;
+  writeAtomic(noticesPath(root), { ...all, [id]: { ...n, at: now.toISOString() } });
+}
+
+export function clearNotice(root: string, id: string): void {
+  const all = readNotices(root);
+  if (!(id in all)) return;
+  delete all[id];
+  writeAtomic(noticesPath(root), all);
+}
+
 /** `<dot-dir>/wake-nudge-<session>.json` (SW-418): a `pr watch` wake held for that open session. */
 export const wakeNudgePath = (root: string, session: string) =>
   path.join(dotDir(root), `wake-nudge-${session}.json`);
-// The id comes from hook input and names a file.
-const SESSION_ID = /^[\w-]+$/;
-
 function readWakeNudge(file: string): string | null {
   try {
     const message = JSON.parse(fs.readFileSync(file, "utf8"))?.message;
@@ -444,61 +583,34 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
   }
 }
 
-/** Apply one hook event to the workspace holding its cwd. Returns the file written, or null. */
+/** Apply one hook event to its session's record in the workspace holding its cwd. Returns the file written, or null. */
 export function record(input: Record<string, any>, now = new Date()): string | null {
   const root = findRecordRoot(String(input["cwd"] || process.cwd()));
-  if (!root) return null;
-  const raw = readRaw(root);
-  const current = stateOf(raw);
-  let next = nextState(input, current);
-  // A held PR wake's needs-you lasts until the session is handed it, not its next tool call (SW-418).
-  if (
-    next?.state === "working" &&
-    current?.state === "needs-you" &&
-    pendingWake(root, input["session_id"])
-  )
-    next = null;
-  const stateChanged =
-    next !== null &&
-    !(
-      current &&
-      current.state === next.state &&
-      current.question === next.question &&
-      current.via === next.via
-    );
-
-  const sessions = sessionsOf(raw);
   const id = input["session_id"];
+  if (!root || typeof id !== "string" || !SESSION_ID.test(id)) return null;
+  const file = sessionPath(root, id);
+  const own = sessionOf(readJson(file));
+  const legacy = readJson(legacyFile(root));
+  const current = own ?? sessionOf(legacy?.["sessions"]?.[id]);
   const headless = process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith("sdk") ?? false;
   // `claude -p --resume <id>` shares an open session's id: its busy/idle counts, its end must not end that session.
-  // shortcut: an interactive session that dies without SessionEnd stays here until stale (24 h); upgrade if crashed sessions block Resume.
-  const foreign = headless && sessions[id] && !sessions[id].headless;
-  const mark = headless && !foreign;
-  const status =
-    typeof id === "string" && id ? nextSessionStatus(input["hook_event_name"]) : undefined;
-  let sessionsChanged = false;
-  if (status === null && id in sessions && !foreign) {
-    delete sessions[id];
-    sessionsChanged = true;
-  } else if (status && (sessions[id]?.status !== status || !!sessions[id]?.headless !== mark)) {
-    sessions[id] = { status, at: now.toISOString(), ...(mark && { headless: true as const }) };
-    sessionsChanged = true;
+  const foreign = headless && current !== null && !current.headless;
+  const next = nextSession(input, current, now, { headless, foreign });
+  if (next === undefined) return null;
+  // A session open across the upgrade moves out of the old file on its first event, so it can't reappear after it ends.
+  if (legacy?.["sessions"]?.[id]) {
+    delete legacy["sessions"][id];
+    writeAtomic(legacyFile(root), legacy);
   }
-  if (!stateChanged && !sessionsChanged) return null;
-
-  let body: Partial<AgentStateFile> & { sessions?: Record<string, SessionRecord> } = {
-    ...current,
-  };
-  if (stateChanged && next) {
-    body = { state: next.state, at: now.toISOString() };
-    if (next.question) body.question = next.question;
-    if (next.via) body.via = next.via;
+  if (next === null) {
+    if (!current) return null;
+    fs.rmSync(file, { force: true });
+    return file;
   }
-  if (Object.keys(sessions).length) body.sessions = sessions;
-  // ponytail: read-modify-write with no lock, so two sessions' hooks in the same
-  // millisecond can drop one's change; a file lock if that shows up.
-  const file = stateFile(root);
-  writeAtomic(file, body);
+  // shortcut: parallel tool calls in one session still race on its own file (the last `tool` wins);
+  // both are busy and none carries an ask, which only blocking tools and prompts set.
+  fs.mkdirSync(sessionsDir(root), { recursive: true });
+  writeAtomic(file, next);
   return file;
 }
 

@@ -21,11 +21,16 @@ import path from "node:path";
 import { promisify } from "node:util";
 import { parse as parseYaml } from "yaml";
 import {
+  agentOf,
   claimNudge,
   heldWakes,
   nudgePath,
   RESUME_NUDGE,
+  readNotices,
   readPaused,
+  readSessions,
+  readWaiting,
+  sessionGone,
   writeNudge,
 } from "./agent_state.js";
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
@@ -148,6 +153,13 @@ import { collectingReporter, info, warn, withReporter } from "./reporter.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
 import { provisionWorkspace, WorkspaceInitError } from "./workspace_init.js";
 import { computePromptSpec, isTrue, loadConfigFile, resolveInputs } from "./workspace_prompts.js";
+import {
+  legacyAgent,
+  type NeedItem,
+  prNeeds,
+  type WorkspaceState,
+  workspaceState,
+} from "./workspace_state.js";
 import { revokeWorkspaceToken } from "./workspace_token.js";
 import { hasGit, listRepoWorktrees } from "./worktrees.js";
 
@@ -170,6 +182,16 @@ export {
   watchPrs,
   // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 } from "./pr_lifecycle.js";
+export type {
+  Activity,
+  ActivityId,
+  NeedItem,
+  NeedKind,
+  NeedSource,
+  Phase,
+  PhaseId,
+  WorkspaceState,
+} from "./workspace_state.js";
 export { listRepoWorktrees };
 
 const execFileAsync = promisify(execFile);
@@ -1319,6 +1341,8 @@ export interface WorkspaceStatus {
   resumeNudge: boolean;
   /** Sessions with a `pr watch` wake held for them (SW-418) and the file's mtime; each one's band prompts it when idle. */
   heldWakes: { session: string; at: string }[];
+  /** Phase, activity and the needs-you list (SW-487); PR items come from {@link getWorkspacePRs}. */
+  workspaceState: WorkspaceState;
 }
 
 /** An ICM workspace's current stage: 1-based `index` of `total`, `name` without its `NN_` prefix. */
@@ -1491,8 +1515,8 @@ export async function getWorkspaceStatuses(): Promise<{
   const projects = swept?.tallies ?? null;
   const portsDoc = await loadPortsDoc();
 
-  const statuses = await Promise.all(
-    names.map(async (name): Promise<WorkspaceStatus> => {
+  const rows = await Promise.all(
+    names.map(async (name): Promise<Omit<WorkspaceStatus, "workspaceState">> => {
       const dir = path.join(root, name);
       let project = await readEnvValue(dir, "COMPOSE_PROJECT_NAME");
       if (!project) {
@@ -1565,6 +1589,16 @@ export async function getWorkspaceStatuses(): Promise<{
       };
     }),
   );
+  const statuses = await Promise.all(
+    rows.map(async (s): Promise<WorkspaceStatus> => {
+      const workspaceState = await stateFor(path.join(root, s.name), s);
+      return {
+        ...s,
+        workspaceState,
+        claude: { ...s.claude, ...legacyAgent(workspaceState, s.claude) },
+      };
+    }),
+  );
 
   // Shared infra is a single Compose project — read its tally from the same sweep.
   let infra: InfraStatus;
@@ -1599,6 +1633,13 @@ export async function getWorkspaceStatuses(): Promise<{
   return { statuses, infra };
 }
 
+// What a check-in courier can carry to the person and back; PR and lifecycle items need the person themselves.
+const COURIER_KINDS = new Set<NeedItem["kind"]>(["question", "permission", "plan", "gate"]);
+const BUSY_ACTIVITY = new Set(["testing", "tool", "subagent", "thinking"]);
+// Not claude.agent: since SW-487 it reads Needs you whenever the list has an item, even mid-turn.
+const working = (r: CheckInRow) =>
+  r.claude.agent === "working" || BUSY_ACTIVITY.has(r.workspaceState?.activity.id ?? "");
+
 /** One workspace in a check-in sweep: the facts that decide whether a courier goes to it. */
 export interface CheckInRow {
   name: string;
@@ -1618,6 +1659,8 @@ export interface CheckInRow {
   paused: boolean;
   /** One per PR file; `repo` is its worktree dir, `release` the tag that shipped it. */
   prs: Array<{ repo: string; url: string | null; status: string; release: string | null }>;
+  /** The status sweep's state model (SW-487), read before merged PRs were shipped. */
+  workspaceState: WorkspaceState | null;
 }
 
 export interface CheckInTriage {
@@ -1635,6 +1678,59 @@ export interface CheckInTriage {
   candidates: string[];
   /** Shipped or abandoned with no Claude turn working: ask the person about close-out. */
   readyToClose: string[];
+}
+
+const mtimeOf = (file: string) =>
+  fs.stat(file).then(
+    (st) => st.mtime.toISOString(),
+    () => null,
+  );
+
+/** The facts {@link workspaceState} reads for one swept workspace, beyond its status row. */
+async function stateFor(
+  dir: string,
+  s: Omit<WorkspaceStatus, "workspaceState">,
+): Promise<WorkspaceState> {
+  const sessions = readSessions(dir);
+  const life = lifecycleOf(dir);
+  const shipped = life.state === "shipped";
+  const released = shipped ? await Promise.all(life.prs.map((p) => mtimeOf(p.path))) : [];
+  const gone = Object.values(sessions).some((x) => sessionGone(x));
+  return workspaceState({
+    now: new Date(),
+    sessions,
+    turnRunning: s.claude.state === "running",
+    // Only when it decides something: it costs a `ps` and an `lsof`.
+    processOpen: gone ? await claudeOpenIn(dir, s.harness).catch(() => null) : null,
+    paused: s.paused,
+    waiting: readWaiting(dir),
+    services: s.services,
+    crashLoops: s.crashLoops,
+    started: s.started,
+    lifecycle: life.state,
+    postmortemAt: await mtimeOf(path.join(dir, "postmortem.md")),
+    releasedAt:
+      released
+        .filter((t) => t !== null)
+        .sort()
+        .at(-1) ?? null,
+    closedOut: life.state === "closed-out",
+    stage: s.stage,
+    jitPhase: s.phase,
+    gates: await Promise.all(
+      (await proposedGates(dir)).map(async (file) => ({
+        file,
+        at: (await mtimeOf(path.join(dir, file))) ?? new Date().toISOString(),
+      })),
+    ),
+    heldWakes: s.heldWakes,
+    registrySync: life.prs.filter((p) => p.registry_sync).map((p) => ({ repo: p.dir, url: p.url })),
+    notices: readNotices(dir),
+    transcriptAsk:
+      agentOf(sessions) === null && s.claude.agent === "needs-you" && s.claude.question
+        ? { what: s.claude.question, at: s.claude.at ?? new Date().toISOString() }
+        : null,
+  });
 }
 
 /** `stages/<stage>/output/*.md` files with a line starting `status: proposed` (a `pr-*.md`: `status: draft`), relative to `dir`. */
@@ -1708,6 +1804,7 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
           status: p.status,
           release: p.release,
         })),
+        workspaceState: status?.workspaceState ?? null,
       };
     }),
   );
@@ -1716,10 +1813,7 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
   await fs.utimes(mark, now, now);
   const readyToClose = rows
     .filter(
-      (r) =>
-        !r.paused &&
-        (r.lifecycle === "shipped" || r.lifecycle === "abandoned") &&
-        r.claude.agent !== "working",
+      (r) => !r.paused && (r.lifecycle === "shipped" || r.lifecycle === "abandoned") && !working(r),
     )
     .map((r) => r.name);
   return {
@@ -1731,11 +1825,12 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
       .filter(
         (r) =>
           !r.paused &&
-          r.claude.agent !== "working" &&
+          !working(r) &&
           !readyToClose.includes(r.name) &&
-          (sinceMs === null
-            ? r.claude.agent === "needs-you" || r.claude.agent === "done"
-            : r.gates.length > 0 || r.changed),
+          (r.workspaceState?.needs.some((n) => COURIER_KINDS.has(n.kind)) ||
+            (sinceMs === null
+              ? r.claude.agent === "needs-you" || r.claude.agent === "done"
+              : r.gates.length > 0 || r.changed)),
       )
       .map((r) => r.name),
     readyToClose,
@@ -1803,10 +1898,24 @@ export interface RepoPr {
   failingChecks: number;
   /** True for a draft PR; absent when there is no PR. */
   draft?: boolean;
+  /** GitHub's `mergeable`; absent when there is no PR (SW-487). */
+  mergeable?: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | null;
+  /** GitHub's `reviewDecision`; null when the repo requires no review. */
+  review?: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
+  /** `mergeStateStatus` is BEHIND: the branch is behind its base. */
+  behind?: boolean;
+  /** When the newest failing check completed. */
+  ciAt?: string | null;
+  /** When the newest review was submitted. */
+  reviewAt?: string | null;
 }
 export interface WorkspacePrs {
   name: string;
   repos: RepoPr[];
+  /** The PR needs-you items ({@link prNeeds}); a UI lists them after `WorkspaceStatus.state.needs`. */
+  needs: NeedItem[];
+  /** "waiting on review", "behind main", or null. */
+  phaseDetail: string | null;
 }
 
 /**
@@ -1840,7 +1949,7 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
       "--state",
       "all",
       "--json",
-      "url,state,title,labels,statusCheckRollup,isDraft",
+      "url,state,title,labels,statusCheckRollup,isDraft,mergeable,mergeStateStatus,reviewDecision,latestReviews",
       "--limit",
       "1",
     ],
@@ -1855,6 +1964,10 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
       labels?: Array<{ name?: string }>;
       statusCheckRollup?: unknown;
       isDraft?: boolean;
+      mergeable?: string;
+      mergeStateStatus?: string;
+      reviewDecision?: string;
+      latestReviews?: Array<{ submittedAt?: string }>;
     }>;
     if (!arr.length) return none;
     const s = (arr[0].state ?? "").toUpperCase();
@@ -1868,10 +1981,38 @@ async function ghPrForWorktree(repoDir: string): Promise<Omit<RepoPr, "repo">> {
       labels,
       ...ciOf(arr[0].statusCheckRollup),
       draft: arr[0].isDraft === true,
+      ...prFacts(arr[0]),
     };
   } catch {
     return none;
   }
+}
+
+const newest = (times: unknown[]): string | null =>
+  times
+    .filter((t): t is string => typeof t === "string" && t !== "")
+    .sort()
+    .at(-1) ?? null;
+
+/** The mergeability, review and timing facts the state model reads from a `gh pr list` row (SW-487). */
+export function prFacts(v: {
+  mergeable?: string;
+  mergeStateStatus?: string;
+  reviewDecision?: string;
+  latestReviews?: Array<{ submittedAt?: string }>;
+  statusCheckRollup?: unknown;
+}): Pick<RepoPr, "mergeable" | "review" | "behind" | "ciAt" | "reviewAt"> {
+  const m = v.mergeable;
+  const r = v.reviewDecision;
+  const rollup = Array.isArray(v.statusCheckRollup) ? v.statusCheckRollup : [];
+  const failed = rollup.filter((c) => countFailingChecks([c]) > 0);
+  return {
+    mergeable: m === "MERGEABLE" || m === "CONFLICTING" || m === "UNKNOWN" ? m : null,
+    review: r === "APPROVED" || r === "CHANGES_REQUESTED" || r === "REVIEW_REQUIRED" ? r : null,
+    behind: v.mergeStateStatus === "BEHIND",
+    ciAt: newest(failed.map((c) => c?.completedAt)),
+    reviewAt: newest((v.latestReviews ?? []).map((x) => x?.submittedAt)),
+  };
 }
 
 /**
@@ -1896,7 +2037,7 @@ export async function getWorkspacePRs(): Promise<WorkspacePrs[]> {
           async ({ repo, dir }): Promise<RepoPr> => ({ repo, ...(await ghPrForWorktree(dir)) }),
         ),
       );
-      return { name, repos: repoPrs };
+      return { name, repos: repoPrs, ...prNeeds(repoPrs) };
     }),
   );
 }

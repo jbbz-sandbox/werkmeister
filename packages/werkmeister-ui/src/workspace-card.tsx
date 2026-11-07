@@ -323,8 +323,20 @@ export function WorkspaceCard(p: CardProps) {
             <span className={p.issueId ? "" : "faint"}>{p.issueId ?? "no issue"}</span>
           )}
         </div>
+        {d.needsList.length > 0 && (
+          <ul className="needs-list">
+            {d.needsList.map((n) => (
+              <li key={n.id}>
+                <span className="q-label">{n.guess ? `${n.what} (guess)` : n.what}</span>
+                {n.since && <span className="muted"> · {n.since}</span>}
+                <span className="muted"> — {n.action}</span>
+              </li>
+            ))}
+          </ul>
+        )}
         {d.needs &&
           d.question &&
+          d.needsList.length === 0 &&
           (questionOpen ? (
             <div className="question open">
               <div className="q-meta">
@@ -407,7 +419,7 @@ export function WorkspaceCard(p: CardProps) {
         <span className="lbl">Workflow</span>
         <div className="val">
           <span className={d.workflow.kind === "lifecycle" ? "wf strong" : "wf"}>
-            {d.workflow.text || "—"}
+            {(d.phase && d.phase.text !== "Building" ? d.phase.text : d.workflow.text) || "—"}
           </span>
           {d.workflow.pips.length > 0 && (
             <span className="pips" aria-hidden="true">
@@ -424,7 +436,11 @@ export function WorkspaceCard(p: CardProps) {
             <Dot tone={d.agent.dot} />
             {d.agent.word}
           </span>
-          <span className="muted small">{d.agent.time}</span>
+          <span className="muted small">
+            {d.activity
+              ? [d.activity.text, d.activity.time].filter(Boolean).join(" · ")
+              : d.agent.time}
+          </span>
         </div>
       </div>
 
@@ -565,6 +581,7 @@ export const CARD_CSS = `${TONES}
   .wsui .q-label { color: var(--sd-warn); font-weight: 600; white-space: nowrap; }
   .wsui .q-clip { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .wsui .question .muted { white-space: nowrap; }
+  .wsui .needs-list { margin: 8px 0 0; padding-left: 18px; }
   .wsui .q-meta { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
   .wsui .q-toggle { all: unset; cursor: pointer; color: var(--sd-muted); }
   .wsui .q-text { margin: 6px 0 12px; font-size: 15px; line-height: 1.5; text-wrap: pretty; overflow-wrap: anywhere; }

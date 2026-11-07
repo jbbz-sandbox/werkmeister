@@ -35,6 +35,9 @@ const _RUNTIME_FILES = [
   "compose.yml",
   "compose.gate.yml",
   ".werkmeister/agent-state.json",
+  // SW-487: per-session hook records (they hold Bash command text) and system notices.
+  ".werkmeister/sessions/",
+  ".werkmeister/notices.json",
   ".werkmeister/last-exec",
   ".werkmeister/starts.json",
   ".werkmeister/token",

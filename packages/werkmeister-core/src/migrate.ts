@@ -40,6 +40,7 @@ import {
   zshrcPath,
 } from "./global_config.js";
 import {
+  AGENT_STATE_EVENTS,
   workspaceAllowRules,
   workspaceAskRules,
   workspaceDenyRules,
@@ -361,7 +362,15 @@ function workspaceStale(dir: string): boolean {
   const deny = has("deny");
   const ask = has("ask");
   const wrapper = tempHomeWrapper(dir);
+  // SW-487 added agent-state events: a workspace hooked before it misses permission and subagent events.
+  const hooks: Record<string, unknown> = settings?.["hooks"] ?? {};
+  const agentState = (e: string) => JSON.stringify(hooks[e] ?? []).includes("agent-state");
+  const missingEvents =
+    Object.keys(hooks).some(agentState) &&
+    !JSON.stringify(hooks).includes("WERKMEISTER_HOOK_HARNESS=codex") &&
+    AGENT_STATE_EVENTS.some((e) => !agentState(e));
   return (
+    missingEvents ||
     PRE_SW186_HOOK.test(fs.readFileSync(settingsFile, "utf8")) ||
     workspaceAllowRules(dir).some((r) => !allow.has(r)) ||
     workspaceDenyRules(dir).some((r) => !deny.has(r)) ||

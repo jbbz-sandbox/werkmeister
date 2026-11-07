@@ -37,6 +37,9 @@ test("compose and runtime state are ignored; the record's own files are not", ()
       "compose.yml",
       "compose.gate.yml",
       ".werkmeister/agent-state.json",
+      // SW-487: per-session hook records and stored notices.
+      ".werkmeister/sessions/s-1.json",
+      ".werkmeister/notices.json",
       ".werkmeister/last-exec",
       ".werkmeister/starts.json",
       // SW-476: held wakes, before (SW-418) and since (SW-444) one file per session.

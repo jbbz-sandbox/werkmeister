@@ -3095,3 +3095,81 @@ test("a session outside any workspace starts no band and reads no workspaces", a
   await $.session.start({ cwd: "/elsewhere", surface: "terminal", isInteractive: true });
   expect(w.calls.filter((c) => c.key === `${WS}/list-workspaces`)).toHaveLength(0);
 });
+
+test("SW-487: a card lists every needs-you item with its action, the activity beside the chip, and ✕ for a stored notice", async ($, on) => {
+  const need = (id: string, what: string, over = {}) => ({
+    id,
+    kind: id.split(":")[0],
+    what,
+    since: null,
+    action: "Do it",
+    source: "gate",
+    ...over,
+  });
+  const status = {
+    ...STATUS,
+    statuses: STATUS.statuses.map((s) =>
+      s.name === "abc"
+        ? {
+            ...s,
+            workspaceState: {
+              phase: { id: "building", label: "Stage 2 of 4 · spec", stage: "Stage 2 of 4 · spec" },
+              activity: { id: "testing", label: "Running tests", since: null, session: "s" },
+              needs: [
+                need("gate:spec", "Approve spec.md"),
+                need("question:s", "Ship it?", { source: "text", action: "Answer it" }),
+                need("notice:autofix-app", "auto-fix blocked", {
+                  source: "notice",
+                  dismiss: "autofix-app",
+                }),
+              ],
+            },
+          }
+        : s,
+    ),
+  };
+  const prs = PRS.map((w) =>
+    w.name === "ab"
+      ? {
+          ...w,
+          needs: [
+            need("merge:sandbox", "sandbox PR is approved and green", {
+              source: "pr",
+              action: "Merge it",
+            }),
+          ],
+          phaseDetail: null,
+        }
+      : w,
+  );
+  const w = world(
+    on,
+    stubs({ [`${WS}/workspace-status`]: () => ok(status), [`${WS}/workspace-prs`]: () => ok(prs) }),
+  );
+  await openPane($);
+  await w.clock.settle();
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: SURFACES[0],
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "activity:abc" }))?.text).toBe("Running tests");
+  expect((await ui.find({ key: "meta:abc" }))?.text).toBe(
+    "containers 1 of 3 up · PRs None yet · Stage 2 of 4 · spec",
+  );
+  expect((await ui.find({ key: "need:abc:gate:spec" }))?.text).toBe("● Approve spec.md — Do it");
+  expect((await ui.find({ key: "need:abc:question:s" }))?.text).toBe(
+    "● Ship it? (guess) — Answer it",
+  );
+  expect(await ui.find({ key: "question:abc" })).toBeUndefined();
+  expect(await ui.find({ key: "dismiss-btn:abc:notice:autofix-app" })).toBeDefined();
+  expect(await ui.find({ key: "dismiss-btn:abc:gate:spec" })).toBeUndefined();
+  expect((await ui.find({ key: "need:ab:merge:sandbox" }))?.text).toBe(
+    "● sandbox PR is approved and green — Merge it",
+  );
+  // An older core sends no model: the chip's own time stands in (it was computed and never drawn).
+  expect((await ui.find({ key: "activity:ab" }))?.text).toBe("last activity");
+  await ui.unmount();
+});

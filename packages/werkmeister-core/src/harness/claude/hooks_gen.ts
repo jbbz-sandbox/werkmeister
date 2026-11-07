@@ -117,13 +117,25 @@ export const AGENT_STATE_EVENTS = [
   "Notification",
   "Stop",
   "SessionEnd",
+  // SW-487: permission prompts beside Notification, subagents apart from their parent, failed turns.
+  "PermissionRequest",
+  "PermissionDenied",
+  "PostToolUseFailure",
+  "SubagentStart",
+  "SubagentStop",
+  "StopFailure",
 ] as const;
 
-/** {@link AGENT_STATE_EVENTS} on Codex, which has no Notification: its approval prompts arrive as PermissionRequest. */
-export const CODEX_AGENT_STATE_EVENTS = AGENT_STATE_EVENTS.map((e) =>
-  e === "Notification" ? "PermissionRequest" : e,
-);
-
+/** The agent-state events on Codex: no Notification (its approval prompts arrive as PermissionRequest) and none of SW-487's. */
+export const CODEX_AGENT_STATE_EVENTS = [
+  "SessionStart",
+  "UserPromptSubmit",
+  "PreToolUse",
+  "PostToolUse",
+  "PermissionRequest",
+  "Stop",
+  "SessionEnd",
+] as const;
 // SessionEnd hooks get a 1.5s budget unless one sets `timeout`, and the CLI's own
 // start-up can take most of that. The stop itself runs detached, so this only
 // bounds the idle check.

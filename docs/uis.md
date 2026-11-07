@@ -38,7 +38,8 @@ workspace, drawn from the same display model as the dashboard. Source:
 workspaces. If it is closed, type `/workspaces`.
 
 **What you can do.** Each card shows the agent chip (Working, Needs you, Done,
-Idle), the work type and task, and containers · PRs · CI · stage. The primary
+Idle) with what the agent is doing and since when, a list of everything that
+needs you, the work type and task, and containers · PRs · CI · stage. The primary
 action follows the state: Up, Continue, Resume, or Close out once every PR
 shipped. Stop and Pause sit beside it, and `⋯` holds the rest. ＋ New session
 starts a new Claude Code session in the workspace; Continue in Desktop, VS Code

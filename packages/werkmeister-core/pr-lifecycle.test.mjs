@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { readAgentState } from "./dist/agent_state.js";
+import { heldWakes, readNotices } from "./dist/agent_state.js";
 import { dotDir } from "./dist/config.js";
 import { resolveIssueStatuses } from "./dist/issue_status.js";
 import {
@@ -1857,7 +1857,11 @@ test("SW-340 warn (default): only the notice, on pr status and the card; never r
       assert.ok(r.lines.includes(notice), r.lines.join("\n"));
       assert.ok(!d.calls.some((c) => c.startsWith("git -C /src/app")), d.calls.join("\n"));
       assert.equal(registry(), before);
-      assert.equal(readAgentState(ws).question, notice);
+      assert.equal(
+        lifecycleOf(ws).prs[0].registry_sync,
+        true,
+        "the card reads the PR file, no agent flag",
+      );
       assert.equal(readPrFiles(ws)[0].fm.registry_sync, "needed");
       const again = await refreshPrStatus(ws, deps([]));
       assert.ok(!again.lines.some((l) => l.includes("registry")), again.lines.join("\n"));
@@ -3815,7 +3819,11 @@ test("claimCallbacks: a wake for an open session is claimed and left as its nudg
     assert.deepEqual(wakes(busy), [], "no headless resume into an open session");
     assert.ok(busy.lines.includes("app: wake held, session s-1 in use"), busy.lines.join("\n"));
     assert.match(nudge().message, new RegExp(`PR ${URL9} conflicts with main, resolve it.`));
-    assert.match(readAgentState(ws).question, /^waiting for your open session: /);
+    assert.deepEqual(
+      heldWakes(ws).map((w) => w.session),
+      ["s-1"],
+      "the held wake is the card's fact",
+    );
     assert.equal(readPrFiles(ws)[0].fm["notified_conflict"], "true", "claimed with the nudge");
     assert.deepEqual(wakes(await claim(ws, deps([view]))), [], "not sent again once idle");
   } finally {
@@ -3935,9 +3943,9 @@ test("watchPrs: headless claims are sent, desktop ones returned, a failed send i
         ),
         retried.lines.join("\n"),
       );
-      assert.notEqual(
-        readAgentState(path.join(root, "a-ws"))?.state,
-        "needs-you",
+      assert.equal(
+        readNotices(path.join(root, "a-ws"))["autofix-app"],
+        undefined,
         "a fix that landed",
       );
 
@@ -3953,9 +3961,18 @@ test("watchPrs: headless claims are sent, desktop ones returned, a failed send i
       const line =
         "auto-fix blocked: needs approval — Bash: pnpm run test; Bash: git commit -qam fix";
       assert.ok(blocked.lines.includes(`app: ${line}`), blocked.lines.join("\n"));
-      const flagged = readAgentState(path.join(root, "a-ws"));
-      assert.equal(flagged.state, "needs-you");
-      assert.ok(flagged.question.startsWith(line), flagged.question);
+      const flagged = readNotices(path.join(root, "a-ws"))["autofix-app"];
+      assert.ok(flagged.what.startsWith(line), flagged.what);
+      fs.writeFileSync(
+        path.join(root, "a-ws", "stages", "03_propose", "output", "pr-app.md"),
+        callbackFile(),
+      );
+      await watchPrs({ desktop: false }, deps([MERGED, NO_TAG]), async () => []);
+      assert.equal(
+        readNotices(path.join(root, "a-ws"))["autofix-app"],
+        undefined,
+        "a clean resend clears it",
+      );
     });
   } finally {
     if (prev === undefined) delete process.env.WERKMEISTER_WORKSPACES_ROOT;

@@ -625,8 +625,30 @@ export function registerWorkspaceTools(server: McpServer): void {
                 ci: z.enum(["pass", "running", "fail"]).nullable(),
                 failingChecks: z.number(),
                 draft: z.boolean().optional(),
+                mergeable: z.enum(["MERGEABLE", "CONFLICTING", "UNKNOWN"]).nullable().optional(),
+                review: z
+                  .enum(["APPROVED", "CHANGES_REQUESTED", "REVIEW_REQUIRED"])
+                  .nullable()
+                  .optional(),
+                behind: z.boolean().optional(),
+                ciAt: z.string().nullable().optional(),
+                reviewAt: z.string().nullable().optional(),
               }),
             ),
+            // SW-487: the PR items a card lists after `status`'s own.
+            needs: z.array(
+              z
+                .object({
+                  id: z.string(),
+                  kind: z.string(),
+                  what: z.string(),
+                  since: z.string().nullable(),
+                  action: z.string(),
+                  source: z.string(),
+                })
+                .passthrough(),
+            ),
+            phaseDetail: z.string().nullable(),
           }),
         ),
       }),
@@ -984,6 +1006,28 @@ export function registerWorkspaceTools(server: McpServer): void {
             paused: z.object({ at: z.string(), containers: z.array(z.string()) }).nullable(),
             resumeNudge: z.boolean(),
             heldWakes: z.array(z.object({ session: z.string(), at: z.string() })),
+            // SW-487: what the card shows; PR items come from `workspace-prs`.
+            workspaceState: z.object({
+              phase: z.object({ id: z.string(), label: z.string(), stage: z.string().nullable() }),
+              activity: z.object({
+                id: z.string(),
+                label: z.string(),
+                since: z.string().nullable(),
+                session: z.string().nullable(),
+              }),
+              needs: z.array(
+                z
+                  .object({
+                    id: z.string(),
+                    kind: z.string(),
+                    what: z.string(),
+                    since: z.string().nullable(),
+                    action: z.string(),
+                    source: z.string(),
+                  })
+                  .passthrough(),
+              ),
+            }),
           }),
         ),
         host: z.record(z.string(), z.unknown()).optional(),
@@ -1036,6 +1080,7 @@ export function registerWorkspaceTools(server: McpServer): void {
         "merged PRs a release tag now contains, as `pr status` does. Drops `skip` workspaces " +
         "(and non-`focus` ones when any carry `focus`), names the `candidates` that need a " +
         "courier and the `readyToClose` ones (shipped or abandoned, no Claude turn working). " +
+        "Each row's `workspaceState` is the card's phase, activity and needs-you list. " +
         "Marks now as the last check-in.",
       inputSchema: {},
     },

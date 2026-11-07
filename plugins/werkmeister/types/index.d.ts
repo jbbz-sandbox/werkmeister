@@ -1,5 +1,27 @@
 export type WorkspaceState = "up" | "partial" | "stopped" | "paused" | "down" | "unknown";
 
+/** One needs-you item from werkmeister-core's state model (SW-487). */
+export type NeedItem = {
+  id: string;
+  kind: string;
+  what: string;
+  since: string | null;
+  action: string;
+  source: "session" | "gate" | "pr" | "lifecycle" | "containers" | "notice" | "text";
+  session?: string;
+  file?: string;
+  url?: string;
+  /** A stored notice's id: the card offers ✕ Dismiss. */
+  dismiss?: string;
+};
+
+/** werkmeister-core `WorkspaceState` (SW-487): phase, activity and the needs-you list. */
+export type StateModel = {
+  phase: { id: string; label: string; stage: string | null };
+  activity: { id: string; label: string; since: string | null; session: string | null };
+  needs: NeedItem[];
+};
+
 export type WorkspaceRow = {
   name: string;
   path: string;
@@ -37,6 +59,8 @@ export type WorkspaceRow = {
     at: string | null;
     question: string | null;
   };
+  /** Core's state model (SW-487); null or absent with a core older than it. */
+  workspaceState?: StateModel | null;
   /** JIT phase from the newest live note (SW-47), or null. */
   phase: string | null;
   /** `autonomous` in workspace.yml. */
@@ -183,6 +207,8 @@ declare module "claude-code" {
       prs: Record<string, RepoPr[]>;
       /** How the last PR poll ended; `failed` reads `PRs unavailable · retry` on the cards. */
       prsPoll: "ok" | "failed";
+      /** The PR poll's needs-you items and phase detail by workspace name (SW-487). */
+      prNeeds: Record<string, { needs: NeedItem[]; phaseDetail: string | null }>;
       /** The ? legend is shown. */
       legend: boolean;
       /** Inline (above the prompt) the list shows one line per workspace; expanded it fills the room. */

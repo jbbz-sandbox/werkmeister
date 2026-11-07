@@ -226,3 +226,30 @@ export async function withFakeDaemon(fn, tools = {}) {
     await daemon.close();
   }
 }
+
+/**
+ * Seed one session's hook record (SW-487 per-session files) as the badge *agent* would read:
+ * working = busy, needs-you = an ask, done = stopped. For tests that used to write agent-state.json.
+ */
+export function writeSessionState(
+  dir,
+  agent,
+  { question, at = new Date().toISOString(), id = "s1" } = {},
+) {
+  const rec =
+    agent === "working"
+      ? { status: "busy", at, last: at }
+      : agent === "needs-you"
+        ? {
+            status: "idle",
+            at,
+            stopped: true,
+            ask: { kind: "question", what: question ?? "?", at, source: "session" },
+          }
+        : agent === "done"
+          ? { status: "idle", at, stopped: true }
+          : { status: "idle", at };
+  const sessions = path.join(dir, ".werkmeister", "sessions");
+  fs.mkdirSync(sessions, { recursive: true });
+  fs.writeFileSync(path.join(sessions, `${id}.json`), JSON.stringify(rec));
+}

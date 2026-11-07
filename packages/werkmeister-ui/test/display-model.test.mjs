@@ -250,3 +250,107 @@ test("SW-41: hostLine", () => {
   assert.equal(hostLine({ load: [401, 300, 200], cores: 10, featureCpuPercent: 900 }).tone, "warn");
   assert.deepEqual(hostLine(null), { text: "host load n/a", tone: "off" });
 });
+
+// SW-487: the core state model rendered as a Needs-you list, a phase and an activity.
+const wsState = (over = {}) => ({
+  phase: { id: "building", label: "Stage 2 of 4 · spec", stage: "Stage 2 of 4 · spec" },
+  activity: { id: "testing", label: "Running tests", since: minsAgo(4), session: "s" },
+  needs: [],
+  ...over,
+});
+const need = (over = {}) => ({
+  id: "gate:x",
+  kind: "gate",
+  what: "Approve stages/02_spec/output/spec.md",
+  since: minsAgo(12),
+  action: "Read it",
+  source: "gate",
+  ...over,
+});
+
+test("SW-487: needsList joins the sweep's items and the PR poll's, with since, guess and dismiss", () => {
+  const m = model(
+    {
+      workspaceState: wsState({
+        needs: [
+          need(),
+          need({ id: "question:s", kind: "question", what: "Ship?", source: "text" }),
+          need({
+            id: "notice:autofix-app",
+            kind: "notice",
+            source: "notice",
+            dismiss: "autofix-app",
+          }),
+        ],
+      }),
+    },
+    {
+      prNeeds: [
+        need({
+          id: "merge:app",
+          kind: "merge",
+          what: "app PR is approved and green",
+          since: null,
+          source: "pr",
+          url: "https://x/pr/1",
+        }),
+      ],
+    },
+  );
+  assert.deepEqual(
+    m.needsList.map((n) => [n.id, n.since, n.guess, n.dismiss, n.url]),
+    [
+      ["gate:x", "12 min ago", false, null, null],
+      ["question:s", "12 min ago", true, null, null],
+      ["notice:autofix-app", "12 min ago", false, "autofix-app", null],
+      ["merge:app", "", false, null, "https://x/pr/1"],
+    ],
+  );
+  assert.equal(m.needs, true, "any item lights the card");
+  assert.equal(m.question, "Approve stages/02_spec/output/spec.md");
+});
+
+test("SW-487: phase and activity rows; PR detail only while a PR is open", () => {
+  const m = model({ workspaceState: wsState() });
+  assert.deepEqual(m.phase, { text: "Stage 2 of 4 · spec", tone: "off" });
+  assert.deepEqual(m.activity, { text: "Running tests", tone: "ok", time: "4 min ago" });
+  const open = model(
+    { workspaceState: wsState({ phase: { id: "pr-open", label: "PR open", stage: null } }) },
+    { phaseDetail: "waiting on review" },
+  );
+  assert.equal(open.phase.text, "PR open · waiting on review");
+  const gone = model({
+    workspaceState: wsState({
+      activity: { id: "gone", label: "Session gone", since: minsAgo(40), session: "s" },
+    }),
+  });
+  assert.equal(gone.activity.tone, "err");
+  const old = model({});
+  assert.deepEqual(
+    [old.needsList, old.phase, old.activity],
+    [[], null, null],
+    "an older core still renders",
+  );
+});
+
+test("SW-487: primary action follows the session's ask, not a gate or lifecycle item", () => {
+  const released = wsState({
+    needs: [need({ id: "postmortem:workspace", kind: "postmortem", source: "lifecycle" })],
+  });
+  assert.equal(
+    model(
+      { claude: { agent: "needs-you", at: null, question: "Released" }, workspaceState: released },
+      { lifecycle: "shipped" },
+    ).primary.action,
+    "close-out",
+  );
+  const asked = wsState({
+    needs: [need({ id: "question:s", kind: "question", source: "session" })],
+  });
+  assert.equal(
+    model({ workspaceState: asked }, { lifecycle: "shipped" }).primary.action,
+    "continue",
+  );
+  const paused = model({ paused: { at: minsAgo(1), containers: [] }, workspaceState: asked });
+  assert.deepEqual([paused.needsList, paused.needs], [[], false], "paused: nothing is news");
+});

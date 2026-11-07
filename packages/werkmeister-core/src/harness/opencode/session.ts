@@ -1,7 +1,7 @@
 /** Driving an OpenCode session (SW-385): one `opencode run` turn through the shared runner. */
 import os from "node:os";
 import path from "node:path";
-import { type AgentState, readAgentState } from "../../agent_state.js";
+import { type AgentState, agentOf, readSessions } from "../../agent_state.js";
 import { isExecutable, shellQuote } from "../../tool_bins.js";
 import { runTurn, turnStatus } from "../turn.js";
 import type { SessionSignal, TurnOptions, TurnResult } from "../types.js";
@@ -68,14 +68,14 @@ export async function sessionSignal(
     lastActivity,
   });
   if (state === "running") return signal("working");
-  const recorded = readAgentState(dir);
+  const recorded = agentOf(readSessions(dir));
   // A headless `opencode run` exits before the plugin's Stop call finishes (seen on 2.2.5), so
   // a `working` record from that turn would stick; the turn runner knows the turn ended.
   // The record keeps its first `at` while it stays working, so it can predate the last turn.
   // shortcut: an interactive session working after that turn reads done until the daemon restarts or another turn runs; record the turn's end time if that shows up.
-  if ((state === "done" || state === "failed") && recorded?.state === "working")
+  if ((state === "done" || state === "failed") && recorded?.agent === "working")
     return signal(state === "done" ? "done" : "idle", recorded.at);
-  if (recorded) return signal(recorded.state, recorded.at, recorded.question ?? null);
+  if (recorded) return signal(recorded.agent, recorded.at, recorded.question);
   return signal("idle");
 }
 

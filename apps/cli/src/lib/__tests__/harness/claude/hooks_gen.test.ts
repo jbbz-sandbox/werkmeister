@@ -138,5 +138,9 @@ describe("writeAgentStateHooks", () => {
       ]);
     expect(hooks.PreToolUse[0]).toEqual(buildPrGuardEntry());
     expect(hooks.SessionEnd[0]).toEqual(buildSessionEndEntry());
+    // SW-487: permission prompts beside Notification, and subagents apart from their parent.
+    expect(AGENT_STATE_EVENTS).toEqual(
+      expect.arrayContaining(["PermissionRequest", "SubagentStart"]),
+    );
   });
 });
