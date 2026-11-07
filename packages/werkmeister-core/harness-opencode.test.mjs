@@ -168,6 +168,7 @@ test("writeOpencodeHooks keeps the person's opencode.json keys and leaves a non-
 
 test("plugin, V1 API: edits go to gate and agent-state, a pr-guard deny blocks bash, idle is Stop", async () => {
   const root = tmp("oc-v1-");
+  const empty = tmp("oc-empty-");
   const wm = fakeWerkmeister();
   try {
     const plugin = await loadPlugin(root);
@@ -233,11 +234,12 @@ test("plugin, V1 API: edits go to gate and agent-state, a pr-guard deny blocks b
       );
     });
     // No werkmeister on PATH: the plugin must not get in the way.
-    await withPath(tmp("oc-empty-"), () =>
+    await withPath(empty, () =>
       hooks["tool.execute.before"]({ tool: "bash", sessionID: "s1" }, { args: { command: "ls" } }),
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(empty, { recursive: true, force: true });
     fs.rmSync(wm.bin, { recursive: true, force: true });
   }
 });
@@ -272,7 +274,6 @@ test("plugin, V2 API: a gate deny throws from execute.before, subscribed events 
     await withPath(wm.bin, async () => {
       const cleanup = await plugin.setup(ctx);
       await done;
-      await new Promise((r) => setTimeout(r, 200));
       assert.deepEqual(
         wm.calls().map((c) => c.input.hook_event_name),
         ["Notification", "Stop"],
@@ -348,6 +349,12 @@ test("sessions over a fake opencode: run, list, export, agent state; harnessFor 
   const root = workspace("opencode");
   const other = tmp("oc-other-");
   const bin = tmp("oc-oc-");
+  const extra = [];
+  const ws = (h) => {
+    const d = workspace(h);
+    extra.push(d);
+    return d;
+  };
   const saved = process.env.OPENCODE_BIN;
   try {
     const real = fs.realpathSync(root);
@@ -386,10 +393,10 @@ esac`,
     );
 
     assert.equal(harnessFor(root), opencodeAdapter);
-    assert.equal(harnessFor(workspace(null)).id, "claude");
+    assert.equal(harnessFor(ws(null)).id, "claude");
     // mcp keeps Claude's (idle) session readers, as on main (SW-189).
-    assert.equal(harnessFor(workspace("mcp")).id, "claude");
-    assert.equal(harnessFor(workspace("nonsense")).id, "claude");
+    assert.equal(harnessFor(ws("mcp")).id, "claude");
+    assert.equal(harnessFor(ws("nonsense")).id, "claude");
 
     const sessions = await opencodeAdapter.listSessions(root);
     assert.deepEqual(
@@ -448,6 +455,6 @@ esac`,
   } finally {
     if (saved === undefined) delete process.env.OPENCODE_BIN;
     else process.env.OPENCODE_BIN = saved;
-    for (const d of [root, other, bin]) fs.rmSync(d, { recursive: true, force: true });
+    for (const d of [root, other, bin, ...extra]) fs.rmSync(d, { recursive: true, force: true });
   }
 });
