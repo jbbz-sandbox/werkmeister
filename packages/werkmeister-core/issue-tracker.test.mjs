@@ -321,7 +321,7 @@ test("jira placeholder base_url counts as not configured (#114)", async () => {
         assert.equal(t.url("PROJ-1"), null);
         const a = await t.checkAuth();
         assert.equal(a.ok, false);
-        assert.match(a.fix, /jira-rest-setup\.md/);
+        assert.match(a.fix, /issue-trackers\.md/);
       },
       {
         config:

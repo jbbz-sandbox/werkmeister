@@ -1,6 +1,6 @@
 /**
  * Jira. REST first (one HTTP call when `jira.api_token` is configured, see
- * docs/jira-rest-setup.md); otherwise a `claude -p` run over the Atlassian MCP
+ * docs/issue-trackers.md); otherwise a `claude -p` run over the Atlassian MCP
  * the same machine's `claude` has connected.
  */
 
@@ -213,7 +213,7 @@ export function markdownToWiki(md: string): string {
 const WERKMEISTER_ISSUES_REPO = "jbbz-sandbox/werkmeister";
 
 const NO_REST =
-  "no Jira REST credentials: set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md), " +
+  "no Jira REST credentials: set jira.base_url, jira.email and jira.api_token (docs/issue-trackers.md), " +
   "or file it with the Atlassian MCP tools";
 
 const ISSUE_TYPES: Record<IssueKind, string> = { bug: "Bug", feature: "Story", task: "Task" };
@@ -301,7 +301,7 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
             `project = ${key} AND statusCategory != Done ORDER BY priority DESC, rank ASC`,
           );
       if (!issues)
-        throw new Error("listing ready work needs Jira REST credentials (docs/jira-rest-setup.md)");
+        throw new Error("listing ready work needs Jira REST credentials (docs/issue-trackers.md)");
       return issues.map(fromRest);
     },
 
@@ -312,7 +312,7 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
     },
 
     async checkAuth() {
-      const fix = "set jira.base_url, jira.email and jira.api_token (docs/jira-rest-setup.md)";
+      const fix = "set jira.base_url, jira.email and jira.api_token (docs/issue-trackers.md)";
       try {
         const me = await jiraMyself();
         if (me) return { ok: true, who: me.who, fix: "" };
