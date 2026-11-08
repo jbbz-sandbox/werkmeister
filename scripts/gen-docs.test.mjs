@@ -3,7 +3,16 @@ import { mkdtempSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { cliGuide, fill, mcpTools, newerThanBuild, roff, withMan } from "./gen-docs.mjs";
+import {
+  bundledPackages,
+  cliGuide,
+  fill,
+  licenceTable,
+  mcpTools,
+  newerThanBuild,
+  roff,
+  withMan,
+} from "./gen-docs.mjs";
 
 test("fill rewrites each region's body and nothing else, idempotently", () => {
   const once = fill("a\n<!-- generated:x -->\nold\n<!-- /generated -->\nb", { x: "| t |" }).text;
@@ -119,4 +128,31 @@ test("newerThanBuild names only the files modified after the build", () => {
   utimesSync(main, 2000, 2000);
   utimesSync(edited, 3000, 3000);
   assert.deepEqual(newerThanBuild(main, [old, edited]), [edited]);
+});
+
+test("bundledPackages reads each entry's header, scoped names included", () => {
+  const sep = `\n${"-".repeat(72)}\n\n`;
+  const text =
+    "Third-party packages bundled into dist/*.js, with their licence text. See NOTICE.\n\n" +
+    [
+      "d@3.0.0 (MIT)\n\nMIT text\n",
+      "@scope/a@1.0.0 (MIT)\n\nMIT text\n",
+      "b@2.0.0 (ISC)\n\nc@9 (X)\n",
+    ].join(sep);
+  const packages = bundledPackages(text);
+  assert.deepEqual(packages, [
+    { name: "d", version: "3.0.0", license: "MIT" },
+    { name: "@scope/a", version: "1.0.0", license: "MIT" },
+    { name: "b", version: "2.0.0", license: "ISC" },
+  ]);
+  const table = licenceTable(packages);
+  assert.match(table, /^3 packages: MIT 2, ISC 1\.\n/);
+  assert.deepEqual(
+    table.split("\n").filter((l) => l.startsWith("| `")),
+    ["| `@scope/a` | 1.0.0 | MIT |", "| `b` | 2.0.0 | ISC |", "| `d` | 3.0.0 | MIT |"],
+  );
+  assert.throws(
+    () => bundledPackages(`preamble\n\nnot a header\n\ntext\n`),
+    /unexpected entry header "not a header"/,
+  );
 });

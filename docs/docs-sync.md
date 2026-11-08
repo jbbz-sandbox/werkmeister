@@ -51,6 +51,7 @@ Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-manage
 | `autonomous-allow`, `autonomous-deny` | `docs/context-strategies.md` | `packages/werkmeister-core/src/harness/claude/hooks_gen.ts::autonomousRules`, `AUTONOMOUS_DENY` |
 | `mcp-tools` | `apps/werkmeister-mcp/README.md` | each `registerTool` / `registerAppTool` call's name and `title` in `apps/werkmeister-mcp/src` |
 | `cli-reference` | `docs/users-guide.md` | commander's commands, groups, arguments and options, through the CLI's hidden `__reference` mode, plus each command's `apps/cli/src/commands/<command>.help.md` |
+| `third-party-npm` | `docs/third-party.md` | each entry header in `apps/cli/dist/THIRD-PARTY-LICENSES.txt` (`scripts/write-licenses.mjs`) |
 | `workspaces` | `README.md` | each `apps/*` and `packages/*` `package.json`'s `name` and `description` |
 
 A new region is a key in `loadRegions()` plus its markers in a doc.
@@ -68,7 +69,7 @@ A new region is a key in `loadRegions()` plus its markers in a doc.
 
 Ranked by drift caught per effort, as proposed with the check above.
 
-1. **More generated regions.** Implemented for four regions (SW-81, above). Still a candidate: the changesets `fixed` group and the release `needs:` in the README.
+1. **More generated regions.** Implemented for five regions (SW-81, above). Still a candidate: the changesets `fixed` group and the release `needs:` in the README.
 2. **TSDoc `{@link}` in code comments, checked by TypeDoc.** Code comments that name another symbol or file drift too (the esbuild header, comments linking to deleted specs). Write them as `{@link reloadCaddy}` and run TypeDoc over `werkmeister-core` in CI with `--emit none` and `invalidLink` validation as errors. Skip publishing an API site: `werkmeister-core` is private, so a site would have almost no readers. Implemented (SW-82) as `pnpm --filter werkmeister-core run docs:links` (config in `packages/werkmeister-core/typedoc.json`), run by the CI `test` job; `notExported` is off, and a link to a symbol in another module needs the module name, as in `{@link sandbox.resolveSandboxBin}`. <!-- name-check: ignore -->
 3. **Run the skills' shell snippets.** The plugin skills' bash blocks are instructions Claude executes, and a wrong path there fails at runtime. Extracting and smoke-running them (e.g. in `apps/cli/bdd`) costs more than the checks above. Revisit if skills keep breaking after `docs:check`.
 
