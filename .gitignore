@@ -24,3 +24,5 @@ apps/cli/infra/compose/k8s-port-forward/tmp/
 # Python bytecode
 __pycache__/
 *.pyc
+# AWS CDK synth output (apps/github-ingest)
+cdk.out/

@@ -3913,6 +3913,69 @@ test("claimCallbacks: settled drops the wake marks with the callback", async () 
   }
 });
 
+test("watchPrs({repo}): only that repo's workspaces are claimed; an unmanaged repo is ignored (SW-583)", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-watch-repo-"));
+  const prev = process.env.WERKMEISTER_WORKSPACES_ROOT;
+  process.env.WERKMEISTER_WORKSPACES_ROOT = root;
+  fs.renameSync(icmWorkspace({ files: { app: callbackFile() } }), path.join(root, "a-ws"));
+  const other = callbackFile().replace("repo: o/app", "repo: o/other").replace("s-1", "s-2");
+  fs.renameSync(icmWorkspace({ files: { app: other } }), path.join(root, "b-ws"));
+  fs.renameSync(icmWorkspace({ files: { app: "no frontmatter\n" } }), path.join(root, "c-broken"));
+  try {
+    await withSandboxHome(async () => {
+      let reaped = 0;
+      const d = deps([MERGED, NO_TAG]);
+      d.reapIdle = async () => {
+        reaped++;
+        return { lines: [] };
+      };
+      const sent = [];
+      const send = async (cb) => {
+        sent.push(cb.session);
+      };
+      const r = await watchPrs({ desktop: false, repo: "O/App" }, d, send);
+      assert.ok(r.ok);
+      assert.deepEqual(sent, ["s-1"]);
+      assert.equal(reaped, 0, "a pushed pass leaves reaping to the scheduled one");
+
+      // The scheduled pass holds the lock: throw so the queue redelivers, never drop the event.
+      const lock = path.join(
+        path.dirname(process.env.WERKMEISTER_CONFIG_FILE),
+        "pr-callbacks.lock",
+      );
+      fs.writeFileSync(lock, "");
+      await assert.rejects(
+        watchPrs({ desktop: false, repo: "o/app" }, d, send),
+        /another PR watch pass is running; o\/app left for redelivery/,
+      );
+      assert.deepEqual(
+        await watchPrs({ desktop: false }, d, send),
+        {
+          ok: true,
+          lines: ["another PR watch pass is running"],
+          desktop: [],
+        },
+        "the scheduled pass still just skips",
+      );
+      fs.rmSync(lock);
+      reaped = 0;
+
+      const ignored = await watchPrs({ desktop: false, repo: "o/unmanaged" }, d, send);
+      assert.deepEqual(ignored, {
+        ok: true,
+        lines: ["github ingest: no workspace has a PR for o/unmanaged; ignored"],
+        desktop: [],
+      });
+      assert.deepEqual(sent, ["s-1"]);
+      assert.equal(reaped, 0);
+    });
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_WORKSPACES_ROOT;
+    else process.env.WERKMEISTER_WORKSPACES_ROOT = prev;
+    clean(root);
+  }
+});
+
 test("watchPrs: headless claims are sent, desktop ones returned, a failed send is reported", async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-watch-"));
   const prev = process.env.WERKMEISTER_WORKSPACES_ROOT;

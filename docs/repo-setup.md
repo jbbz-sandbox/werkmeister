@@ -36,6 +36,8 @@ easy to make. The fields themselves are covered in the users guide:
    service that has a `feature_router:`.
 6. **Commit `.werkmeister/services.yaml`** to the repo.
 
+GitHub push events need no per-repo step: once [GitHub push events](github-ingest.md) are set up, the App is installed on every repo, and a repo's events act as soon as a workspace has a PR file for it.
+
 ## Checklist
 
 - **`port_offset`:** must be unique across *all* repos. Find the ones in use with

@@ -66,7 +66,15 @@ const options = {
   // own package, so it stays an installed dependency rather than bundled code.
   // chokidar is nunjucks' optional peer, required only for template watching,
   // which we never use; pnpm's hidden hoist would otherwise let esbuild bundle one.
-  external: ["dockerode", "*.node", "@anthropic-ai/claude-agent-sdk", "chokidar"],
+  // The SQS client (SW-583) loads only when github_ingest is configured; several of its
+  // packages ship no licence file, so it stays installed rather than bundled.
+  external: [
+    "dockerode",
+    "*.node",
+    "@anthropic-ai/claude-agent-sdk",
+    "chokidar",
+    "@aws-sdk/client-sqs",
+  ],
   // jsonc-parser's `main` is UMD, which loads its own files with a dynamic
   // require esbuild can't follow; its ESM build is plain imports.
   alias: { "jsonc-parser": "jsonc-parser/lib/esm/main.js" },

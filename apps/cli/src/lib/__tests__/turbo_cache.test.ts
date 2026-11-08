@@ -54,6 +54,7 @@ describe("the built-in turbo cache on this repo's services", () => {
     expect(fed.sort()).toEqual([
       "cli",
       "docs-site",
+      "github-ingest",
       "werkmeister-core",
       "werkmeister-dashboard",
       "werkmeister-vscode",

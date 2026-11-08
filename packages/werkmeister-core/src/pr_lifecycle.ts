@@ -2116,6 +2116,8 @@ async function wakeEvents(
   return { events, claim, lines };
 }
 
+const LOCK_BUSY = "another PR watch pass is running";
+
 function takeLock(file: string): boolean {
   for (let i = 0; i < 2; i++) {
     try {
@@ -2148,7 +2150,7 @@ export async function claimCallbacks(
   lockFile = path.join(sandboxHome(), "pr-callbacks.lock"),
 ): Promise<{ claimed: PrCallback[]; lines: string[] }> {
   fs.mkdirSync(path.dirname(lockFile), { recursive: true });
-  if (!takeLock(lockFile)) return { claimed: [], lines: ["another PR watch pass is running"] };
+  if (!takeLock(lockFile)) return { claimed: [], lines: [LOCK_BUSY] };
   const claimed: PrCallback[] = [];
   const lines: string[] = [];
   try {
@@ -2250,7 +2252,7 @@ export async function shipMerged(
   });
   if (!due.length) return [];
   fs.mkdirSync(path.dirname(lockFile), { recursive: true });
-  if (!takeLock(lockFile)) return ["another PR watch pass is running"];
+  if (!takeLock(lockFile)) return [LOCK_BUSY];
   const lines: string[] = [];
   try {
     const d = deps ?? defaultDeps();
@@ -2299,17 +2301,36 @@ async function fixLeftBehind(dir: string, deps: Deps): Promise<boolean> {
  * never closes out.
  */
 export async function watchPrs(
-  opts: { desktop: boolean },
+  opts: { desktop: boolean; repo?: string },
   deps: Deps = defaultDeps(),
   send: (cb: PrCallback) => Promise<string[] | void> = deliverHeadless,
   idleLock = path.join(sandboxHome(), "idle-stop.lock"),
 ): Promise<{ ok: boolean; lines: string[]; desktop: PrCallback[] }> {
   const { workspaces } = await listWorkspaces();
-  const { claimed, lines } = await claimCallbacks(
-    workspaces.map((w) => w.path),
-    opts,
-    deps,
-  );
+  let paths = workspaces.map((w) => w.path);
+  // A pushed GitHub event (SW-583) names its repo; GitHub's full_name case can differ from the PR file's.
+  const repo = opts.repo?.toLowerCase();
+  if (repo) {
+    const hasRepo = (ws: string) => {
+      // One workspace's broken PR file must not stop every repo's events (claimCallbacks skips it too).
+      try {
+        return readPrFiles(ws).some((f) => String(f.fm.repo ?? "").toLowerCase() === repo);
+      } catch {
+        return false;
+      }
+    };
+    paths = paths.filter(hasRepo);
+    if (!paths.length)
+      return {
+        ok: true,
+        lines: [`github ingest: no workspace has a PR for ${opts.repo}; ignored`],
+        desktop: [],
+      };
+  }
+  const { claimed, lines } = await claimCallbacks(paths, opts, deps);
+  // A pushed event acted on by no pass would wait for the next scheduled one: throw, so SQS redelivers it.
+  if (repo && lines[0] === LOCK_BUSY)
+    throw new Error(`${LOCK_BUSY}; ${opts.repo} left for redelivery`);
   const desktop: PrCallback[] = [];
   for (const cb of claimed) {
     if (cb.hostSession) {
@@ -2338,6 +2359,8 @@ export async function watchPrs(
       lines.push(`${cb.dir}: could not resume session ${cb.session}: ${(e as Error).message}`);
     }
   }
+  // A pushed pass is for one repo; reaping every workspace stays with the scheduled pass.
+  if (repo) return { ok: true, lines, desktop };
   // Its own lock: every desktop session's timer runs this pass, and two reapers would race compose.
   fs.mkdirSync(path.dirname(idleLock), { recursive: true });
   if (takeLock(idleLock)) {
