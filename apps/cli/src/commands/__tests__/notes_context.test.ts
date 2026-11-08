@@ -1,8 +1,7 @@
 /**
  * The SessionStart context is truncated by the harness at ~10k chars, and
  * decisions print after the handoff — so an unbounded list lost its newest
- * decisions, the ones a fresh session needs (known-issues.md, "Session-Start
- * Notes Context Is Unbounded").
+ * decisions, the ones a fresh session needs.
  */
 
 import * as fs from "node:fs";

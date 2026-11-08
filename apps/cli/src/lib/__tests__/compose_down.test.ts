@@ -1,8 +1,8 @@
 /**
  * `composeDown` used to return true unconditionally, so a failed
- * `docker compose down` was indistinguishable from one that worked
- * (known-issues.md, "Library Rough Edges"). The process boundary is mocked one
- * level down: `docker ps` resolves the workspace, `docker compose` tears down.
+ * `docker compose down` was indistinguishable from one that worked.
+ * The process boundary is mocked one level down: `docker ps` resolves the
+ * workspace, `docker compose` tears down.
  */
 
 import * as fs from "node:fs";

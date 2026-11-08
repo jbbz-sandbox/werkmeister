@@ -8,6 +8,8 @@
  *
  * `WERKMEISTER_CONFIG_FILE` relocates the whole set (see `configPath` in config.ts),
  * so pointing it at a seeded temp dir makes a test hermetic in one move.
+ * Before merging a core test, run it unconfigured:
+ *   EMPTY=$(mktemp -d) WERKMEISTER_CONFIG_FILE="$EMPTY/.werkmeister/config.yaml" node --test *.test.mjs
  *
  * Not named `*.test.mjs` on purpose: the suite globs that pattern.
  */

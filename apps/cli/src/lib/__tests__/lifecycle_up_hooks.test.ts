@@ -1,7 +1,7 @@
 /**
  * `writeWorkspaceHooks` used to run only from init-workspace, so a workspace
  * created before a hook-template change kept the stale SessionStart hook
- * until someone re-ran it by hand (known-issues.md, "Library Rough Edges").
+ * until someone re-ran it by hand.
  * Every collaborator of `up` is mocked; only the hook write is real.
  */
 

@@ -152,8 +152,7 @@ test("workspace.yml stores autonomous as a YAML boolean", () => {
 });
 
 // `getFormSchema` builds the spec against $HOME and discards every default, so
-// the issue default's `git` scan of each subdirectory was pure cost
-// (known-issues.md, "getFormSchema() Scans Your Home Directory").
+// the issue default's `git` scan of each subdirectory was pure cost.
 test("defaults: false skips the issue scan of the root's repos", () => {
   const scanned = mkdtempSync(path.join(tmpdir(), "prompt-defaults-"));
   const repo = path.join(scanned, "repo");
