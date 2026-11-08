@@ -1,5 +1,11 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.85.0
+
+### Minor Changes
+
+- 5e44780: The daemon can take GitHub events by push (SW-583). A GitHub App's webhook goes to a Lambda function URL that checks the signature and queues the event in SQS. The daemon long-polls the queue and runs one `pr watch` pass for the event's repo within seconds, instead of waiting for the 10-minute schedule. It's off until `~/.werkmeister/config.yaml` has a `github_ingest:` block. Setup: docs/github-ingest.md.
+
 ## 0.84.0
 
 ### Minor Changes
