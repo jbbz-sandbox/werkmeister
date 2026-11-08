@@ -364,7 +364,8 @@ const bugfix: Stage[] = [
         "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet.",
         "Trace to the root cause: the first place the code does something other than intended. A symptom site is not a root cause.",
         // SW-543: sw-520 grepped one call shape and missed the calls through other helpers; review caught them a round later.
-        "List every other caller of the function at the root cause — a fix there reaches them too. When the fix belongs in shared code, list its call sites through every helper or entry point that reaches that code, not one argument shape, and record the search commands (greps) you used in `repro.md`.",
+        // SW-566: sw-545's fix changed a return shape its one caller treated as "stop"; only the exercise caught it.
+        "List every other caller of the function at the root cause and what each does with the result (an early return, a printed value, a stored state), so the fix's return shape is checked against every caller before the fix stage — a fix there reaches them too. When the fix belongs in shared code, list its call sites through every helper or entry point that reaches that code, not one argument shape, and record the search commands (greps) you used in `repro.md`.",
         // SW-442: sessionBusy had two true cases; stage 01 listed callers, so only review caught the second (sw-418).
         "When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test.",
         NAME_HISTORY_STEP,
