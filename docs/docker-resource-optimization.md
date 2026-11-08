@@ -191,6 +191,39 @@ The generated compose also sets `memswap_limit` equal to each service's memory
 limit (SW-151). Without it Docker allows twice the limit in swap, so a container
 near its limit slows down on a host with swap and is killed on one without.
 
+## Sizing a machine
+
+Two budgets, not one. Containers share the memory you gave Docker (OrbStack or
+Docker Desktop → Resources), and that allocation fills long before the machine
+does. Agents, browsers and your editor use the rest.
+
+**Inside the Docker allocation**
+
+| What | Each | Note |
+|---|---|---|
+| A local service | ~0.5 GB | a Node service with hot reload; a JVM or a database is more |
+| Caddy | ~20 MB | measured |
+| `k8s-forwards` | ~65–250 MB | measured idle; grows with forwards |
+| Docker daemon | ~0.5 GB | |
+
+**Outside it**
+
+| What | Each | Note |
+|---|---|---|
+| A Claude Code agent | ~0.25 GB per process, 2–3 processes per session | 245 MB per process measured 2026-10-25 |
+| A Playwright run | ~0.5–1 GB | one Chromium |
+
+**Worked example: 6 features, 2 local services each** (memory in use; how many features `feature up` admits at once is set by reservations and CPU limits, see [Default budget](#default-budget))
+
+- containers: 12 × 0.5 GB = 6 GB, + ~0.6 GB shared → ~7 GB of the Docker allocation
+- agents: 6 × ~0.6 GB → ~3.6 GB
+- browsers: 2 Playwright runs → ~1.5 GB
+- total ≈ 12 GB plus the OS and your editor. On a 32 GB machine with 12 GB given to Docker, the first thing to run out is the Docker allocation, at about ten more local services.
+
+**Measured:** 5 features × 3 local services on a 32 GB machine = 15 GB (2026-10-26).
+
+The number of features is whatever fits: raise the Docker allocation or run fewer services per feature before you touch `feature_slots.count`.
+
 ## Default budget
 
 `werkmeister feature up` admits a feature only when the budget has room for it (SW-181).
@@ -252,7 +285,7 @@ On this laptop memory now fills up first: two features of this shape fit, and a
 third waits (CPU alone would allow three). On a 4 GiB engine one fits. The
 reservations were 128M each before, which cost 768 MiB and let in nine
 features by memory, more than a smaller engine could hold.
-Agent sessions run outside Docker (about 0.3–0.6 GB each), so the laptop's own
+Agent sessions run outside Docker ([Sizing a machine](#sizing-a-machine) has the numbers), so the laptop's own
 memory, not the engine's, limits how many sessions run beside them.
 
 ## Step 4: Verify and Adjust

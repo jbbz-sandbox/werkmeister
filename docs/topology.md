@@ -59,7 +59,7 @@ Everything else is local: compose builds, Caddy routing, file watching, tests,
 and the whole edit loop.
 
 The container runtime is the developer's own choice. Werkmeister speaks only the
-Docker API, and `infra/compose/shared-infra.yml` maps
+Docker API, and `apps/cli/infra/compose/shared-infra.yml` maps
 `host.docker.internal:host-gateway` — the portable form — so plain `dockerd` on
 Linux behaves like Docker Desktop or OrbStack on a Mac.
 
@@ -169,7 +169,7 @@ Most of it is already handled:
 through one — `aws eks get-token`, `gke-gcloud-auth-plugin`, `az`, an OIDC
 helper. That stanza survives `--flatten` as a command the *container* is then
 expected to run, and the `k8s-forwards` image
-(`infra/compose/k8s-port-forward/Dockerfile`) ships `kubectl`, a shell and probe clients, but no auth plugin.
+(`apps/cli/infra/compose/k8s-port-forward/Dockerfile`) ships `kubectl`, a shell and probe clients, but no auth plugin.
 
 - Host side: fine. Your `kubectl`, and telepresence in host mode, run where the
   plugin and its credentials already live.
