@@ -1,5 +1,16 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.83.5
+
+### Patch Changes
+
+- e3a5405: SW-543: the bug-fix and incident `01_reproduce` contract now says that when the fix belongs in shared code, call sites are listed through every helper or entry point that reaches it, not one argument shape, and the search commands used are recorded in `repro.md`. New workspaces get the text; an existing one keeps its copy.
+- 5af63c1: SW-562: the ICM stages that write `exercise.md` now tell the agent to ask the person for each MANUAL row's result (pass / fail / not run) before asking for approval, and to record it; an approval that skips this keeps the rows MANUAL and the PR file says why. New workspaces get the text.
+- 6347d0d: SW-564: the bug-fix and incident `01_reproduce` contract has a new step 7: when the root cause is a permission rule, step 4 lists every source of a matching rule (builders, rules derived from registered commands, rules kept in existing workspaces, a headless wake's tool lists) and the failing test probes each one. The repro file now holds steps 1–7. New workspaces get the text.
+- b9dfb3f: SW-565: `pr-rules.md` rule 5 and the `workspace-pr` skill say to take the force-push lease's `<old sha>` from `git rev-parse origin/<branch>` after a fetch and paste it verbatim, never shortened or retyped, for a manual rebase with no wake message to copy from. New workspaces get the text.
+- a7464d7: SW-566: the bug-fix and incident `01_reproduce` step 4 now also lists what each caller does with the result (an early return, a printed value, a stored state), so the fix's return shape is checked against every caller before the fix stage. New workspaces get the text.
+- fa646c4: SW-568: `pr-rules.md` rule 3 gives the `pr open` log redirect with the absolute workspace path, so a shell cwd that drifted into a code worktree cannot write `pr-open.log` there as an untracked file. The existing `werkmeister pr` allow rule still matches. New workspaces get the text.
+
 ## 0.83.4
 
 ### Patch Changes
