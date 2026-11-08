@@ -65,6 +65,11 @@ test("activity: first match wins, in the order paused → queued → starting �
     act({ waiting: { position: 2, reason: "" }, sessions: { s: testing } }).label,
     "Queued for CPU · position 2",
   );
+  // SW-569: a service start waiting on capacity holds only that start, so the live session shows.
+  assert.equal(
+    act({ waiting: { position: 2, reason: "", services: ["api"] }, sessions: { s: testing } }).id,
+    "testing",
+  );
   assert.equal(
     act({ services: [{ name: "api", state: "starting" }], sessions: { s: testing } }).id,
     "starting",
