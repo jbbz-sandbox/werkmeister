@@ -12,6 +12,8 @@ published package doesn't depend on the repo's package manager, so
 
 Docs: <https://werkmeister.io/>
 
+New here? Start with the [Quick Start](docs/quick-start.md).
+
 ## Workspaces
 
 <!-- generated:workspaces -->

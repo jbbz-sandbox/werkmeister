@@ -7,6 +7,8 @@ import { dirname, join, normalize, relative } from "node:path";
  */
 export function repoLinks(md, { root, pages, repoUrl, exists }) {
   md.core.ruler.push("repo-links", (state) => {
+    // A `::: tip` title is parsed by renderInline with no page path; it holds no links.
+    if (!state.env.path) return;
     const from = dirname(relative(root, state.env.path));
     for (const token of state.tokens)
       for (const link of token.children ?? []) {

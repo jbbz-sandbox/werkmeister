@@ -39,3 +39,7 @@ test("URLs, anchors and site-absolute links are untouched", () => {
   assert.equal(anchor, "#top");
   assert.doesNotMatch(absolute, /github\.com/);
 });
+
+test("a custom container renders; its title is parsed with no page path", () => {
+  assert.match(md.render("::: tip\nSee [g](guide.md).\n:::", { path: "/repo/docs/x.md" }), /tip/);
+});

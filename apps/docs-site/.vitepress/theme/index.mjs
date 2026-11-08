@@ -1,6 +1,7 @@
 import DefaultTheme from "vitepress/theme";
 import { h } from "vue";
 import DictHero from "./DictHero.vue";
+import FlowDiagram from "./FlowDiagram.vue";
 import "./custom.css";
 
 // The landing hero reads as a dictionary entry (SW-98): the entry replaces the
@@ -8,4 +9,7 @@ import "./custom.css";
 export default {
   extends: DefaultTheme,
   Layout: () => h(DefaultTheme.Layout, null, { "home-hero-info": () => h(DictHero) }),
+  enhanceApp({ app }) {
+    app.component("FlowDiagram", FlowDiagram);
+  },
 };
