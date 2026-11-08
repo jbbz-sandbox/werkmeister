@@ -19,6 +19,7 @@ const GROUPS = [
       ["Setting up a repo", "docs/repo-setup.md"],
       ["The UIs", "docs/uis.md"],
       ["Workspace lifecycle", "docs/workspace-lifecycle.md"],
+      ["ICM workflows and stages", "docs/icm-workflows.md"],
     ],
   ],
   [
