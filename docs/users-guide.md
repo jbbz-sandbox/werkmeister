@@ -78,6 +78,7 @@ A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and rout
 | **kubectl** | Kubernetes CLI | `brew install kubectl` |
 | **Git** | Workspace detection | Included with macOS Xcode tools |
 | **Playwright** | Running browser tests | `npx playwright install` (optional) |
+| **An agent harness** | Runs the workspace's agent | Claude Code, or another harness per [Harnesses](harnesses.md) |
 
 ### Cluster Access
 
@@ -2138,8 +2139,8 @@ issues guide then sends them there with `werkmeister issue create`.
 
 For Jira, set `jira.base_url` (e.g. `https://your-org.atlassian.net`) to get issue links in
 CLAUDE.md, the dashboard, and VS Code. Briefings fetched through the Atlassian MCP use
-`jira.cloud_id` when set, otherwise the `base_url` hostname. The REST token is optional; see
-[jira-rest-setup.md](jira-rest-setup.md).
+`jira.cloud_id` when set, otherwise the `base_url` hostname. The REST token is optional. For
+each tracker's setup (the Jira token, GitHub's `gh auth`), see [Issue trackers](issue-trackers.md).
 
 Read or update an issue in the configured tracker from the command line:
 
@@ -2206,7 +2207,7 @@ open work in priority order. With a board, it is the board's `ready` column in b
 one, the scope's open issues (Jira: `statusCategory != Done` by priority then rank; GitHub: each
 scoped repo's open issues, oldest first). The project is `--project`, else the workspace's, else
 the `default: true` one, else the only one. The `next-wave` plugin skill reads its tickets from it.
-Jira needs the REST token (`jira.api_token`, [Jira REST setup](jira-rest-setup.md)). A GitHub board
+Jira needs the REST token (`jira.api_token`, [Issue trackers § Jira](issue-trackers.md#jira-api-token)). A GitHub board
 needs the `read:project` token scope: `gh auth refresh -s read:project`. One page is read: 100
 issues on Jira, 200 board items on GitHub.
 

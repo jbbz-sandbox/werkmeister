@@ -26,7 +26,7 @@ const GROUPS = [
       ["Topology", "docs/topology.md"],
       ["Architecture", "docs/werkmeister-architecture.md"],
       ["Claude Code plugin", "plugins/werkmeister/README.md"],
-      ["Other harnesses", "docs/harnesses.md"],
+      ["Harnesses", "docs/harnesses.md"],
     ],
   ],
   [
@@ -35,7 +35,7 @@ const GROUPS = [
       ["Troubleshooting", "docs/troubleshooting-advanced.md"],
       ["Known issues", "docs/known-issues.md"],
       ["Docker resources", "docs/docker-resource-optimization.md"],
-      ["Jira REST setup", "docs/jira-rest-setup.md"],
+      ["Issue trackers", "docs/issue-trackers.md"],
       ["GitHub push events", "docs/github-ingest.md"],
     ],
   ],
