@@ -14,6 +14,7 @@ const GROUPS = [
     "Start",
     [
       ["Overview", "README.md"],
+      ["Quick Start", "docs/quick-start.md"],
       ["Users guide", "docs/users-guide.md"],
       ["Setting up a repo", "docs/repo-setup.md"],
       ["The UIs", "docs/uis.md"],

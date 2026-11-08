@@ -14,7 +14,7 @@ hero:
   actions:
     - theme: brand
       text: Get started
-      link: /docs/users-guide
+      link: /docs/quick-start
     - theme: alt
       text: GitHub
       link: https://github.com/jbbz-sandbox/werkmeister

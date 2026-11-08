@@ -127,6 +127,15 @@ In this layout each feature maps to a subdirectory containing its repo worktrees
 ## Installation
 
 ```bash
+cd ~
+npx werkmeister machine setup
+```
+
+It installs the CLI globally from npm and runs setup. See the [Quick Start](quick-start.md).
+
+### From source (contributors)
+
+```bash
 # Clone the repository
 git clone https://github.com/jbbz-sandbox/werkmeister.git
 cd werkmeister
@@ -262,19 +271,9 @@ Each feature runs in an isolated environment:
 
 **Single-repo concurrency note:** In single-repo mode (`~/workspace/` with one checkout per repo), all features share the same source code checkout. This means two features modifying the same repo will see each other's uncommitted changes. For true concurrent multi-feature development, use the per-feature workspace layout via `WERKMEISTER_WORKSPACES_ROOT=<parent>` and place git worktrees under each feature subdir.
 
----
+### Optional shared infrastructure
 
-## Getting Started
-
-### Step 1: Start Shared Infrastructure
-
-Start shared infrastructure (k8s-forwards, caddy):
-
-```bash
-werkmeister infra connect
-```
-
-Jaeger and RedisInsight are opt-in. To start either or both with it, add their profiles to `~/.werkmeister/config.yaml` and run `werkmeister infra connect` again:
+Jaeger and RedisInsight are opt-in. To start either or both with the shared infrastructure, add their profiles to `~/.werkmeister/config.yaml` and run `werkmeister infra connect` again:
 
 ```yaml
 infra:
@@ -285,58 +284,11 @@ For a one-off, `COMPOSE_PROFILES=redisinsight werkmeister connect`. `werkmeister
 
 No cluster? `infra.baseline` runs the base services you aren't changing from digest-pinned images, and each service's `baseline_upstream` in `services.yaml` points `{service}` references at them. See [Without Kubernetes](topology.md#without-kubernetes).
 
-Verify k8s forwards are healthy:
+---
 
-```bash
-werkmeister infra status
-```
+## Getting Started
 
-### Step 2: Configure Local DNS
-
-Add to `/etc/hosts`:
-
-```
-127.0.0.1 frontend.local.werkmeister.io
-```
-
-### Step 3: Start a Feature
-
-```bash
-# Auto-detect and start services (scans ~/workspace/ by default)
-werkmeister feature up my-feature
-
-# Or point to a different repo directory
-werkmeister feature up my-feature --workspace /path/to/repos
-
-# Run another service locally: add it to `services` in .werkmeister/workspace.yml, then
-werkmeister workspace init
-werkmeister feature up my-feature
-```
-
-A workspace with no services still comes up; all its traffic goes to k8s.
-
-### Step 5: Access Your Feature
-
-**Option A: Browser cookie**
-Visit `https://frontend.local.werkmeister.io/__werkmeister`, type your feature name, and click "Set Feature". All subsequent requests in that browser will be routed to your feature.
-
-**Option B: HTTP header**
-Use a browser extension or curl:
-```bash
-curl -H "X-Feature: my-feature" https://frontend.local.werkmeister.io/
-```
-
-### Step 6: View Status
-
-```bash
-werkmeister feature status
-```
-
-### Step 7: Tear Down
-
-```bash
-werkmeister feature down my-feature
-```
+The [Quick Start](quick-start.md) walks the whole flow, from `machine setup` to closing a workspace. Each command is in the [CLI Reference](#cli-reference).
 
 ---
 
