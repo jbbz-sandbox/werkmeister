@@ -865,9 +865,9 @@ const SPECS: CommandSpec[] = [
             "headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).",
         )
         .option(
-          "--model <id>",
-          "Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a " +
-            "claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).",
+          "--model <tier|model>",
+          "Model tier (small, mid, frontier, advanced_frontier) or an explicit model; blank = " +
+            "models.default_tier in ~/.werkmeister/config.yaml (frontier) (env: WERKMEISTER_MODEL; config: model).",
         )
         .option(
           "--auto-stop",
@@ -1238,9 +1238,9 @@ const SPECS: CommandSpec[] = [
             "headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).",
         )
         .option(
-          "--model <id>",
-          "Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a " +
-            "claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).",
+          "--model <tier|model>",
+          "Model tier (small, mid, frontier, advanced_frontier) or an explicit model; blank = " +
+            "models.default_tier in ~/.werkmeister/config.yaml (frontier) (env: WERKMEISTER_MODEL; config: model).",
         )
         .option(
           "--auto-stop",

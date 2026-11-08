@@ -217,6 +217,7 @@ const STATUS = {
       ports: null,
       services: [],
       claude: { state: "idle", agent: "working" },
+      model: "opus",
     },
     {
       name: "abc",
@@ -384,6 +385,9 @@ test("a card is name and agent chip, work type · task, then the labelled compac
     expect((await ui.find({ key: "claude:abc" }))?.text).toBe("● Needs you");
     expect((await ui.find({ key: "claude:empty" }))?.text).toBe("Idle");
     expect(await ui.find({ key: "auto:ab" })).toBeUndefined();
+    // SW-577: the model the workspace runs; none drawn when it records none.
+    expect((await ui.find({ key: "model:ab" }))?.text).toBe("opus");
+    expect(await ui.find({ key: "model:abc" })).toBeUndefined();
     // The subtitle is workspace.yml's work type and task, never the session title or the description.
     expect((await ui.find({ key: "task:ab" }))?.text).toBe("Spike · BWell");
     expect((await ui.find({ key: "task:abc" }))?.text).toBe("Bug");

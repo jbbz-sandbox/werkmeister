@@ -75,6 +75,11 @@ test("header: type tag, task title, issue; no issue reads 'no issue'", () => {
   assert.match(card({ issueId: null, issueUrl: null }), /class="faint">no issue</);
 });
 
+test("header: the model chip, none when the workspace records no model", () => {
+  assert.match(card({ ws: { model: "opus" } }), /class="auto" title="Model">opus</);
+  assert.doesNotMatch(card(), /title="Model"/);
+});
+
 test("rows: containers, services, PR badge + CI, stage pips, agent", () => {
   const html = card({ prs: [pr()] });
   assert.match(html, /2 of 2 up/);

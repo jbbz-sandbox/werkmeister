@@ -96,6 +96,7 @@ export interface GlobalConfig {
   overrides?: Record<string, unknown>;
   jira?: Record<string, unknown>;
   ingress?: Record<string, unknown>;
+  models?: Record<string, unknown>;
   [key: string]: unknown;
 }
 

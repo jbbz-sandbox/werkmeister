@@ -23,6 +23,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { PromptSpec } from "werkmeister-core/global_config";
 import * as gc from "werkmeister-core/global_config";
+import { modelTiers } from "werkmeister-core/model_tiers";
 import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
 import { runWizard } from "../lib/wizard.js";
 
@@ -50,6 +51,24 @@ function show(cfg: ReturnType<typeof gc.load>): void {
   for (const [k, v] of Object.entries(ingress)) {
     const origin = cfg.ingress?.[k] ? "YAML" : "default";
     console.log(`  ${k}: ${v}  ${Colors.DIM}(${origin})${Colors.RESET}`);
+  }
+
+  try {
+    const tiers = modelTiers(cfg);
+    const tag = (o: string) => (o === "YAML" ? ` ${Colors.DIM}(YAML)${Colors.RESET}` : "");
+    console.log(
+      `${Colors.BOLD}models:${Colors.RESET}  default tier: ${tiers.defaultTier}${tag(tiers.defaultOrigin)}`,
+    );
+    for (const [harness, map] of Object.entries(tiers.byHarness)) {
+      const set = Object.entries(map).filter(([, e]) => e);
+      console.log(
+        set.length
+          ? `  ${harness}: ${set.map(([t, e]) => `${t}=${e?.model}${tag(e?.origin ?? "")}`).join(" ")}`
+          : `  ${harness}: ${Colors.DIM}(none: set models.${harness}.<tier>)${Colors.RESET}`,
+      );
+    }
+  } catch (e) {
+    console.log(`${Colors.RED}models: ${(e as Error).message}${Colors.RESET}`);
   }
 
   const overrides = Object.fromEntries(Object.entries(cfg.overrides || {}).filter(([, v]) => v));

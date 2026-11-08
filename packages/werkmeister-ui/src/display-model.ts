@@ -40,6 +40,8 @@ export interface DisplayInput {
   crashLoops?: { service: string; restarts: number; lastLog: string | null }[];
   /** SW-487; optional so a core older than it still renders. */
   workspaceState?: WorkspaceState | null;
+  /** SW-577: the model the workspace runs; optional so a core older than it still renders. */
+  model?: string | null;
 }
 
 /** One project's share of the stats sweep (core `Usage`). */
@@ -128,6 +130,8 @@ export interface WorkspaceDisplay {
   /** `Running tests` and `4 min ago`; null with an older core. */
   activity: (Text & { time: string }) | null;
   autonomous: { full: string; compact: string } | null;
+  /** The model the workspace runs (`opus`, `claude-opus-5-5`); null when it records none. */
+  model: string | null;
   containers: Text;
   services: (Text & { name: string; glyph: string; codicon: string })[];
   /** `12.3% CPU · 410 MiB`. */
@@ -373,6 +377,7 @@ export function displayModel(ws: DisplayInput, opts: DisplayOptions = {}): Works
         }
       : null,
     autonomous: ws.autonomous ? { full: "⚙ Autonomous", compact: "⚙ Auto" } : null,
+    model: ws.model ?? null,
     containers: containers(ws),
     services: ws.services.map(({ name, state }) => {
       const s = ws.crashLoops?.some((l) => l.service === name) ? CRASH_LOOP : SERVICE[state];

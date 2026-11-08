@@ -56,8 +56,8 @@ Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), mcp
 \fB\-\-autonomous\fR
 Run an icm workspace stage\-to\-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
 .TP
-\fB\-\-model <id>\fR
-Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a claude\-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).
+\fB\-\-model <tier|model>\fR
+Model tier (small, mid, frontier, advanced_frontier) or an explicit model; blank = models.default_tier in ~/.werkmeister/config.yaml (frontier) (env: WERKMEISTER_MODEL; config: model).
 .TP
 \fB\-\-auto\-stop\fR
 Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).

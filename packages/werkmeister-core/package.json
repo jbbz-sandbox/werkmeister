@@ -55,6 +55,7 @@
     "./locks": "./dist/locks.js",
     "./machine_setup": "./dist/machine_setup.js",
     "./migrate": "./dist/migrate.js",
+    "./model_tiers": "./dist/model_tiers.js",
     "./mcp_gen": "./dist/mcp_gen.js",
     "./notes": "./dist/notes.js",
     "./plugin_check": "./dist/plugin_check.js",

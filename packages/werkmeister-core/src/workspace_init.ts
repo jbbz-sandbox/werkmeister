@@ -75,6 +75,7 @@ import {
   validateArchetypeMcpServers,
   writeWorkspaceMcp,
 } from "./mcp_gen.js";
+import { modelTiers } from "./model_tiers.js";
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
 import { syncRegistry } from "./registry_sync.js";
@@ -94,7 +95,9 @@ import {
   expandUserPath,
   loadSandboxServiceConfigs,
   loadWorkspaceConfig,
+  readModel,
   resolveInputs,
+  resolveModelInput,
   slugToTask,
 } from "./workspace_prompts.js";
 import { mintWorkspaceToken, workspaceTokenFile } from "./workspace_token.js";
@@ -702,6 +705,17 @@ export async function initWorkspace(
     );
   }
 
+  // SW-577: say which model a new workspace, or an old one that recorded none, now runs.
+  resolveModelInput(inputs);
+  if (inputs["model"] && !readModel(workspaceRoot)) {
+    const given = String(args["model"] || envVar("MODEL") || "").trim();
+    const why = !given
+      ? ` (${modelTiers().defaultTier} tier, default)`
+      : given !== inputs["model"]
+        ? ` (${given} tier)`
+        : "";
+    info(`Model: ${inputs["model"]}${why}`);
+  }
   // 2a. Persist resolved inputs to .werkmeister/workspace.yml BEFORE writing any
   // other file — the durable source of truth. A no-op when unchanged.
   writeWorkspaceConfig(workspaceRoot, inputs);
@@ -999,6 +1013,8 @@ export async function provisionWorkspace(
   if (fs.existsSync(workspaceDir)) {
     info(`Workspace already exists: ${workspaceDir} — re-running init-workspace.`);
   } else {
+    // SW-577: a tier that can't resolve fails here, before any worktree exists; init records and names it.
+    resolveModelInput({ ...resolved });
     refreshRegistry();
     const repos = await selectRepos(resolved.repos, resolved.services);
     resolved.repos = repos.join(",");

@@ -193,6 +193,9 @@ string in `result` and is parsed from there.
    `pr-guard` and `agent-state`, so the Workspaces pane shows working / needs you / done.
 4. A `model:` in `workspace.yml` reaches headless turns (`claude-send` on this workspace) only in
    OpenCode's `provider/model` form; a Claude alias like `sonnet` is left to OpenCode's own config.
+   A tier resolves through `models.opencode` (built-in frontier: `anthropic/claude-opus-5-5`); Codex
+   has no built-in tiers, so set `models.codex.<tier>` in `~/.werkmeister/config.yaml` (users-guide
+   § `~/.werkmeister/config.yaml: models`).
 
 `opencode.json` also gets werkmeister's MCP server with this workspace's token
 (`Bearer {file:.werkmeister/token}`), and `permission.bash` deny rules for shared infra, other
