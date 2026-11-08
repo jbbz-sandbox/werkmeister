@@ -173,6 +173,12 @@ test("init writes the icm layer and nothing of jit's", async () => {
       /`git -C <absolute worktree path> push --force-with-lease=<branch>:<old sha>`/,
       "SW-494",
     );
+    // SW-568: the pr open log goes to the absolute workspace path, so a drifted cwd cannot write it into a code worktree.
+    assert.match(
+      fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
+      /`werkmeister pr open > <absolute workspace path>\/\.werkmeister\/pr-open\.log 2>&1`/,
+      "SW-568",
+    );
     // SW-565: a manual re-rebase has no wake message; the lease SHA comes verbatim from rev-parse.
     assert.match(
       rule5,
