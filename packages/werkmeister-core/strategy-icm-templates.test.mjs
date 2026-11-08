@@ -140,6 +140,15 @@ test("each template renders with no undefined and a route per stage", async () =
         // SW-111: spec asks how an existing user turns the change on.
         if (d.endsWith("_spec"))
           assert.match(c, /^5\. .*how does an existing user turn this on\?/m, `${wt}/${d}`);
+        // SW-543: call sites come from every entry point, with the greps recorded; the generic text names no werkmeister helper.
+        if (d.endsWith("_reproduce")) {
+          assert.match(
+            c,
+            /^4\. .*list its call sites through every helper or entry point that reaches that code, not one argument shape, and record the search commands \(greps\) you used in `repro\.md`/m,
+            `${wt}/${d}`,
+          );
+          assert.doesNotMatch(c, /runCapture|execRun|childEnv|execFileSync|runAsync/, `${wt}/${d}`);
+        }
         // SW-392: a repro is judged by exit code, not an output grep.
         if (d.endsWith("_reproduce"))
           assert.match(c, /^1\. Reproduce .*Judge each run by its exit code/m, `${wt}/${d}`);
