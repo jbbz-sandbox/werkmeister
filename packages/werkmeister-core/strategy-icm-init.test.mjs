@@ -173,6 +173,12 @@ test("init writes the icm layer and nothing of jit's", async () => {
       /`git -C <absolute worktree path> push --force-with-lease=<branch>:<old sha>`/,
       "SW-494",
     );
+    // SW-565: a manual re-rebase has no wake message; the lease SHA comes verbatim from rev-parse.
+    assert.match(
+      rule5,
+      /take `<old sha>` from the output of `git rev-parse origin\/<branch>`, pasted verbatim: never shortened or retyped/,
+      "SW-565",
+    );
     assert.match(
       fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
       /\("decided", "approved", "proceed", "continue"\) counts as the approval/,
