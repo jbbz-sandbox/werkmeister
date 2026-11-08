@@ -57,7 +57,7 @@ GitHub push events need no per-repo step: once [GitHub push events](github-inges
   that service. Set a command that works, even if it's only the build
   (`pnpm --filter <pkg> build`).
 - **`validate:`:** write how a person would check a change by hand, with
-  `{{local_domain}}` in the URLs. Without it, agents are told there is no guidance.
+  <code v-pre>{{local_domain}}</code> in the URLs. Without it, agents are told there is no guidance.
 - **`image:`:** detect reads the Node major from `engines`, so `>=22` gives `node:22`
   even if the repo is developed on 24. Pick the major you actually use.
 - **pnpm in the container:** `node:*` images don't include pnpm. Start every command that

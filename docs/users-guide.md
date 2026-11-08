@@ -1601,9 +1601,9 @@ infrastructure: {}                # cluster-forwarded datastores this repo needs
 Rules:
 - Only `services:`, `setup_services:` and `infrastructure:` may appear. `repo:` is the
   checkout's directory name and `repos:` is derived from each service's `path`.
-- `{{home}}`, `{{repos_root}}` and `{{workspaces_root}}` expand from the developer's
-  `config.yaml`, `{{werkmeister_home}}` to the tool's home folder (`~/.werkmeister`, or
-  `~/.sandbox` until `werkmeister machine migrate`), and `{{local_domain}}` to `ingress.local_domain`; <!-- name-check: ignore -->
+- <code v-pre>{{home}}</code>, <code v-pre>{{repos_root}}</code> and <code v-pre>{{workspaces_root}}</code> expand from the developer's
+  `config.yaml`, <code v-pre>{{werkmeister_home}}</code> to the tool's home folder (`~/.werkmeister`, or
+  `~/.sandbox` until `werkmeister machine migrate`), and <code v-pre>{{local_domain}}</code> to `ingress.local_domain`; <!-- name-check: ignore -->
   use them instead of absolute paths and hard-coded domains in
   `extra_volumes:` and `environment:`.
 - A `secrets:` key resolves from the workspace's `.werkmeister/workspace.yml` `env_vars:` first,
@@ -1935,7 +1935,6 @@ Fixed ports shared by all features:
 
 | Port | Service |
 |---|---|
-
 | 9050 | redis |
 | 9051 | postgres |
 | 9052 | backend |

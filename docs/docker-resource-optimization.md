@@ -296,7 +296,6 @@ From `.werkmeister/services.yaml` and `infra/compose/shared-infra.yml`:
 | frontend | 2560M | 1024M | Web app (Next.js) |
 | backend | 256M | 64M | API server |
 | redis | 64M | 32M | Infrastructure |
-
 | k8s-forwards | 256M | 64M | Infrastructure |
 
 ## Troubleshooting
