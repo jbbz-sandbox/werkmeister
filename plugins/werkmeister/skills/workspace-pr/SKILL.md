@@ -27,7 +27,10 @@ is `docs/workspace-lifecycle.md` in the werkmeister repo.
 4. **`werkmeister pr open`** gates, pushes, opens the PR, records its URL in the
    PR file and moves the issue to In Review. `werkmeister pr watch` then wakes this
    session on a failed check, a review or a conflict (rule 5); don't turn on the
-   desktop app's Auto-fix. Never auto-merge. Merging is the person's act.
+   desktop app's Auto-fix. Never auto-merge. Merging is the person's act. After a
+   manual rebase there is no wake message to copy the force-push lease from: fetch,
+   take `<old sha>` from the output of `git rev-parse origin/<branch>` and paste it
+   verbatim, never shortened or retyped (rule 5).
 5. **`werkmeister pr status`** after merge and release: records `merged`, then
    `shipped` with the release tag that contains the merge, and moves the issue
    to Done once every PR has shipped. A review asking for changes, or a PR
