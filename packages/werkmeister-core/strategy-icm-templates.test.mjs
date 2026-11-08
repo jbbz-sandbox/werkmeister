@@ -149,6 +149,13 @@ test("each template renders with no undefined and a route per stage", async () =
           );
           assert.doesNotMatch(c, /runCapture|execRun|childEnv|execFileSync|runAsync/, `${wt}/${d}`);
         }
+        // SW-562: stages that write exercise.md collect each MANUAL row's result before approval.
+        if (c.includes("Write `output/exercise.md`"))
+          assert.match(
+            c,
+            /Before asking for approval, list the exercise rows only a person can run .* one question per row \(pass \/ fail \/ not run\).*`MANUAL: not run \(person's reason\)`/,
+            `${wt}/${d}`,
+          );
         // SW-564: a permission-rule root cause lists every source of a matching rule.
         if (d.endsWith("_reproduce"))
           assert.match(
