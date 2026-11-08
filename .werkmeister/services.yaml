@@ -162,6 +162,33 @@ services:
     extra_volumes: *host_mounts
     environment: *host_env
 
+  # SW-583: the GitHub push-ingest infra (CDK + Lambda). Its tests synthesize the stack offline;
+  # a real deploy needs AWS credentials and is a person's step (docs/github-ingest.md).
+  github-ingest:
+    path: apps/github-ingest
+    type: library
+    archetype: node-tool
+    test: "pnpm turbo run test --continue --filter=github-ingest"
+    validate: "Fresh worktree (no node_modules): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then the test command. `pnpm --filter github-ingest exec cdk synth` must print the template with no AWS credentials. Setup steps 1-3 in docs/github-ingest.md (deploy, the GitHub App, the `github_ingest:` block in ~/.werkmeister/config.yaml and `werkmeister daemon restart`) are a person's steps, never part of a run."
+    internal_port: 3996
+    port_offset: 7
+    health_endpoint: /
+    setup_service: werkmeister-install
+    image: node:22
+    command: "sleep infinity"
+    node_modules_volume: node-modules
+    # Same tools and repo mount as docs-site, so pnpm resolves; no docker socket or HOME mounts.
+    extra_volumes:
+      - tools:/opt/werkmeister-tools
+      - "{{repos_root}}:{{repos_root}}"
+    environment:
+      PATH: /opt/werkmeister-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+      COREPACK_HOME: /opt/werkmeister-tools/corepack
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+
   # Also the MCP client bed: WERKMEISTER_MCP_TOKEN arrives via the feature .env
   # (a missing one makes `werkmeister feature up` refuse the workspace). Its archetype
   # no longer wires the werkmeister server into the shared .mcp.json (SW-115).

@@ -36,6 +36,7 @@ const GROUPS = [
       ["Known issues", "docs/known-issues.md"],
       ["Docker resources", "docs/docker-resource-optimization.md"],
       ["Jira REST setup", "docs/jira-rest-setup.md"],
+      ["GitHub push events", "docs/github-ingest.md"],
     ],
   ],
   [

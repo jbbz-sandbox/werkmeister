@@ -22,6 +22,15 @@ test("jira.api_token and other secret-named keys are masked, the rest stays visi
   assert.equal(r.projects.list[0].auth_header, "<redacted>");
 });
 
+test("github_ingest AWS keys are masked, the queue URL stays visible (SW-583)", () => {
+  const r = redact({
+    github_ingest: { queue_url: "https://sqs/q", access_key_id: "AKIAX", secret_access_key: "sek" },
+  });
+  assert.equal(r.github_ingest.access_key_id, "<redacted>");
+  assert.equal(r.github_ingest.secret_access_key, "<redacted>");
+  assert.equal(r.github_ingest.queue_url, "https://sqs/q");
+});
+
 test("an unset secret stays empty and the input is not mutated", () => {
   const input = cfg();
   input.jira.api_token = "";

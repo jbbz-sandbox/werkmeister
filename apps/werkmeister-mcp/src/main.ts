@@ -27,10 +27,13 @@ import express, { type NextFunction, type Request, type Response } from "express
 import { composeLogsStream } from "werkmeister-core/compose";
 import { BUILD_HEADER, buildOf, DEFAULT_DAEMON_PORT } from "werkmeister-core/daemon_client";
 import { SandboxError } from "werkmeister-core/errors";
+import { githubIngestConfig } from "werkmeister-core/github_ingest";
+import { watchPrs } from "werkmeister-core/pr_lifecycle";
 import { ownScheduler } from "werkmeister-core/scheduler_client";
 import { readQueue } from "werkmeister-core/scheduler_state";
 import { DAEMON_LABEL } from "werkmeister-core/web_servers";
 import { registerDaemonTools, registerSchedulerTool } from "./daemon_tools.js";
+import { sqsDeps, startGithubIngest } from "./github_ingest.js";
 import { resolveFeature, SCOPE_HEADER } from "./lib/feature.js";
 import { connectInMemoryClient } from "./lib/in_memory.js";
 import { restartGuard } from "./lib/self_restart.js";
@@ -122,6 +125,23 @@ async function startHttp(): Promise<void> {
     log: (msg) => console.error(`[werkmeister-mcp] ${msg}`),
   });
   setInterval(() => guard.check(), 5000).unref();
+
+  const log = (msg: string) => console.error(`[werkmeister-mcp] ${msg}`);
+  const ingest = githubIngestConfig();
+  if (ingest) {
+    // Ingest is optional: a missing SDK must never keep the daemon from serving.
+    try {
+      startGithubIngest(ingest.queueUrl, {
+        ...(await sqsDeps(ingest)),
+        watch: (opts) => watchPrs(opts),
+        track: (work) => guard.track(work),
+        log,
+      });
+      log(`github ingest: polling ${ingest.queueUrl}`);
+    } catch (e) {
+      log(`github ingest: off, could not start: ${(e as Error).message}`);
+    }
+  } else log("github ingest: off (no github_ingest block in ~/.werkmeister/config.yaml)");
 
   // No browser UI here, so any Origin at all is a browser reaching a server
   // that has none. Refusing outright is both less code than an allowlist and
