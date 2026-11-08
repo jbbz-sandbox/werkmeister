@@ -758,6 +758,7 @@ function sample(over: Partial<WorkspaceRow>): WorkspaceRow {
     claude: { agent: "working", at: null, question: null },
     phase: null,
     autonomous: false,
+    model: null,
     lastActivity: null,
     project: "sandbox-s",
     started: null,
