@@ -51,6 +51,11 @@ const PAGES = [
   "apps/docs-site/index.md",
   ...GROUPS.flatMap(([, items]) => items.map(([, f]) => f)),
 ];
+const toGroups = () =>
+  GROUPS.map(([text, items]) => ({
+    text,
+    items: items.map(([t, f]) => ({ text: t, link: `/${f.replace(/\.md$/, "")}` })),
+  }));
 
 // Docs outside this package would resolve `vue` from their own folder, where there is none.
 const VUE = dirname(createRequire(import.meta.resolve("vitepress")).resolve("vue/package.json"));
@@ -83,11 +88,8 @@ export default defineConfig({
   },
   themeConfig: {
     search: { provider: "local" },
-    nav: [{ text: "Guide", link: "/docs/users-guide" }],
+    nav: toGroups(),
     socialLinks: [{ icon: "github", link: REPO }],
-    sidebar: GROUPS.map(([text, items]) => ({
-      text,
-      items: items.map(([t, f]) => ({ text: t, link: `/${f.replace(/\.md$/, "")}` })),
-    })),
+    sidebar: toGroups(),
   },
 });
