@@ -91,7 +91,8 @@ test("hooks: each event writes the session's state, `at` only when its status ch
   fs.mkdirSync(cwd, { recursive: true });
   const fire = (event, extra = {}, now = new Date()) =>
     record({ hook_event_name: event, cwd, session_id: "s", ...extra }, now);
-  const t0 = new Date("2026-10-19T10:00:00Z");
+  // Recent: SW-559 drops a busy record silent past STALE_SESSION_MS.
+  const t0 = new Date(Date.now() - 60_000);
 
   fire("UserPromptSubmit", {}, t0);
   assert.deepEqual(rec(dir), { status: "busy", at: t0.toISOString(), last: t0.toISOString() });
@@ -322,9 +323,44 @@ test("agentOf: a busy session silent past SESSION_GONE_MS is no longer working",
   assert.equal(agentOf({ s: busy(60_000) }, now).agent, "working");
 });
 
+// SW-559: a crash never sends SessionEnd, so without an expiry a dead record was probed on every sweep.
+test("readSessions: a busy record with no ask, silent for STALE_SESSION_MS, is dropped and its file deleted", async () => {
+  const { STALE_SESSION_MS } = await import("./dist/agent_state.js");
+  const dir = workspace("j-stale", null);
+  const now = Date.parse("2026-11-06T12:00:00Z");
+  const at = (ms) => new Date(now - ms).toISOString();
+  const file = (id) => path.join(dir, ".werkmeister", "sessions", `${id}.json`);
+  const old = at(STALE_SESSION_MS + 1);
+  const ask = { kind: "permission", what: "Bash", at: old, source: "session" };
+  write(file("dead"), JSON.stringify({ status: "busy", at: at(STALE_SESSION_MS * 2), last: old }));
+  write(file("recent"), JSON.stringify({ status: "busy", at: at(STALE_SESSION_MS - 60_000) }));
+  write(file("asking"), JSON.stringify({ status: "busy", at: old, last: old, ask }));
+  write(file("idle"), JSON.stringify({ status: "idle", at: old, last: old }));
+  write(file("junk-date"), JSON.stringify({ status: "busy", at: "not a date" }));
+  write(
+    path.join(dir, ".werkmeister", "agent-state.json"),
+    JSON.stringify({ sessions: { legacy: { status: "busy", at: old } } }),
+  );
+  assert.deepEqual(Object.keys(readSessions(dir, now)).sort(), ["asking", "idle", "recent"]);
+  assert.equal(fs.existsSync(file("dead")), false, "the stale file is deleted");
+  assert.equal(fs.existsSync(file("junk-date")), false);
+  assert.equal(fs.existsSync(file("recent")), true);
+
+  // A delete that fails (a read-only or foreign-owned dir) still leaves the record out, and never throws.
+  write(file("dead"), JSON.stringify({ status: "busy", at: old, last: old }));
+  const sessions = path.dirname(file("dead"));
+  fs.chmodSync(sessions, 0o500);
+  try {
+    assert.deepEqual(Object.keys(readSessions(dir, now)).sort(), ["asking", "idle", "recent"]);
+  } finally {
+    fs.chmodSync(sessions, 0o755);
+  }
+});
+
 test("readSessions: pre-SW-487 agent-state.json sessions still count until their own file exists", () => {
   const dir = workspace("i-legacy", null);
-  const at = "2026-11-01T10:00:00.000Z";
+  // Recent: SW-559 drops records older than STALE_SESSION_MS.
+  const at = new Date().toISOString();
   write(
     path.join(dir, ".werkmeister", "agent-state.json"),
     JSON.stringify({
@@ -361,8 +397,9 @@ test("hooks: each session id gets a busy/idle record; SessionEnd drops it", () =
   const dir = workspace("i-sessions", null);
   const fire = (event, session_id, now) =>
     record({ hook_event_name: event, cwd: dir, session_id }, now);
-  const t0 = new Date("2026-10-29T10:00:00Z");
-  const t1 = new Date("2026-10-29T10:05:00Z");
+  // Recent: SW-559 drops a busy record silent past STALE_SESSION_MS.
+  const t0 = new Date(Date.now() - 10 * 60_000);
+  const t1 = new Date(t0.getTime() + 5 * 60_000);
 
   fire("SessionStart", "a", t0);
   assert.deepEqual(readSessions(dir), {

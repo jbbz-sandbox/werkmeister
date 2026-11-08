@@ -49,11 +49,18 @@ test("first run: skip dropped, gates read, candidates are where Claude spoke las
   workspace("b-decided", { gate: "decided", lastRole: "user" });
   workspace("c-waiting", { lastRole: "assistant" });
   workspace("d-parked", { labels: ["skip"], gate: "proposed" });
+  // SW-559: a notice reads as needs-you, but a courier can't carry it, so alone it is no candidate.
+  workspace("e-notice", { lastRole: "user" });
+  fs.writeFileSync(
+    path.join(root, "e-notice", ".werkmeister", "notices.json"),
+    JSON.stringify({ n1: { what: "Gate failed", action: "Look", at: new Date().toISOString() } }),
+  );
 
   const r = await checkInTriage();
   assert.equal(r.root, root);
   assert.equal(r.since, null);
-  assert.deepEqual(names(r), ["a-gate", "b-decided", "c-waiting"]);
+  assert.deepEqual(names(r), ["a-gate", "b-decided", "c-waiting", "e-notice"]);
+  assert.equal(r.workspaces[3].claude.agent, "needs-you");
   assert.deepEqual(r.dropped, ["d-parked"]);
   assert.deepEqual(r.workspaces[0].gates, [path.join("stages", "02_plan", "output", "plan.md")]);
   assert.deepEqual(r.workspaces[1].gates, []);
@@ -71,17 +78,18 @@ test("next run: gates and transcripts that moved since the mark", async () => {
   // Back-date the mark so the write below is strictly newer.
   const past = new Date(Date.now() - 60_000);
   fs.utimesSync(path.join(root, ".check-in-last"), past, past);
-  fs.utimesSync(
-    path.join(
-      home,
-      ".claude",
-      "projects",
-      path.join(root, "c-waiting").replace(/[^a-zA-Z0-9]/g, "-"),
-      "s1.jsonl",
-    ),
-    past,
-    past,
-  );
+  for (const name of ["c-waiting", "e-notice"])
+    fs.utimesSync(
+      path.join(
+        home,
+        ".claude",
+        "projects",
+        path.join(root, name).replace(/[^a-zA-Z0-9]/g, "-"),
+        "s1.jsonl",
+      ),
+      past,
+      past,
+    );
   say(path.join(root, "b-decided"), "assistant");
 
   const r = await checkInTriage();
@@ -92,16 +100,17 @@ test("next run: gates and transcripts that moved since the mark", async () => {
       ["a-gate", false],
       ["b-decided", true],
       ["c-waiting", false],
+      ["e-notice", false],
     ],
   );
   assert.deepEqual(r.candidates, ["a-gate", "b-decided"]);
 });
 
 test("focus narrows the sweep to focus workspaces", async () => {
-  workspace("e-focus", { labels: ["focus"] });
+  workspace("f-focus", { labels: ["focus"] });
   const r = await checkInTriage();
-  assert.deepEqual(names(r), ["e-focus"]);
-  assert.deepEqual(r.dropped, ["a-gate", "b-decided", "c-waiting", "d-parked"]);
+  assert.deepEqual(names(r), ["f-focus"]);
+  assert.deepEqual(r.dropped, ["a-gate", "b-decided", "c-waiting", "d-parked", "e-notice"]);
 });
 
 test("the mark's sub-millisecond mtime rounds instead of truncating", async () => {

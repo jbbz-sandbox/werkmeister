@@ -54,6 +54,10 @@ export interface SessionRecord {
 /** Past this with no hook event, a busy session has crashed or been killed (SW-487 Q7). */
 export const SESSION_GONE_MS = 30 * 60_000;
 
+// shortcut: a crash never sends SessionEnd, so a busy record with no hook event for a day is
+// dropped as dead; add a heartbeat if a longer silent turn misreads.
+export const STALE_SESSION_MS = 24 * 60 * 60_000;
+
 // The id comes from hook input and names a file.
 const SESSION_ID = /^[\w-]+$/;
 const legacyFile = (root: string) => path.join(dotDir(root), "agent-state.json");
@@ -82,15 +86,20 @@ function sessionOf(s: any): SessionRecord | null {
 }
 
 /**
- * The workspace's sessions by id; empty when there are none.
+ * The workspace's sessions by id; empty when there are none. A busy record with no ask, silent
+ * for {@link STALE_SESSION_MS}, is a crashed session: left out and its file deleted (SW-559).
+ * Idle records and asks stay, since a question can wait on the person past a day.
  * shortcut: also reads the pre-SW-487 `agent-state.json` `sessions{}` for ids with no file of their
  * own, so a session open across the upgrade still counts as live; drop with the VS Code/dashboard migration.
  */
-export function readSessions(root: string): Record<string, SessionRecord> {
+export function readSessions(root: string, now = Date.now()): Record<string, SessionRecord> {
   const out: Record<string, SessionRecord> = {};
+  // `<` is false for an unparseable date, so that record goes as well.
+  const fresh = (r: SessionRecord) =>
+    r.status === "idle" || r.ask !== undefined || now - lastOf(r) < STALE_SESSION_MS;
   for (const [id, s] of Object.entries(readJson(legacyFile(root))?.["sessions"] ?? {})) {
     const r = sessionOf(s);
-    if (r) out[id] = r;
+    if (r && fresh(r)) out[id] = r;
   }
   let names: string[] = [];
   try {
@@ -100,10 +109,24 @@ export function readSessions(root: string): Record<string, SessionRecord> {
   }
   for (const n of names) {
     const id = n.match(/^([\w-]+)\.json$/)?.[1];
-    const r = id ? sessionOf(readJson(path.join(sessionsDir(root), n))) : null;
-    if (id && r) out[id] = r;
+    const file = path.join(sessionsDir(root), n);
+    const r = id ? sessionOf(readJson(file)) : null;
+    if (!id || !r) continue;
+    if (fresh(r)) out[id] = r;
+    else removeIfStale(file, fresh);
   }
   return out;
+}
+
+// A resume keeps the session id, so re-read: its hook may have just written a fresh record.
+// Cleanup only: the record is already left out, so a failed delete must not fail the sweep.
+function removeIfStale(file: string, fresh: (r: SessionRecord) => boolean): void {
+  try {
+    const again = sessionOf(readJson(file));
+    if (again && !fresh(again)) fs.rmSync(file, { force: true });
+  } catch {
+    /* read-only or foreign-owned sessions dir */
+  }
 }
 
 const lastOf = (s: SessionRecord) => Date.parse(s.last ?? s.at);
