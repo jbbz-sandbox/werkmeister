@@ -311,6 +311,39 @@ export function withMan(packageJson, pages) {
   return `${JSON.stringify(pkg, null, 2)}\n`;
 }
 
+/** Each entry's `name@version (license)` header in a THIRD-PARTY-LICENSES.txt (`scripts/write-licenses.mjs`). */
+export function bundledPackages(text) {
+  const [first, ...rest] = text.split(`\n${"-".repeat(72)}\n\n`);
+  // The first chunk opens with the file's one-paragraph preamble.
+  return [first.slice(first.indexOf("\n\n") + 2), ...rest].map((entry) => {
+    const header = entry.slice(0, entry.indexOf("\n"));
+    const m = header.match(/^(.+)@([^@\s]+) \((.+)\)$/);
+    if (!m) throw new Error(`THIRD-PARTY-LICENSES.txt: unexpected entry header "${header}"`);
+    return { name: m[1], version: m[2], license: m[3] };
+  });
+}
+
+/** A count by licence, then every package in a collapsed table. */
+export function licenceTable(packages) {
+  const counts = Object.entries(Object.groupBy(packages, (p) => p.license))
+    .map(([id, ps]) => [id, ps.length])
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const rows = packages
+    .toSorted((a, b) => a.name.localeCompare(b.name))
+    .map((p) => `| \`${p.name}\` | ${p.version} | ${md(p.license, true)} |`);
+  return [
+    `${packages.length} packages: ${counts.map(([id, n]) => `${id} ${n}`).join(", ")}.`,
+    "",
+    "<details><summary>Every bundled package</summary>",
+    "",
+    "| Package | Version | SPDX |",
+    "| --- | --- | --- |",
+    ...rows,
+    "",
+    "</details>",
+  ].join("\n");
+}
+
 /** Every region's Markdown, keyed by name. */
 export async function loadRegions() {
   const hooks = await import(
@@ -341,6 +374,10 @@ export async function loadRegions() {
       ...tools.map((t) => `| \`${t.name}\` | ${md(t.title, true)}${t.app ? " (UI-only)" : ""} |`),
     ].join("\n"),
     "cli-reference": cliGuide(commands),
+    // Written by the same build as dist/main.js, which cliReference() already requires.
+    "third-party-npm": licenceTable(
+      bundledPackages(readFileSync(join(ROOT, "apps/cli/dist/THIRD-PARTY-LICENSES.txt"), "utf8")),
+    ),
     workspaces: workspaces.join("\n\n"),
   };
 }
