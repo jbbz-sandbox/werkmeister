@@ -86,7 +86,7 @@ test("each template renders with no undefined and a route per stage", async () =
             c,
             d.endsWith("_research")
               ? /evidence from steps 1–3 and 5/
-              : /`output\/repro\.md`: steps 1–6/,
+              : /`output\/repro\.md`: steps 1–7/,
             `${wt}/${d}`,
           );
         } else {
@@ -149,6 +149,13 @@ test("each template renders with no undefined and a route per stage", async () =
           );
           assert.doesNotMatch(c, /runCapture|execRun|childEnv|execFileSync|runAsync/, `${wt}/${d}`);
         }
+        // SW-564: a permission-rule root cause lists every source of a matching rule.
+        if (d.endsWith("_reproduce"))
+          assert.match(
+            c,
+            /^7\. When the root cause is a permission rule \(allow, deny, ask\), step 4 lists every source of a matching rule:.*`--allowedTools` \/ `--disallowedTools`\)\. The failing test probes each source\./m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(

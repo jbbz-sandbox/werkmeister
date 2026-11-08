@@ -369,7 +369,9 @@ const bugfix: Stage[] = [
         // SW-442: sessionBusy had two true cases; stage 01 listed callers, so only review caught the second (sw-418).
         "When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test.",
         NAME_HISTORY_STEP,
-        "Write `output/repro.md`: steps 1–6, and a proposed fix in one paragraph under a `status: proposed` line.",
+        // SW-564: sw-521's root cause was a permission rule; step 4 listed the callers of one builder and missed two other sources of a matching rule.
+        "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source.",
+        "Write `output/repro.md`: steps 1–7, and a proposed fix in one paragraph under a `status: proposed` line.",
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
       humanCheck: `Read \`output/repro.md\`. Correct the root cause or the proposed fix if needed, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts the fix without asking again. ${CHAT_APPROVAL}`,
