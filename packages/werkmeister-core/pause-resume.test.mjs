@@ -262,13 +262,18 @@ test("resumeAndNudge: with no live session, continue goes headless", async () =>
 const noProcTools = ["ps", "lsof"].some(
   (b) => spawnSync("sh", ["-c", `command -v ${b}`]).status !== 0,
 );
+// A process `ps` lists as *name*, its cwd in the workspace. Not a `/bin/sleep` symlink: Ubuntu
+// 26.04's multi-call coreutils picks the tool by argv[0], so `claude -> sleep` exits at once.
+const openProcess = (name) =>
+  spawn(process.execPath, ["-e", "setTimeout(() => {}, 30000)"], {
+    argv0: name,
+    cwd: path.join(ws, ".werkmeister"),
+  });
 test("resumeAndNudge: an open claude process with no record gets a pending nudge", {
   skip: noProcTools && "no ps/lsof",
 }, async (t) => {
   paused(true);
-  const procDir = fs.mkdtempSync(path.join(dir, "proc-"));
-  fs.symlinkSync("/bin/sleep", path.join(procDir, "claude"));
-  const child = spawn(path.join(procDir, "claude"), ["30"], { cwd: path.join(ws, ".werkmeister") });
+  const child = openProcess("claude");
   t.after(() => child.kill());
   assert.equal((await resumeAndNudge("demo-ws", ws, "demo")).nudge, "pending");
   assert.equal(readLog(), "", "no second claude on a live transcript");
@@ -289,9 +294,7 @@ test("resumeAndNudge: an open codex process in a codex workspace gets a pending 
   t.after(() =>
     prevBin === undefined ? delete process.env.CODEX_BIN : (process.env.CODEX_BIN = prevBin),
   );
-  const procDir = fs.mkdtempSync(path.join(dir, "proc-"));
-  fs.symlinkSync("/bin/sleep", path.join(procDir, "codex"));
-  const child = spawn(path.join(procDir, "codex"), ["30"], { cwd: path.join(ws, ".werkmeister") });
+  const child = openProcess("codex");
   t.after(() => child.kill());
   assert.equal((await resumeAndNudge("demo-ws", ws, "demo")).nudge, "pending");
   assert.equal(readLog(), "", "no headless codex beside the open one");
