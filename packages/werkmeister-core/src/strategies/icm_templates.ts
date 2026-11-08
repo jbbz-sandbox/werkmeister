@@ -102,6 +102,10 @@ const REVIEW_DELTA =
 const diffCheck = (doc: string) =>
   `Before running tests, read \`git diff\` in each repo you touched and tick off each edit \`${doc}\` settled against it: an edit reported as applied can be missing.`;
 
+// SW-562: sw-499's two MANUAL rows (a real VS Code window) were approved unrun and shipped as MANUAL, never recorded.
+const MANUAL_STEP =
+  "Before asking for approval, list the exercise rows only a person can run (a real VS Code window, a device, a browser). Ask the person for each one's result, one question per row (pass / fail / not run), and write the answer into `exercise.md`: PASS or FAIL in the table, and for a row not run a `MANUAL: not run (person's reason)` line under it (the table's result cell stays PASS or FAIL). An approval that skips this keeps those rows MANUAL, and the PR file says why.";
+
 const SKIPPED = "every skipped test by name with its skip reason and where it ran instead";
 
 // SW-438: a grouped PR commits per ticket as it goes; the uncommitted-diff contracts contradicted it (sw-323).
@@ -322,6 +326,7 @@ const feature: Stage[] = [
         REVIEW_DELTA,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
+        MANUAL_STEP,
       ],
       outputs: [
         v.group.length
@@ -441,6 +446,7 @@ const bugfix: Stage[] = [
           "rerun the test command exactly as `../../.werkmeister/werkmeister-context.md` states it (through `.werkmeister/bin/with-temp-home`), rerun steps 2–3 and update `exercise.md`",
           v.group,
         ),
+        MANUAL_STEP,
       ],
       outputs: [
         "`output/exercise.md`",
@@ -515,6 +521,7 @@ const refactor: Stage[] = [
         REVIEW_DELTA,
         `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
+        MANUAL_STEP,
       ],
       outputs: [
         v.group.length
