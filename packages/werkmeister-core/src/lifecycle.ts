@@ -35,6 +35,7 @@ import {
   readPaused,
   readSessions,
   readWaiting,
+  STALE_SESSION_MS,
   writeNudge,
   writePaused,
 } from "./agent_state.js";
@@ -674,20 +675,17 @@ export interface LiveSession {
   statusUpdatedAt: number;
 }
 
-// ponytail: a crash never sends SessionEnd, so a record with no status change for a
-// day counts as gone; a heartbeat if a longer silent turn or idle session misreads.
-const STALE_SESSION_MS = 24 * 60 * 60_000;
-
 /** The open sessions in *workspaceRoot*, as Werkmeister's hooks recorded them. */
 export function liveSessions(workspaceRoot: string, now = Date.now()): LiveSession[] {
   return (
-    Object.entries(readSessions(workspaceRoot))
+    Object.entries(readSessions(workspaceRoot, now))
       // `last` is the newest hook; older records have only `at`, when the status began.
       .map(([sessionId, s]) => ({
         sessionId,
         status: s.status,
         statusUpdatedAt: Date.parse(s.last ?? s.at),
       }))
+      // readSessions keeps idle records and asks of any age; a day-silent one isn't open.
       .filter((s) => now - s.statusUpdatedAt < STALE_SESSION_MS)
   );
 }

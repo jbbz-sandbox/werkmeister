@@ -1827,9 +1827,9 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
           !working(r) &&
           !readyToClose.includes(r.name) &&
           (r.workspaceState?.needs.some((n) => COURIER_KINDS.has(n.kind)) ||
-            (sinceMs === null
-              ? r.claude.agent === "needs-you" || r.claude.agent === "done"
-              : r.gates.length > 0 || r.changed)),
+            r.gates.length > 0 ||
+            // Not needs-you: legacyAgent reads it for any item, crash loops and notices too (SW-559).
+            (sinceMs === null ? r.claude.agent === "done" : r.changed)),
       )
       .map((r) => r.name),
     readyToClose,
