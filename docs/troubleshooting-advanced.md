@@ -54,7 +54,7 @@ console.log(countCompiledRoutes(JSON.parse(json)), 'compiled routes');
 
 > Needs `pnpm --filter werkmeister-core run build` first — `dist/` is gitignored.
 
-**Fix:** Ensure the Caddyfile uses `route { ... }` instead of multiple `handle` blocks. See `docs/known-issues.md` for the full explanation.
+**Fix:** The generated Caddyfile uses scoped `handle @<feature>` blocks; a bare `handle` beside scoped ones is what drops routes. Regenerate it (`werkmeister infra proxy-reload`) rather than hand-editing it.
 
 ### If Both Return Empty/Error
 

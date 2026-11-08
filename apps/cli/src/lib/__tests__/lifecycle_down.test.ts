@@ -1,8 +1,7 @@
 /**
  * `lifecycle.down` is library code now, so its reporter lines reach the
  * dashboard as well as the terminal: no CLI flag names, and a
- * teardown that failed must say so rather than pass as success
- * (known-issues.md, "Library Rough Edges").
+ * teardown that failed must say so rather than pass as success.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
