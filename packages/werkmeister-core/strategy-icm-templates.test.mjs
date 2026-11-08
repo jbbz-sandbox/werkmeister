@@ -149,6 +149,13 @@ test("each template renders with no undefined and a route per stage", async () =
           );
           assert.doesNotMatch(c, /runCapture|execRun|childEnv|execFileSync|runAsync/, `${wt}/${d}`);
         }
+        // SW-566: step 4 also lists what each caller does with the result.
+        if (d.endsWith("_reproduce"))
+          assert.match(
+            c,
+            /^4\. List every other caller .* and what each does with the result \(an early return, a printed value, a stored state\), so the fix's return shape is checked against every caller before the fix stage/m,
+            `${wt}/${d}`,
+          );
         // SW-392: a repro is judged by exit code, not an output grep.
         if (d.endsWith("_reproduce"))
           assert.match(c, /^1\. Reproduce .*Judge each run by its exit code/m, `${wt}/${d}`);
