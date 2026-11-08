@@ -151,7 +151,9 @@ function activityOf(f: StateFacts): Activity {
     session,
   });
   if (f.paused) return a("paused", "Paused", f.paused.at);
-  if (f.waiting) return a("queued", `Queued for CPU · position ${f.waiting.position}`);
+  // A service-start wait (SW-540) holds only that start; the session keeps working (SW-569).
+  if (f.waiting && !f.waiting.services)
+    return a("queued", `Queued for CPU · position ${f.waiting.position}`);
   if (f.services.some((s) => s.state === "starting"))
     return a("starting", "Containers starting", f.started?.at ?? null);
   const now = f.now.getTime();
