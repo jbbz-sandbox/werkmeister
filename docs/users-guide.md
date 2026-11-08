@@ -207,38 +207,15 @@ werkmeister workspace init \
 
 ### Slots & Port Ranges
 
-Each active feature is assigned a **slot** (numbered 1–12). The slot determines the feature's host port range:
+Each active feature is assigned a **slot** (numbered 1 to `feature_slots.count`, default 12). The slot determines the feature's 20-port host range, and a service's host port is that range's base plus its `port_offset` from `~/.werkmeister/services.yaml`. The table and formula are in [Port Allocation](#port-allocation).
 
-| Slot | Port Range | Example (port_offset 0) |
-|---|---|---|
-| 1 | 11100–11119 | `localhost:11100` |
-| 2 | 11200–11219 | `localhost:11200` |
-| 3 | 11300–11319 | `localhost:11300` |
-| ... | ... | ... |
-| 12 | 12200–12219 | `localhost:12200` |
-
-Each slot provides 20 ports. A service's host port is calculated as:
-
-```
-host_port = base_port + (slot - 1) * 100 + port_offset
-```
-
-Where `port_offset` is defined per service in `~/.werkmeister/services.yaml` (in the demo registry: backend = 0, frontend = 1).
-
-Slot assignments are persisted in `~/.werkmeister/slots.json` and survive terminal restarts.
+The slot is recorded as the `com.werkmeister.slot` label on the feature's containers, so it survives terminal restarts.
 
 ### k8s Port-Forwards (Baseline)
 
 All services are available from k8s on a fixed port range (9000–9099), shared across all features. These are the "baseline" — when a feature doesn't run a service locally, requests are routed to the k8s forward.
 
-k8s port-forwards now run inside a Docker container (`k8s-forwards`) as part of shared infrastructure (`infra/compose/shared-infra.yml`). They are accessible via the Docker DNS name `k8s-forwards` on the `werkmeister-shared` network.
-
-| Port | Service | k8s Namespace |
-|---|---|---|
-| 9050 | redis | default |
-| 9051 | postgres | default |
-| 9052 | backend | default |
-| 9053 | frontend | default |
+k8s port-forwards now run inside a Docker container (`k8s-forwards`) as part of shared infrastructure (`apps/cli/infra/compose/shared-infra.yml`). They are accessible via the Docker DNS name `k8s-forwards` on the `werkmeister-shared` network. The port table is in [k8s Forward Ports](#k8s-forward-ports).
 
 These ports are internal to the Docker network — other containers reach them via `k8s-forwards:9xxx`. k8s forwards must be running before starting features. Start them with `werkmeister infra connect`.
 
@@ -1933,12 +1910,12 @@ The 80-port gap between each slot's 20-port range is reserved for future expansi
 
 Fixed ports shared by all features:
 
-| Port | Service |
-|---|---|
-| 9050 | redis |
-| 9051 | postgres |
-| 9052 | backend |
-| 9053 | frontend |
+| Port | Service | k8s Namespace | Remote Port |
+|---|---|---|---|
+| 9050 | redis | default | 6379 |
+| 9051 | postgres | default | 5432 |
+| 9052 | backend | default | 80 |
+| 9053 | frontend | default | 8080 |
 
 ---
 
@@ -2653,22 +2630,4 @@ Containers:
 
 ### Lifecycle Flow
 
-```
-werkmeister feature up PROJ-1234
-    │
-    ├── 1. Scan workspace (~/workspace/PROJ-1234/)
-    │       └── git diff main..HEAD in each repo
-    │
-    ├── 2. Allocate slot → ~/.werkmeister/slots.json
-    │
-    ├── 3. Generate files → ~/workspace/PROJ-1234/
-    │       ├── compose.yml      (from infra/templates/)
-    │       ├── .env                    (from infra/templates/)
-    │       └── .werkmeister/supergraph-config.yml  (if a GraphQL subgraph exists)
-    │
-    ├── 4. Verify k8s forwards → werkmeister status --k8s
-    │
-    ├── 5. Start containers → docker compose up -d
-    │
-    └── 6. Update proxy → ~/.werkmeister/infra/proxy/Caddyfile → caddy reload
-```
+What `werkmeister feature up` does, step by step, is in [`werkmeister feature up`](#werkmeister-feature-up).
