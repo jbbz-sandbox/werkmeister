@@ -225,6 +225,7 @@ test("initWorkspace after a switch to icm removes jit's managed hooks even witho
       {
         hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
         permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
+        model: "opus", // SW-577: init always records the default-tier model
       },
       "only the PR guard and the allow rules are left",
     );
@@ -258,6 +259,7 @@ test("initWorkspace --prune-context removes tracked jit leftovers after a switch
       {
         hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
         permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
+        model: "opus", // SW-577: init always records the default-tier model
       },
       "jit-tracked settings pruned; icm wrote back only the PR guard and the allow rules",
     );

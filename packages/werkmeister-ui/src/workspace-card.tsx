@@ -304,6 +304,11 @@ export function WorkspaceCard(p: CardProps) {
           <span className="ws-chips">
             <span className={`chip t-${d.agent.tone}`}>{d.agent.label}</span>
             {d.autonomous && <span className="auto">{d.autonomous.full}</span>}
+            {d.model && (
+              <span className="auto" title="Model">
+                {d.model}
+              </span>
+            )}
           </span>
         </div>
         {(p.workType || p.task) && (

@@ -33,6 +33,7 @@ import type { PromptSpec } from "./global_config.js";
 import { HARNESS_IDS } from "./harness/types.js";
 // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { defaultProject, issueIdOf, issueTracker, trackerById } from "./issue_tracker.js";
+import { resolveModel } from "./model_tiers.js";
 import { ProcError, run as procRun } from "./proc.js";
 import { loadProjects } from "./projects.js";
 import { info, warn } from "./reporter.js";
@@ -160,6 +161,17 @@ export function readAutoStop(workspaceRoot: string): boolean {
   return value === undefined || value === null || value === ""
     ? readAutonomous(workspaceRoot)
     : isTrue(value);
+}
+
+/**
+ * Set *inputs*' `model` to the model its tier (or the default tier) resolves to (SW-577),
+ * so create and init record one and no session falls to the harness's own default.
+ * Not in {@link resolveInputs}: the create form only asks for fields still unset there.
+ */
+export function resolveModelInput(inputs: Record<string, string>): void {
+  const { model } = resolveModel(inputs.model, inputs.harness || HARNESS_IDS[0]);
+  if (model) inputs.model = model;
+  else delete inputs.model;
 }
 
 /** The workspace's `model` input, or null when unset or blank. */
@@ -549,12 +561,13 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "model",
     label: "Model",
     help:
-      "Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a full " +
-      "claude-… id; empty = Claude Code's default. Written to .claude/settings.json and passed as --model to claude-send and " +
-      "claude-resume. A cheaper model suits mechanical jobs (lint passes, renames).",
+      "Model tier (small, mid, frontier, advanced_frontier) or an explicit model (alias or full id); " +
+      "empty = the default tier from `models.default_tier` in ~/.werkmeister/config.yaml (frontier). " +
+      "The resolved model is written to workspace.yml and .claude/settings.json and passed to every session start. " +
+      "mid suits mechanical jobs (lint passes, renames).",
     // One token, not an alias list: Claude Code's aliases change, and a bad value fails on first use.
-    pattern: "^[A-Za-z0-9][A-Za-z0-9._\\[\\]-]*$",
-    placeholder: "sonnet",
+    pattern: "^[A-Za-z0-9][A-Za-z0-9._/\\[\\]-]*$",
+    placeholder: "frontier",
   },
   {
     key: "auto_stop",

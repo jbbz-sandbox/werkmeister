@@ -15,7 +15,13 @@ import { deniedIn } from "./dist/harness/claude/session.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
 import { claudeResumeCommand, claudeSendArgs } from "./dist/sandbox.js";
 import { writeWorkspaceConfig } from "./dist/workspace_init.js";
-import { _WIZARD_PROMPTS, computePromptSpec, readModel } from "./dist/workspace_prompts.js";
+import {
+  _WIZARD_PROMPTS,
+  computePromptSpec,
+  readModel,
+  resolveInputs,
+  resolveModelInput,
+} from "./dist/workspace_prompts.js";
 
 process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
 
@@ -157,6 +163,9 @@ test("claude-resume passes a quoted --model only when the workspace has one", ()
   assert.equal(claudeResumeCommand("s1", null), "claude --resume s1");
   assert.equal(claudeResumeCommand("s1", "sonnet"), "claude --model 'sonnet' --resume s1");
   assert.equal(claudeResumeCommand(null, "sonnet[1m]"), "claude --model 'sonnet[1m]'");
+  // SW-577: the default tier's model, now always set, reaches the command line too.
+  assert.equal(claudeResumeCommand(null, "opus"), "claude --model 'opus'");
+  assert.ok(claudeSendArgs("hi", null, "opus").join(" ").includes("--model opus"));
   assert.equal(
     claudeResumeCommand("s1", null, "start the run"),
     "claude --resume s1 'start the run'",
@@ -187,7 +196,71 @@ test("the form gets model right after autonomous: an optional string with a one-
   assert.equal(field.type, "string");
   assert.ok(!(schema.required ?? []).includes("model"));
   const re = new RegExp(field.pattern);
-  // Blank passes: an optional field's pattern also admits "" (Claude Code's default).
-  for (const ok of ["", "sonnet", "claude-opus-5-5", "sonnet[1m]"]) assert.ok(re.test(ok), ok);
+  // Blank passes: an optional field's pattern also admits "" (the default tier).
+  for (const ok of [
+    "",
+    "sonnet",
+    "claude-opus-5-5",
+    "sonnet[1m]",
+    "mid",
+    "anthropic/claude-opus-5-5",
+  ])
+    assert.ok(re.test(ok), ok);
   for (const bad of ["bad model", "x;rm", "-p"]) assert.ok(!re.test(bad), bad);
+});
+
+// SW-577: create and init resolve the model once, so the run never falls to the harness default.
+async function withConfig(yaml, fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-model-cfg-"));
+  const file = path.join(dir, "config.yaml");
+  fs.writeFileSync(file, yaml);
+  const saved = process.env.WERKMEISTER_CONFIG_FILE;
+  process.env.WERKMEISTER_CONFIG_FILE = file;
+  try {
+    return await fn(file);
+  } finally {
+    process.env.WERKMEISTER_CONFIG_FILE = saved;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** What create and init record: the inputs, then the model resolved from them. */
+const recorded = (args, root) => {
+  const inputs = resolveInputs(args, root);
+  resolveModelInput(inputs);
+  return inputs;
+};
+
+test("SW-577: no --model and no models: block resolves to the built-in frontier model, opus", () => {
+  assert.equal(recorded({ feature: "f" }, workspace()).model, "opus");
+  assert.equal(
+    recorded({ feature: "f", harness: "opencode" }, workspace()).model,
+    "anthropic/claude-opus-5-5",
+  );
+  assert.equal(recorded({ feature: "f", harness: "mcp" }, workspace()).model, undefined);
+  // The create form still asks: resolveInputs leaves a blank model unset.
+  assert.equal(resolveInputs({ feature: "f" }, workspace()).model, undefined);
+});
+
+test("SW-577: --model mid resolves through config.yaml; a later config change leaves the recorded model", async () => {
+  const root = workspace();
+  await withConfig("models:\n  claude:\n    mid: haiku\n", async (file) => {
+    const inputs = recorded({ feature: "f", model: "mid" }, root);
+    assert.equal(inputs.model, "haiku");
+    await withReporter(collectingReporter(), async () => writeWorkspaceConfig(root, inputs));
+    fs.writeFileSync(file, "models:\n  claude:\n    mid: sonnet\n");
+    assert.equal(recorded({}, root).model, "haiku");
+    assert.equal(recorded({ feature: "g", model: "mid" }, workspace()).model, "sonnet");
+  });
+});
+
+test("SW-577: an explicit model passes through; a tier with no model for the harness throws naming the key", () => {
+  assert.equal(
+    recorded({ feature: "f", model: "claude-opus-5-5" }, workspace()).model,
+    "claude-opus-5-5",
+  );
+  assert.throws(
+    () => recorded({ feature: "f", harness: "codex" }, workspace()),
+    /set models\.codex\.frontier in ~\/\.werkmeister\/config\.yaml/,
+  );
 });

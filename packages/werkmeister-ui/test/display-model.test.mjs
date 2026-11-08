@@ -66,6 +66,12 @@ test("autonomous badge", () => {
   });
 });
 
+test("model: the workspace's model, null when it records none or the core predates SW-577", () => {
+  assert.equal(model({ model: "opus" }).model, "opus");
+  assert.equal(model({ model: null }).model, null);
+  assert.equal(model().model, null);
+});
+
 test("container summary states", () => {
   const cases = [
     [{ state: "up", running: 2, total: 2 }, "2 of 2 up", "ok"],

@@ -143,3 +143,21 @@ test("the run limits name the commands the brief defers (SW-296)", () => {
   ])
     assert.ok(RUN_LIMITS.includes(cmd), cmd);
 });
+
+test("SW-577: a workspace created with no --model starts with the frontier model, opus", async () => {
+  const { resolveInputs, resolveModelInput } = await import("./dist/workspace_prompts.js");
+  const { writeWorkspaceConfig } = await import("./dist/workspace_init.js");
+  const { collectingReporter, withReporter } = await import("./dist/reporter.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "start-args-"));
+  const saved = process.env.WERKMEISTER_CONFIG_FILE;
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(dir, "no-config.yaml");
+  try {
+    const inputs = resolveInputs({ feature: "f", issue_id: "SW-7" }, dir);
+    resolveModelInput(inputs);
+    await withReporter(collectingReporter(), async () => writeWorkspaceConfig(dir, inputs));
+    assert.equal((await startArgs(dir)).model, "opus");
+  } finally {
+    process.env.WERKMEISTER_CONFIG_FILE = saved;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

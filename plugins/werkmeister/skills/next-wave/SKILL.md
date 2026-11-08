@@ -26,7 +26,7 @@ No UI: don't call the werkmeister MCP tools that render the workspaces dashboard
 | **Autonomous** | mechanical or well-specified, verifiable with unit tests and mocks, no live infra, no decision left to the person | Yes, `--autonomous` |
 | **Interactive** | touches the person's machine state (crontab, `~/.claude`, real `~/.werkmeister`), needs a live cluster / Telepresence / a real tracker to verify, or leaves a design choice to the person | Yes, interactive |
 
-Model per ticket: `--model sonnet` for mechanical work (renames, lint/tsc fixes, license files, doc sweeps); default model for design or bug-hunting.
+Model tier per ticket: `--model mid` for mechanical work (renames, lint/tsc fixes, license files, doc sweeps); `--model frontier` (the default) for design or bug-hunting; `small` only for one-line mechanical edits; `advanced_frontier` only when the person asks. `~/.werkmeister/config.yaml` `models:` maps each tier to a model (`werkmeister machine config` prints it).
 
 ## 3. Pick the wave: no two tickets in the same files
 
@@ -43,7 +43,7 @@ One `werkmeister workspace new` per ticket, **in sequence** (they share source r
 ```bash
 werkmeister workspace new <slug> --issue-id <ref> --repos <repo> \
   [--services <only what the ticket says to run or measures>] --work-type <feature|bugfix|refactor|spike> \
-  --labels focus [--group <member keys>] [--autonomous] [--model sonnet]
+  --labels focus [--group <member keys>] [--autonomous] [--model <tier>]
 ```
 
 - Before the first create: the code checkout the CLI runs from is on an up-to-date `main` and rebuilt (`pnpm run build` at its root; the plugin's MCP server runs `apps/werkmeister-mcp/dist`).

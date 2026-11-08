@@ -36,7 +36,7 @@ async function codexWorkspace(fn, { configToml } = {}) {
     const init = async () => {
       const reporter = collectingReporter();
       await withSandboxHome(() => withReporter(reporter, () => initWorkspace({}, root)), {
-        config: `overrides:\n  standards_dir: ${std}\n`,
+        config: `overrides:\n  standards_dir: ${std}\nmodels:\n  codex:\n    frontier: o-test\n`,
       });
       return reporter.text();
     };

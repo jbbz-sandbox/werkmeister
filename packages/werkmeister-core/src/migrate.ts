@@ -46,16 +46,21 @@ import {
   workspaceDenyRules,
   writePrGuardHook,
   writeWorkspaceHooks,
+  writeWorkspaceModel,
   writeWorkspaceSettings,
 } from "./harness/claude/hooks_gen.js";
+import { HARNESS_IDS } from "./harness/types.js";
 import {
   installPrWatchSchedule,
   type PrWatchScheduleOptions,
   prWatchScheduleState,
   type Step,
 } from "./machine_setup.js";
+import { resolveModel } from "./model_tiers.js";
 import { syncRegistry } from "./registry_sync.js";
 import { tempHomeWrapper, writeTempHomeWrapper } from "./temp_home.js";
+import { writeWorkspaceConfig } from "./workspace_init.js";
+import { readModel, readWorkspaceField } from "./workspace_prompts.js";
 
 export const LEGACY_DOT_DIR = ".sandbox";
 
@@ -334,7 +339,8 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
     });
   }
   // A home half-moved is not one to rewrite settings in.
-  if (steps.every((s) => s.ok)) steps.push(...nounGroupSteps(wsRoot, checkOnly));
+  if (steps.every((s) => s.ok))
+    steps.push(...nounGroupSteps(wsRoot, checkOnly), modelStep(wsRoot, checkOnly));
   return steps;
 }
 
@@ -414,6 +420,41 @@ function secretsStep(checkOnly: boolean): Step {
     label,
     ok: true,
     detail: `${checkOnly ? "would replace" : "replaced"} SANDBOX_MCP_TOKEN with WERKMEISTER_MCP_TOKEN from ${tokenFile}`,
+  };
+}
+
+/** SW-577: a workspace that records no model gets its harness's default-tier model, so no session falls to the harness default. */
+function modelStep(wsRoot: string, checkOnly: boolean): Step {
+  const label = "workspace models";
+  const wrote: string[] = [];
+  const failed: string[] = [];
+  for (const dir of workspaceDirs(wsRoot).filter((d) => fs.existsSync(path.join(d, DOT_DIR)))) {
+    if (readModel(dir)) continue;
+    const harness = String(readWorkspaceField(dir, "harness") || HARNESS_IDS[0]);
+    try {
+      const { model, tier } = resolveModel(null, harness);
+      if (!model) continue; // a harness that takes no model (mcp)
+      if (!checkOnly) {
+        writeWorkspaceConfig(dir, { model });
+        // Only the model, and only into a settings.json init already wrote: regenerating the rest would
+        // rewrite rules and hooks of workspaces in use; a workspace with none gets it from its next init.
+        if (harness === "claude" && fs.existsSync(path.join(dir, ".claude", "settings.json")))
+          writeWorkspaceModel(dir, model);
+      }
+      wrote.push(`${path.basename(dir)}: ${model} (${tier})`);
+    } catch (e) {
+      failed.push(`${path.basename(dir)}: ${(e as Error).message}`);
+    }
+  }
+  const verb = checkOnly ? "would write" : "wrote";
+  const parts = [
+    ...(wrote.length ? [`${verb} ${wrote.length}: ${wrote.join(", ")}`] : []),
+    ...failed,
+  ];
+  return {
+    label,
+    ok: !failed.length,
+    detail: parts.join("; ") || "every workspace records a model",
   };
 }
 

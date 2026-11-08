@@ -470,3 +470,53 @@ test("SW-521: migrate drops the interpreter rules an older autonomous init recor
   const { permissions } = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
   for (const r of old) assert.ok(!permissions.allow.includes(r), r);
 });
+
+// SW-577: a workspace that records no model gets its harness's default-tier model; one that does is left alone.
+test("SW-577: migrate writes the default model to a workspace with none and names it; --check writes nothing", async () => {
+  movedHome();
+  const bare = path.join(features, "bare");
+  const set = path.join(features, "set");
+  write(path.join(bare, ".werkmeister", "workspace.yml"), "feature: bare\n");
+  // An inited workspace's settings.json, as a pre-SW-577 init left it (no model).
+  const { writeWorkspaceSettings } = await import("./dist/harness/claude/hooks_gen.js");
+  writeWorkspaceSettings(bare);
+  const settingsFile = path.join(bare, ".claude", "settings.json");
+  const mine = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  assert.equal(mine.model, undefined);
+  write(path.join(set, ".werkmeister", "workspace.yml"), "feature: set\nmodel: sonnet\n");
+  const yml = (ws) => fs.readFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "utf8");
+
+  const checked = (await run({ checkOnly: true })).find((s) => s.label === "workspace models");
+  assert.match(checked.detail, /^would write \d+: .*bare: opus \(frontier\)/);
+  assert.doesNotMatch(checked.detail, /set:/);
+  assert.doesNotMatch(yml(bare), /model:/);
+
+  const step = (await run()).find((s) => s.label === "workspace models");
+  assert.equal(step.ok, true);
+  assert.match(step.detail, /^wrote \d+: .*bare: opus \(frontier\)/);
+  assert.doesNotMatch(step.detail, /set:/);
+  assert.match(yml(bare), /^model: opus$/m);
+  assert.match(yml(set), /^model: sonnet$/m);
+  const settings = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  // Only the model: the workspace's own rules and hooks are not regenerated.
+  assert.deepEqual(settings, { ...mine, model: "opus" });
+
+  const again = (await run()).find((s) => s.label === "workspace models");
+  assert.equal(again.detail, "every workspace records a model");
+});
+
+test("SW-577: a Codex workspace with no models.codex is not ok and names the key; mcp is skipped", async () => {
+  movedHome();
+  write(
+    path.join(features, "cx", ".werkmeister", "workspace.yml"),
+    "feature: cx\nharness: codex\n",
+  );
+  write(path.join(features, "gm", ".werkmeister", "workspace.yml"), "feature: gm\nharness: mcp\n");
+  const step = (await run()).find((s) => s.label === "workspace models");
+  assert.equal(step.ok, false);
+  assert.match(
+    step.detail,
+    /cx: No model for tier frontier on harness codex: set models\.codex\.frontier/,
+  );
+  assert.doesNotMatch(step.detail, /gm/);
+});

@@ -613,6 +613,7 @@ type StatusResult = {
     };
     phase?: string | null;
     autonomous?: boolean;
+    model?: string | null;
     lastActivity?: string | null;
     project?: string | null;
     started?: WorkspaceRow["started"];
@@ -700,6 +701,7 @@ export function buildRows(
       },
       phase: s?.phase ?? null,
       autonomous: s?.autonomous ?? false,
+      model: s?.model ?? null,
       lastActivity: s?.lastActivity ?? null,
       project: s?.project ?? null,
       started: s?.started ?? null,
@@ -887,6 +889,11 @@ function cardInfo(
         {d.autonomous && (
           <Box key={`auto:${r.name}`}>
             <Text>{d.autonomous.compact}</Text>
+          </Box>
+        )}
+        {d.model && (
+          <Box key={`model:${r.name}`}>
+            <Text dimColor>{d.model}</Text>
           </Box>
         )}
       </Box>

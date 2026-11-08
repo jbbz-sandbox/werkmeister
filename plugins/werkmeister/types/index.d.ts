@@ -65,6 +65,8 @@ export type WorkspaceRow = {
   phase: string | null;
   /** `autonomous` in workspace.yml. */
   autonomous: boolean;
+  /** SW-577: the model the workspace runs, or null when it records none. */
+  model: string | null;
   /** mtime (ISO) of the newest Claude transcript, or null. */
   lastActivity: string | null;
   /** `werkmeister-<feature>`: the key resources are joined on (SW-41). */

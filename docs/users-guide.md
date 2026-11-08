@@ -733,7 +733,7 @@ Create a new workspace under $WERKMEISTER_WORKSPACES_ROOT (git worktrees on a \<
 - `--context-strategy <id>`: Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
 - `--harness <id>`: Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).
 - `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
-- `--model <id>`: Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).
+- `--model <tier|model>`: Model tier (small, mid, frontier, advanced_frontier) or an explicit model; blank = models.default_tier in ~/.werkmeister/config.yaml (frontier) (env: WERKMEISTER_MODEL; config: model).
 - `--auto-stop`: Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).
 - `--browser-form`: Collect inputs through the Werkmeister-branded browser form (the same form the Desktop MCP App renders), pre-filled from every flag given, then create the workspace. Opens a localhost page in the default browser and blocks until submit/cancel.
 - `--no-distill`: Store the issue but don't have a model rewrite it into description/starting_prompt.
@@ -804,7 +804,7 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 - `--context-strategy <id>`: Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
 - `--harness <id>`: Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).
 - `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
-- `--model <id>`: Claude model for this workspace's sessions: an alias (opus, sonnet, haiku) or a claude-… id; blank keeps Claude Code's default (env: WERKMEISTER_MODEL; config: model).
+- `--model <tier|model>`: Model tier (small, mid, frontier, advanced_frontier) or an explicit model; blank = models.default_tier in ~/.werkmeister/config.yaml (frontier) (env: WERKMEISTER_MODEL; config: model).
 - `--auto-stop`: Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).
 - `--config <path>`: Path to a YAML config file (JSONC/JSON also accepted). Defaults to \<workspace>/.werkmeister/workspace.yml; legacy workspace.yaml / workspace.jsonc / workspace.json are migrated on next write (env: WERKMEISTER_WORKSPACE_CONFIG).
 - `--prune-context`: After a context_strategy change, delete the previous strategy's files that git tracks unmodified (anything else is kept and reported).
@@ -2097,6 +2097,29 @@ the container's forward list is written to `k8s-port-forward/forwards` (mounted 
 The "shipped shared-infra.yml" tests in `apps/cli/src/lib/__tests__/k8s_forwards.test.ts` fail if the committed
 `shared-infra.yml` drifts out of sync. To add or change a forward, edit only
 `services.yaml` and run `werkmeister infra connect`.
+
+### ~/.werkmeister/config.yaml: models
+
+Which model a workspace runs is werkmeister's choice, by tier, never the harness's own default (SW-577). `--model` on `workspace new` / `workspace init` takes a tier (`small`, `mid`, `frontier`, `advanced_frontier`) or an explicit model (an alias or full id); blank means `models.default_tier`. The tier resolves once, at create or init, and the resolved model is written to `.werkmeister/workspace.yml` and `.claude/settings.json`, so changing this block affects new workspaces only.
+
+```yaml
+models:
+  default_tier: frontier        # optional; built-in frontier
+  claude:                       # one block per harness id: claude, opencode, codex
+    mid: claude-sonnet-5-5      # overrides one tier; the others keep the built-in
+  codex:
+    frontier: <an OpenAI model id>
+```
+
+Built-ins, used for every tier the block leaves out:
+
+| harness | small | mid | frontier | advanced_frontier |
+|---|---|---|---|---|
+| claude | haiku | sonnet | opus | claude-fable-5-1 |
+| opencode | anthropic/claude-haiku-5-5 | anthropic/claude-sonnet-5-5 | anthropic/claude-opus-5-5 | anthropic/claude-fable-5-1 |
+| codex | — | — | — | — |
+
+A tier with no model for the workspace's harness fails create, and init of a workspace that records no model yet, with the key to set (`models.codex.frontier`). The generic `mcp` harness takes no model, so its workspaces are not resolved. `werkmeister machine config` prints the merged tiers, each set value marked `(YAML)`. Workspaces created before this record no model: `werkmeister machine migrate` (or each one's next `workspace init`) writes the default tier's model and names it.
 
 ### Optional integrations
 
