@@ -16,9 +16,19 @@ export const cli = (rule: string) => CLI_NAMES.map((name) => `Bash(${name} ${rul
 // outranks allow, including a person's broader user-level rule (`Bash(npm:*)`
 // in ~/.claude/settings.json). Own-workspace acts a person may approve
 // interactively (`close-out`, `workspace-pr`) are left unallowed, not denied.
-// ponytail: prefix rules — `npm install foo -g` or a script the agent adds to package.json
-// still slips past; a container is the upgrade if runs need a hard boundary.
+// shortcut: prefix rules — `npm install foo -g`, an agent-edited test script or a repo's own git
+// hook still runs (SW-522); a runner without host mounts is the upgrade if runs need a hard boundary.
 export const AUTONOMOUS_DENY = [
+  // SW-560: `Bash(git:*)` is allowed, and an alias, pager, fsmonitor or hook set through config, or a
+  // git-* binary on --exec-path, runs any command. No `* -c *`/`* config *` forms: deny beats allow, and they
+  // refuse `git commit -m "fix config"`; `git -C <dir> -c …` is SW-626's.
+  "Bash(git -c:*)",
+  "Bash(git config:*)",
+  ...["--config", "--exec-path", "--template"].flatMap((flag) => [
+    `Bash(git ${flag}*)`,
+    `Bash(git * ${flag}*)`,
+  ]),
+  "Bash(git --git-dir*)",
   // SW-521: a registered test chain's bare `node --test` segment (buildAllowRules) runs any file
   // with the real HOME; npx and pnpm exec segments name their tool, so they stay allowed.
   "Bash(node:*)",

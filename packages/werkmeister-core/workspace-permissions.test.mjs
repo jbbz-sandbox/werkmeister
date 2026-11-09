@@ -246,10 +246,11 @@ test("autonomousRules: the feature's own werkmeister and docker targets, exact w
     "Bash(werkmeister feature restart feat)",
     "Bash(werkmeister feature logs feat:*)",
     "Bash(werkmeister feature test feat:*)",
-    "Bash(docker exec feat-api:*)",
     "Bash(docker restart feat-api)",
   ])
     assert.ok(rules.includes(r), r);
+  // SW-560: no ad-hoc exec; the container's exact registered test comes from buildAllowRules.
+  assert.ok(!rules.some((r) => r.startsWith("Bash(docker exec")), "no docker exec rule");
   assert.deepEqual(autonomousRules("", ["api"]), AUTONOMOUS_RULES);
 });
 
@@ -261,7 +262,7 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
   // SW-31: the only pnpm install is the lockfile one; adding a dependency waits for a person.
   assert.deepEqual(
     AUTONOMOUS_RULES.filter((r) => /^Bash\(pnpm (install|i|add)\b/.test(r)),
-    ["Bash(pnpm install --frozen-lockfile:*)"],
+    ["Bash(pnpm install --frozen-lockfile)"],
   );
   for (const r of [
     "Bash(werkmeister infra proxy-reload:*)",
@@ -313,6 +314,77 @@ test("SW-521: autonomous rules never pre-approve an interpreter that runs any fi
       "python3 x.py",
     ])
       assert.ok(!matches(allow, cmd) || matches(AUTONOMOUS_DENY, cmd), cmd);
+});
+
+test("SW-560: no route past the registered commands to scripts, readers, docker exec or git config", () => {
+  // Claude Code's matching: `:*` is a word-boundary prefix, any other `*` a wildcard (probed on 2.1.319).
+  const re = (r) => {
+    const m = /^Bash\((.*?)(:\*)?\)$/.exec(r);
+    if (!m) return null;
+    const body = m[1].replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+    return new RegExp(`^${body}${m[2] ? "( .*)?" : ""}$`);
+  };
+  const matches = (rules, cmd) => rules.some((r) => re(r)?.test(cmd));
+  for (const allow of [autonomousRules("feat", ["api"]), workspaceAllowRules(workspace(), true)]) {
+    const runs = (cmd) => matches(allow, cmd) && !matches(AUTONOMOUS_DENY, cmd);
+    for (const cmd of [
+      "sed -i '' s/a/b/ f",
+      "sed -n 'w x' f",
+      "find . -delete",
+      "find . -exec touch x ;",
+      "mkdir -p /Users/x/.werkmeister/locks/install-1",
+      "cat /Users/x/.ssh/id_ed25519",
+      "grep -r TOKEN /Users/x/features",
+      "ls -la /Users/x/.ssh",
+      "docker exec feat-api curl http://host.docker.internal:3002/api/tool",
+      "npm run x",
+      "pnpm run x",
+      "npm test",
+      "pnpm test",
+      "pnpm turbo run x",
+      "git -c alias.x=!y x",
+      "git config alias.y !z",
+      "git --config-env=core.pager=HOME log",
+      "git clone --config core.fsmonitor=x . sub",
+      "git --exec-path=. x",
+      "git --git-dir=/x status",
+      "git init --template=/x sub",
+    ])
+      assert.ok(!runs(cmd), cmd);
+    for (const cmd of [
+      "npm ci",
+      "pnpm install --frozen-lockfile",
+      "git status",
+      "git -C werkmeister diff",
+      "git commit -m x",
+      "git commit -m fix config loader",
+      "git add config src",
+      "git grep -c x",
+      "git -C . log -1 -- config",
+    ])
+      assert.ok(runs(cmd), cmd);
+  }
+});
+
+test("SW-560: a workspace's services keep only their exact registered test in the container", async () => {
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  await withSandboxHome(
+    async () => {
+      const root = workspace();
+      fs.mkdirSync(dotDir(root), { recursive: true });
+      fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\nSERVICES=api\n");
+      const rules = workspaceAllowRules(root, true);
+      assert.deepEqual(
+        rules.filter((r) => r.startsWith("Bash(docker exec")),
+        ["Bash(docker exec feat-api sh -c 'pnpm test')"],
+      );
+      assert.ok(!rules.includes("Bash(pnpm run:*)"), "no generic run rule");
+    },
+    {
+      services:
+        "services:\n  api:\n    type: library\n    repo: demo\n    path: api\n    test: pnpm test\n",
+    },
+  );
 });
 
 test("SW-186: each pre-rename spelling keeps its rule through the window, beside its noun-group twin", () => {
