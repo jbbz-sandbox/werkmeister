@@ -55,7 +55,8 @@ services:
     type: cli
     archetype: node-tool
     # apps/werkmeister-mcp ships inside the CLI (dist/mcp.js), so its tests run here.
-    test: "pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp"
+    # SW-557: the lint row's cheap checks run first, so a format or licence error fails before turbo's ~6 minutes (sw-541), about a minute in the container.
+    test: "pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm run name:check && pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp"
     # SW-143: the ICM exercise step defers to this text for a CLI, so the whole recipe lives here.
     validate: &cli_validate >-
       In this repo the host checkout has no node_modules (`tsc: command not found`, `ERR_MODULE_NOT_FOUND: dockerode`), so run every command below, the install, the build, the tests and `with-fixture-workspace`, through `docker exec -w /app/<path> <container> <command>` (container names are in `werkmeister-context.md`),
@@ -143,7 +144,8 @@ services:
     path: packages/werkmeister-core
     type: library
     archetype: node-tool
-    test: "pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core"
+    # SW-557: same cheap checks first as cli's row.
+    test: "pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm run name:check && pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core"
     # Bundled into the CLI, so a core change is exercised through the built binary, not node-tool's "run the tests".
     validate: *cli_validate
     internal_port: 3999
