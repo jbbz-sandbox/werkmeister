@@ -262,6 +262,6 @@ no cloud cluster is available.
 
 ---
 
-**See also:** [`werkmeister infra intercept` in the users guide](users-guide.md#werkmeister-infra-intercept)
+**See also:** [`werkmeister infra intercept` in the CLI reference](cli-reference.md#werkmeister-infra-intercept)
 for flags and worked commands; [architecture](werkmeister-architecture.md) for how
 Caddy chooses between a local container and the cluster baseline.

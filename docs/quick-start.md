@@ -70,4 +70,4 @@ Once the change ships, the agent writes a short post-mortem, then `werkmeister w
 
 - [Setting up a repo](repo-setup.md): register your own repos and their services.
 - [Workspace lifecycle](workspace-lifecycle.md): every state from first commit to close-out.
-- [Users guide](users-guide.md): concepts, the CLI reference and configuration.
+- [Concepts](concepts.md), [CLI reference](cli-reference.md) and [Configuration](configuration.md): how it works, every command, and every config file.

@@ -3,7 +3,7 @@
 A workspace starts from an issue, and agents file the bugs they find, in the machine's
 issue tracker: Jira or GitHub Issues. This page covers how to connect each one. For issue
 refs, projects and the `werkmeister issue` commands, see the
-[users guide § Issue tracker](users-guide.md#issue-tracker).
+[Configuration § Issue tracker](configuration.md#issue-tracker).
 
 ## What machine setup asks
 

@@ -94,7 +94,7 @@ async function ready(args: Record<string, unknown>): Promise<void> {
   const projects = loadProjects();
   if (!projects.length)
     fail(
-      "no project: add one under projects: in ~/.werkmeister/config.yaml (docs/users-guide.md § Projects)",
+      "no project: add one under projects: in ~/.werkmeister/config.yaml (docs/configuration.md § Projects)",
     );
   const workspace = findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots());
   const name =

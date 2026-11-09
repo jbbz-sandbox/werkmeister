@@ -104,7 +104,7 @@ header and, under a workspace token, must name that same workspace.
 That covers a container werkmeister itself runs. For putting the *agent* in a
 container, a Docker Sandbox microVM, or a full VM — what each needs mounted and <!-- name-check: ignore -->
 set, and which pieces stop working there — see "Running the agent itself in
-isolation" in `docs/users-guide.md`.
+isolation" in `docs/configuration.md`.
 
 ## Watching it
 

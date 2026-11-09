@@ -50,13 +50,13 @@ Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-manage
 | --- | --- | --- |
 | `autonomous-allow`, `autonomous-deny` | `docs/context-strategies.md` | `packages/werkmeister-core/src/harness/claude/hooks_gen.ts::autonomousRules`, `AUTONOMOUS_DENY` |
 | `mcp-tools` | `apps/werkmeister-mcp/README.md` | each `registerTool` / `registerAppTool` call's name and `title` in `apps/werkmeister-mcp/src` |
-| `cli-reference` | `docs/users-guide.md` | commander's commands, groups, arguments and options, through the CLI's hidden `__reference` mode, plus each command's `apps/cli/src/commands/<command>.help.md` |
+| `cli-reference` | `docs/cli-reference.md` | commander's commands, groups, arguments and options, through the CLI's hidden `__reference` mode, plus each command's `apps/cli/src/commands/<command>.help.md` |
 | `third-party-npm` | `docs/third-party.md` | each entry header in `apps/cli/dist/THIRD-PARTY-LICENSES.txt` (`scripts/write-licenses.mjs`) |
 | `workspaces` | `README.md` | each `apps/*` and `packages/*` `package.json`'s `name` and `description` |
 
 A new region is a key in `loadRegions()` plus its markers in a doc.
 
-`docs:gen` also writes the CLI's man pages from the same source (SW-180): `apps/cli/man/werkmeister.1` lists the commands by group, and `werkmeister-<command>.1` holds one command's synopsis, options and help.md. It lists them in the `man` array of `apps/cli/package.json`, which npm links on a global install. `docs:check` fails when a page or that array differs from what `docs:gen` would write. To change a command's long help, edit its help.md: `--help` prints it, and the guide and man pages are generated from it. The help.md files themselves are skipped by `docs:check`, because their links are written to resolve from `docs/users-guide.md`, where they are checked.
+`docs:gen` also writes the CLI's man pages from the same source (SW-180): `apps/cli/man/werkmeister.1` lists the commands by group, and `werkmeister-<command>.1` holds one command's synopsis, options and help.md. It lists them in the `man` array of `apps/cli/package.json`, which npm links on a global install. `docs:check` fails when a page or that array differs from what `docs:gen` would write. To change a command's long help, edit its help.md: `--help` prints it, and the CLI reference and man pages are generated from it. The help.md files themselves are skipped by `docs:check`, because their links are written to resolve from `docs/cli-reference.md`, where they are checked.
 
 ## Writing docs that stay checkable
 

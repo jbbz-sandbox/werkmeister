@@ -16,10 +16,19 @@ const GROUPS = [
       ["Overview", "README.md"],
       ["Quick Start", "docs/quick-start.md"],
       ["Users guide", "docs/users-guide.md"],
+      ["Concepts", "docs/concepts.md"],
       ["Setting up a repo", "docs/repo-setup.md"],
+      ["Registry fragments", "docs/registry-fragments.md"],
       ["The UIs", "docs/uis.md"],
       ["Workspace lifecycle", "docs/workspace-lifecycle.md"],
       ["ICM workflows and stages", "docs/icm-workflows.md"],
+    ],
+  ],
+  [
+    "Reference",
+    [
+      ["CLI reference", "docs/cli-reference.md"],
+      ["Configuration", "docs/configuration.md"],
     ],
   ],
   [

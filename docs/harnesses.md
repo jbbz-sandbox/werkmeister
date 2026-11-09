@@ -200,7 +200,7 @@ string in `result` and is parsed from there.
 4. A `model:` in `workspace.yml` reaches headless turns (`claude-send` on this workspace) only in
    OpenCode's `provider/model` form; a Claude alias like `sonnet` is left to OpenCode's own config.
    A tier resolves through `models.opencode` (built-in frontier: `anthropic/claude-opus-5-5`); Codex
-   has no built-in tiers, so set `models.codex.<tier>` in `~/.werkmeister/config.yaml` (users-guide
+   has no built-in tiers, so set `models.codex.<tier>` in `~/.werkmeister/config.yaml` (configuration
    § `~/.werkmeister/config.yaml: models`).
 
 `opencode.json` also gets werkmeister's MCP server with this workspace's token
