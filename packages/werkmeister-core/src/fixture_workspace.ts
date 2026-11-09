@@ -308,6 +308,11 @@ for f in "$ws"/*/apps/cli/dist/main.js; do
   main=$f
 done
 [ -n "$main" ] || { echo "with-fixture-workspace: no built CLI at $ws/<worktree>/apps/cli/dist/main.js; build it first" >&2; exit 2; }
+# In the werkmeister container the worktree is also at /app, the only place its node_modules volume is mounted (SW-548).
+app=/app
+wt=\${main%/apps/cli/dist/main.js}
+[ ! "$app" -ef "$wt" ] || { wt=$app; main=$app/apps/cli/dist/main.js; }
+[ -n "$(ls -A "$wt/node_modules" 2>/dev/null)" ] || { echo "with-fixture-workspace: no node_modules in $wt (installed in the container); run it there: docker exec -w /app <container> $0 ..." >&2; exit 2; }
 # --no-wait first goes to with-temp-home, like its own (SW-367).
 nw=
 [ "\${1:-}" != --no-wait ] || { nw=--no-wait; shift; }

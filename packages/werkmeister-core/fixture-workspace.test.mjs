@@ -2,7 +2,7 @@
 // hand-built seed the cli validate: text described (SW-234, SW-232, SW-251, SW-114).
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -432,4 +432,57 @@ test("--gate refuses a registry whose change would map to no service (SW-426)", 
   assert.equal(fixturePreset({ gate: true }).running?.length, 1);
   // SW-470: without --gate a broken registry reaches workspace init's own error.
   assert.doesNotThrow(() => fixturePreset({ services: "{bad" }));
+});
+
+// SW-548: inside a werkmeister container the worktree is mounted at /app and at its host path, but its
+// node_modules is a volume at /app/node_modules only, so the host-path CLI fails ERR_MODULE_NOT_FOUND.
+test("with-fixture-workspace runs /app's CLI when /app is its worktree, and says why on a host with no node_modules (SW-548)", async () => {
+  const { writeFixtureWrapper } = await import("./dist/fixture_workspace.js");
+  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fixture-wrapper-")));
+  try {
+    const ws = path.join(tmp, "ws");
+    const wt = path.join(ws, "wt");
+    fs.mkdirSync(path.join(wt, "apps", "cli", "dist"), { recursive: true });
+    fs.mkdirSync(path.join(wt, "node_modules"));
+    fs.writeFileSync(
+      path.join(wt, "apps", "cli", "dist", "main.js"),
+      "console.log(process.argv[1])\n",
+    );
+    const script = writeFixtureWrapper(ws);
+    // A stand-in for with-temp-home: drop --no-wait, run the rest.
+    fs.writeFileSync(
+      path.join(path.dirname(script), "with-temp-home"),
+      '#!/bin/sh\n[ "$1" != --no-wait ] || shift\nexec "$@"\n',
+      { mode: 0o755 },
+    );
+    const text = fs.readFileSync(script, "utf8");
+    assert.match(text, /^app=\/app$/m);
+    const run = (app) => {
+      fs.writeFileSync(script, text.replace(/^app=\/app$/m, `app=${app}`));
+      return new Promise((resolve) =>
+        execFile(script, ["--no-wait", "x"], (e, stdout, stderr) =>
+          resolve(e ? { code: e.code, out: stderr } : { code: 0, out: stdout.trim() }),
+        ),
+      );
+    };
+    const own = path.join(wt, "apps", "cli", "dist", "main.js");
+    // Host, no /app: an empty node_modules (the container's mount point) fails with the container form.
+    const r = await run(path.join(tmp, "none"));
+    assert.equal(r.code, 2);
+    assert.match(r.out, /no node_modules.*docker exec -w \/app/s);
+    // Host with an install: unchanged.
+    fs.writeFileSync(path.join(wt, "node_modules", ".modules.yaml"), "");
+    assert.deepEqual(await run(path.join(tmp, "none")), { code: 0, out: own });
+    // An /app that is another folder: unchanged.
+    fs.mkdirSync(path.join(tmp, "other"));
+    assert.deepEqual(await run(path.join(tmp, "other")), { code: 0, out: own });
+    // In the container: /app is the same folder as the worktree, so its CLI runs from /app.
+    fs.symlinkSync(wt, path.join(tmp, "app"));
+    assert.deepEqual(await run(path.join(tmp, "app")), {
+      code: 0,
+      out: path.join(tmp, "app", "apps", "cli", "dist", "main.js"),
+    });
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
 });
