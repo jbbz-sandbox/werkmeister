@@ -134,9 +134,9 @@ flowchart TB
 </details>
 
 The right-hand fork is the one thing docker mode gets wrong on its own, so the
-CLI passes `--address host.docker.internal` whenever `--docker-daemon` is set
-(`buildInterceptArgs` in `packages/werkmeister-core/src/telepresence.ts`). Host mode's
+CLI passes `--address host.docker.internal` whenever `--docker-daemon` is set. Host mode's
 `127.0.0.1` default already names the right machine and is left alone.
+Source: [telepresence.ts](../packages/werkmeister-core/src/telepresence.ts).
 
 | | host mode | `--docker-daemon` |
 |---|---|---|
@@ -159,11 +159,11 @@ Most of it is already handled:
 - The forwards container is fed `kubectl config view --raw --minify --flatten`,
   so certificates and tokens are **inlined**, not left as host paths the
   container cannot see.
-- `shimLocalApiServer` (`packages/werkmeister-core/src/k8s.ts`) rewrites a
-  `127.0.0.1` API address to `host.docker.internal` and drops CA verification —
-  and no-ops for a remote cluster, which needs neither. Telepresence's docker
-  mode does the same rewrite for the same reason. A local cluster is the special
-  case here, not the cloud one.
+- A `127.0.0.1` API address is rewritten to `host.docker.internal`, with CA
+  verification dropped — and left alone for a remote cluster, which needs neither.
+  Telepresence's docker mode does the same rewrite for the same reason. A local
+  cluster is the special case here, not the cloud one.
+  Source: [k8s.ts](../packages/werkmeister-core/src/k8s.ts).
 
 **Check first: `exec` credential plugins.** Managed clusters usually authenticate
 through one — `aws eks get-token`, `gke-gcloud-auth-plugin`, `az`, an OIDC
@@ -197,14 +197,13 @@ Nothing above needs a cluster except the forwards and the intercepts, and only
 the intercepts have no stand-in. What holds today, checked against the code:
 
 1. **The forward table is empty.** A service with no `k8s_forward_port` gets no
-   forward (`forwardSpecs`, `packages/werkmeister-core/src/config.ts`), so
-   `k8s-forwards` has nothing to do and the shape collapses to Caddy plus your
-   containers.
+   forward, so `k8s-forwards` has nothing to do and the shape collapses to Caddy
+   plus your containers. Source: [config.ts](../packages/werkmeister-core/src/config.ts).
 2. **Browser traffic still has a baseline.** Caddy's no-cookie default for a
-   hostname is the service's `feature_router.remote_upstream`, any `host:port`
-   (`defaultUpstream` in `packages/werkmeister-core/src/generate.ts`). Set it to
-   `host.docker.internal:<port>` and a tunnel held open on the host is the
-   baseline. One line each:
+   hostname is the service's `feature_router.remote_upstream`, any `host:port`.
+   Set it to `host.docker.internal:<port>` and a tunnel held open on the host is
+   the baseline. Source: [generate.ts](../packages/werkmeister-core/src/generate.ts).
+   One line each:
 
    | Where the base service runs | The tunnel |
    |---|---|
@@ -217,10 +216,10 @@ the intercepts have no stand-in. What holds today, checked against the code:
    reference in a container's environment, and its generated `<SVC>_URL` /
    `_HOST` / `_PORT`, resolve to the service's `baseline_upstream: host:port` in
    `services.yaml` when it is set, ahead of `k8s_forward_port`; a service with
-   the key gets no forward (`resolveServiceRefs`, `packages/werkmeister-core/src/generate.ts`).
+   the key gets no forward.
    Point it at a baseline container (item 5) or any Docker DNS name or remote
    address the containers can reach; not `host.docker.internal`, which only
-   Caddy and `k8s-forwards` map.
+   Caddy and `k8s-forwards` map. Source: [generate.ts](../packages/werkmeister-core/src/generate.ts).
 4. **No intercepts.** Telepresence is Kubernetes-only: `werkmeister infra intercept`
    needs the traffic-manager and a traffic-agent sidecar, and refuses a service
    without `k8s_deployment`, `k8s_namespace` and `k8s_port`. Remote → laptop by

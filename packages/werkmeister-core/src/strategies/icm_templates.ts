@@ -255,7 +255,9 @@ const feature: Stage[] = [
           // SW-242: "no test covers it" was written without a grep; a test pinned the exact old string.
           "For each value the change alters (a string, a default, a command), grep tests and fixtures for that exact value and list the hits; never write that no test covers it without that grep.",
         "Find the test command in `../../.werkmeister/werkmeister-context.md` and copy it verbatim — do not restate it from memory.",
-        "Check what is already installed that could do the job before recommending anything new.",
+        "Check what is already installed that could do the job before recommending anything new. " +
+          // Moved from docs/harnesses.md: adapter runs kept deciding from a harness's docs, not its binary.
+          "When a decision rests on how an external tool behaves (a CLI command or flag, a plugin API, an event name), check it against the installed tool, not only its docs: record `<bin> --version`, and confirm each fact with `<bin> <cmd> --help` or a real run or plugin load. `decisions.md` names the version and, beside each fact, the command that confirmed it; a fact only the docs support is marked `unverified: docs only`, and no decision rests on it. If the tool cannot be installed, say so and mark every such fact `unverified`.",
         "Write `output/inventory.md`: steps 1–3.",
         NAME_HISTORY_STEP,
         "Write `output/decisions.md`: every open question in `BRIEF.md`, each as a heading with `status: proposed`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference).",

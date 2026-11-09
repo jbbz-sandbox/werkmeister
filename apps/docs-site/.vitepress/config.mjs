@@ -55,6 +55,7 @@ const GROUPS = [
     [
       ["Why Werkmeister", "docs/why.md"],
       ["Third-party software", "docs/third-party.md"],
+      ["Contributing", "docs/contributing.md"],
     ],
   ],
 ];

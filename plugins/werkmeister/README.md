@@ -1,11 +1,42 @@
 # werkmeister
 
-A Claude Code plugin bundling the diagnostic and operations skills for the
-werkmeister environment.
+The Claude Code plugin for Werkmeister: a pane of your workspaces, a band in each workspace session, the diagnostic and lifecycle skills, and the `werkmeister` MCP server.
 
 > Paths: `~/.werkmeister/` and a workspace's `.werkmeister/` are the current names. A machine or workspace set up before the rename moves its old directories with `werkmeister machine migrate`.
 
+## The `/workspaces` pane
+
+![The Claude Code workspaces pane: compact cards for three demo workspaces](../../docs/images/uis/claude-code-pane.png)
+
+*Screenshot pending: the image above is a placeholder.*
+
+A docked pane with one compact card per workspace. It opens by itself when an interactive session starts in a folder of workspaces (one whose child holds `.werkmeister/workspace.yml`, e.g. `~/features`); type `/workspaces` to open it again.
+
+- **Line 1:** the name, the agent chip (`◌ Working` · `● Needs you` · `✓ Done` · `Idle`), and `⚙ Auto` for an autonomous run.
+- **Line 2:** work type · task from `workspace.yml`.
+- **Line 3:** `containers 2 of 3 up · PRs repo#12 Open · CI running · stage 4/5 implement`. The last part is the ICM stage, the JIT phase, or the lifecycle step (`Ready to close out`, `Awaiting release`; see [Workspace lifecycle](../../docs/workspace-lifecycle.md)).
+
+A Needs you card quotes the question its agent asked, and is the only card with an amber border. `?` beside the tabs shows the legend.
+
+The buttons sit in three rows by what they act on. Those that don't apply are hidden, and the primary action for the state (▶ Resume while paused, Continue, ✓ Close out once shipped, or ▶ Up while nothing runs) is highlighted.
+
+| Row | Buttons |
+|---|---|
+| session | ⇆ Open beside or Continue (in VS Code or Terminal, where the newest session lives), ＋ New session, 📌 Pin |
+| containers | ▶ Resume or ▶ Up, ■ Stop, ⏸ Pause, ↻ Restart, ⏻ Down, then Logs and Open feature ↗ while they run |
+| work | ↻ Refresh PRs (`werkmeister pr status`, also the retry for `PRs unavailable`), Open issue ↗, ✓ Close out, ✕ Abandon… |
+
+✓ Close out and ✕ Abandon… run `werkmeister workspace close`; each confirms in the card first, Abandon asks for the reason, and both archive the workspace's desktop sessions and list terminal sessions still open there to `/exit`.
+
+The **＋ Create** tab draws the same workspace form as the browser dashboard, with a button that fills empty fields from the issue, and creates the workspace directly. On the Workspaces tab, ☐ Focused only shows the workspaces whose `labels` include `focus`. The `workspaces_pane_fill_create_form` tool lets Claude fill the form from your prompt; it never creates the workspace.
+
+## The workspace band
+
+In a session inside a workspace (its folder or one below holds `.werkmeister/workspace.yml`), a band above the prompt draws that workspace's card without its buttons: name and chips, work type · task, the containers · PRs · workflow line, resources, a crash loop, and the question a Needs you agent asked. Outside a workspace it draws nothing.
+
 ## Skills
+
+Skills are namespaced by the plugin: `/werkmeister:diagnose`, `/werkmeister:workspace`, …
 
 ### Diagnostics & operations
 | Skill | What it does |
@@ -19,52 +50,44 @@ werkmeister environment.
 | Skill | What it does |
 |-------|--------------|
 | `setup` | First run on a new machine: checks the prerequisites, runs machine setup with you, registers your repos and creates your first workspace. |
-| `workspace` | Create a brand-new workspace (git worktrees + init). Uses the bundled **`werkmeister` MCP server** (see below) for the form; falls back to the direct CLI. Self-contained — no external skill dependency. |
+| `workspace` | Create a brand-new workspace (git worktrees + init) through the create form; falls back to the CLI. |
 | `feature-test` | Start a feature environment and open a headed Playwright browser for interactive testing. |
 | `starting-prompt` | Run the `starting_prompt` defined in the workspace's `.werkmeister/workspace.yml`. |
-| `install-check` | Check (and `--fix`) that the global `werkmeister`/`w9r`, its MCP server and this plugin all run from the repo checkout; the manual form of the session-start hook below. |
+| `install-check` | Check (and `--fix`) that the global `werkmeister`/`w9r`, its MCP server and this plugin all run from the repo checkout. The plugin also runs it at every interactive session start. |
 | `check-in` | From the root session: cycle the workspaces, show each one waiting on a person as a card, and relay the answer. An approval goes in as the gate file's own status flip with the check-in note, so the workspace acts on it with no second prompt (SW-478). |
-| `postmortem` | Before close-out: gather every problem in the run, agree with the person what changes so it doesn't recur, write `postmortem.md` and act on each change (docs/workspace-lifecycle.md § Post-mortem). |
-
-### Mods
-
-| Mod | What it does |
-|-----|--------------|
-| install check | On every interactive session start, runs `skills/install-check/check.sh --fix` (`runInstallCheck` in [`hooks/register.tsx`](hooks/register.tsx)): silent when the install is clean or there is no checkout; logs drift to the transcript; after a repair, toasts a restart notice and refuses the next *typed* prompt once, because the session already loaded the old MCP server and skills. Messages from other sessions, background notifications, slash commands and headless sessions are never refused (SW-348, SW-377). `werkmeister machine setup` removes the hand-copied `~/.claude` hooks this replaced. |
-| workspace band | In a session inside a workspace (its folder or one below holds `.werkmeister/workspace.yml`), a band above the prompt draws that workspace's `/workspaces` card without its buttons or intercept controls: name and chips, work type · task, the containers · PRs · workflow line, resources, a crash loop, and the question a Needs you agent asked. It shares the card's lines with the pane (`cardInfo`) and polls on its own timers, slower than the pane (rows 15 s, PRs 5 min, resources 60 s), since every workspace session runs one. Outside a workspace it draws nothing and reads nothing. Source: [`hooks/register.tsx`](hooks/register.tsx). |
-| `/workspaces` | Opens by itself when an interactive session starts in a folder of workspaces (one whose child holds `.werkmeister/workspace.yml`, e.g. `~/features`). A docked pane with one compact card per workspace (docs/ui-spec.md, `docs/design/workspace-card/design/Pane View.dc.html`), drawn from the shared display model (`hooks/display-model.ts`, a copy of `packages/werkmeister-ui`'s that `packages/werkmeister-ui/test/pane-copy.test.mjs` keeps in step). Line 1: the name, the agent chip (`◌ Working` · `● Needs you` · `✓ Done` · `Idle`, from SW-46's agent state), and `⚙ Auto` for an autonomous run. Line 2: work type · task from workspace.yml. Line 3, always in this order: `containers 2 of 3 up · PRs repo#12 Open · CI running · stage 4/5 implement`. The last part is the Workflow: the ICM stage, the JIT phase, or the lifecycle step (`Ready to close out`, `Awaiting release`; docs/workspace-lifecycle.md). A Needs you card quotes the question it asked, and is the only card with an amber border. `?` beside the tabs shows the legend. Below these sit the buttons in three labelled rows by what they act on (ui-spec § Actions, SW-105): `session` (⇆ Open beside or Continue, ＋ New session, 📌 Pin), `containers` (▶ Resume or ▶ Up, ■ Stop, ⏸ Pause, ↻ Restart, ⏻ Down, then Logs and Open feature ↗ while they run) and `work` (↻ Refresh PRs, Open issue ↗, ✓ Close out, ✕ Abandon…). Buttons that don't apply are hidden; the primary action by state (▶ Resume while paused, Continue, ✓ Close out once shipped, or ▶ Up while nothing runs) is highlighted where it sits. Logs opens a Terminal window following the containers' logs (`werkmeister feature logs`); Open feature ↗ opens the feature in the browser with its routing cookie. Up / Stop / Pause / Resume / Restart / Down run werkmeister-core in a `node` child (a plugin's call to its own MCP server is refused by the desktop's auto mode; a host process is not). ↻ Refresh PRs runs `werkmeister pr status` and re-polls the PRs; it is also the retry when a card says `PRs unavailable`. The end verb is `werkmeister workspace close` (docs/workspace-lifecycle.md): ✓ Close out once every PR shipped, and ✕ Abandon…, which asks for the reason in the pane. Each confirms inline in the card before it runs, then archive every desktop session whose cwd is in the workspace (`ccd_session_mgmt` `archive_session`; a refused one is reported as left open) and list terminal sessions still open there to `/exit`. The same archive runs after a successful `close-out` MCP tool call, through a `tool.call` hook, since that server can't reach the app's session tools. ＋ New session opens a new Claude Code Desktop session in the workspace folder (`claude://code/new?folder=…`, the link the app's Finder service uses). ⇆ Open beside / ↗ Continue in VS Code / Terminal picks up the newest session where it lives: ⇆ Open beside opens the Desktop session in split view beside this chat so the pane stays in sight (the app splits only sessions this one started; for any other it opens the session's own link, which takes this chat's place, and toasts how to split it from the sidebar), Continue in VS Code opens the folder in VS Code for a VS Code session, else Continue in Terminal resumes it in a Terminal window. 📌 Pin / Unpin pins or unpins that session in the app's sidebar (`ccd_sidebar` `set_pinned`; desktop only). A Workspaces \| ＋ Create tab bar heads the pane; on the Workspaces tab, ☐ Focused only shows only workspaces whose `.werkmeister/workspace.yml` `labels` include `focus`, and the choice survives a plugin reload. The Create tab draws the workspace form from the same schema as the browser form (fields, grouped checkbox columns, a multi-line starting prompt with Refine with Claude) with a button that fills empty fields from the issue, and creates the workspace directly. A desktop session that starts inside a workspace files itself under the sidebar group named `Feature Workspaces`, if that group exists and the session is in no group yet (`ccd_sidebar` `move_sessions`). The `workspaces_pane_fill_create_form` tool lets Claude fill the form from the prompt box (where pasting works); it never creates the workspace. Source: [`hooks/register.tsx`](hooks/register.tsx). |
-
-Probe findings (2026-10-09): `change_directory` from a plugin call: yes, after the person approves the folder. `claude://` link in a pane focuses the session: no, the desktop pane draws nothing for it. Fallback taken: the session entry is text plus a Jump button that calls `ccd_window` `open_session_in`, which only focuses sessions this one started; otherwise it toasts the title to open from the sidebar.
-
-To load it from a checkout instead of the marketplace, set `CLAUDE_CODE_PLUGIN_DIRS` to this folder in the `env` block of `~/.claude/settings.json`. `skills/install-check/check.sh --fix` keeps that link healthy.
-
-### Code standards (`w9r-*`) — NOT in this plugin
-
-The `w9r-implement` / `w9r-research` entry skills and the `w9r-*-standard` code
-standards are **not shipped here**. They are projected into each workspace's
-`.claude/skills/` by `werkmeister workspace init`: entry-skill sources live in
-[`apps/cli/infra/skills/`](../../apps/cli/infra/skills), and the standards are
-rendered at the same step from the tree `overrides.standards_dir` points at (e.g. a
-[jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards) checkout), <!-- name-check: ignore -->
-which `werkmeister standards check` validates.
+| `postmortem` | Before close-out: gather every problem in the run, agree with the person what changes so it doesn't recur, write `postmortem.md` and act on each change ([Workspace lifecycle § Post-mortem](../../docs/workspace-lifecycle.md#post-mortem)). |
 
 ## Bundled MCP server (`werkmeister`)
 
-The plugin's [`.mcp.json`](./.mcp.json) auto-wires the one werkmeister MCP server
-(`werkmeister internal mcp`, source in [`apps/werkmeister-mcp`](../../apps/werkmeister-mcp)) exposing every tool —
-workspace create/manage and lifecycle, PR review, issue lookups, k8s/kube health, and a
-Claude session bridge — with **one form definition and graceful UI degradation per client**:
+The plugin's [`.mcp.json`](./.mcp.json) wires up the one werkmeister MCP server
+(`werkmeister internal mcp`) with every tool: workspace create/manage and lifecycle, PR review,
+issue lookups, k8s/kube health, and a Claude session bridge. Each client gets the same form, with
+the UI its host can draw:
 
 | Surface | How it connects | UI |
 |---------|-----------------|----|
 | **Claude Desktop** | `claude_desktop_config.json` (Desktop doesn't install plugins) | Inline MCP App (`ui://`): create form + workspace dashboard |
 | **Claude Code CLI / VS Code** | this plugin's `.mcp.json` | Localhost browser: dashboard (`open-workspaces-ui`) + blocking create form |
 
-The server detects whether the client renders MCP App UI (`io.modelcontextprotocol/ui`
-capability); every tool also returns markdown/text, so any host degrades gracefully.
-Call the create tool directly: `mcp__plugin_werkmeister_werkmeister__create-workspace-form` (optionally
+Every tool also returns markdown, so any host works. Call the create tool directly:
+`mcp__plugin_werkmeister_werkmeister__create-workspace-form` (optionally
 `{ "issue": "<issue ID>" }`). Full tool table in the
 [server README](../../apps/werkmeister-mcp/README.md).
+
+## Install
+
+Needs the `w9r` CLI (package `werkmeister` 0.14 or later) on `PATH`, and Docker running.
+Issues come from the tracker picked in `werkmeister machine setup`.
+
+This repo doubles as a plugin marketplace. From any Claude Code session (installs at user scope,
+so the skills and MCP server are available in every session, not just inside this repo):
+
+```
+/plugin marketplace add jbbz-sandbox/werkmeister
+/plugin install werkmeister@werkmeister
+```
+
+To work on the plugin from a checkout, see [Contributing](../../docs/contributing.md#the-claude-code-plugin-from-a-checkout).
 
 ### Register on Claude Desktop
 Plugins don't install in Desktop, so add the same server to
@@ -73,57 +96,6 @@ Plugins don't install in Desktop, so add the same server to
 ```json
 { "mcpServers": { "werkmeister": { "command": "werkmeister", "args": ["internal", "mcp"] } } }
 ```
-
-## Dependencies
-
-- **UI build (checkout only):** run `cd apps/werkmeister-dashboard && pnpm run build` once — it
-  builds the `ui://` HTML, the browser form and the localhost dashboard that `werkmeister internal mcp`
-  serves. Without it the server still runs; its App tools fall back to text.
-- The `w9r` CLI (package `werkmeister` 0.14 or later) must be on `PATH`, and Docker running.
-- **Self-contained:** the workspace form and its "Refine with Claude" / issue-fetch logic
-  live in [`apps/werkmeister-dashboard`](../../apps/werkmeister-dashboard) — no external skill is required.
-  Issues come from the tracker picked in `werkmeister machine setup`; refine uses the local `claude` CLI.
-
-## Install
-
-This repo doubles as a plugin marketplace. From any Claude Code session
-(installs at user scope, so the skills + workspace MCP server are available in
-every session, not just inside this repo):
-
-```
-/plugin marketplace add jbbz-sandbox/werkmeister
-/plugin install werkmeister@werkmeister
-```
-
-Skills are namespaced by the plugin: `/werkmeister:diagnose`, `/werkmeister:workspace`, …
-
-To develop/test locally from a checkout:
-
-```
-/plugin marketplace add /path/to/werkmeister
-/plugin install werkmeister@werkmeister
-```
-
-Validate changes before committing:
-
-```
-claude plugin validate ./plugins/werkmeister
-claude plugin validate .   # validates the marketplace manifest
-```
-
-The full check, from the repo root after `corepack pnpm install` (or `pnpm check` inside
-`plugins/werkmeister`):
-
-```
-pnpm --filter werkmeister-plugin check
-```
-
-It regenerates the gitignored `.claude-plugin/types/` that `tsc` reads, then runs
-`tsc -p . --noEmit`, `claude plugin validate .` and `claude plugin test .`. The types are Claude
-Code's, so `plugins/werkmeister/scripts/gen-types.mjs` has the `claude` on your PATH write them, by
-loading the folder as a plugin under a throwaway HOME with no login: no API call, and the types
-always match your installed Claude Code. CI runs the same `typecheck` and `test` scripts through
-turbo, against the Claude Code version pinned in `.github/workflows/ci.yml`.
 
 ## Migrating from `sandbox-tools`
 

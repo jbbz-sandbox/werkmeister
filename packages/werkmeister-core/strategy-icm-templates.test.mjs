@@ -113,6 +113,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^1\. List what exists.*grep tests and fixtures for that exact value and list the hits/m,
             `${wt}/${d}`,
           );
+        // Research checks an external tool's facts against the installed tool, not its docs.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^3\. Check what is already installed.*against the installed tool.*`unverified: docs only`/m,
+            `${wt}/${d}`,
+          );
         // SW-534: an exercise that changes code gets the review rerun on its delta.
         if (d.endsWith("_implement"))
           assert.match(c, /rerun the review on that delta/, `${wt}/${d}`);

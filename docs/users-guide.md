@@ -26,26 +26,7 @@ cd ~
 npx werkmeister machine setup
 ```
 
-It installs the CLI globally from npm and runs setup. See the [Quick Start](quick-start.md).
-
-### From source (contributors)
-
-```bash
-# Clone the repository
-git clone https://github.com/jbbz-sandbox/werkmeister.git
-cd werkmeister
-
-# Build the CLI once, then run it (pnpm via corepack, at the version package.json pins):
-corepack enable
-pnpm install
-pnpm turbo run build --filter=werkmeister
-
-# apps/cli/werkmeister resolves a node runtime (WERKMEISTER_NODE -> PATH -> newest nvm)
-# and execs apps/cli/dist/main.js.
-apps/cli/werkmeister --help
-```
-
-After the initial build, `apps/cli/werkmeister` is self-contained — it resolves a node runtime and execs the compiled CLI. Rebuild (`pnpm turbo run build --filter=werkmeister`) after pulling changes to `apps/cli/src/`.
+It installs the CLI globally from npm and runs setup. See the [Quick Start](quick-start.md). To build it from source, see [Contributing](contributing.md).
 
 ### Required Environment Variables
 

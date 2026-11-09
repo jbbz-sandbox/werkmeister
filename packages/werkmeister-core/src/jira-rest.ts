@@ -11,6 +11,17 @@
  *
  * API v2 on purpose: it returns description/comment bodies as plain
  * wiki-markup strings; v3 returns ADF JSON we'd have to walk.
+ *
+ * Endpoints used:
+ * - `GET /rest/api/3/myself`: verify only (`werkmeister infra connect`)
+ * - `GET /rest/api/2/issue/<KEY>?fields=…`: issue card, briefing, form prefill
+ * - `GET /rest/api/2/search/jql?jql=key in (…)&fields=status`: batch status
+ *   lookup (the old `/rest/api/2/search` is removed; use `/search/jql`)
+ * - `GET /rest/api/2/issue/createmeta/<PROJECT>/issuetypes`, `POST /rest/api/2/issue`:
+ *   `issue create`
+ * - `GET`/`POST /rest/api/2/issue/<KEY>/transitions`, `POST …/comment`: status
+ *   moves and comments
+ * - `POST /rest/api/2/issueLink`: "relates to" links
  */
 import { loadConfig } from "./config.js";
 
