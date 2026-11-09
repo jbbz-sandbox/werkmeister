@@ -75,7 +75,8 @@ const IMPLEMENT_STEPS = [
 // SW-316: a host run misses the container's env; the tests-only gate runs where pr open will.
 // SW-547: sw-526's over-width test lines surfaced only at the lint chain, after 7 commits.
 const HOST_TESTS =
-  "If the repo uses biome (`biome.json` or `biome.jsonc`), first run `pnpm exec biome check --write <the files you touched>` (never a folder), so formatting lands in the ticket's own commit. " +
+  // SW-646: the command is the repo's `format:` (registry `repo:`), so no toolchain is named here.
+  "If `../../.werkmeister/werkmeister-context.md` gives the repo a format command (`Format:` under its repo commands), first run it on the files you touched (never a folder), so formatting lands in the ticket's own commit. " +
   "Run the test command exactly as `../../.werkmeister/werkmeister-context.md` states it: through `.werkmeister/bin/with-temp-home`, which gives it a fresh temporary HOME — never hand-roll `HOME=…`. " +
   "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. " +
   // SW-506: werkmeister's host checkout has no node_modules; the recipe is its services.yaml text (SW-190), not this generic step.
@@ -122,7 +123,7 @@ const groupStep = (v: IcmVars) =>
           "Take the tickets one at a time: make that ticket's changes and tests, run the diff check below on them, then commit on the worktree's branch with a message that starts with its key (`<KEY> <summary>`) before starting the next. " +
           "Each commit builds and passes the host tests on its own. " +
           // SW-503: a changeset folded into the lead's commit survives a revert of the member that earned it (sw-481).
-          "A ticket that changes a released package carries its release entry (changeset) in its own commit. " +
+          "A ticket that changes a released package carries its release entry in its own commit. " +
           // SW-466: SW-462's brief said to regenerate the snapshot once for the PR, so three commits failed it alone.
           "When a ticket's change alters a generated snapshot (e.g. `strategy-jit.snapshot.json`), regenerate it in that ticket's commit, so the commit passes the snapshot test alone; a brief that says to regenerate once for the whole PR does not override this. " +
           // SW-497: a scripted reorder to match the spec dropped a commit (sw-406); rebase-and-merge keeps any order.
@@ -147,7 +148,7 @@ const reviewStep = (rerun: string, group: string[]) =>
   // SW-479: an exercise script that could restart the host daemon was rated Should fix and left open (sw-439).
   'Always add: "any finding where the change can restart or write the host daemon, the real `~/.werkmeister` or another workspace, whether through an allow rule, a script or a test, is Must fix". ' +
   // SW-449: a left Should fix shipped a false "every key is checked" in a changeset (sw-412).
-  "Fix every **Must fix** finding in place, and any **Should fix** finding that shows the change's own docs, comments, help text or changeset state something false (fix the code, or reword that text so it is true), " +
+  "Fix every **Must fix** finding in place, and any **Should fix** finding that shows the change's own docs, comments, help text or release entry state something false (fix the code, or reword that text so it is true), " +
   `${group.length ? `fold each fix into the commit of the ticket it belongs to (${FOLD}), ` : ""}then ${rerun}. Leave the other **Should fix** and **Nice to have** findings as they are. ` +
   "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
   `${REVIEW_FORMAT}, with one row per worktree (\`PASS\` means no Must fix left open). ` +
@@ -206,8 +207,8 @@ const propose: Stage = {
       "Walk every acceptance criterion in `BRIEF.md`. For each, write a row whose result cell is exactly PASS or FAIL (MANUAL for a criterion only the reviewer can check, e.g. it needs a real PR or the desktop app, with why in the evidence; never PASS for a check nobody ran), with the file and line in a prior `output/` that proves it in a separate evidence column. A FAIL routes back to the owning stage — do not fix it here.",
       v.group.length
         ? // Lint before the fold, so a lint fix lands in a commit and the gate's clean row holds.
-          `The commits are already made, one per ticket: keep them, never squash to one per repo. For a repo with \`ship: tag\` and a \`release_check\` in the registry, write the release entry it needs (e.g. a changeset). Run ${LINT} Then fold everything uncommitted into its ticket's commit (${FOLD}), each ticket's release entry into that ticket's own commit, and check that \`git log --oneline origin/main..HEAD\` in each worktree shows one commit per ticket (the workspace's issue and ${keys(v.group)}), each message starting with its key.`
-        : "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (e.g. a changeset) in the same commit. " +
+          `The commits are already made, one per ticket: keep them, never squash to one per repo. For a repo with \`ship: tag\` and a \`release_check\` in the registry, write the release entry it needs (the \`Release check:\` line in \`werkmeister-context.md\` names its command). Run ${LINT} Then fold everything uncommitted into its ticket's commit (${FOLD}), each ticket's release entry into that ticket's own commit, and check that \`git log --oneline origin/main..HEAD\` in each worktree shows one commit per ticket (the workspace's issue and ${keys(v.group)}), each message starting with its key.`
+        : "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (the `Release check:` line in `werkmeister-context.md` names its command) in the same commit. " +
           // SW-399: a changeset written after the last lint run failed the gate only at `pr open`.
           `Before committing, run ${LINT}`,
       // SW-535: sw-385 promised a follow-up in decisions.md; nothing said to file it, so the first `pr open` stopped at the gate.

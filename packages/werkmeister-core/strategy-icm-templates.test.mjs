@@ -205,15 +205,16 @@ test("each template renders with no undefined and a route per stage", async () =
             c.indexOf("tick off each edit") < c.indexOf("Run the test command"),
             `${wt}/${d}: diff check before tests`,
           );
-          // SW-547: formatting is fixed on the touched files before the tests and the commit.
+          // SW-547, SW-646: the repo's own format command runs on the touched files before the tests.
           assert.match(
             c,
-            /If the repo uses biome[^\n]*first run `pnpm exec biome check --write <the files you touched>` \(never a folder\)/,
+            /gives the repo a format command[^\n]*first run it on the files you touched \(never a folder\)/,
             `${wt}/${d}`,
           );
+          assert.doesNotMatch(c, /\b(pnpm|biome|turbo|changesets?)\b/, `${wt}/${d}`);
           assert.ok(
-            c.indexOf("biome check --write") < c.indexOf("Run the test command"),
-            `${wt}/${d}: biome before tests`,
+            c.indexOf("format command") < c.indexOf("Run the test command"),
+            `${wt}/${d}: format before tests`,
           );
           // SW-125: skips are named in the test step and in the file that records the run.
           assert.match(c, /A skipped test is not a pass: name each one/, `${wt}/${d}`);
@@ -263,7 +264,7 @@ test("each template renders with no undefined and a route per stage", async () =
           // SW-449: a Should fix that shows the change's own text is false is fixed, not left.
           assert.match(
             c,
-            /and any \*\*Should fix\*\* finding that shows the change's own docs, comments, help text or changeset state something false \(fix the code, or reword that text so it is true\)/,
+            /and any \*\*Should fix\*\* finding that shows the change's own docs, comments, help text or release entry state something false \(fix the code, or reword that text so it is true\)/,
             `${wt}/${d}`,
           );
           assert.match(
@@ -532,8 +533,8 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     assert.match(implement, /commits in `origin\/main\.\.\.HEAD`/);
     // SW-466: each ticket's commit carries its own snapshot regeneration.
     assert.match(implement, /regenerate it in that ticket's commit/);
-    // SW-503: each ticket's changeset goes in that ticket's own commit, in the build and propose stages.
-    assert.match(implement, /carries its release entry \(changeset\) in its own commit/);
+    // SW-503: each ticket's release entry goes in that ticket's own commit, in the build and propose stages.
+    assert.match(implement, /carries its release entry in its own commit/);
     assert.match(propose, /each ticket's release entry into that ticket's own commit/);
     // SW-497: order across tickets is free; the spec does not fix it.
     assert.match(implement, /Commit order across tickets is free/);

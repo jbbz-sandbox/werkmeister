@@ -134,6 +134,7 @@ repo:
   release_tag: "werkmeister@*"  # glob for git tag --list; required for ship: tag
   release_check: pnpm changeset status --since=origin/main
   lint: pnpm exec biome ci .                  # the gate's lint row; any ship mode
+  format: pnpm exec biome check --write {files}  # run by the agent on the files it touched, before tests
   no_service_paths: [docs, .changeset, .gitignore, README.md]  # prefixes that touch no service in the gate
   path_mappings: { plugins: werkmeister-core }  # paths no service's `path:` owns → the service that tests them
   sync_on_merge: warn                         # warn (default) | auto: when a merged PR changes this fragment
@@ -145,6 +146,7 @@ repo:
 - With `ship: tag`, it is shipped once a tag matching `release_tag` contains its merge commit (`git tag --contains`). A PR file with `release: none` needs no release, so it is shipped as soon as it merges.
 - `release_check` stops a PR that would never reach a release. For changesets, a branch that changes a package without a changeset fails it.
 - `lint` is the repo's lint/format check (the gate's `lint` row). Set it to CI's own command so a format error fails before the PR opens.
+- `format` is the command that formats the files an agent touched, e.g. `uv run ruff format {files}` or `./gradlew spotlessApply`. `{files}` is replaced with those files; without it the command runs as written. `.werkmeister/werkmeister-context.md` shows it (and `release_check`, for `ship: tag`), and the implement contract runs it before the tests. The gate does not run it. With no `format`, the contract has no format step and `lint` catches formatting.
 - `sync_on_merge` covers a merged PR whose diff changes this fragment. With `warn`, `pr status` prints `registry sync needed: <repo> fragment changed in <url>` and puts it on the workspace card. With `auto`, it fast-forwards the repo's source checkout (only when it is on the PR's base branch with no uncommitted changes), runs `registry sync` (a hand-written registry is left as is), prints the services added, removed or changed, and names each running feature that uses a changed service with `werkmeister feature up <feature>` to apply it. It restarts nothing. When the checkout isn't ready, `auto` prints the notice and tries again on each later pass. A machine pins its own choice in `~/.werkmeister/services.local.yaml` under `repos.<repo>.sync_on_merge`, which wins over the fragment. The PR file's `registry_sync:` records the step: `pending`, `needed` or `synced`.
 
 ## Commands

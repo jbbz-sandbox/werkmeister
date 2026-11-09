@@ -42,8 +42,9 @@ workspace — don't reach for them.
      ```
 
    - A repo whose registry entry has `ship: tag` and a `release_check` needs its
-     release entry (e.g. a changeset) committed on the branch, or `skip_release`
-     with a reason. A change that ships nothing (tests only, no changeset) reads
+     release entry (the `Release check:` line in `werkmeister-context.md` names
+     its command) committed on the branch, or `skip_release` with a reason. A
+     change that ships nothing (tests only, no release entry) reads
      shipped once merged: `pr status` writes `release: none` (changesets
      repos only; elsewhere set it yourself beside `skip_release`).
 3. **Approval is the person's.** Ask them to read the PR file and set

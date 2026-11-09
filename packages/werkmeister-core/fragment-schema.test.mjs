@@ -52,6 +52,12 @@ test("repo: lint takes a command string (SW-133)", () => {
   assert.equal(validate({ ...withoutRepo, repo: { lint: 1 } }), false);
 });
 
+test("repo: format takes a command string; werkmeister's is biome on the touched files (SW-646)", () => {
+  assert.equal(fragment.repo.format, "pnpm exec biome check --write {files}");
+  assert.ok(validate({ ...withoutRepo, repo: { format: "uv run ruff format {files}" } }));
+  assert.equal(validate({ ...withoutRepo, repo: { format: ["ruff"] } }), false);
+});
+
 test("cpus: accepted on services, setup services and extra_services; zero and junk rejected", () => {
   const api = {
     path: "apps/api",
