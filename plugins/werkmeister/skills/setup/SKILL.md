@@ -11,6 +11,8 @@ New machine? This skill comes with the werkmeister plugin, which isn't installed
 
 Never move, rename or delete an existing `~/.werkmeister`. If one is there, the machine is already set up: **skip step 2**. Run `werkmeister machine setup --check`, fix only what it reports, then go to step 3. Re-running the wizard rewrites the machine config and restarts the host daemon every workspace uses.
 
+In any `--check` output, `✗ global config: no standards tree` is a known bug in the published package (SW-640). Re-running the wizard can't fix it, so never re-run it for that line; go on.
+
 ## 1. Check the prerequisites
 
 Run all four checks, then show the results as one table:
@@ -31,6 +33,8 @@ If any row fails, **stop here**. Don't run machine setup: it would fail partway 
 
 Ask them to run this skill again once they're installed. Kubernetes is optional; don't check for it.
 
+Also check `gh auth status`, but don't stop on it. Without a signed-in GitHub CLI, machine setup can't find a workspace record repo, and workspaces are plain folders. Recommend <https://cli.github.com> and `gh auth login` before step 2.
+
 ## 2. Run machine setup
 
 From the home folder, never inside a werkmeister checkout (npx would run that checkout's CLI and install nothing):
@@ -39,20 +43,9 @@ From the home folder, never inside a werkmeister checkout (npx would run that ch
 cd ~ && npx werkmeister machine setup
 ```
 
-It's interactive and asks for a sudo password, so the person runs it in their own terminal (in Claude Code: type `! cd ~ && npx werkmeister machine setup` so the output lands here). Before they start, tell them what it will ask, in this order:
+It's an interactive wizard that waits for typed answers and a sudo password, so the person runs it in their own terminal window. Each question explains itself and the defaults are fine to start. If they have no repo ready, tell them to say yes to cloning the demo apps (they need Kubernetes to start, SW-641; without a cluster, setup ends at the created workspace); if their issues are in Jira, to have an API token ready.
 
-| It asks | What it means |
-|---|---|
-| repo and workspace folders, workspace record repo | where your repos are cloned (`~/repos`), where workspaces go, and the git repo that keeps each workspace's record |
-| browser | what `werkmeister feature open` opens |
-| ingress domain | the local domain your services answer on; changing it rewrites the TLS certificate and `/etc/hosts` |
-| clone the demo apps? | two small apps (backend, frontend) to try things with; say yes if you have no repo ready |
-| kube context | only for `werkmeister infra intercept`; leave the default if you don't use Kubernetes |
-| issue tracker (and Jira credentials) | where your issues live, GitHub or Jira; for Jira it asks for a login and links you to where to make an API token |
-| telepresence, superpowers plugin, VS Code settings and extension, standards folder, PR watch, background daemon | optional extras; the default is fine to start |
-| sudo password | to trust the TLS certificate and add the `/etc/hosts` entries |
-
-Answer their questions as each one comes up. When it ends, run `werkmeister machine setup --check` and show the result. Fix anything it reports before going on.
+Answer their questions as they ask. Ask them to say when it finishes, or paste any error, then run `werkmeister machine setup --check` and show the result. Fix anything it reports before going on, apart from the SW-640 line above.
 
 ## 3. Add their repos
 
@@ -72,7 +65,7 @@ A repo is done when `werkmeister registry --check` prints "Registry is up to dat
 werkmeister workspace new <name> --services <service,...>
 ```
 
-For the issue, model and other options, use the `workspace` skill rather than guessing flags. Then, from the new folder, run `werkmeister feature up` and open each service with a `feature_router:` at `https://<service>.<local_domain>`.
+For the issue, model and other options, use the `workspace` skill rather than guessing flags. Then, from the new folder, run `werkmeister feature up` and open each service with a `feature_router:` at `https://<service>.<local_domain>`. The demo apps need a Kubernetes cluster today (SW-641). Without one, their `feature up` fails on `k8s-postgres`: say so, and treat the created workspace as the end of setup.
 
 Tell the person the folder it created and how to open it: `cd <folder> && claude`, or press Start on its card in the `/workspaces` pane.
 
@@ -80,6 +73,6 @@ Tell the person the folder it created and how to open it: `cd <folder> && claude
 
 Summarise the three things that make setup done, each with what showed it:
 
-- machine setup: `werkmeister machine setup --check` is clean
+- machine setup: `werkmeister machine setup --check` is clean, apart from the SW-640 standards-tree line
 - repos: the ones now in `werkmeister registry`
-- workspace: its folder, and that `feature up` started it
+- workspace: its folder, and whether `feature up` started it
