@@ -1709,11 +1709,20 @@ export async function generateWorkspaceCompose(
     const msg = exc instanceof Error ? exc.message : String(exc);
     warn(`Could not allocate slot: ${msg}`);
     // The lock has no distinct timeout error type — it signals one in the message.
-    if (msg.startsWith("Timed out")) {
-      warn("Retry, or remove the stale lock file if no werkmeister process is running.");
-    } else {
-      warn("Run 'werkmeister feature down <feature>' to free a slot, then re-run init-workspace.");
-    }
+    const next = msg.startsWith("Timed out")
+      ? "Retry `werkmeister workspace init`, or remove the stale lock file if no werkmeister process is running."
+      : "Run `werkmeister feature down <feature>` on another feature to free a slot, then rerun `werkmeister workspace init` here.";
+    warn(next);
+    // Every stage contract sends the agent here for containers, so it sees the skip too (SW-551).
+    const sandboxDir = dotDir(workspaceRoot);
+    fs.mkdirSync(sandboxDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(sandboxDir, "werkmeister-context.md"),
+      `# Werkmeister Context: ${feature}\n\n` +
+        `The container step did not run: no slot, so ${COMPOSE_FILE} and ports were not (re)generated.\n\n` +
+        `Why: ${msg}\n\n` +
+        `Next: ${next} That rewrites this file with the container recipe.\n`,
+    );
     return null;
   }
 
