@@ -164,6 +164,8 @@ export async function warnUnresolvedHosts(
     warn(`  ${host}: ${addresses.length ? `resolves to ${addresses.join(", ")}` : "no address"}`);
   }
   warn(`Add them:  echo "127.0.0.1 ${names.join(" ")}" | sudo tee -a /etc/hosts`);
-  warn('or run `werkmeister machine setup` (users-guide: "New hostnames need /etc/hosts entries")');
+  warn(
+    'or run `werkmeister machine setup` (docs/configuration.md: "New hostnames need /etc/hosts entries")',
+  );
   return names;
 }

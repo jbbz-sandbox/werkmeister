@@ -125,7 +125,7 @@ narrows it to the committed source.
 
 ### 4. Docs
 
-`docs/users-guide.md` "Self-hosting the Werkmeister repo" loses the "Host access" bullet. That bullet
+`docs/configuration.md` "Self-hosting the Werkmeister repo" loses the "Host access" bullet. That bullet
 is stale anyway: it names two services, but #137 gave access to four. It gains the host dogfood
 script.
 
@@ -135,9 +135,9 @@ script.
 |---|---|
 | Keep the exception for `cli` only | The escape is still one `docker run` away for anything that runs in `cli`, and the read-write host paths stay |
 | Filtering docker API proxy (e.g. docker-socket-proxy) | An endpoint allowlist still lets `POST /containers/create` ask for `Privileged` or a `/` bind. Filtering request bodies makes the proxy a security boundary this repo has to own. And the compose files the CLI generates bind worktrees under `~/features` read-write, so the proxy has to allow the kind of bind behind the second escape |
-| Container drives the host's `apps/werkmeister-mcp` with a token | Fine for an agent that operates Werkmeister (documented in `users-guide.md`), but `apps/werkmeister-mcp` runs the *installed* build, so it can't dogfood a worktree's changes |
+| Container drives the host's `apps/werkmeister-mcp` with a token | Fine for an agent that operates Werkmeister (documented in `configuration.md`), but `apps/werkmeister-mcp` runs the *installed* build, so it can't dogfood a worktree's changes |
 | Docker-in-Docker / sysbox / rootless docker | dind needs `--privileged`, so it is another escape. sysbox is Linux-only, and rootless dockerd is not a drop-in under OrbStack or Docker Desktop. A second daemon also can't see the host's features, so the dogfood value is gone anyway |
-| A VM with its own stack (`users-guide.md` shape 3) | The strongest isolation, but it is a second full install. Worth it for the agent itself, too heavy for four dev containers |
+| A VM with its own stack (`configuration.md` shape 3) | The strongest isolation, but it is a second full install. Worth it for the agent itself, too heavy for four dev containers |
 
 ## Answers to the issue's open questions
 

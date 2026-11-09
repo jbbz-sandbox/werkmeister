@@ -3,9 +3,9 @@
 A repo works with Werkmeister once it has a registry fragment,
 `<repo>/.werkmeister/services.yaml`, and that fragment has been merged into
 `~/.werkmeister/services.yaml`. This page walks through the steps and the mistakes that are
-easy to make. The fields themselves are covered in the users guide:
-[Writing a fragment](users-guide.md#writing-a-fragment) and
-[Test commands and validation guidance](users-guide.md#test-commands-and-validation-guidance).
+easy to make. The fields themselves are covered in [Registry fragments](registry-fragments.md):
+[Writing a fragment](registry-fragments.md#writing-a-fragment) and
+[Test commands and validation guidance](registry-fragments.md#test-commands-and-validation-guidance).
 
 ## Steps
 
@@ -40,15 +40,12 @@ GitHub push events need no per-repo step: once [GitHub push events](github-inges
 
 ## Checklist
 
+### Every repo
+
 - **`port_offset`:** must be unique across *all* repos. Find the ones in use with
   `grep -h port_offset ~/repos/*/.werkmeister/services.yaml`. Detect already picks a free one.
 - **`internal_port`:** the port the dev server listens on *in the container*, not the
   port the app uses in production.
-- **Bind to `0.0.0.0`.** Many dev servers listen on `localhost` only, which can't be
-  reached from outside the container. For Vite: `vite --host 0.0.0.0 --port 5173`.
-- **Allow the ingress hostname.** Vite (and other dev servers that check the `Host` header)
-  turn away `<service>.<local_domain>` unless it's allowed: `server: { allowedHosts: true }`
-  in `vite.config.*`. That's fine for a dev server only.
 - **`health_endpoint`:** pick a path that returns 200 once the service is up, without a
   login. If the app's `/` needs a login or redirect state (such as an OAuth callback
   page), use another page.
@@ -58,23 +55,31 @@ GitHub push events need no per-repo step: once [GitHub push events](github-inges
   (`pnpm --filter <pkg> build`).
 - **`validate:`:** write how a person would check a change by hand, with
   <code v-pre>{{local_domain}}</code> in the URLs. Without it, agents are told there is no guidance.
-- **`image:`:** detect reads the Node major from `engines`, so `>=22` gives `node:22`
-  even if the repo is developed on 24. Pick the major you actually use.
+- **No `$schema:` key or `# yaml-language-server` line** in the fragment. See
+  [Writing a fragment](registry-fragments.md#writing-a-fragment).
+
+### Node repos
+
+- **Bind to `0.0.0.0`.** Many dev servers listen on `localhost` only, which can't be
+  reached from outside the container. For Vite: `vite --host 0.0.0.0 --port 5173`.
+- **Allow the ingress hostname.** Vite (and other dev servers that check the `Host` header)
+  turn away `<service>.<local_domain>` unless it's allowed: `server: { allowedHosts: true }`
+  in `vite.config.*`. That's fine for a dev server only.
 - **pnpm in the container:** `node:*` images don't include pnpm. Start every command that
   calls it with `corepack enable &&`, and pin `packageManager` in the root `package.json`.
-- **Give `node_modules_volume` a repo-specific name** (`<repo>-node-modules`, not
-  `node-modules`; detect does this, but older fragments may not). The volume is per feature, not per repo, so in a workspace that checks
-  out two repos, the same name puts both repos' installs in one volume and they break
-  each other.
 - **pnpm workspaces: put `node-linker=hoisted` in `.npmrc`.** Only `/app/node_modules`
   gets a volume. pnpm's default layout also writes a `node_modules` into each package,
   inside the bind-mounted worktree, where Linux installs from the container and macOS
   installs from the host overwrite each other, along with native binaries such as
   rollup's. Hoisted puts everything at the root, in the volume.
+- **`image:`:** detect reads the Node major from `engines`, so `>=22` gives `node:22`
+  even if the repo is developed on 24. Pick the major you actually use.
+- **Give `node_modules_volume` a repo-specific name** (`<repo>-node-modules`, not
+  `node-modules`; detect does this, but older fragments may not). The volume is per feature, not per repo, so in a workspace that checks
+  out two repos, the same name puts both repos' installs in one volume and they break
+  each other.
 - **No install, no setup service.** A service with no dependencies can run `node` directly
   and leave out `setup_service` and `node_modules_volume`.
-- **No `$schema:` key or `# yaml-language-server` line** in the fragment. See
-  [Writing a fragment](users-guide.md#writing-a-fragment).
 
 ## What detect gets wrong
 

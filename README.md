@@ -41,7 +41,7 @@ extension). Only the CLI publishes; everything else is private.
 
 Every workspace here can also be run as a Werkmeister service of its own, so a feature
 workspace can develop Werkmeister inside Werkmeister — see "Self-hosting the Werkmeister repo"
-in [docs/users-guide.md](docs/users-guide.md).
+in [docs/configuration.md](docs/configuration.md).
 
 ## Install the CLI from a clone
 

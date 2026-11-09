@@ -107,7 +107,7 @@ const SKIP = [
   /^docs\/research\//,
   /^docs\/(naming|context-management)-research\.md$/,
   /^docs\/scamper-/,
-  // SW-180: written to read from docs/users-guide.md, where gen-docs renders them and this checks them.
+  // SW-180: written to read from docs/cli-reference.md, where gen-docs renders them and this checks them.
   /\.help\.md$/,
 ];
 

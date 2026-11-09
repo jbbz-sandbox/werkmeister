@@ -1,6 +1,6 @@
 # Advanced Troubleshooting Guide
 
-Operational runbook for debugging Werkmeister infrastructure issues that go beyond the basic troubleshooting in the users guide.
+Operational runbook for debugging Werkmeister infrastructure issues.
 
 ## Start with the skills
 
@@ -110,7 +110,7 @@ docker logs w9r-k8s-forwards --tail 30 2>&1
 
 ### Test Individual Forwards
 
-`werkmeister infra status` probes each forward with its own health check. By hand, with the ports from [k8s Forward Ports](users-guide.md#k8s-forward-ports):
+`werkmeister infra status` probes each forward with its own health check. By hand, with the ports from [k8s Forward Ports](configuration.md#k8s-forward-ports):
 
 ```bash
 docker exec w9r-k8s-forwards sh -c '
@@ -211,6 +211,76 @@ docker network inspect werkmeister-shared --format '{{range .Containers}}{{.Name
 docker exec w9r-caddy nslookup host.docker.internal
 docker exec {feature}-frontend nslookup k8s-forwards
 ```
+
+---
+
+## Common errors
+
+### "No available slots" Error
+
+Every slot is taken (12 by default). Free one by stopping a feature:
+
+```bash
+werkmeister feature status          # See which features are active
+werkmeister feature down old-feature  # Free up a slot
+```
+
+### Services Not Auto-Detected
+
+```bash
+# Check that the workspace has committed changes
+cd ~/workspace/PROJ-1234/werkmeister
+git diff main..HEAD --name-only
+
+# Verify repo name matches config
+grep -A 3 "repos:" ~/.werkmeister/services.yaml
+
+# Add the service manually: list it in `services` in .werkmeister/workspace.yml, then
+werkmeister workspace init
+werkmeister feature up PROJ-1234
+```
+
+### Build/Dependency Errors
+
+```bash
+# Reinstall dependencies and rebuild the CLI
+rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/cli/dist
+pnpm install
+pnpm turbo run build --filter=werkmeister
+werkmeister --help
+
+# Check the node version — must be 20+
+node --version
+
+# werkmeister picks a runtime: WERKMEISTER_NODE, then PATH, then the newest nvm
+# install. Pin it explicitly if the wrong one is found:
+WERKMEISTER_NODE=/opt/homebrew/bin/node werkmeister --help
+
+# Update a dependency
+#   1. Edit the version in apps/cli/package.json
+#   2. pnpm install   # re-resolve and update pnpm-lock.yaml
+#   3. pnpm turbo run build --filter=werkmeister
+```
+
+> `werkmeister internal gate` deliberately bypasses the CLI import chain via
+> `dist/lib/gate.js` for a fast PreToolUse cold start — if the gate misbehaves,
+> confirm `dist/` is built before debugging further.
+
+### Stale Slot Data
+
+If `~/.werkmeister/slots.json` gets out of sync (e.g., containers were removed manually):
+
+```bash
+# View current slot data
+cat ~/.werkmeister/slots.json | jq .
+
+# Reset by running down on stale features
+werkmeister feature down stale-feature
+
+# Or manually edit the file
+# (delete entries for features that no longer exist)
+```
+
 
 ---
 

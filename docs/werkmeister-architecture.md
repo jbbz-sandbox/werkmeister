@@ -118,7 +118,7 @@ cookie is still copied onto the request as the `X-Feature` header
 
 ### 2. Port Allocation Scheme
 
-Each feature slot (1–12) gets its own 20-port range, and a service's host port is the slot's base port plus the service's `port_offset`: deterministic, no collisions. **k8s port-forwards** listen on fixed 9xxx ports inside the `k8s-forwards` container, shared by every feature and reached by Docker DNS (e.g. `k8s-forwards:9052`). Both tables live in [the users guide § Port Allocation](users-guide.md#port-allocation).
+Each feature slot (1–12) gets its own 20-port range, and a service's host port is the slot's base port plus the service's `port_offset`: deterministic, no collisions. **k8s port-forwards** listen on fixed 9xxx ports inside the `k8s-forwards` container, shared by every feature and reached by Docker DNS (e.g. `k8s-forwards:9052`). Both tables live in [Configuration § Port Allocation](configuration.md#port-allocation).
 
 **Shared infrastructure** (not k8s -- runs locally as containers):
 
@@ -135,7 +135,7 @@ in `apps/cli/infra/compose/shared-infra.yml` and managed by Docker Compose.
 
 ### 3. Service Registry
 
-A central registry, `~/.werkmeister/services.yaml`, maps repos to services and gives each one its port offset, health endpoint and k8s forward. `werkmeister machine detect` generates a repo's entry. The example and every key are in [the users guide § Configuration Files](users-guide.md#configuration-files) (`~/.werkmeister/services.yaml`).
+A central registry, `~/.werkmeister/services.yaml`, maps repos to services and gives each one its port offset, health endpoint and k8s forward. `werkmeister machine detect` generates a repo's entry. The example and every key are in [Configuration § Configuration Files](configuration.md#configuration-files) (`~/.werkmeister/services.yaml`).
 
 **How local services are chosen**:
 
@@ -271,7 +271,7 @@ All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rath
 - The primary alias `k8s-forwards` is the canonical name used by other containers.
 - Each forward listens on `0.0.0.0:<listen_port>` so it is reachable from any container on the shared network.
 
-**Port mappings**: listen port, k8s service, namespace and remote port for each forward are in [the users guide § k8s Forward Ports](users-guide.md#k8s-forward-ports).
+**Port mappings**: listen port, k8s service, namespace and remote port for each forward are in [Configuration § k8s Forward Ports](configuration.md#k8s-forward-ports).
 
 **Health checks**: Docker Compose healthcheck runs `/usr/local/bin/probe.sh` (`apps/cli/infra/compose/k8s-port-forward/probe.sh`). The container reports healthy only when every forward in the table answers its protocol probe. Other containers (e.g., `redisinsight`) use `depends_on: k8s-forwards: condition: service_started` to wait.
 
@@ -299,13 +299,13 @@ export default defineConfig({
 });
 ```
 
-See [`werkmeister feature test`](users-guide.md#werkmeister-feature-test) for its flags.
+See [`werkmeister feature test`](cli-reference.md#werkmeister-feature-test) for its flags.
 
 ---
 
 ## Routing applies only to front-door services
 
-Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwright feature test apply only to services with a `feature_router:` block. Libraries, CLIs and editor extensions are not reached by URL, so none of that exercises them. `.werkmeister/werkmeister-context.md` always carries a "How to validate" table with each of the workspace's services and its test command, plus the service's `validate:` text (or its archetype's). It emits the routing, Caddy and health-check sections only when the workspace has a URL-addressed service. `werkmeister feature test` runs Playwright only when the workspace has a `playwright.config.*`. `test:` is the command tooling runs (the implement stage, the PR gate); `validate:` is the hands-on check an agent or person performs, recorded as the exercise table the gate requires. See [Test commands and validation guidance](users-guide.md#test-commands-and-validation-guidance).
+Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwright feature test apply only to services with a `feature_router:` block. Libraries, CLIs and editor extensions are not reached by URL, so none of that exercises them. `.werkmeister/werkmeister-context.md` always carries a "How to validate" table with each of the workspace's services and its test command, plus the service's `validate:` text (or its archetype's). It emits the routing, Caddy and health-check sections only when the workspace has a URL-addressed service. `werkmeister feature test` runs Playwright only when the workspace has a `playwright.config.*`. `test:` is the command tooling runs (the implement stage, the PR gate); `validate:` is the hands-on check an agent or person performs, recorded as the exercise table the gate requires. See [Test commands and validation guidance](registry-fragments.md#test-commands-and-validation-guidance).
 
 ## Directory Structure
 
@@ -330,7 +330,7 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 ├── apps/cli/infra/proxy/ui/            # Feature selector web UI
 │   └── index.html
 └── docs/
-    ├── users-guide.md
+    ├── users-guide.md, concepts.md, cli-reference.md, configuration.md
     └── known-issues.md
 
 ~/.werkmeister/                         # machine config + generated state
@@ -362,7 +362,7 @@ Caddy routing, the `X-Feature` cookie, the proxy health checks and the Playwrigh
 
 ## Lifecycle: `werkmeister feature up`
 
-What `feature up` does, step by step (slot allocation, the budget queue, file generation, the forward check, compose up, the Caddy reload), is in [the users guide § `werkmeister feature up`](users-guide.md#werkmeister-feature-up), generated from the command's own help.
+What `feature up` does, step by step (slot allocation, the budget queue, file generation, the forward check, compose up, the Caddy reload), is in [CLI reference § `werkmeister feature up`](cli-reference.md#werkmeister-feature-up), generated from the command's own help.
 
 ---
 

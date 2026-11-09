@@ -30,6 +30,7 @@ import { HARNESS_IDS } from "werkmeister-core/harness";
 import { error, ttyReporter, withReporter } from "werkmeister-core/reporter";
 import { STRATEGY_IDS } from "werkmeister-core/strategies";
 import { appEntryPath, MCP } from "werkmeister-core/web_servers";
+import abandonHelp from "./commands/abandon.help.md";
 import budgetHelp from "./commands/budget.help.md";
 import cacheHelp from "./commands/cache.help.md";
 import cleanHelp from "./commands/clean.help.md";
@@ -1437,7 +1438,7 @@ const SPECS: CommandSpec[] = [
   {
     name: "workspace abandon",
     group: "Workspaces:",
-    help: closeOutHelp,
+    help: abandonHelp,
     load: () => import("./commands/close_out.js"),
     configure: (cmd) => {
       cmd
