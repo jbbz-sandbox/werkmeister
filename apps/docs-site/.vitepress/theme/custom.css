@@ -2,3 +2,11 @@
 .dark .vp-doc img[src*="/images/topology/"] {
   filter: invert(0.88) hue-rotate(180deg);
 }
+
+.home-dashboard {
+  display: block;
+  max-width: min(640px, 100% - 48px);
+  margin: 0 auto 48px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+}

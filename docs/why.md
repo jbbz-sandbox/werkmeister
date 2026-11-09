@@ -123,8 +123,6 @@ out whether this is useful to anyone but me. If it is, the "we" starts there.
 
 ## The name
 
-Not part of the story. For an "About" or FAQ block, or a footnote on the landing page.
-
 **Werkmeister** is German for a works foreman: the person in charge of a workshop
 floor. Said roughly VAIRK-my-ster.
 
