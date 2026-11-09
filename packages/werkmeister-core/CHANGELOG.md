@@ -1,5 +1,12 @@
 # sandbox-core
 
+## 0.85.6
+
+### Patch Changes
+
+- ee7e229: `.werkmeister/bin/with-fixture-workspace` now works inside a werkmeister container (`docker exec -w /app <container> <ws>/.werkmeister/bin/with-fixture-workspace …`): it runs the CLI at /app, where the container's node_modules is, instead of the host-path copy that failed `ERR_MODULE_NOT_FOUND: dockerode`. From a host checkout with no node_modules it exits 2 and names that form. Rerun `werkmeister workspace init` to regenerate the script.
+- 1f39deb: `with-fixture-workspace --gate --pr-field status=<value>` sets the seeded PR file's `status:` line verbatim (one line, a `# note` included), so a fixture run can check how `pr gate` reads a status form, e.g. `"status=approved  # approved via check-in 2026-11-06"`.
+
 ## 0.85.5
 
 ### Patch Changes
