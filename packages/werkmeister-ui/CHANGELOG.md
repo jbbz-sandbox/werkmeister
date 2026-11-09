@@ -1,5 +1,12 @@
 # werkmeister-ui
 
+## 0.7.9
+
+### Patch Changes
+
+- Updated dependencies [c8c721b]
+  - werkmeister-core@0.86.0
+
 ## 0.7.8
 
 ### Patch Changes
