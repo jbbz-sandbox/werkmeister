@@ -1,5 +1,13 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.85.3
+
+### Patch Changes
+
+- 5fd29d0: A crashed session's record now expires (SW-559). After 24 hours with no hook event, a busy record with no pending ask is dropped and its file deleted, so status sweeps stop running the `ps` + `lsof` probe for it and the card stops showing "The session stopped with work unfinished". Idle records and pending questions or permission prompts are kept. Check-in's first run no longer picks a workspace only because a crash loop or notice made it read Needs you. It now picks workspaces with a question, permission, plan or gate waiting, or where Claude spoke last.
+- ee0403b: A workspace card no longer reads "Queued for CPU" while only one of its service starts waits for capacity (SW-569). The session keeps working during that wait, so the card shows what it is doing: Running tests, Running Bash, Thinking or Needs you. "Queued for CPU" is now kept for a whole-feature queue, where the session itself is held.
+- 531e140: SW-551: when `workspace init` (or `workspace new`) can't get a feature slot, it no longer reports plain success. It warns that the container step did not run and gives the next step: free a slot with `werkmeister feature down <feature>`, then rerun `werkmeister workspace init`. It also writes that notice to `.werkmeister/werkmeister-context.md`, so the agent sees it there too, and the next successful init replaces it with the container recipe. The MCP `init-workspace` tool result now includes `containers`.
+
 ## 0.85.2
 
 ### Patch Changes
