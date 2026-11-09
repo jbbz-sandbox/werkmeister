@@ -249,7 +249,7 @@ pnpm install
 pnpm turbo run build --filter=werkmeister
 werkmeister --help
 
-# Check the node version — must be 20+
+# Check the node version — must be 22+
 node --version
 
 # werkmeister picks a runtime: WERKMEISTER_NODE, then PATH, then the newest nvm
