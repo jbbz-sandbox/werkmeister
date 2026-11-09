@@ -25,6 +25,7 @@ Do it once for each part: the AWS account, the GitHub account, and each machine.
 You need the AWS CLI with credentials for the account (`aws configure`), and a fresh worktree install (`pnpm install --frozen-lockfile` at the repo root).
 
 ```sh
+# export AWS_REGION=us-east-2     # only to leave your profile's region; bootstrap and deploy must match
 SECRET=$(openssl rand -hex 32)    # keep it for step 2
 cd apps/github-ingest
 pnpm exec cdk bootstrap           # first time in this account and region only
@@ -32,18 +33,18 @@ pnpm exec cdk deploy --parameters WebhookSecret=$SECRET
 aws iam create-access-key --user-name werkmeister-github-ingest-poller
 ```
 
-`cdk deploy` prints `FunctionUrl`, `QueueUrl`, `DlqUrl` and `PollerUser`. The region defaults to `us-east-1`; set `CDK_DEFAULT_REGION` to use another. The access key belongs to a user that can only `sqs:ReceiveMessage` and `sqs:DeleteMessage` on that one queue. The stack doesn't create the key itself, because a CloudFormation output would show its secret.
+`cdk deploy` prints `FunctionUrl`, `QueueUrl`, `DlqUrl` and `PollerUser`. The stack goes to your AWS profile's region, or `AWS_REGION` when set, and to `us-east-1` when neither is set. Use the same region in step 3. Setting `CDK_DEFAULT_REGION` has no effect, because the CDK CLI overwrites it. The access key belongs to a user that can only `sqs:ReceiveMessage` and `sqs:DeleteMessage` on that one queue. The stack doesn't create the key itself, because a CloudFormation output would show its secret.
 
 ### 2. GitHub: create and install the App
 
-Go to GitHub → Settings → Developer settings → GitHub Apps → New GitHub App:
+Go to GitHub → Settings → Developer settings → GitHub Apps → New GitHub App. If an organization owns the repos, go to Organization settings → Developer settings → GitHub Apps instead, because a private App can only be installed on the account that owns it.
 
 - **Webhook URL:** the `FunctionUrl` output. **Webhook secret:** `$SECRET` from step 1.
 - **Repository permissions**, all read-only: Checks, Actions, Pull requests, Issues, Metadata.
 - **Subscribe to events:** Check run, Workflow run, Pull request, Pull request review, Pull request review comment, Issue comment.
 - **Where can this App be installed:** only on this account.
 
-Then install it with **All repositories**. You don't need the App's private key: werkmeister calls no API as the App, and `gh` keeps doing the reading.
+Then install it from the App's **Install App** tab with **All repositories**. You don't need the App's private key, so ignore GitHub's prompt to generate one: werkmeister calls no API as the App, and `gh` keeps doing the reading.
 
 ### 3. Each machine: point the daemon at the queue
 
