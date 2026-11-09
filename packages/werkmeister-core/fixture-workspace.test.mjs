@@ -486,3 +486,26 @@ test("with-fixture-workspace runs /app's CLI when /app is its worktree, and says
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test("--pr-field status sets the gate PR file's status line verbatim, notes included (SW-549)", async () => {
+  for (const [status, ok] of [
+    ["approved  # approved via check-in 2026-11-06", true],
+    ["approvd", false],
+  ])
+    await withFixtureWorkspace(
+      async (fx) => {
+        const pr = fs.readFileSync(
+          path.join(fx.workspace, ".werkmeister", "notes", "pr-app.md"),
+          "utf8",
+        );
+        assert.equal(pr.match(/^status: .*$/gm)?.join("|"), `status: ${status}`);
+        await withReporter(collectingReporter(), () =>
+          initWorkspace({}, fx.workspace, { build: false }),
+        );
+        const { ok: passed, lines } = await gatePrs(fx.workspace);
+        assert.equal(passed, ok, lines.join("\n"));
+        if (!ok) assert.match(lines.join("\n"), /✗ approved: status: approvd/);
+      },
+      { gate: true, prFields: { status } },
+    );
+});

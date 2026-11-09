@@ -60,9 +60,13 @@ export function parse(argv: string[]) {
       if (!/^[A-Za-z0-9][\w.-]*\/[A-Za-z0-9][\w.-]*#\d+$/.test(ref)) return { bad: a };
       opts.issue = ref;
     } else if (a === "--pr-field") {
-      // Only fields no command reads: branch, base, session… reach git and Claude from the allowed wrapper.
-      const m = /^(skip_release|skip_exercise|skip_review|release)=(.*)$/s.exec(argv[++i] ?? "");
-      if (!m) return { bad: a };
+      // Only fields that reach no git or Claude call: branch, base, session… do from the allowed wrapper.
+      // status is one line, written verbatim, so a newline can't add one of those (SW-549).
+      const m = /^(skip_release|skip_exercise|skip_review|release|status)=(.*)$/s.exec(
+        argv[++i] ?? "",
+      );
+      if (!m || (m[1] === "status" && /[\r\n\u2028\u2029\u0085]/.test(m[2] ?? "")))
+        return { bad: a };
       opts.prFields = { ...opts.prFields, [m[1] as string]: m[2] as string };
     } else if (a === "--print" && argv[i + 1] !== undefined) print.push(argv[++i] as string);
     else if ((a === "--services" || a === "--fragment") && argv[i + 1] !== undefined) {
@@ -110,7 +114,7 @@ export async function run(argv: string[]): Promise<void> {
     if ("bad" in parsed)
       console.error(
         parsed.bad === "--pr-field"
-          ? "--pr-field: skip_release, skip_exercise, skip_review or release =<value>, with --gate"
+          ? "--pr-field: skip_release, skip_exercise, skip_review, release or status (one line) =<value>, with --gate"
           : parsed.bad === "--issue"
             ? "--issue: a GitHub issue as owner/repo#number, e.g. o/app#1"
             : `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" ? ", holding a YAML mapping" : ""}`,

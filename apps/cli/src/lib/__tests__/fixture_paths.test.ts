@@ -40,13 +40,26 @@ it("--exec-runs is a fixture option only first, where the ask rule's prefix sees
   expect(later.steps?.[0]?.[0]).toBe("--exec-runs");
 });
 
-it("--pr-field sets only fields no command reads, keeping any = in the value (SW-514)", () => {
+it("--pr-field sets only fields that reach no git or Claude call, keeping any = in the value (SW-514)", () => {
   const r = parse(["--pr-field", "skip_release=a=b", "--pr-field", "release=none", "pr", "status"]);
   expect(r.opts?.prFields).toEqual({ skip_release: "a=b", release: "none" });
   expect(r.steps).toEqual([["pr", "status"]]);
   // branch reaches `git push origin <branch>`: --receive-pack=<cmd> would run under the allow rule.
-  for (const f of ["branch=--receive-pack=touch x", "session_cwd=/", "status=open"])
+  for (const f of [
+    "branch=--receive-pack=touch x",
+    "session_cwd=/",
+    "status=a\nbranch: x",
+    "status=a\rb",
+    "status=a\u2028b",
+  ])
     expect(parse(["--pr-field", f, "pr", "gate"])).toEqual({ bad: "--pr-field" });
+});
+
+it("--pr-field status takes one line, kept verbatim with its note (SW-549)", () => {
+  const status = "approved  # approved via check-in 2026-11-06";
+  expect(parse(["--pr-field", `status=${status}`, "pr", "gate"]).opts?.prFields).toEqual({
+    status,
+  });
 });
 
 it("--issue takes only owner/repo#number, never a gh flag (SW-509)", () => {
