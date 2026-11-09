@@ -435,11 +435,13 @@ export const AUTONOMOUS_RULES = [
   // Local build and test; no `npm install` or `pnpm add`, so a new dependency waits for a person.
   // SW-521: no `node`, `npx`, `pnpm exec` or `python3`, which run any file with the real HOME;
   // tests go through the registered wrapped and container forms (buildAllowRules).
-  ...["npm ci", "npm run", "npm test"].map((cmd) => `Bash(${cmd}:*)`),
-  ...["install --frozen-lockfile", "run", "test", "turbo"].map((cmd) => `Bash(pnpm ${cmd}:*)`),
-  ...["ls", "cat", "grep", "find", "head", "tail", "sed", "diff", "wc", "test", "mkdir"].map(
-    (cmd) => `Bash(${cmd}:*)`,
-  ),
+  // SW-560: no generic `run`, `test` or `turbo` either, which run any script the agent adds;
+  // buildAllowRules allows each registered chain's segments. A fresh worktree still needs a lockfile install.
+  // Exact: `--prefix`, `--dir`/`-C` reach another workspace, `--script-shell` runs any file.
+  "Bash(npm ci)",
+  "Bash(pnpm install --frozen-lockfile)",
+  // SW-560: no `find` (`-exec`), `sed` (`-i`, `w`), `mkdir`, `ls` or the readers (`cat`, `grep`, `head`, …), which
+  // write or read any path, ~/.ssh and other workspaces' .env included; Glob, Grep, Read and Write ask outside.
   // A plugin's pane tests; never `claude plugin:*`, which would also allow install/uninstall.
   "Bash(claude plugin validate:*)",
   "Bash(claude plugin test:*)",
@@ -467,8 +469,9 @@ export function autonomousRules(feature: string, services: string[]): string[] {
     ...["logs", "test", "services", "feature logs", "feature test", "feature services"].flatMap(
       (cmd) => cli(`${cmd} ${feature}:*`),
     ),
+    // SW-560: no `docker exec <f>-<svc>:*`: any container reaches the host daemon over
+    // host.docker.internal, and some mount the docker socket; its exact registered test still runs.
     ...services.flatMap((svc) => [
-      `Bash(docker exec ${feature}-${svc}:*)`,
       `Bash(docker logs ${feature}-${svc}:*)`,
       `Bash(docker restart ${feature}-${svc})`,
     ]),

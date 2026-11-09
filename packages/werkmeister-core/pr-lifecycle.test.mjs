@@ -4163,7 +4163,7 @@ test("deliverHeadless: a codex session started in a code worktree is resumed fro
   }
 });
 
-test("deliverHeadless: the wake can test, commit and push in a non-autonomous workspace (SW-313)", async () => {
+test("deliverHeadless: the wake can commit, push and read checks in a non-autonomous workspace (SW-313)", async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "pr-deliver-")));
   const prev = process.env.WERKMEISTER_WORKSPACES_ROOT;
   process.env.WERKMEISTER_WORKSPACES_ROOT = root;
@@ -4183,8 +4183,9 @@ test("deliverHeadless: the wake can test, commit and push in a non-autonomous wo
       withClaudeHome({ "s-root": ws }, async (calls) => {
         await deliverHeadless(cb);
         const argv = (await calls(2)).at(-1);
-        // Without these the turn edits files, then every check, commit and push is refused.
-        for (const rule of ["Bash(git:*)", "Bash(pnpm run:*)", "Bash(gh pr checks:*)"])
+        // Without these the turn edits files, then every commit, push and check read is refused.
+        // SW-560: it tests only through a registered test command, and this fixture registers none.
+        for (const rule of ["Bash(git:*)", "Bash(gh pr checks:*)"])
           assert.ok(argv.includes(rule), `wake argv lacks ${rule}: ${argv}`);
         assert.ok(argv.includes("--disallowedTools"), "AUTONOMOUS_DENY still applies");
       }),
