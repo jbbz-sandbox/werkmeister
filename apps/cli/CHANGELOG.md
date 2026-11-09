@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.85.7
+
+### Patch Changes
+
+- 9f80deb: Help text and package descriptions no longer cite internal tracker keys (`feature up --service`, `pr`, `migrate`, `tokens`, the github-ingest description), and `feature test` help names only `WERKMEISTER_FEATURE`.
+- 841867c: The feature research stage contract now says to check a decision's facts about an external tool (a CLI command or flag, a plugin API, an event name) against the installed tool, not only its docs, and to mark a docs-only fact `unverified: docs only`.
+
 ## 0.85.6
 
 ### Patch Changes
