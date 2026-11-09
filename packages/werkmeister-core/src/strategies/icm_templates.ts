@@ -73,7 +73,9 @@ const IMPLEMENT_STEPS = [
 
 // SW-124: one wrapper, so no session or subagent hand-rolls (or forgets) its temp HOME.
 // SW-316: a host run misses the container's env; the tests-only gate runs where pr open will.
+// SW-547: sw-526's over-width test lines surfaced only at the lint chain, after 7 commits.
 const HOST_TESTS =
+  "If the repo uses biome (`biome.json` or `biome.jsonc`), first run `pnpm exec biome check --write <the files you touched>` (never a folder), so formatting lands in the ticket's own commit. " +
   "Run the test command exactly as `../../.werkmeister/werkmeister-context.md` states it: through `.werkmeister/bin/with-temp-home`, which gives it a fresh temporary HOME — never hand-roll `HOME=…`. " +
   "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. " +
   // SW-506: werkmeister's host checkout has no node_modules; the recipe is its services.yaml text (SW-190), not this generic step.
