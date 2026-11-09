@@ -678,7 +678,7 @@ export async function initWorkspace(
   args: Record<string, unknown>,
   workspaceRootOverride?: string,
   opts: InitWorkspaceOptions = {},
-): Promise<void> {
+): Promise<{ containers: boolean }> {
   // 1. Find workspace root. A WorkspaceRootError propagates: printing its
   //    (already rendered) message and choosing an exit status is the CLI's job.
   const workspaceRoot = workspaceRootOverride ?? findWorkspaceRoot();
@@ -873,6 +873,7 @@ export async function initWorkspace(
 
   // 8. Generate compose.yml, allocate slot, write .werkmeister/werkmeister-context.md
   const feature = (meta["FEATURE"] ?? "").trim();
+  let containers = true;
   if (feature) {
     const slot = await generateWorkspaceCompose(
       feature,
@@ -881,6 +882,7 @@ export async function initWorkspace(
       (meta["TEST_PATH"] ?? "").trim(),
       repos.map(([name]) => name),
     );
+    containers = slot !== null;
     if (slot !== null && opts.build !== false) {
       // 9. Build images (without starting containers)
       info("Building Docker images (--no-start)...");
@@ -910,10 +912,19 @@ export async function initWorkspace(
     }
   }
 
+  if (!containers) {
+    warn(
+      `Workspace initialised, but the container step did not run: no slot, so ${COMPOSE_FILE} was not (re)generated ` +
+        "(see the slot warning above). `werkmeister feature up` fails until you free a slot " +
+        "and rerun `werkmeister workspace init`.",
+    );
+    return { containers };
+  }
   raw(
     `\n${Colors.BOLD}Workspace initialised.${Colors.RESET} ` +
       "Open a new Claude Code session from the workspace root to pick up the context.\n\n",
   );
+  return { containers };
 }
 
 // ---------------------------------------------------------------------------
@@ -924,23 +935,22 @@ export async function initWorkspace(
  * Run {@link initWorkspace} against the directory just created, with the root
  * handed over explicitly so nothing has to resolve it from a cwd.
  *
- * Returns a status the way the child process used to, because the caller's
- * "the workspace root exists at …, re-run from there" warning is keyed on it.
+ * Returns null on failure, because the caller's "the workspace root exists
+ * at …, re-run from there" warning is keyed on it.
  */
 async function runInitWorkspace(
   workspaceDir: string,
   featureSlug: string,
   resolved: Record<string, string>,
   opts: InitWorkspaceOptions,
-): Promise<number> {
+): Promise<{ containers: boolean } | null> {
   info(`Running: werkmeister workspace init (feature: ${featureSlug})`);
   try {
-    await initWorkspace(
+    return await initWorkspace(
       { ...resolved, feature: featureSlug, force: opts.force },
       workspaceDir,
       opts,
     );
-    return 0;
   } catch (exc) {
     // A WorkspaceInitError has already emitted its own `[err]` line — the
     // specific one — so don't restate it as a stringified throw. Anything else
@@ -949,7 +959,7 @@ async function runInitWorkspace(
     if (!(exc instanceof WorkspaceInitError)) {
       error(`init-workspace failed: ${(exc as Error).message}`);
     }
-    return 1;
+    return null;
   }
 }
 
@@ -1026,10 +1036,10 @@ export async function provisionWorkspace(
   }
 
   // 3. init-workspace inside the workspace.
-  const rc = await runInitWorkspace(workspaceDir, featureSlug, resolved, opts);
-  if (rc !== 0) {
+  const init = await runInitWorkspace(workspaceDir, featureSlug, resolved, opts);
+  if (!init) {
     const message =
-      `werkmeister workspace init exited with status ${rc}. ` +
+      "werkmeister workspace init failed. " +
       `The workspace root exists at ${workspaceDir}; ` +
       "re-run `werkmeister workspace init` from there once resolved.";
     warn(message);
@@ -1039,6 +1049,13 @@ export async function provisionWorkspace(
   // 4. First commit of the workspace state (repo-rooted workspaces only).
   commitWorkspaceState(workspaceDir, workspaceName);
 
+  if (!init.containers) {
+    warn(
+      `Workspace created at ${workspaceDir}, but its containers are not set up: it has no slot (see the slot warning above). ` +
+        "Free a slot with `werkmeister feature down <feature>`, then run `werkmeister workspace init` there.",
+    );
+    return workspaceDir;
+  }
   raw(
     `\n${Colors.BOLD}Workspace ready.${Colors.RESET} ` +
       `cd ${workspaceDir} and open a Claude Code session from there.\n\n`,

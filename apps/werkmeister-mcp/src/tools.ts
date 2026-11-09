@@ -528,8 +528,8 @@ function registerAuthoringTools(server: McpServer): void {
         const { workspace: _id, ...fields } = args;
         const { feature, dir } = resolveFeature(_id, headersOf(extra));
         // No readStdinTask: fd 0 here may be the MCP transport.
-        await initWorkspace({ ...fields, feature }, dir);
-        return { feature, workspace: dir };
+        const { containers } = await initWorkspace({ ...fields, feature }, dir);
+        return { feature, workspace: dir, containers };
       }),
   );
 
