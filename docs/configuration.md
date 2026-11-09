@@ -15,7 +15,7 @@ renders the fragments as they are on disk; a hand-written registry is left alone
 A workspace's `compose.yml` then takes each of its own repos' services from the fragment in that
 repo's worktree, merged over the registry, so a branch that changes a service's `command:`, image, setup or
 volumes runs that change in its feature containers before merge; other repos' services, and the registry
-file, stay as they are (SW-337). The demo
+file, stay as they are. The demo
 registry comes from the `demo-services` repo's own fragment (our private example app;
 see [Local Kubernetes bootstrap](../README.md#local-kubernetes-bootstrap)):
 
@@ -96,12 +96,12 @@ the pieces that are not obvious from the demo services:
   containers do. Installs are queued host-wide through `~/.werkmeister/locks`, at most
   `WERKMEISTER_INSTALL_SLOTS` (default 2) at a time, and builds run one at a time. The PR
   gate's service starts don't re-run it once it has succeeded for the current lockfile and
-  Node major: they start the service with `--no-deps` (SW-541), and the gate's own `turbo run
+  Node major: they start the service with `--no-deps`, and the gate's own `turbo run
   test` builds what it tests. `werkmeister feature up`, with or without `--service`, still
   re-runs it, so a service started after a pull gets a fresh build. To force a reinstall, run
   `werkmeister feature down -v`. After upgrading, run `werkmeister registry` so the new
   command reaches `~/.werkmeister/services.yaml`.
-- **Shared build and package caches (SW-69).** The registry's built-in `turbo` and
+- **Shared build and package caches.** The registry's built-in `turbo` and
   `pnpm-store` caches attach to `werkmeister-install` and the four services because the repo has
   `turbo.json` and `pnpm-lock.yaml`. Each is a shared named volume (`werkmeister-turbo` at
   `/turbo-cache`, `werkmeister-pnpm-store` at `/pnpm-store`), so a commit any workspace has built
@@ -209,7 +209,7 @@ It does need:
 - A container-only MCP registration for `http://host.docker.internal:3002/mcp` carrying
   that header, made inside the container. Never put it in the
   workspace's `.mcp.json`: host sessions share that file, and `host.docker.internal` does
-  not resolve on the host (SW-115).
+  not resolve on the host.
 
 Two things stop working on the isolated side, by design. The `werkmeister` plugin's
 MCP entry runs `werkmeister internal mcp` over stdio, and its skills shell out to the CLI; with
@@ -432,7 +432,7 @@ The "shipped shared-infra.yml" tests in `apps/cli/src/lib/__tests__/k8s_forwards
 
 ### ~/.werkmeister/config.yaml: models
 
-Which model a workspace runs is werkmeister's choice, by tier, never the harness's own default (SW-577). `--model` on `workspace new` / `workspace init` takes a tier (`small`, `mid`, `frontier`, `advanced_frontier`) or an explicit model (an alias or full id); blank means `models.default_tier`. The tier resolves once, at create or init, and the resolved model is written to `.werkmeister/workspace.yml` and `.claude/settings.json`, so changing this block affects new workspaces only.
+Which model a workspace runs is werkmeister's choice, by tier, never the harness's own default. `--model` on `workspace new` / `workspace init` takes a tier (`small`, `mid`, `frontier`, `advanced_frontier`) or an explicit model (an alias or full id); blank means `models.default_tier`. The tier resolves once, at create or init, and the resolved model is written to `.werkmeister/workspace.yml` and `.claude/settings.json`, so changing this block affects new workspaces only.
 
 ```yaml
 models:

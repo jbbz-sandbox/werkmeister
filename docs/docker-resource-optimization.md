@@ -4,7 +4,7 @@ How much memory and CPU Werkmeister asks Docker for, how many features fit, and 
 
 ## Default budget
 
-`werkmeister feature up` admits a feature only when the budget has room for it (SW-181).
+`werkmeister feature up` admits a feature only when the budget has room for it.
 A feature's cost is what its compose file asks Docker for: the sum of each
 service's `memory_reservation` and `cpus` limit, leaving out services behind the
 `on-demand` profile. Running features' cost is read from Docker on every `up`.
@@ -18,7 +18,7 @@ The defaults come from `docker info`, so a new machine needs no setup:
 | `memory` | the Docker engine's memory minus 1G |
 | `cpus` | the engine's CPU count |
 | `preempt` | `true`: a start that doesn't fit may stop features whose session is idle or waiting on a person; a person's `up` may also stop a working autonomous one |
-| `host_load` | twice the host's CPU count: the gate waits before each check while the host's 1-minute load is above it, up to 10 minutes in all per gate run; `with-temp-home` waits the same way before its command, for up to 90 s, except on macOS, whose load average is neither the test VM's nor usable (SW-556); `0` turns the wait off |
+| `host_load` | twice the host's CPU count: the gate waits before each check while the host's 1-minute load is above it, up to 10 minutes in all per gate run; `with-temp-home` waits the same way before its command, for up to 90 s, except on macOS, whose load average is neither the test VM's nor usable; `0` turns the wait off |
 
 Override any of them in `~/.werkmeister/config.yaml`:
 
@@ -30,18 +30,18 @@ budget:
   host_load: 24
 ```
 
-`host_load` limits the gate by live host load, not by reservations (SW-209): the gate's checks run inside a container that is already admitted, and agents' direct test runs happen on the host where no reservation sees them, so `.werkmeister/bin/with-temp-home` runs the same wait (`werkmeister internal wait-load`) before its command unless `WERKMEISTER_NO_WAIT=1` is set (SW-224), except on macOS, whose load average is no usable signal (SW-556). A failed gate check, and a failed `with-temp-home` run, end with the host load so a timeout under load reads as load.
+`host_load` limits the gate by live host load, not by reservations: the gate's checks run inside a container that is already admitted, and agents' direct test runs happen on the host where no reservation sees them, so `.werkmeister/bin/with-temp-home` runs the same wait (`werkmeister internal wait-load`) before its command unless `WERKMEISTER_NO_WAIT=1` is set, except on macOS, whose load average is no usable signal. A failed gate check, and a failed `with-temp-home` run, end with the host load so a timeout under load reads as load.
 
 ### Measured on a 16 GB laptop
 
-Re-measured 2026-10-31 for SW-204 on a 16 GB MacBook with Docker Desktop's engine
+Re-measured 2026-10-31 on a 16 GB MacBook with Docker Desktop's engine
 at 7.8 GiB and 12 CPUs, so the default budget is 6.8 GiB and 12 CPUs. Each
 service's gate command ran cold (`turbo --force`, nothing cached) in a `node:22`
 container limited to 2G, one after the other, while `anon` in the container's
 `memory.stat` was sampled every 0.5 s. A reservation is the peak plus about 10%,
 rounded up to 64M. One `werkmeister-core` test failed in the bare container, so
 its peak is for a gate that ran to the end. The `cli` reservation is lower than
-this run's peak: SW-283 re-measured the gate row at 948 MiB on 2026-11-05 and set
+this run's peak: a later run re-measured the gate row at 948 MiB on 2026-11-05 and set
 1088M. The Reservation column is what `.werkmeister/services.yaml` sets today.
 
 | Service | Cold gate | Peak anon | Reservation (was) |
@@ -184,7 +184,7 @@ werkmeister feature restart my-feature
 | `reservations` | Guaranteed minimum — Docker ensures this is available, and the budget counts it |
 
 The generated compose also sets `memswap_limit` equal to each service's memory
-limit (SW-151). Without it Docker allows twice the limit in swap, so a container
+limit. Without it Docker allows twice the limit in swap, so a container
 near its limit slows down on a host with swap and is killed on one without.
 
 ### 4. Verify

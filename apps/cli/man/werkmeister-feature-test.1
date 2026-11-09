@@ -21,7 +21,7 @@ Looks for a \fBplaywright.config.ts\fR (or \fB.js\fR/\fB.mjs\fR) in the workspac
 .IP 2. 3
 If none is found, runs nothing and exits non\-zero. The message lists each workspace service's test command and \fBvalidate:\fR guidance. Libraries, CLIs and extensions are validated that way, not with Playwright; see Test commands and validation guidance.
 .IP 3. 3
-Otherwise sets \fBWERKMEISTER_FEATURE\fR (and \fBSANDBOX_FEATURE\fR, until suites move) and, when the feature has a slot, \fBWERKMEISTER_SLOT\fR for the Playwright process and runs \fBnpx playwright test\fR from that directory with a 10\-minute timeout \" name-check: ignore
+Otherwise sets \fBWERKMEISTER_FEATURE\fR and, when the feature has a slot, \fBWERKMEISTER_SLOT\fR for the Playwright process and runs \fBnpx playwright test\fR from that directory with a 10\-minute timeout
 .PP
 .nf
 .RS 4

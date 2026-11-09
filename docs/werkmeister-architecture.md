@@ -241,7 +241,7 @@ services:
 **Key design choices**:
 - Between containers, Docker DNS only: a feature's services, the k8s forwards and shared infra all reach each other by alias. `host.docker.internal` appears only in Caddy's hop to a published port (see [System Architecture](#system-architecture)).
 - Each container joins the per-feature network (isolation, short aliases like `docs-site`) and `werkmeister-shared` (shared infra, the forwards, and a feature-prefixed alias like `docs-architecture-docs-site`).
-- Each service gets `<PREFIX>_URL` / `_HOST` / `_PORT` in `.env`: a local sibling resolves to its Docker DNS alias (`http://<svc>:<port>`), any other service to its `baseline_upstream` when set, else to its forward (`http://k8s-forwards:<forward_port>`). This run had no cluster services, so its `.env` holds no service URLs: only the workspace metadata (`FEATURE`, `SERVICES`, `ISSUE_ID`, `DESCRIPTION`) and `WERKMEISTER_FEATURE`, `SANDBOX_FEATURE`, `WERKMEISTER_SLOT`, `COMPOSE_PROJECT_NAME`.
+- Each service gets `<PREFIX>_URL` / `_HOST` / `_PORT` in `.env`: a local sibling resolves to its Docker DNS alias (`http://<svc>:<port>`), any other service to its `baseline_upstream` when set, else to its forward (`http://k8s-forwards:<forward_port>`). This run had no cluster services, so its `.env` holds no service URLs: only the workspace metadata (`FEATURE`, `SERVICES`, `ISSUE_ID`, `DESCRIPTION`) and `WERKMEISTER_FEATURE`, `WERKMEISTER_SLOT`, `COMPOSE_PROJECT_NAME`.
 - The worktree is volume-mounted for hot reload; `node_modules` is a per-feature named volume filled by the setup service.
 - Containers carry `com.werkmeister.*` labels; the slot label is how the CLI knows which slot a feature holds.
 
@@ -283,7 +283,7 @@ Each feature can run its Playwright suite against its own stack. Playwright hits
 
 **Browser traffic**: Caddy copies the `X-Feature` cookie into an `X-Feature` header on every request routed to a feature, and on hosts with no running feature, so apps need no code change to carry the feature. A request whose cookie names a feature that doesn't run this service falls through to the default upstream without the header, and a call a service makes itself, without going through Caddy, doesn't carry it.
 
-**Test runs**: `werkmeister feature test <feature>` looks for a `playwright.config.*` in the workspace root, then in each repo worktree. With none, it runs nothing and lists each service's test command instead. With one, it sets `WERKMEISTER_FEATURE` (and `SANDBOX_FEATURE`, until suites move) and, when the feature has a slot, `WERKMEISTER_SLOT`, then runs `npx playwright test` from that directory. `werkmeister feature test --scaffold` writes a starter config that sends the feature as a header:
+**Test runs**: `werkmeister feature test <feature>` looks for a `playwright.config.*` in the workspace root, then in each repo worktree. With none, it runs nothing and lists each service's test command instead. With one, it sets `WERKMEISTER_FEATURE` and, when the feature has a slot, `WERKMEISTER_SLOT`, then runs `npx playwright test` from that directory. `werkmeister feature test --scaffold` writes a starter config that sends the feature as a header:
 
 ```javascript
 // playwright.config.ts, as --scaffold writes it (trimmed)

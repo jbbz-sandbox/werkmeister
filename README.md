@@ -22,7 +22,7 @@ New here? Start with the [Quick Start](docs/quick-start.md).
 | --- | --- | --- |
 | `werkmeister` | [apps/cli](apps/cli) | Multi-feature concurrent development orchestrator CLI tool |
 | `docs-site` | [apps/docs-site](apps/docs-site) | The public docs site: VitePress over the repo's docs, in place. |
-| `github-ingest` | [apps/github-ingest](apps/github-ingest) | AWS infra for GitHub push events (SW-583): a GitHub App webhook hits a Lambda function URL that checks the signature and queues the event in SQS, which the werkmeister daemon long-polls. |
+| `github-ingest` | [apps/github-ingest](apps/github-ingest) | AWS infra for GitHub push events: a GitHub App webhook hits a Lambda function URL that checks the signature and queues the event in SQS, which the werkmeister daemon long-polls. |
 | `werkmeister-dashboard` | [apps/werkmeister-dashboard](apps/werkmeister-dashboard) | The localhost workspaces dashboard and the --browser-form page. |
 | `werkmeister-mcp` | [apps/werkmeister-mcp](apps/werkmeister-mcp) | The werkmeister MCP server: every tool over authenticated HTTP (the host daemon), including the MCP App UI tools and the App pages they serve, plus dist/proxy.js, the stdio proxy each session runs. Bundled into the CLI. |
 

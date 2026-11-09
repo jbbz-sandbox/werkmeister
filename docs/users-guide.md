@@ -48,31 +48,31 @@ GITHUB_AUTH_TOKEN=ghp_...          # npm registry access for private packages
 werkmeister infra connect --k8s
 werkmeister infra status
 
-# 2. Create your workspace directory (skip if your VK / agent runner already did)
-mkdir -p ~/workspace/PROJ-1234
-cd ~/workspace/PROJ-1234
+# 2. Create your workspace directory (skip if your agent runner already did)
+mkdir -p ~/workspace/my-feature
+cd ~/workspace/my-feature
 
 # 3. Create worktrees for the repos you'll modify
-git -C ~/repos/werkmeister worktree add ~/workspace/PROJ-1234/werkmeister feature/PROJ-1234
+git -C ~/repos/werkmeister worktree add ~/workspace/my-feature/werkmeister feature/my-feature
 
 # 4. Make your code changes
-cd ~/workspace/PROJ-1234/werkmeister
+cd ~/workspace/my-feature/werkmeister
 # ... edit files ...
 git add . && git commit -m "WIP"
 
 # 5. Start the feature
 cd ~/workspace/werkmeister
-werkmeister feature up PROJ-1234
+werkmeister feature up my-feature
 
 # 6. Set the feature in your browser
-# Visit https://frontend.local.werkmeister.io/__werkmeister and enter "PROJ-1234"
+# Visit https://frontend.local.werkmeister.io/__werkmeister and enter "my-feature"
 
 # 7. Develop and iterate
-werkmeister feature logs PROJ-1234
-werkmeister feature restart PROJ-1234  # after code changes if hot-reload doesn't work
+werkmeister feature logs my-feature
+werkmeister feature restart my-feature  # after code changes if hot-reload doesn't work
 
 # 8. Tear down when done
-werkmeister feature down PROJ-1234
+werkmeister feature down my-feature
 ```
 
 ### Adding a Service Mid-Development
@@ -81,14 +81,14 @@ If you started with just `frontend` but now need `backend` running locally:
 
 ```bash
 # Check what's currently running
-werkmeister feature services PROJ-1234
+werkmeister feature services my-feature
 
 # Add backend to `services` in .werkmeister/workspace.yml, then
 werkmeister workspace init
-werkmeister feature up PROJ-1234
+werkmeister feature up my-feature
 
 # Verify
-werkmeister feature services PROJ-1234
+werkmeister feature services my-feature
 ```
 
 ### Running Multiple Features Simultaneously
@@ -96,9 +96,9 @@ werkmeister feature services PROJ-1234
 Each feature is fully isolated. Just `werkmeister feature up` each one:
 
 ```bash
-werkmeister feature up PROJ-1234    # Gets slot 1
-werkmeister feature up PROJ-5678    # Gets slot 2
-werkmeister feature up PROJ-9012    # Gets slot 3
+werkmeister feature up my-feature    # Gets slot 1
+werkmeister feature up other-feature    # Gets slot 2
+werkmeister feature up third-feature    # Gets slot 3
 
 # Check all features
 werkmeister feature status
@@ -108,48 +108,48 @@ werkmeister feature status
 #
 # Easiest: open a dedicated, isolated window per feature with the cookie
 # already set and the window tagged [feature] in its title + a corner badge:
-werkmeister feature open PROJ-1234
-werkmeister feature open PROJ-5678 --path /categories/crm
+werkmeister feature open my-feature
+werkmeister feature open other-feature --path /categories/crm
 ```
 
 ### Running Playwright Tests
 
 ```bash
 # Make sure the feature is running
-werkmeister feature up PROJ-1234
+werkmeister feature up my-feature
 
 # Run all Playwright tests
-werkmeister feature test PROJ-1234
+werkmeister feature test my-feature
 
 # Run a specific test file
-werkmeister feature test PROJ-1234 -- tests/checkout.spec.ts
+werkmeister feature test my-feature -- tests/checkout.spec.ts
 
 # Run in headed mode for debugging
-werkmeister feature test PROJ-1234 -- --headed --debug
+werkmeister feature test my-feature -- --headed --debug
 ```
 
-The test command sets `SANDBOX_FEATURE` and `WERKMEISTER_SLOT` in the Playwright process environment. Your Playwright config can use these to set the `X-Feature` header on all requests.
+The test command sets `WERKMEISTER_FEATURE` and `WERKMEISTER_SLOT` in the Playwright process environment. Your Playwright config can use these to set the `X-Feature` header on all requests.
 
 ### Debugging a Service
 
 ```bash
 # Tail logs for a specific service
-werkmeister feature logs PROJ-1234 frontend
+werkmeister feature logs my-feature frontend
 
 # Check service endpoints
-werkmeister feature services PROJ-1234
+werkmeister feature services my-feature
 
 # Access the service directly (bypassing Caddy)
 curl http://localhost:11101/  # frontend at slot 1, offset 1
 
 # Access via Caddy with feature header
-curl -H "X-Feature: PROJ-1234" https://frontend.local.werkmeister.io/
+curl -H "X-Feature: my-feature" https://frontend.local.werkmeister.io/
 
 # Check container status
 werkmeister feature status -v
 
 # Restart after fixing
-werkmeister feature restart PROJ-1234
+werkmeister feature restart my-feature
 ```
 
 

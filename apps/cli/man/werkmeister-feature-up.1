@@ -6,13 +6,13 @@ werkmeister\-feature\-up \- Detect services, allocate slot, generate config, sta
 .SH OPTIONS
 .TP
 \fB\-w, \-\-workspace <path>\fR
-Path to directory containing repo checkouts. Default: ~/workspace (override with WORKSPACE env var).
+Path to directory containing repo checkouts. Default: ~/workspace (override with paths.workspaces_root in ~/.werkmeister/config.yaml).
 .TP
 \fB\-\-dev\fR
 Run the file watchers in cli/library/extension containers, which otherwise idle.
 .TP
 \fB\-\-service <name>\fR
-Start only this service and wait for it, the way the PR gate does — including one behind the on\-demand profile (SW\-132). \fBfeature stop\fR stops it.
+Start only this service and wait for it, the way the PR gate does — including one behind the on\-demand profile. \fBfeature stop\fR stops it.
 .SH DESCRIPTION
 .PP
 The local services come from the workspace's \fB.werkmeister/workspace.yml\fR (via \fBwerkmeister workspace init\fR), not from a flag.

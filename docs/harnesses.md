@@ -11,7 +11,7 @@ host daemon. The workspace's `harness` (in `.werkmeister/workspace.yml`, set by
 | Instructions file | `CLAUDE.md` | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` | `AGENTS.md` |
 | Skills | `.claude/skills/w9r-*` | `.claude/skills/w9r-*` | `.agents/skills/w9r-*` | `.agents/skills/w9r-*` | `.agents/skills/w9r-*` |
 | Subagents | `.claude/agents/w9r-*` | `.claude/agents/w9r-*` | none | none | none |
-| Question tool (stage human checks, SW-517) | `AskUserQuestion` | `AskUserQuestion` | none: a numbered plain-text block | none: a numbered plain-text block | `question` |
+| Question tool (stage human checks) | `AskUserQuestion` | `AskUserQuestion` | none: a numbered plain-text block | none: a numbered plain-text block | `question` |
 | MCP server | plugin `.mcp.json` | daemon over `host.docker.internal` | daemon, registered by you | daemon, via `.codex/config.toml` | `opencode.json` |
 | Hooks | `.claude/settings.json` | same | **unavailable** | `.codex/hooks.json` | `.opencode/plugins/werkmeister.js` (partial) |
 | Session tools and Workspaces pane | yes | yes | no | yes | yes (limited) |
@@ -95,7 +95,7 @@ has its own harness with hooks, `harness: codex` ([Codex](#codex)).
 ## The agent-state record
 
 Every harness's hooks call `werkmeister internal agent-state`, which keeps one record per
-session in `.werkmeister/sessions/<session id>.json` (SW-487): busy or idle, the open tool
+session in `.werkmeister/sessions/<session id>.json`: busy or idle, the open tool
 call, running subagents, and what the session is waiting on the person for (a question, a
 permission or a plan). One file per session means a second session, a headless wake turn or a
 subagent can't overwrite another session's ask. A busy session silent for 30 minutes with no
@@ -150,7 +150,7 @@ What differs from Claude Code:
 
 ### Sessions
 
-The session tools and the Workspaces pane follow the workspace's `harness:` (SW-384). The
+The session tools and the Workspaces pane follow the workspace's `harness:`. The
 tools keep their `claude-*` names.
 
 - **Where sessions come from.** Codex files sessions by date under `~/.codex/sessions`
@@ -165,7 +165,7 @@ tools keep their `claude-*` names.
   unattended turn relies on the PreToolUse gate in `.codex/hooks.json`; the refused-calls
   list a waited turn returns is always empty.
 - **Working / Needs you / Done** comes from the agent-state hook, else from the session's
-  last line, as on Claude Code. Codex sends none of the SW-487 events (PermissionDenied,
+  last line, as on Claude Code. Codex sends none of the agent-state events (PermissionDenied,
   subagents, StopFailure), so its card shows no subagent activity.
 - **`claude-resume`** and the pane's Continue / New Session open
   `WERKMEISTER_MCP_TOKEN=$(cat .werkmeister/token) codex` (`resume <id>`, `resume --last`).
@@ -208,7 +208,7 @@ string in `result` and is parsed from there.
 workspaces, global installs and `gh pr merge` (the list Claude's unattended turns get). They hold in
 your own OpenCode sessions in the workspace too; run those commands from a terminal.
 
-Checked on OpenCode 2.2.5 (SW-385): it loads the plugin through its V2 `setup`; its shell tool is
+Checked on OpenCode 2.2.5: it loads the plugin through its V2 `setup`; its shell tool is
 `shell` and its file tools `write` / `edit` pass `path`; a turn ends with
 `session.execution.succeeded`, which the plugin sends as Stop. A headless `opencode run` exits before
 that Stop call finishes, so for turns werkmeister started (`claude-send`) the card reads done from the
