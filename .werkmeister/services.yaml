@@ -20,6 +20,8 @@ repo:
   # them so each fails before the PR opens (SW-133, SW-225, SW-252, SW-312). docs:check reads the built CLI and core.
   # Left out: vscode test:integration and package (need xvfb and a downloaded VS Code), typecheck/test (the services' `test:`).
   # SW-226: --diagnostic-level=error keeps the exit code but prints only errors, so a format error is not buried under warnings.
+  # SW-646: the implement contract runs this on the files it touched before tests (was hard-coded there).
+  format: pnpm exec biome check --write {files}
   lint: pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
   # Changes here touch no service, so the gate runs no service tests for them.
   # scripts/: its tests and checks all run in the lint row above (licenses, docs:check, name:check); SW-563.

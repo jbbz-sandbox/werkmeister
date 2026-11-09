@@ -572,6 +572,8 @@ export interface RepoEntry {
   release_check?: string;
   /** Read by pr_lifecycle.ts: the gate runs it in the repo's container for every PR (SW-133). */
   lint?: string;
+  /** Shown in werkmeister-context.md; the agent runs it on touched files (`{files}`) before tests (SW-646). */
+  format?: string;
   [key: string]: unknown;
 }
 

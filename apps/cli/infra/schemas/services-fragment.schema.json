@@ -46,6 +46,10 @@
           "type": "string",
           "description": "Pre-PR gate lint/format command, run from the repo root in a service container for every PR from this repo, so a format error fails locally instead of in CI; non-zero fails the gate (e.g. `pnpm exec biome ci .`)."
         },
+        "format": {
+          "type": "string",
+          "description": "The command an agent runs on the files it touched before running tests, so formatting lands in its own commit; `{files}` is replaced with those files, and without it the command runs as written (e.g. `pnpm exec biome check --write {files}`, `uv run ruff format {files}`, `./gradlew spotlessApply`). Not run by the gate: `lint` checks formatting there."
+        },
         "no_service_paths": {
           "type": "array",
           "items": { "type": "string" },

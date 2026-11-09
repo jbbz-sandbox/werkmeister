@@ -412,6 +412,20 @@ export function buildSandboxContextMd(
     return `\`${tempHome ? `${tempHome} ` : ""}${r.test}${lint ? ` && ${lint}` : ""}\``;
   };
   const rows = validationRows(candidates, servicesConfig, archetypes, urlServices);
+  // SW-646: contracts name no repo's toolchain; they send the agent here for the repo's own commands.
+  const repoCommands = [...new Set(rows.map((r) => r.repo))]
+    .map((repo) => {
+      const { format, release_check, ship } = reposConfig[repo] ?? {};
+      const lines = [
+        format &&
+          `- Format: \`${format}\` — ${format.includes("{files}") ? "`{files}` replaced with the files you touched" : "run as written, from the repo root"}`,
+        ship === "tag" &&
+          release_check &&
+          `- Release check: \`${release_check}\` — the PR gate's release row; commit the release entry it looks for`,
+      ].filter(Boolean);
+      return lines.length ? `\n\nRepo commands for ${repo}:\n${lines.join("\n")}` : "";
+    })
+    .join("");
   const linted = rows.some((r) => r.test && lintOf(r.repo));
   const validationTable =
     "| Service | Repo | Path in repo | Test command | Validation |\n" +
@@ -607,7 +621,7 @@ How to exercise a change to each service in this workspace.${
       : ""
   }
 
-${validationTable}
+${validationTable}${repoCommands}
 
 `;
   const slotBlock = hasLocal
