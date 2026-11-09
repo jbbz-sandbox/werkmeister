@@ -32,6 +32,12 @@ It installs werkmeister globally from npm, then runs the setup wizard. The wizar
 
 It is safe to re-run. `werkmeister machine setup --check` reports what drifted without changing anything.
 
+::: tip
+Using Claude Code? It can do this page's setup with you. Install the werkmeister plugin with
+`claude plugin marketplace add jbbz-sandbox/werkmeister && claude plugin install werkmeister@werkmeister`,
+then run `/werkmeister:setup`. It checks the list above, runs machine setup, adds your repos and creates your first workspace ([the skill](../plugins/werkmeister/skills/setup/SKILL.md)).
+:::
+
 ::: warning
 Don't run the `npx` line inside a checkout of the werkmeister repo. npx runs the checkout's own CLI instead, and nothing is installed.
 :::
