@@ -198,6 +198,16 @@ test("each template renders with no undefined and a route per stage", async () =
             c.indexOf("tick off each edit") < c.indexOf("Run the test command"),
             `${wt}/${d}: diff check before tests`,
           );
+          // SW-547: formatting is fixed on the touched files before the tests and the commit.
+          assert.match(
+            c,
+            /If the repo uses biome[^\n]*first run `pnpm exec biome check --write <the files you touched>` \(never a folder\)/,
+            `${wt}/${d}`,
+          );
+          assert.ok(
+            c.indexOf("biome check --write") < c.indexOf("Run the test command"),
+            `${wt}/${d}: biome before tests`,
+          );
           // SW-125: skips are named in the test step and in the file that records the run.
           assert.match(c, /A skipped test is not a pass: name each one/, `${wt}/${d}`);
           assert.match(
