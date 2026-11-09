@@ -18,6 +18,7 @@ werkmeister environment.
 ### Workspace lifecycle
 | Skill | What it does |
 |-------|--------------|
+| `setup` | First run on a new machine: checks the prerequisites, runs machine setup with you, registers your repos and creates your first workspace. |
 | `workspace` | Create a brand-new workspace (git worktrees + init). Uses the bundled **`werkmeister` MCP server** (see below) for the form; falls back to the direct CLI. Self-contained — no external skill dependency. |
 | `feature-test` | Start a feature environment and open a headed Playwright browser for interactive testing. |
 | `starting-prompt` | Run the `starting_prompt` defined in the workspace's `.werkmeister/workspace.yml`. |
