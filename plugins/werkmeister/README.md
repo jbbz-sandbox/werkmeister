@@ -54,7 +54,7 @@ Skills are namespaced by the plugin: `/werkmeister:diagnose`, `/werkmeister:work
 | `feature-test` | Start a feature environment and open a headed Playwright browser for interactive testing. |
 | `starting-prompt` | Run the `starting_prompt` defined in the workspace's `.werkmeister/workspace.yml`. |
 | `install-check` | Check (and `--fix`) that the global `werkmeister`/`w9r`, its MCP server and this plugin all run from the repo checkout. The plugin also runs it at every interactive session start. |
-| `check-in` | From the root session: cycle the workspaces, show each one waiting on a person as a card, and relay the answer. An approval goes in as the gate file's own status flip with the check-in note, so the workspace acts on it with no second prompt (SW-478). |
+| `check-in` | From the root session: cycle the workspaces, show each one waiting on a person as a card, and relay the answer. An approval goes in as the gate file's own status flip with the check-in note, so the workspace acts on it with no second prompt. |
 | `postmortem` | Before close-out: gather every problem in the run, agree with the person what changes so it doesn't recur, write `postmortem.md` and act on each change ([Workspace lifecycle § Post-mortem](../../docs/workspace-lifecycle.md#post-mortem)). |
 
 ## Bundled MCP server (`werkmeister`)
@@ -96,56 +96,3 @@ Plugins don't install in Desktop, so add the same server to
 ```json
 { "mcpServers": { "werkmeister": { "command": "werkmeister", "args": ["internal", "mcp"] } } }
 ```
-
-## Migrating from `sandbox-tools`
-
-SW-9 renamed the plugin, the marketplace, the skills and the MCP servers. Claude Code has no
-alias for a renamed plugin, and an already-added `sandbox` marketplace stops resolving <!-- name-check: ignore -->
-`sandbox-tools` once its manifest says `werkmeister` (an update reports success, then <!-- name-check: ignore -->
-`Plugin "sandbox-tools" not found`), so an old install does not move on its own. <!-- name-check: ignore -->
-
-| Was | Is |
-|-----|----|
-| plugin `sandbox-tools` | `werkmeister` | <!-- name-check: ignore -->
-| marketplace `sandbox` | `werkmeister` (install id `werkmeister@werkmeister`) | <!-- name-check: ignore -->
-| skills `sandbox-workspace`, `sandbox-diagnose`, `sandbox-feature-test`, `sandbox-status`, `sandbox-caddy-reload`, `sandbox-routing-test`, `sandbox-starting-prompt` | `/werkmeister:workspace`, `:diagnose`, `:feature-test`, `:status`, `:caddy-reload`, `:routing-test`, `:starting-prompt` | <!-- name-check: ignore -->
-| plugin MCP server `sandbox-workspace` (`mcp__plugin_sandbox-tools_sandbox-workspace__*`) | `werkmeister` (`mcp__plugin_werkmeister_werkmeister__*`; it was `workspaces` until SW-48) | <!-- name-check: ignore -->
-| Claude Desktop entry `"sandbox-workspace"` (`mcp__sandbox-workspace__*`) | `"werkmeister"` (`mcp__werkmeister__*`; it was `"workspaces"` until SW-48) | <!-- name-check: ignore -->
-| registry MCP server `sandbox`, tools `sandbox-up`, `sandbox-status`, `sandbox-workspace`, … | `werkmeister`, tools `up`, `status`, `create-workspace`, … (every `sandbox-` prefix dropped; SW-48 then folded the `workspaces` server in) | <!-- name-check: ignore -->
-
-**One step:** update the CLI to `werkmeister` 0.14 or later, then run
-
-```
-w9r machine setup
-```
-
-It adds the `werkmeister` marketplace, installs `werkmeister@werkmeister`, and only then
-uninstalls `sandbox-tools@sandbox` and removes the `sandbox` marketplace. <!-- name-check: ignore -->
-`w9r machine setup --check` lists an old install as a failed step until you do. `init-workspace` also warns
-about it.
-
-**By hand**, in a Claude Code session:
-
-```
-/plugin marketplace add jbbz-sandbox/werkmeister
-/plugin install werkmeister@werkmeister
-```
-
-Then drop the old install:
-
-- `/plugin uninstall sandbox-tools@sandbox` <!-- name-check: ignore -->
-- `/plugin marketplace remove sandbox` <!-- name-check: ignore -->
-
-**Checkout installs** that set `CLAUDE_CODE_PLUGIN_DIRS` to `.../plugins/sandbox-tools` stop <!-- name-check: ignore -->
-loading the plugin: the plugins/sandbox-tools link was removed (SW-23). Point it at <!-- name-check: ignore -->
-`.../plugins/werkmeister`, and rename the `sandbox` entry in `extraKnownMarketplaces` to <!-- name-check: ignore -->
-`werkmeister` (or delete it).
-
-**Also update by hand:**
-- Claude Desktop: in `claude_desktop_config.json`, rename the `sandbox-workspace` server to <!-- name-check: ignore -->
-  `werkmeister`, as in [Register on Claude Desktop](#register-on-claude-desktop).
-- Anything of yours that names the old tools or skills (permission rules in your own settings,
-  prompts that say `/sandbox-diagnose`). <!-- name-check: ignore -->
-
-**Compatibility for one release:** the generated workspace permission rules allow both the old
-and the new `mcp__plugin_…` prefixes, so a machine that has not run `w9r machine setup` yet keeps working.

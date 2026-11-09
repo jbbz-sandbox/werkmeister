@@ -189,7 +189,7 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "-w, --workspace <path>",
-          "Path to directory containing repo checkouts. Default: ~/workspace (override with WORKSPACE env var).",
+          "Path to directory containing repo checkouts. Default: ~/workspace (override with paths.workspaces_root in ~/.werkmeister/config.yaml).",
         )
         .option(
           "--dev",
@@ -198,7 +198,7 @@ const SPECS: CommandSpec[] = [
         .option(
           "--service <name>",
           "Start only this service and wait for it, the way the PR gate does — including one " +
-            "behind the on-demand profile (SW-132). `feature stop` stops it.",
+            "behind the on-demand profile. `feature stop` stops it.",
         );
     },
     namespace: ([feature], o) => ({

@@ -16,9 +16,9 @@ Detect services, allocate slot, generate config, start containers
 
 `werkmeister feature up [feature]`
 
-- `-w, --workspace <path>`: Path to directory containing repo checkouts. Default: ~/workspace (override with WORKSPACE env var).
+- `-w, --workspace <path>`: Path to directory containing repo checkouts. Default: ~/workspace (override with paths.workspaces_root in ~/.werkmeister/config.yaml).
 - `--dev`: Run the file watchers in cli/library/extension containers, which otherwise idle.
-- `--service <name>`: Start only this service and wait for it, the way the PR gate does — including one behind the on-demand profile (SW-132). `feature stop` stops it.
+- `--service <name>`: Start only this service and wait for it, the way the PR gate does — including one behind the on-demand profile. `feature stop` stops it.
 
 The local services come from the workspace's `.werkmeister/workspace.yml` (via `werkmeister workspace init`), not from a flag.
 
@@ -206,7 +206,7 @@ Run Playwright tests against a feature's stack
 
 1. Looks for a `playwright.config.ts` (or `.js`/`.mjs`) in the workspace root, then in each repo worktree under it (`~/workspace/<feature>/<repo>/`). There is no fallback to the Werkmeister root.
 2. If none is found, runs nothing and exits non-zero. The message lists each workspace service's test command and `validate:` guidance. Libraries, CLIs and extensions are validated that way, not with Playwright; see [Test commands and validation guidance](registry-fragments.md#test-commands-and-validation-guidance).
-3. Otherwise sets `WERKMEISTER_FEATURE` (and `SANDBOX_FEATURE`, until suites move) and, when the feature has a slot, `WERKMEISTER_SLOT` for the Playwright process and runs `npx playwright test` from that directory with a 10-minute timeout
+3. Otherwise sets `WERKMEISTER_FEATURE` and, when the feature has a slot, `WERKMEISTER_SLOT` for the Playwright process and runs `npx playwright test` from that directory with a 10-minute timeout
 
 ```bash
 # Run all tests
@@ -522,7 +522,7 @@ Opens PRs from a workspace and tracks them to a release. Each action:
 - `gate` runs the pre-PR gate for each PR file and changes nothing.
 - `gate --tests` runs only the gate's lint and test rows, in the workspace container, on each worktree's uncommitted tree (committed, staged, unstaged and untracked changes since its base). It needs no PR file and skips the PR-file, clean, baseline and release rows. It starts a container when none is running and stops it after. The implement stage runs it, so a failure that only happens with the container's env shows up before `pr open`.
 - `open` gates, pushes and opens a PR for each PR file at `status: approved`, and records its URL.
-- `gate` and `open` don't wait on host load before their checks (SW-542): the 1-minute load counts the gate's own install and test rows, and the services the gate starts are already admitted against the budget. `--no-wait` is still accepted and does nothing. With tests, a gate can run past a 10-minute tool call: run `pr open` detached, as rule 3 of `_shared/pr-rules.md` shows. `.werkmeister/bin/with-temp-home` runs a shorter wait (up to 90 s) before its command and exits 75 without running it if load is still over (`WERKMEISTER_NO_WAIT=1` skips it). Each service the gate starts waits up to 10 minutes for room in the budget, then fails with `NO_CAPACITY`. A failed check ends with the host load.
+- `gate` and `open` don't wait on host load before their checks: the 1-minute load counts the gate's own install and test rows, and the services the gate starts are already admitted against the budget. `--no-wait` is still accepted and does nothing. With tests, a gate can run past a 10-minute tool call: run `pr open` detached, as rule 3 of `_shared/pr-rules.md` shows. `.werkmeister/bin/with-temp-home` runs a shorter wait (up to 90 s) before its command and exits 75 without running it if load is still over (`WERKMEISTER_NO_WAIT=1` skips it). Each service the gate starts waits up to 10 minutes for room in the budget, then fails with `NO_CAPACITY`. A failed check ends with the host load.
 - `status` records merged, shipped or closed from GitHub and the repo's release tags.
 - `adopt` records a PR opened outside the workspace.
 - `watch` resumes each opening session once its PR merges, ships or closes; `--install` schedules it.
@@ -931,7 +931,7 @@ List daemon tokens with no workspace; --remove deletes them
 Without `--remove` nothing changes. If the workspaces root cannot be read or holds no workspace folder, nothing is removed and the command exits 1.
 
 **When to use:**
-- Once after upgrading past 0.74.0: core tests that ran before SW-433 left tokens there (see the release notes for the name prefixes)
+- Once after upgrading past 0.74.0: core tests from older versions left tokens there (see the release notes for the name prefixes)
 - After deleting a workspace folder by hand
 
 A removed token is minted again by the next `werkmeister workspace init` for that workspace.
@@ -1032,7 +1032,7 @@ Move ~/.sandbox to ~/.werkmeister and repoint everything that names it: config.y
 
 A one-shot move of the pre-rename machine folder to `~/.werkmeister`, repointing every file that carries the old path. Safe to re-run; it refuses while containers the move would break are running. Pull and rebuild the CLI before you migrate.
 
-It also brings what an older CLI wrote up to the noun-group spellings (SW-186): each workspace's hooks, permission rules and `with-temp-home`, the stale pre-rename MCP token in `secrets.env`, and Claude Desktop's server args. A workspace whose `.env` still exports only `SANDBOX_FEATURE` is listed; run `werkmeister workspace init` there.
+It also brings what an older CLI wrote up to the noun-group spellings: each workspace's hooks, permission rules and `with-temp-home`, the stale pre-rename MCP token in `secrets.env`, and Claude Desktop's server args. A workspace whose `.env` still exports only `SANDBOX_FEATURE` is listed; run `werkmeister workspace init` there.
 
 **Examples**
 

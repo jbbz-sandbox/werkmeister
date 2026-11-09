@@ -4,7 +4,7 @@
   "license": "Apache-2.0",
   "type": "module",
   "private": true,
-  "description": "AWS infra for GitHub push events (SW-583): a GitHub App webhook hits a Lambda function URL that checks the signature and queues the event in SQS, which the werkmeister daemon long-polls.",
+  "description": "AWS infra for GitHub push events: a GitHub App webhook hits a Lambda function URL that checks the signature and queues the event in SQS, which the werkmeister daemon long-polls.",
   "scripts": {
     "test": "node --test *.test.mjs",
     "synth": "cdk synth",

@@ -4,7 +4,7 @@
 
 1. Looks for a `playwright.config.ts` (or `.js`/`.mjs`) in the workspace root, then in each repo worktree under it (`~/workspace/<feature>/<repo>/`). There is no fallback to the Werkmeister root.
 2. If none is found, runs nothing and exits non-zero. The message lists each workspace service's test command and `validate:` guidance. Libraries, CLIs and extensions are validated that way, not with Playwright; see [Test commands and validation guidance](registry-fragments.md#test-commands-and-validation-guidance).
-3. Otherwise sets `WERKMEISTER_FEATURE` (and `SANDBOX_FEATURE`, until suites move) and, when the feature has a slot, `WERKMEISTER_SLOT` for the Playwright process and runs `npx playwright test` from that directory with a 10-minute timeout
+3. Otherwise sets `WERKMEISTER_FEATURE` and, when the feature has a slot, `WERKMEISTER_SLOT` for the Playwright process and runs `npx playwright test` from that directory with a 10-minute timeout
 
 ```bash
 # Run all tests

@@ -43,12 +43,12 @@ Werkmeister supports two workspace layouts:
 └── werkmeister/        # standard git clone
 ```
 
-Feature names are arbitrary labels (not directory names). Override the default path with `--workspace` or the `WORKSPACE` env var.
+Feature names are arbitrary labels (not directory names). Override the default path with `--workspace` or `paths.workspaces_root` in `~/.werkmeister/config.yaml`.
 
-**Multi-feature layout** — per-feature workspace nesting (one parent dir, one subdir per feature, repo worktrees under each). Activated by setting `WERKMEISTER_WORKSPACES_ROOT` and laying out subdirectories like:
+**Multi-feature layout** — per-feature workspace nesting (one parent dir, one subdir per feature, repo worktrees under each). Activated by setting `paths.workspaces_root` and laying out subdirectories like:
 
 ```
-~/workspace/         # set WERKMEISTER_WORKSPACES_ROOT to this
+~/workspace/         # set paths.workspaces_root to this
 ├── feature-abc/
 │   └── werkmeister/    # git worktree of the werkmeister repo
 ├── feature-xyz/
@@ -56,21 +56,19 @@ Feature names are arbitrary labels (not directory names). Override the default p
 └── ...
 ```
 
-In this layout each feature maps to a subdirectory containing its repo worktrees. This layout is what Vibe Kanban's automation produces by default, but Werkmeister itself is layout-agnostic — any directory with worktrees under `WERKMEISTER_WORKSPACES_ROOT/<feature>/` works.
+In this layout each feature maps to a subdirectory containing its repo worktrees. Werkmeister itself is layout-agnostic — any directory with worktrees under `<workspaces_root>/<feature>/` works.
 
 ## Features & Workspaces
 
 A **feature** is a named unit of development work. The feature name is an arbitrary label used for slot allocation, container naming, and proxy routing.
 
-By default, Werkmeister looks for repos in `~/workspace/`. Override with `--workspace`, the legacy `WORKSPACE` env var, or `WERKMEISTER_WORKSPACES_ROOT` (preferred) for per-feature workspace nesting.
+By default, Werkmeister looks for repos in `~/workspace/`. Override with `--workspace` or `paths.workspaces_root` for per-feature workspace nesting.
 
-**Resolution priority** (see `resolve_workspace` in `apps/cli/src/lib/config.ts`):
+**Resolution priority** (see `resolveWorkspace` in `packages/werkmeister-core/src/config.ts`):
 1. `--workspace` flag (explicit path)
-2. `WERKMEISTER_WORKSPACES_ROOT` env var (preferred)
-3. `WERKMEISTER_WORKSPACE_ROOT` env var (deprecated alias — removed in v2)
-4. `WORKSPACE` env var (legacy alias, kept for back-compat)
-5. Auto-detect from the current directory — walk up to the nearest `.git` boundary and use its parent, so you can run `werkmeister` from inside a repo/worktree
-6. `~/workspace/` (fallback)
+2. `paths.workspaces_root` in `~/.werkmeister/config.yaml`
+3. Auto-detect from the current directory — walk up to the nearest `.git` boundary and use its parent, so you can run `werkmeister` from inside a repo/worktree
+4. `~/workspace/` (fallback)
 
 When you run `werkmeister feature up my-feature`, the CLI:
 1. Resolves the workspace directory (default: `~/workspace/`, or per the priority above)
@@ -83,7 +81,7 @@ When you run `werkmeister feature up my-feature`, the CLI:
 `werkmeister workspace init` writes the per-feature `CLAUDE.md` and `.env` into the workspace root. Each input resolves in this order (first non-empty wins):
 
 1. **CLI flag** — `--feature`, `--services`, `--issue-id`, `--test-path`, `--description`, `--task`
-2. **`WERKMEISTER_*` env var** — `WERKMEISTER_SERVICES`, `WERKMEISTER_ISSUE_ID`, `WERKMEISTER_TEST_PATH`, `WERKMEISTER_DESCRIPTION`, `WERKMEISTER_TASK`. `WERKMEISTER_FEATURE` is not an input: every workspace container exports it as its own feature name, and `SANDBOX_FEATURE` alongside it for the transition. <!-- name-check: ignore -->
+2. **`WERKMEISTER_*` env var** — `WERKMEISTER_SERVICES`, `WERKMEISTER_ISSUE_ID`, `WERKMEISTER_TEST_PATH`, `WERKMEISTER_DESCRIPTION`, `WERKMEISTER_TASK`. `WERKMEISTER_FEATURE` is not an input: every workspace container exports it as its own feature name.
 3. **Config file** — `<workspace>/.werkmeister/workspace.yml` (override with `--config <path>` or `WERKMEISTER_WORKSPACE_CONFIG`; legacy `workspace.jsonc` / `workspace.json` are still read)
 4. **Stdin / defaults** — piped stdin or a slug-derived hint from the workspace directory name (for `task`)
 
@@ -138,7 +136,7 @@ Each feature runs in an isolated environment:
 - **Port ranges** — each feature's slot maps to a dedicated host port range (see [Slots & Port Ranges](#slots--port-ranges))
 - **Generated files** — each feature's `compose.yml` and `.env` are written to its workspace root, and, when the registry has a GraphQL subgraph, `supergraph-config.yml` to `<workspace>/.werkmeister/`
 
-**Single-repo concurrency note:** In single-repo mode (`~/workspace/` with one checkout per repo), all features share the same source code checkout. This means two features modifying the same repo will see each other's uncommitted changes. For true concurrent multi-feature development, use the per-feature workspace layout via `WERKMEISTER_WORKSPACES_ROOT=<parent>` and place git worktrees under each feature subdir.
+**Single-repo concurrency note:** In single-repo mode (`~/workspace/` with one checkout per repo), all features share the same source code checkout. This means two features modifying the same repo will see each other's uncommitted changes. For true concurrent multi-feature development, use the per-feature workspace layout via `paths.workspaces_root: <parent>` and place git worktrees under each feature subdir.
 
 ## Optional shared infrastructure
 

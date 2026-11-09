@@ -229,7 +229,7 @@ werkmeister feature down old-feature  # Free up a slot
 
 ```bash
 # Check that the workspace has committed changes
-cd ~/workspace/PROJ-1234/werkmeister
+cd ~/workspace/my-feature/werkmeister
 git diff main..HEAD --name-only
 
 # Verify repo name matches config
@@ -237,7 +237,7 @@ grep -A 3 "repos:" ~/.werkmeister/services.yaml
 
 # Add the service manually: list it in `services` in .werkmeister/workspace.yml, then
 werkmeister workspace init
-werkmeister feature up PROJ-1234
+werkmeister feature up my-feature
 ```
 
 ### Build/Dependency Errors
