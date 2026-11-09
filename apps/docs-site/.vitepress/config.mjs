@@ -64,7 +64,8 @@ const VUE = dirname(createRequire(import.meta.resolve("vitepress")).resolve("vue
 
 export default defineConfig({
   title: "Werkmeister",
-  description: "Multi-feature concurrent development orchestrator",
+  description:
+    "One agent per ticket, each in its own git worktree and containers. Bring your harness (Claude Code, OpenCode or Codex), any OCI container manager, and your tracker (Jira, GitHub Issues, or your own).",
   srcDir: ROOT,
   srcExclude: globSync("**/*.md", { cwd: ROOT, exclude: ["**/node_modules/**", ".git/**"] }).filter(
     (f) => !PAGES.includes(f),

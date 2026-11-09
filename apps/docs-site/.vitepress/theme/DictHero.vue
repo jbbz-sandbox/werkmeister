@@ -17,6 +17,7 @@ const headword = hero.name.split("|").join('<span class="bar">|</span>');
     </template>
     <small>[<span v-html="hero.etymology"></span>]</small>
   </p>
+  <p v-if="hero.note" class="dict-note" v-html="hero.note"></p>
   <p class="text" v-html="hero.text"></p>
   <p class="tagline" v-html="hero.tagline"></p>
 </template>
@@ -69,6 +70,13 @@ const headword = hero.name.split("|").join('<span class="bar">|</span>');
   padding-top: 8px;
   font-size: 14px;
   line-height: 22px;
+  color: var(--vp-c-text-2);
+}
+.dict-note {
+  padding-top: 12px;
+  max-width: 592px;
+  line-height: 26px;
+  font-size: 16px;
   color: var(--vp-c-text-2);
 }
 .dict-n {
