@@ -72,32 +72,13 @@ Jira rejects, are reported as a fault.
    through the local `claude` CLI and the Atlassian MCP, so nothing breaks, but you
    don't get the fast path.
 
-### How it's consumed
-
-`packages/werkmeister-core/src/jira-rest.ts` reads `JIRA_BASE_URL` / `JIRA_EMAIL` /
-`JIRA_API_TOKEN` from the process env first, then from the `jira:` section of
-`~/.werkmeister/config.yaml`.
-When credentials are absent or a call fails, every caller falls back to the
-original `claude -p` (Atlassian MCP) path.
-
-Endpoints used (API v2, which returns rich-text fields as plain wiki-markup
-strings; v3 returns ADF JSON we'd have to walk):
-
-- `GET /rest/api/3/myself`: verify only
-- `GET /rest/api/2/issue/<KEY>?fields=…`: issue card, briefing, form prefill
-- `GET /rest/api/2/search/jql?jql=key in (…)&fields=status`: batch status
-  lookup (the old `/rest/api/2/search` endpoint is deprecated/removed; use
-  `/search/jql`)
-- `GET /rest/api/2/issue/createmeta/<PROJECT>/issuetypes`, `POST /rest/api/2/issue`:
-  `issue create`
-- `GET`/`POST /rest/api/2/issue/<KEY>/transitions`, `POST …/comment`: status
-  moves and comments
-
 ### Renewal
 
 Tokens expire (max 1 year). Symptom: Jira status pills and cards quietly fall
 back to the slow path, or the server log shows a `401`. Fix: repeat step 1, then paste
-the new token into `jira.api_token` in `~/.werkmeister/config.yaml`.
+the new token into `jira.api_token` in `~/.werkmeister/config.yaml`. `JIRA_BASE_URL`,
+`JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment win over the `jira:` section, so if
+you export them, update or unset them too.
 
 ## GitHub Issues (`gh auth`)
 

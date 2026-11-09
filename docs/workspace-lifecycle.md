@@ -171,6 +171,11 @@ The workspaces MCP server has the same actions as `workspace-pr` and `close-out`
 
 ## PR callbacks
 
+Once `werkmeister pr open` opens a PR, the session that opened it hears when the PR merges, ships or closes, and is woken to fix a failed check, a review or a conflict while it is open. There is nothing to set up: Desktop sessions get the message through the app, terminal sessions through `werkmeister pr watch` ([Commands](#commands)).
+
+<details>
+<summary>How it works</summary>
+
 `werkmeister pr open` records which session opened each PR (`session`, plus `host_session` inside the desktop app), from the `CLAUDE_CODE_SESSION_ID` / `CLAUDE_CODE_HOST_SESSION_ID` Claude Code gives its commands; run by hand, it records the workspace's newest session. Every workspace gets one; there is no flag.
 
 A pass runs `werkmeister pr status` for each workspace with a callback and tells the session once per change:
@@ -199,7 +204,14 @@ Comments carrying the Claude Code footer (`Generated with [Claude Code]`) are th
 
 One lock file, `~/.werkmeister/pr-callbacks.lock`, lets one pass run at a time.
 
+</details>
+
 ## Check-in
+
+From the folder of workspaces, the `check-in` skill shows each workspace waiting on you and relays your answer, and ships merged PRs as it goes.
+
+<details>
+<summary>How it works</summary>
 
 The `check-in` MCP tool (behind the plugin's `check-in` skill) reports PR and release state for every workspace the label filter keeps, so the root session sees a release without anyone announcing it (SW-65).
 
@@ -216,7 +228,14 @@ Before it reports, it ships merged PRs: for each kept workspace with a `merged` 
 
 The skill asks the person before `werkmeister workspace close` ([Close-out](#close-out)).
 
+</details>
+
 ## Containers after a PR
+
+A workspace's containers stop once its PR opens cleanly, when it merges, and after 30 minutes with nothing using them (`overrides.idle_stop_minutes`; `0` turns this off). Stopping keeps the containers, slot and volumes; `werkmeister feature up` brings them back.
+
+<details>
+<summary>How it works</summary>
 
 A workspace's feature containers stop (SW-39) at these points. Stopping keeps the containers, the slot and the volumes, and `werkmeister feature up` brings them back. Shared infra is never stopped.
 
@@ -233,9 +252,16 @@ A `docker exec` typed by hand in a terminal outside Claude is not seen.
 
 `auto_stop` (a SessionEnd hook, `werkmeister internal session-end`) is on by default for `autonomous` workspaces. Set `auto_stop: false` in `.werkmeister/workspace.yml` to turn it off.
 
+</details>
+
 A grouped PR covers several tickets in one workspace and one PR. Give the member keys (the lead is `issue_id`) before the run starts: `--group SW-2,SW-3` on `werkmeister workspace new` or `werkmeister workspace init`, the create form's **Grouped PR members** field, or `WERKMEISTER_GROUP`. Each lands in `.werkmeister/workspace.yml` as `group: [SW-2, SW-3]`; editing that by hand and rerunning `werkmeister workspace init` works too. The ICM build stages then commit once per ticket and review the range `origin/main...HEAD`, and `propose` keeps the per-ticket commits, asks for rebase and merge rather than squash, and checks each member reads Done after the release ([Issue status](#issue-status) moves them with the issue). Init rewrites the stage contracts, so set `group` before stage work begins.
 
 ## Pause and resume
+
+`⏸ Pause` on a card (or `werkmeister feature pause`) frees the host's CPU by freezing a workspace's containers and its agent; `▶ Resume` (`werkmeister feature resume`) carries on where it stopped.
+
+<details>
+<summary>How it works</summary>
 
 `⏸ Pause` on a card (or `werkmeister feature pause`, the `pause` MCP tool) takes a workspace's load off the host without losing its place (SW-70):
 
@@ -253,7 +279,14 @@ A grouped PR covers several tickets in one workspace and one PR. Give the member
 
 `up` and `restart` refuse while a workspace is paused. `stop` keeps the pause. `down` ends it.
 
+</details>
+
 ## Issue status
+
+The workspace's issue moves by itself: In Progress when the first stage starts, In Review when the PR opens, Done when it ships, with a short comment at each move. Rename the statuses with `overrides.issue_statuses` in `~/.werkmeister/config.yaml`.
+
+<details>
+<summary>How it works</summary>
 
 The workspace's issue (`issue_id` in `workspace.yml`) moves by itself as the work does (SW-27). Each move happens at one lifecycle point and posts a short comment naming its trigger. In a grouped workspace (`group:` in `workspace.yml`) every move covers the issue and each member, with the same comment; a member already past the target is left alone, as the issue is (SW-500).
 
@@ -297,7 +330,14 @@ A key left out takes its default (table above). The flat keys `issue_progress_st
 - **One status label on GitHub.** Adding a `status:` label removes the issue's other `status:` labels, and creates the label if the repo lacks it.
 - **Refusals warn.** No transition, no credentials, a status missing from the workflow: the move prints a warning naming the configured status and, for Jira, the transitions available, and the stage, PR open or close-out carries on.
 
+</details>
+
 ## The PR guard
+
+Inside a workspace, `gh pr create` and the GitHub MCP's `create_pull_request` are refused with a pointer to `werkmeister pr open`, so no PR skips the gate.
+
+<details>
+<summary>How it works</summary>
 
 Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `werkmeister internal pr-guard`, with matcher `Bash|mcp__.*create_pull_request`. It is installed by `werkmeister feature up` / `init-workspace` for both strategies.
 
@@ -307,11 +347,18 @@ Every workspace's `.claude/settings.json` gets one managed PreToolUse hook, `wer
 - `werkmeister pr open` runs `gh` itself, not through the Bash tool, so the guard never sees it.
 - The `werkmeister:workspace-pr` skill and the `w9r-pr` skill steer toward the right path before the guard has to fire.
 
+</details>
+
 ## Close-out
 
 `werkmeister workspace close` is the only way to end a workspace. A post-mortem comes first; then it has two outcomes.
 
 ### Post-mortem
+
+Every close-out, shipped or abandoned, needs `postmortem.md` at the workspace root. The werkmeister `postmortem` skill writes it with you: it gathers the run's problems, agrees a change for each, and acts on them.
+
+<details>
+<summary>How it works</summary>
 
 Lessons found mid-run (SW-104's CI failure on a typecheck the listed test commands never ran, SW-107) are lost with the workspace unless someone asks for them on purpose. So every close-out, shipped or abandoned, needs `postmortem.md` at the workspace root. The werkmeister `postmortem` skill writes it, and every route to close-out points there first (the ICM `CLAUDE.md` row and propose/spike checks, `pr-rules.md` rule 7 for ICM and JIT, `w9r-pr`, `workspace-pr`).
 
@@ -328,6 +375,15 @@ Lessons found mid-run (SW-104's CI failure on a typecheck the listed test comman
 6. **Commit and push** `postmortem.md` on the record branch. The handoff also stages it by name, as it does `closeout.md`.
 
 Without `postmortem.md`, close-out refuses before it changes anything: an unshipped workspace hears the ship refusal first, and with `--abandon` the PR files stay as they were. `--skip-postmortem "<reason>"` (MCP `skip_postmortem`) closes out without one, only when the person says to, and the reason goes in `closeout.md`. A retry of a `closed-out` workspace isn't checked again. The pane's and VS Code's buttons have no skip: they show the refusal, which says to ask Claude to close out.
+
+</details>
+
+### What close-out does
+
+`werkmeister workspace close` closes the issue if shipping hasn't, writes `closeout.md`, pushes every branch, removes the workspace and deletes the merged branches. `werkmeister workspace abandon "<reason>"` ends work that won't ship the same way and keeps every branch.
+
+<details>
+<summary>How it works</summary>
 
 **Shipped.** Without `--abandon`, it refuses unless the workspace is `shipped` or `abandoned`. A `spike` with no PR files is also allowed, and so is `closed-out` (a `closeout.md` exists but the removal failed), which retries. Then, in order:
 
@@ -346,12 +402,21 @@ Without `postmortem.md`, close-out refuses before it changes anything: an unship
 
 The `abandoned` PR status is the record of this, not a second way in. A workspace whose PR files are already all `abandoned` closes out the same way without the flag.
 
+</details>
+
 ### Sessions
+
+Close-out archives the workspace's Desktop sessions and lists the terminal sessions still open there, for you to `/exit`.
+
+<details>
+<summary>How it works</summary>
 
 The workspace's Claude sessions are cleaned up as part of close-out:
 
 - **Desktop sessions.** The pane and the `close-out` MCP tool (through the werkmeister plugin) call `archive_session` on every desktop session whose cwd is in the workspace. The desktop app may refuse some, such as a pinned session, the one on screen, or an archive you declined outside auto mode. Each refusal is reported as "left open"; it doesn't fail the close-out. The CLI and VS Code can't reach the app, so they tell you to archive these from the sidebar.
 - **Terminal sessions.** `claude` running in a terminal can't be archived from outside. Every surface lists those still open in the workspace (`terminal session: pid … on ttys… in <dir> — /exit it`) so you can exit them.
+
+</details>
 
 ## Spikes
 

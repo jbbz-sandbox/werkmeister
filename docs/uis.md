@@ -1,10 +1,9 @@
 # The UIs
 
 Werkmeister has one set of tools, the `werkmeister` MCP server, and four places
-to see them. The workspace list and the create form are one implementation
-(`packages/werkmeister-ui`), rendered by the browser dashboard and by Claude
-Desktop; the Claude Code pane and the VS Code tree are their own compact views
-of the same data. Pick the one where you already are.
+to see them: the browser dashboard, the Claude Code pane, the VS Code extension
+and Claude Desktop. Each shows the same workspaces. Pick the one where you
+already are.
 
 Every screenshot on this page shows demo data.
 
