@@ -49,7 +49,7 @@ export interface FixtureOptions {
   merged?: boolean;
   /** The workspace's `issue_id` (`o/<repo>#N`): resolved by the fixture's GitHub project to the fake gh, whose `issue view` answers it (SW-509). */
   issue?: string;
-  /** Extra front matter for each seeded PR file, e.g. `{ skip_release: "tests only" }` (SW-514). */
+  /** Extra front matter for each seeded PR file, e.g. `{ skip_release: "tests only" }` (SW-514); `status` replaces `approved`, verbatim (SW-549). */
   prFields?: Record<string, string>;
 }
 
@@ -198,6 +198,9 @@ ${githubProject(repos.map((r) => r.name))}`,
     // icm's contracts name a review step, so the gate wants a passing review.md too.
     write(path.join(notes, "review.md"), PASS);
   }
+  // status goes in verbatim, so a brief can try the forms people write, comments included (SW-549).
+  const { status = "approved", ...prFields } = opts.prFields ?? {};
+  const extra = Object.keys(prFields).length ? YAML.stringify(prFields) : "";
   for (const { name, change } of repos) {
     // Ends in owner/repo.git so originSlug matches the PR file's repo: (SW-381).
     const remote = path.join(root, "remotes", "o", `${name}.git`);
@@ -230,7 +233,7 @@ ${githubProject(repos.map((r) => r.name))}`,
     if (opts.prFile && change)
       write(
         path.join(notes, `pr-${name}.md`),
-        `---\nrepo: o/${name}\nbranch: ${FIXTURE_BRANCH}\nbase: main\nstatus: approved\n${opts.prFields ? YAML.stringify(opts.prFields) : ""}---\n# feat: fixture change\n\n${PASS}`,
+        `---\nrepo: o/${name}\nbranch: ${FIXTURE_BRANCH}\nbase: main\nstatus: ${status}\n${extra}---\n# feat: fixture change\n\n${PASS}`,
       );
   }
   if (opts.prFile) write(path.join(notes, "exercise.md"), PASS);
