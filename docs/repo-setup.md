@@ -2,8 +2,8 @@
 
 A repo works with Werkmeister once it has a registry fragment,
 `<repo>/.werkmeister/services.yaml`, and that fragment has been merged into
-`~/.werkmeister/services.yaml`. This page walks through the steps and the mistakes that are
-easy to make. The fields themselves are covered in [Registry fragments](registry-fragments.md):
+`~/.werkmeister/services.yaml`. Below are the steps, and the mistakes that are easy to make.
+[Registry fragments](registry-fragments.md) covers the fields themselves:
 [Writing a fragment](registry-fragments.md#writing-a-fragment) and
 [Test commands and validation guidance](registry-fragments.md#test-commands-and-validation-guidance).
 

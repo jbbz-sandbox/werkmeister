@@ -69,7 +69,7 @@ memory, not the engine's, limits how many sessions run beside them.
 
 ## Sizing a machine
 
-Two budgets, not one. Containers share the memory you gave Docker (OrbStack or
+There are two budgets. Containers share the memory you gave Docker (OrbStack or
 Docker Desktop → Resources), and that allocation fills long before the machine
 does. Agents, browsers and your editor use the rest.
 

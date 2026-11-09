@@ -13,7 +13,7 @@ This page takes you from nothing to a closed workspace: what each step does, and
 
 ## Before you start
 
-- A harness: Claude Code, OpenCode or Codex (see [Other harnesses](harnesses.md)). `machine setup` installs werkmeister's plugins into Claude Code, and reports that step as failed if `claude` isn't on your PATH.
+- A harness: Claude Code, OpenCode or Codex (see [Harnesses](harnesses.md)). `machine setup` installs werkmeister's plugins into Claude Code, and reports that step as failed if `claude` isn't on your PATH.
 - Any OCI container manager with Docker Compose v2: Docker Engine, OrbStack, Docker Desktop or another.
 - git.
 - Node.js 22 or later.
@@ -52,7 +52,7 @@ To add your own repos, see [Setting up a repo](repo-setup.md).
 werkmeister workspace new my-feature --issue-id SW-123
 ```
 
-Or use the Create tab in the `/workspaces` pane (see [The UIs](uis.md)). Run it with no flags for the interactive wizard. You get a folder with its own git worktrees on a new branch, with the issue copied in.
+With no flags it runs an interactive wizard, or you can use the Create tab in the `/workspaces` pane (see [The UIs](uis.md)). Either way you get a folder with its own git worktrees on a new branch and the issue copied in.
 
 ## 3. Start a session
 
