@@ -1,22 +1,22 @@
 # Werkmeister Architecture
 
-## Multi-Feature Concurrent Development for Distributed Application
-
----
-
 ## Overview
 
-A system that lets many Claude Code agents develop features at once across a multi-service application on one machine. Each feature runs only the services it changes; everything else comes from k8s. So the number of features you can run at once depends on how many services you run locally and how much RAM you have. The default is 12 slots (`feature_slots.count`), and you can raise it. A reverse proxy routes traffic per-feature using HTTP headers/cookies.
+Autonomous where it can be. Human where it must be.
+
+One agent per ticket, each in its own git worktree and containers. Bring your harness (Claude Code, OpenCode or Codex), any OCI container manager, and your tracker (Jira, GitHub Issues, or your own).
+
+A workspace runs only the services its ticket changes. Every other service comes from a baseline: a Kubernetes cluster, a remote host, or nothing at all (see [Topology](topology.md)). A Caddy reverse proxy routes each request to a workspace's containers or to the baseline, by the `X-Feature` cookie or header.
 
 ---
 
 ## Core Design Principles
 
-1. **Minimal local footprint** — only run containers for services with code changes; everything else comes from k8s via `kubectl port-forward`.
+1. **Minimal local footprint** — only run containers for services with code changes; everything else comes from the baseline (a cluster through `kubectl port-forward`, or any `host:port`).
 2. **Feature isolation** — each feature gets its own Docker network, port range, and routing identity. No cross-contamination.
-3. **Declared services** — the workspace's `.werkmeister/workspace.yml` lists the services that run locally; everything else comes from k8s.
+3. **Declared services** — the workspace's `.werkmeister/workspace.yml` lists the services that run locally; everything else comes from the baseline.
 4. **Shared state** — a single shared dev database and Redis, served from the cluster through the forward table. No per-feature data isolation needed.
-5. **Cookie-driven routing** — Caddy terminates each service's public hostname and resolves feature-vs-k8s per request from the `X-Feature` cookie, copying it onto the upstream call as a header so the app can read the selected feature.
+5. **Cookie-driven routing** — Caddy terminates each service's public hostname and resolves feature-vs-baseline per request from the `X-Feature` cookie, copying it onto the upstream call as a header so the app can read the selected feature.
 
 ---
 

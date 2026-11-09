@@ -1,7 +1,10 @@
 # Werkmeister — User's Guide
 
-> Multi-feature concurrent development environment (the CLI is `werkmeister`, or `w9r` for short).
-> Each feature runs only the services it changes; everything else comes from k8s. So the number of features you can run at once depends on how many services you run locally and how much RAM you have. The default is 12 slots (`feature_slots.count`), and you can raise it.
+Autonomous where it can be. Human where it must be.
+
+One agent per ticket, each in its own git worktree and containers. Bring your harness (Claude Code, OpenCode or Codex), any OCI container manager, and your tracker (Jira, GitHub Issues, or your own). The CLI is `werkmeister`, or `w9r` for short.
+
+This guide covers the day-to-day workflows. New here? Start with the [Quick Start](quick-start.md). [Before you start](quick-start.md#before-you-start) lists what you need: a harness, a container manager, git and Node.js 22 or later. Kubernetes is optional: see [Without Kubernetes](topology.md#without-kubernetes).
 
 ## The docs, page by page
 

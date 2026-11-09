@@ -93,7 +93,7 @@ implement, deploy, verify. A spike has a different shape. A feature, a refactor,
 a documentation pass, each one has its own stages. Werkmeister gives each work
 type its own workflow, and runs them side by side in isolation.
 
-So you start a wave. It pulls the tickets from Jira, builds a workspace for each
+So you start a wave. It pulls the tickets from your tracker, builds a workspace for each
 one with its own git worktree and its own generated compose, and the agents get
 to work. You're not watching them. You're watching a panel that tells you which
 workspace needs you. When an agent hits a question or a hard gate that needs

@@ -13,7 +13,7 @@ const GROUPS = [
   [
     "Start",
     [
-      ["Overview", "README.md"],
+      ["Overview", "docs/overview.md"],
       ["Quick Start", "docs/quick-start.md"],
       ["Users guide", "docs/users-guide.md"],
       ["Concepts", "docs/concepts.md"],

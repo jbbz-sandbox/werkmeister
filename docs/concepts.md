@@ -1,19 +1,19 @@
 # Concepts
 
-How Werkmeister runs many features at once: what a feature and a workspace are, and how slots, the proxy and the k8s baseline fit together. To get going first, see the [Quick Start](quick-start.md).
+How Werkmeister runs many features at once: what a feature and a workspace are, and how slots, the proxy and the baseline fit together. To get going first, see the [Quick Start](quick-start.md).
 
 ## Overview
 
-Werkmeister is a CLI-driven orchestration layer that enables concurrent feature development across the target app's distributed architecture (~15 services across ~9 repos). Instead of running all services locally, each feature runs **only the services with code changes** in Docker containers, while everything else is transparently served from k8s via containerized `kubectl port-forward` processes.
+Werkmeister is a CLI that runs many features at once on one machine. Instead of running every service locally, each feature runs **only the services with code changes** in Docker containers. Everything else comes from a baseline: a k8s cluster through containerized `kubectl port-forward` processes, a remote host, or nothing ([Without Kubernetes](topology.md#without-kubernetes)).
 
-A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and routes each service's public hostname directly. It reads an `X-Feature` cookie or header from incoming requests and routes them to the correct feature's local containers — or falls back to the k8s baseline for services that aren't running locally.
+A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and routes each service's public hostname directly. It reads an `X-Feature` cookie or header from incoming requests and routes them to the correct feature's local containers — or falls back to the baseline for services that aren't running locally.
 
 **Key benefits:**
 
 - **Low memory footprint** — a local service costs about half a gigabyte, so a feature running two or three of them is a fraction of the full stack
 - **Feature isolation** — each feature gets its own Docker network, port range, and compose stack; no cross-contamination
 - **Auto-detection** — `werkmeister feature up` analyzes your git changes to determine which services to run
-- **Many features at once** — Each feature runs only the services it changes; everything else comes from k8s. So the number of features you can run at once depends on how many services you run locally and how much RAM you have. The default is 12 slots (`feature_slots.count`), and you can raise it.
+- **Many features at once** — a feature costs only the services it runs locally, so how many fit depends on the memory you give the container manager. The default is 12 slots (`feature_slots.count`), and you can raise it.
 
 ## Cluster Access
 
