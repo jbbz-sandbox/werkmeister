@@ -2,9 +2,21 @@
 
 Operational runbook for debugging Werkmeister infrastructure issues that go beyond the basic troubleshooting in the users guide.
 
+## Start with the skills
+
+The werkmeister Claude Code plugin runs these checks for you. Ask Claude, or type the command:
+
+| Skill | Use it when | What it does |
+|---|---|---|
+| `/werkmeister:diagnose` | a workspace URL, container or k8s forward is broken and you don't know why | checks containers, networks, Caddy routing and the forwards, and names the root cause |
+| `/werkmeister:routing-test <url>` | one URL returns the wrong page, an empty body or a redirect | traces that URL through each routing layer to the one that breaks |
+| `/werkmeister:caddy-reload` | the Caddyfile changed but Caddy still serves the old config | validates the config, counts compiled routes, reloads and smoke-tests |
+
+Without the plugin, `werkmeister infra proxy-reload` and `werkmeister infra status` do the CLI part, and the manual steps below cover the rest.
+
 ---
 
-## Debugging Framework
+## Manual debugging
 
 When something doesn't work, follow this layered approach:
 
@@ -41,18 +53,12 @@ curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
 
 **Cause:** Caddy routing misconfiguration — the route for this path was silently dropped.
 
-**Verify:**
+**Verify** (read-only: it leaves the live config alone):
 ```bash
 docker cp ~/.werkmeister/infra/proxy/Caddyfile w9r-caddy:/tmp/Caddyfile
-docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile 2>&1 | \
-  node --input-type=module -e "
-const {countCompiledRoutes} = await import(process.env.WERKMEISTER_ROOT + '/../../packages/werkmeister-core/dist/caddy.js');
-const json = await new Response(process.stdin).text();
-console.log(countCompiledRoutes(JSON.parse(json)), 'compiled routes');
-"
 ```
 
-> Needs `pnpm --filter werkmeister-core run build` first — `dist/` is gitignored.
+Then count the routes as in [Count Compiled Routes](#count-compiled-routes).
 
 **Fix:** The generated Caddyfile uses scoped `handle @<feature>` blocks; a bare `handle` beside scoped ones is what drops routes. Regenerate it (`werkmeister infra proxy-reload`) rather than hand-editing it.
 
@@ -103,9 +109,12 @@ docker logs w9r-k8s-forwards --tail 30 2>&1
 ```
 
 ### Test Individual Forwards
+
+`werkmeister infra status` probes each forward with its own health check. By hand, with the ports from [k8s Forward Ports](users-guide.md#k8s-forward-ports):
+
 ```bash
 docker exec w9r-k8s-forwards sh -c '
-for p in 9000 9001 9002 9003 9004 9005 9006 9007 9008 9052; do
+for p in 9050 9051 9052 9053; do
     if nc -z localhost $p 2>/dev/null; then echo "UP:   port $p"
     else echo "DOWN: port $p"; fi
 done'
@@ -153,17 +162,21 @@ docker exec w9r-caddy caddy reload --config /tmp/Caddyfile
 ```
 
 ### Count Compiled Routes
+
+`werkmeister infra proxy-reload` counts them and refuses a drop. By hand, after the `docker cp` above (the same walk the CLI and the caddy-reload skill use, one count per `reverse_proxy`):
+
 ```bash
 docker exec w9r-caddy caddy adapt --config /tmp/Caddyfile 2>/dev/null | \
   node --input-type=module -e "
-const {countCompiledRoutes} = await import(process.env.WERKMEISTER_ROOT + '/../../packages/werkmeister-core/dist/caddy.js');
-const total = countCompiledRoutes(JSON.parse(await new Response(process.stdin).text()));
-console.log('Total compiled routes:', total);
-if (total < 15) console.log('WARNING: Routes may have been silently dropped!');
+let s=''; for await (const c of process.stdin) s+=c;
+const walk=(rs=[])=>rs.reduce((n,r)=>n+(r.handle??[]).reduce((m,h)=>m+(h.handler==='subroute'?walk(h.routes):h.handler==='reverse_proxy'?1:0),0),0);
+const servers=JSON.parse(s).apps?.http?.servers??{};
+console.log('Compiled routes:', Object.values(servers).reduce((n,sv)=>n+walk(sv.routes),0));
 "
+grep -v '^\s*#' ~/.werkmeister/infra/proxy/Caddyfile | grep -c '\breverse_proxy\b'
 ```
 
-**Expected:** 20+ routes for a standard Werkmeister setup. Under 15 means the `handle` vs `route` bug.
+**Expected:** the compiled count is at least the grep count. Fewer compiled routes means some were dropped, usually by a bare `handle` beside scoped ones.
 
 ### Check TLS Certificates
 ```bash
@@ -201,29 +214,6 @@ docker exec {feature}-frontend nslookup k8s-forwards
 
 ---
 
-## Service-Specific Issues
-
-### frontend (demo-services/apps/frontend)
-
-**Next.js build errors:** Check if the repo's setup service (if any) completed:
-```bash
-docker logs {feature}-demo-services-setup --tail 20 2>&1
-```
-
-**API errors in frontend logs:** Usually means an upstream service isn't reachable. Check environment variable resolution:
-```bash
-docker exec {feature}-frontend env | grep -E "_URL"
-```
-
-### GraphQL gateway (if your registry defines one)
-
-**Subgraph connection errors:** Check that every dependent subgraph is running and accessible:
-```bash
-docker exec {feature}-<gateway> wget -q -O /dev/null http://<subgraph>:<port>/graphql 2>&1
-```
-
----
-
 ## Full System Recovery
 
 When everything is broken:
@@ -232,14 +222,11 @@ When everything is broken:
 # 1. Stop all feature services
 werkmeister feature down --all-features
 
-# 2. Restart shared infrastructure
-cd "$WERKMEISTER_ROOT"
-docker compose -f infra/compose/shared-infra.yml down
-docker compose -f infra/compose/shared-infra.yml up -d
+# 2. Restart shared infrastructure (Caddy, k8s forwards)
+werkmeister infra restart
 
-# 3. Wait for infrastructure health
-sleep 30
-docker ps --format "table {{.Names}}\t{{.Status}}" | grep w9r
+# 3. Check infrastructure health
+werkmeister infra status
 
 # 4. Re-start your feature
 werkmeister feature up {feature}
@@ -253,26 +240,12 @@ werkmeister feature status
 ```bash
 # Stop everything
 werkmeister feature down --all-features --volumes
-docker compose -f infra/compose/shared-infra.yml down -v
+werkmeister infra down --volumes
 
 # Clean up
 docker system prune -a --volumes  # WARNING: removes ALL unused Docker resources
 
 # Start fresh
-docker compose -f infra/compose/shared-infra.yml up -d
+werkmeister infra up
 werkmeister feature up {feature}
-```
-
-## Canonical test URLs
-
-Known-good URLs for each web tier (salvaged from the retired `~/workspace/CLAUDE.md`;
-routing source of truth is the `feature_router:` blocks in `~/.werkmeister/services.yaml`):
-
-```
-# frontend (web)
-https://frontend.local.werkmeister.io/
-https://frontend.local.werkmeister.io/__werkmeister
-
-# backend (api)
-https://backend.local.werkmeister.io/health
 ```
