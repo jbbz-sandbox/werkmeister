@@ -1,6 +1,6 @@
 # Workspace lifecycle: from first commit to close-out
 
-One process for every workspace, whichever context strategy (`icm` or `jit`) it uses and whichever skill or command was asked to "make a PR".
+Every workspace follows one process, whichever context strategy (`icm` or `jit`) it uses and whichever skill or command was asked to "make a PR".
 
 ## Words
 
@@ -89,7 +89,7 @@ The first `#` heading is the PR title and the rest is the body. The person sets 
 
 ### Follow-up PR
 
-Code written after a worktree's PR merged, e.g. a problem found while cutting or deploying the release, or review feedback that lands after merge, goes in a follow-up PR from the same workspace.
+Code that comes after a worktree's PR merged (a problem found while cutting or deploying the release, say, or review feedback that lands after merge) goes in a follow-up PR from the same workspace.
 
 - `werkmeister pr new <worktree> --slug <slug>` fetches the base and cuts `<branch>-<slug>` from `origin/<base>`. It cuts from base, not from the merged branch, because a squash merge leaves that branch's commits off base. It then writes `pr-<worktree>-<slug>.md` at `status: draft`, with `worktree`, `repo`, `branch` and `base` taken from the worktree's first PR file, and commits it on the record branch.
 - It refuses while any other PR file for that worktree is not yet `merged`, `shipped`, `closed` or `abandoned`, since the worktree holds one branch at a time. It also refuses on uncommitted changes.
@@ -217,7 +217,7 @@ The `check-in` MCP tool (behind the plugin's `check-in` skill) reports PR and re
 
 Its `gates` are the files waiting on a person: an ICM stage output whose first status line reads `status: proposed` (`decisions.md`, `spec.md`, `review.md`, a bugfix `fix.md`), or a `pr-*.md` at `status: draft`. When the person approves one at check-in, the `check-in` skill in the werkmeister plugin flips that line itself with the check-in note, then tells the workspace session to re-read it. The session acts on the file, so the person answers once.
 
-Before it reports, it ships merged PRs: for each kept workspace with a `merged` PR file it runs the `pr status` pass without `gh` — the same rule as [Ship detection](#ship-detection-registry-repo) (`git fetch --tags`, then `git tag --contains <merge_sha> --list <release_tag>`), recording `release`, moving the issue and committing the record as `pr status` does. Open → merged stays with `pr status` and the callback pass. A version-bump PR that merged before the changesets release job published its tag stays `merged`. It takes the callback lock above and skips the pass while another one holds it. A PR it ships still gets its callback message from the next pass.
+Before it reports, it ships merged PRs: for each kept workspace with a `merged` PR file it runs the `pr status` pass without `gh`, by the same rule as [Ship detection](#ship-detection-registry-repo) (`git fetch --tags`, then `git tag --contains <merge_sha> --list <release_tag>`), recording `release`, moving the issue and committing the record as `pr status` does. Open → merged stays with `pr status` and the callback pass. A version-bump PR that merged before the changesets release job published its tag stays `merged`. It takes the callback lock above and skips the pass while another one holds it. A PR it ships still gets its callback message from the next pass.
 
 | Field | Holds |
 |---|---|
@@ -411,7 +411,7 @@ Close-out archives the workspace's Desktop sessions and lists the terminal sessi
 <details>
 <summary>How it works</summary>
 
-The workspace's Claude sessions are cleaned up as part of close-out:
+Close-out cleans up the workspace's Claude sessions:
 
 - **Desktop sessions.** The pane and the `close-out` MCP tool (through the werkmeister plugin) call `archive_session` on every desktop session whose cwd is in the workspace. The desktop app may refuse some, such as a pinned session, the one on screen, or an archive you declined outside auto mode. Each refusal is reported as "left open"; it doesn't fail the close-out. The CLI and VS Code can't reach the app, so they tell you to archive these from the sidebar.
 - **Terminal sessions.** `claude` running in a terminal can't be archived from outside. Every surface lists those still open in the workspace (`terminal session: pid … on ttys… in <dir> — /exit it`) so you can exit them.

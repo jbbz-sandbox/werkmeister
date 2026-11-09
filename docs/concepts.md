@@ -4,16 +4,16 @@ How Werkmeister runs many features at once: what a feature and a workspace are, 
 
 ## Overview
 
-Werkmeister is a CLI that runs many features at once on one machine. Instead of running every service locally, each feature runs **only the services with code changes** in Docker containers. Everything else comes from a baseline: a k8s cluster through containerized `kubectl port-forward` processes, a remote host, or nothing ([Without Kubernetes](topology.md#without-kubernetes)).
+Werkmeister is a CLI that runs many features at once on one machine. Each feature runs only the services with code changes, locally in Docker containers. Everything else comes from a baseline: a k8s cluster through containerized `kubectl port-forward` processes, a remote host, or nothing ([Without Kubernetes](topology.md#without-kubernetes)).
 
-A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and routes each service's public hostname directly. It reads an `X-Feature` cookie or header from incoming requests and routes them to the correct feature's local containers — or falls back to the baseline for services that aren't running locally.
+A Caddy reverse proxy terminates HTTPS, serves the feature selector UI, and routes each service's public hostname directly. It reads an `X-Feature` cookie or header from incoming requests and routes them to that feature's local containers, or to the baseline for services that aren't running locally.
 
-**Key benefits:**
+What that gets you:
 
-- **Low memory footprint** — a local service costs about half a gigabyte, so a feature running two or three of them is a fraction of the full stack
-- **Feature isolation** — each feature gets its own Docker network, port range, and compose stack; no cross-contamination
-- **Auto-detection** — `werkmeister feature up` analyzes your git changes to determine which services to run
-- **Many features at once** — a feature costs only the services it runs locally, so how many fit depends on the memory you give the container manager. The default is 12 slots (`feature_slots.count`), and you can raise it.
+- Low memory: a local service costs about half a gigabyte, so a feature running two or three of them uses a fraction of what the full stack would.
+- Isolation: each feature gets its own Docker network, port range, and compose stack, so features can't step on each other.
+- Auto-detection: `werkmeister feature up` looks at your git changes to work out which services to run.
+- Many features at once: a feature costs only the services it runs locally, so how many fit depends on the memory you give the container manager. The default is 12 slots (`feature_slots.count`), and you can raise it.
 
 ## Cluster Access
 
@@ -27,7 +27,7 @@ kubectl config current-context     # confirm the active one
 kubectl get nodes                  # confirm the cluster answers
 ```
 
-Authentication is whatever your kubeconfig already carries — OrbStack embeds a
+Authentication is whatever your kubeconfig already carries. OrbStack embeds a
 client cert, so no cloud-provider CLI or auth plugin is required. If you point
 `k8s_context` at a remote cluster, set that context up with your provider's own
 tooling first; Werkmeister only reads the resulting kubeconfig.
@@ -36,7 +36,7 @@ tooling first; Werkmeister only reads the resulting kubeconfig.
 
 Werkmeister supports two workspace layouts:
 
-**Standalone layout** (default) — repos checked out flat in `~/workspace/`:
+The **standalone layout** (the default) checks repos out flat in `~/workspace/`:
 
 ```
 ~/workspace/
@@ -45,7 +45,7 @@ Werkmeister supports two workspace layouts:
 
 Feature names are arbitrary labels (not directory names). Override the default path with `--workspace` or `paths.workspaces_root` in `~/.werkmeister/config.yaml`.
 
-**Multi-feature layout** — per-feature workspace nesting (one parent dir, one subdir per feature, repo worktrees under each). Activated by setting `paths.workspaces_root` and laying out subdirectories like:
+The **multi-feature layout** nests one workspace per feature: one parent dir, one subdir per feature, and repo worktrees under each. To use it, set `paths.workspaces_root` and lay out subdirectories like this:
 
 ```
 ~/workspace/         # set paths.workspaces_root to this
@@ -56,7 +56,7 @@ Feature names are arbitrary labels (not directory names). Override the default p
 └── ...
 ```
 
-In this layout each feature maps to a subdirectory containing its repo worktrees. Werkmeister itself is layout-agnostic — any directory with worktrees under `<workspaces_root>/<feature>/` works.
+In this layout each feature maps to a subdirectory containing its repo worktrees. Werkmeister doesn't depend on the layout: any directory with worktrees under `<workspaces_root>/<feature>/` works.
 
 ## Features & Workspaces
 
@@ -64,10 +64,10 @@ A **feature** is a named unit of development work. The feature name is an arbitr
 
 By default, Werkmeister looks for repos in `~/workspace/`. Override with `--workspace` or `paths.workspaces_root` for per-feature workspace nesting.
 
-**Resolution priority** (see `resolveWorkspace` in `packages/werkmeister-core/src/config.ts`):
+Werkmeister picks the workspace in this order (see `resolveWorkspace` in `packages/werkmeister-core/src/config.ts`):
 1. `--workspace` flag (explicit path)
 2. `paths.workspaces_root` in `~/.werkmeister/config.yaml`
-3. Auto-detect from the current directory — walk up to the nearest `.git` boundary and use its parent, so you can run `werkmeister` from inside a repo/worktree
+3. Auto-detect from the current directory: walk up to the nearest `.git` boundary and use its parent, so you can run `werkmeister` from inside a repo/worktree
 4. `~/workspace/` (fallback)
 
 When you run `werkmeister feature up my-feature`, the CLI:
@@ -80,10 +80,10 @@ When you run `werkmeister feature up my-feature`, the CLI:
 
 `werkmeister workspace init` writes the per-feature `CLAUDE.md` and `.env` into the workspace root. Each input resolves in this order (first non-empty wins):
 
-1. **CLI flag** — `--feature`, `--services`, `--issue-id`, `--test-path`, `--description`, `--task`
-2. **`WERKMEISTER_*` env var** — `WERKMEISTER_SERVICES`, `WERKMEISTER_ISSUE_ID`, `WERKMEISTER_TEST_PATH`, `WERKMEISTER_DESCRIPTION`, `WERKMEISTER_TASK`. `WERKMEISTER_FEATURE` is not an input: every workspace container exports it as its own feature name.
-3. **Config file** — `<workspace>/.werkmeister/workspace.yml` (override with `--config <path>` or `WERKMEISTER_WORKSPACE_CONFIG`; legacy `workspace.jsonc` / `workspace.json` are still read)
-4. **Stdin / defaults** — piped stdin or a slug-derived hint from the workspace directory name (for `task`)
+1. **CLI flag**: `--feature`, `--services`, `--issue-id`, `--test-path`, `--description`, `--task`
+2. **`WERKMEISTER_*` env var**: `WERKMEISTER_SERVICES`, `WERKMEISTER_ISSUE_ID`, `WERKMEISTER_TEST_PATH`, `WERKMEISTER_DESCRIPTION`, `WERKMEISTER_TASK`. `WERKMEISTER_FEATURE` is not an input: every workspace container exports it as its own feature name.
+3. **Config file**: `<workspace>/.werkmeister/workspace.yml` (override with `--config <path>` or `WERKMEISTER_WORKSPACE_CONFIG`; legacy `workspace.jsonc` / `workspace.json` are still read)
+4. **Stdin / defaults**: piped stdin or a slug-derived hint from the workspace directory name (for `task`)
 
 ```bash
 werkmeister workspace init \
@@ -103,20 +103,20 @@ The slot is recorded as the `com.werkmeister.slot` label on the feature's contai
 
 ## k8s Port-Forwards (Baseline)
 
-All services are available from k8s on a fixed port range (9000–9099), shared across all features. These are the "baseline" — when a feature doesn't run a service locally, requests are routed to the k8s forward.
+All services are available from k8s on a fixed port range (9000–9099), shared across all features. They're the baseline: when a feature doesn't run a service locally, its requests go to the k8s forward.
 
-k8s port-forwards now run inside a Docker container (`k8s-forwards`) as part of shared infrastructure (`apps/cli/infra/compose/shared-infra.yml`). They are accessible via the Docker DNS name `k8s-forwards` on the `werkmeister-shared` network. The port table is in [k8s Forward Ports](configuration.md#k8s-forward-ports).
+k8s port-forwards run inside a Docker container (`k8s-forwards`) that is part of the shared infrastructure (`apps/cli/infra/compose/shared-infra.yml`). Containers reach them by the Docker DNS name `k8s-forwards` on the `werkmeister-shared` network. The port table is in [k8s Forward Ports](configuration.md#k8s-forward-ports).
 
-These ports are internal to the Docker network — other containers reach them via `k8s-forwards:9xxx`. k8s forwards must be running before starting features. Start them with `werkmeister infra connect`.
+These ports are internal to the Docker network: other containers reach them at `k8s-forwards:9xxx`. Start the forwards with `werkmeister infra connect` before you start any feature.
 
 ## Caddy Reverse Proxy
 
-Caddy runs as a Docker container (ports 80 and 443) and provides:
+Caddy runs as a Docker container (ports 80 and 443) and handles:
 
-1. **HTTPS termination** — Caddy terminates HTTPS on port 443 using locally-trusted certificates
-2. **Feature selector UI** — a web page at `https://frontend.local.werkmeister.io/__werkmeister` for setting the active feature in your browser
-3. **Feature resolution** — Caddy matches the `X-Feature` cookie and reverse-proxies to that feature's local container, falling back to the k8s baseline when the service isn't running locally
-4. **Per-service hostnames** — each routed service gets its own hostname derived from `ingress.local_domain` (e.g., `frontend.local.werkmeister.io`)
+1. **HTTPS termination**: on port 443, with locally trusted certificates
+2. **Feature selector UI**: a web page at `https://frontend.local.werkmeister.io/__werkmeister` for setting the active feature in your browser
+3. **Feature resolution**: Caddy matches the `X-Feature` cookie and reverse-proxies to that feature's local container, falling back to the k8s baseline when the service isn't running locally
+4. **Per-service hostnames**: each routed service gets its own hostname derived from `ingress.local_domain` (e.g., `frontend.local.werkmeister.io`)
 
 The base domains default to `local.werkmeister.io` and `remote.werkmeister.io`. `werkmeister machine setup` writes them into `~/.werkmeister/config.yaml`, so a machine set up before the defaults moved off `local.sandbox.com` keeps its domains, certificate and `/etc/hosts` entries. To move one, change the domains in the `werkmeister machine setup` wizard; it regenerates the certificate and hosts entries for them. <!-- name-check: ignore -->
 
@@ -130,13 +130,13 @@ The Caddyfile is regenerated automatically whenever you run `werkmeister feature
 
 Each feature runs in an isolated environment:
 
-- **Docker networks** — each feature gets its own bridge network (`werkmeister-<feature>`)
-- **Container names** — prefixed with the feature name (`<feature>-<service>`)
-- **Named volumes** — `node_modules`, build caches, and other named volumes are prefixed with the feature name (e.g., `my-feature-frontend_node_modules`) so concurrent features never share mutable state
-- **Port ranges** — each feature's slot maps to a dedicated host port range (see [Slots & Port Ranges](#slots--port-ranges))
-- **Generated files** — each feature's `compose.yml` and `.env` are written to its workspace root, and, when the registry has a GraphQL subgraph, `supergraph-config.yml` to `<workspace>/.werkmeister/`
+- **Docker networks**: each feature gets its own bridge network (`werkmeister-<feature>`)
+- **Container names**: prefixed with the feature name (`<feature>-<service>`)
+- **Named volumes**: `node_modules`, build caches, and other named volumes are prefixed with the feature name (e.g., `my-feature-frontend_node_modules`) so concurrent features never share mutable state
+- **Port ranges**: each feature's slot maps to a dedicated host port range (see [Slots & Port Ranges](#slots--port-ranges))
+- **Generated files**: each feature's `compose.yml` and `.env` are written to its workspace root, and, when the registry has a GraphQL subgraph, `supergraph-config.yml` to `<workspace>/.werkmeister/`
 
-**Single-repo concurrency note:** In single-repo mode (`~/workspace/` with one checkout per repo), all features share the same source code checkout. This means two features modifying the same repo will see each other's uncommitted changes. For true concurrent multi-feature development, use the per-feature workspace layout via `paths.workspaces_root: <parent>` and place git worktrees under each feature subdir.
+In single-repo mode (`~/workspace/` with one checkout per repo), all features share one checkout, so two features that change the same repo see each other's uncommitted changes. To run them side by side, use the per-feature layout: set `paths.workspaces_root: <parent>` and put git worktrees under each feature subdir.
 
 ## Optional shared infrastructure
 
@@ -153,15 +153,15 @@ No cluster? `infra.baseline` runs the base services you aren't changing from dig
 
 ## Creating a workspace
 
-Every entry point — `werkmeister workspace new`, `--browser-form`, the MCP `workspace` /
-`create-workspace` tools, and the /workspaces pane — runs the same `createWorkspace`.
+`werkmeister workspace new`, `--browser-form`, the MCP `workspace` /
+`create-workspace` tools and the /workspaces pane all run the same `createWorkspace`.
 With an issue ID it fetches the issue (failing if it can't), stores it in
 `.werkmeister/issue.md`, fills the task from the title, and rewrites the issue into a
 description and starting prompt for any you left empty (`--no-distill` to skip).
 Both context strategies show the issue in CLAUDE.md and the brief.
 
 The copy is frozen at creation. To update it: `werkmeister workspace init --refresh-issue`
-(the brief is not rewritten, except one that is still the untouched placeholder, which is rebuilt from the issue). `werkmeister infra connect` reports whether this machine can read
+(it leaves the brief alone unless the brief is still the untouched placeholder, which it rebuilds from the issue). `werkmeister infra connect` reports whether this machine can read
 the issue tracker and, on a terminal, offers `gh auth login`.
 
 ## Caddy Proxy & Feature Selector UI
@@ -181,7 +181,7 @@ docker compose -f infra/compose/shared-infra.yml stop caddy
 docker compose -f infra/compose/shared-infra.yml logs -f caddy
 ```
 
-**Container details:**
+Container details:
 - Image: `caddy:2-alpine`
 - Name: `w9r-caddy`
 - Ports: 80 (HTTP), 443 (HTTPS)
@@ -190,7 +190,7 @@ docker compose -f infra/compose/shared-infra.yml logs -f caddy
 
 ### Feature Selector UI
 
-Visit **`https://frontend.local.werkmeister.io/__werkmeister`** in your browser to:
+Visit `https://frontend.local.werkmeister.io/__werkmeister` in your browser to:
 - See the currently active feature (from the `X-Feature` cookie)
 - Switch to a different feature by typing the name and clicking "Set Feature"
 - Clear the feature cookie to return to the k8s baseline
@@ -215,7 +215,7 @@ curl -H "X-Feature: my-feature" https://frontend.local.werkmeister.io/
 
 ## k8s Port-Forwards (Containerized)
 
-k8s port-forwards run inside a Docker container rather than as host-side shell scripts. The container is part of shared infrastructure and is managed via `infra/compose/shared-infra.yml`.
+k8s port-forwards run inside a Docker container. It is part of the shared infrastructure and is managed through `infra/compose/shared-infra.yml`.
 
 ### Container Details
 
@@ -242,4 +242,4 @@ docker inspect --format='{{.State.Health.Status}}' w9r-k8s-forwards
 
 ### How It Works
 
-The container runs a single entrypoint script that starts all `kubectl port-forward` processes internally. If a port-forward process dies, it is automatically restarted by the entrypoint script. Docker health checks verify that all expected ports are listening inside the container.
+The container runs a single entrypoint script that starts all `kubectl port-forward` processes internally. If a port-forward process dies, the script restarts it. Docker health checks verify that all expected ports are listening inside the container.

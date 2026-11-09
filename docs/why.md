@@ -50,9 +50,8 @@ unit test, the functional test, the integration test were the first things to
 fall off the end. I'd tell myself I'd circle back. Anyone who's shipped software
 knows how that ends.
 
-Then something changed, and it wasn't my discipline. The tests get written now.
-All three kinds. Not because I found more hours, but because the writing is no
-longer on me. The work that used to compete with my judgment now runs beside it.
+Then something changed, and it wasn't my discipline. The tests get written now,
+all three kinds, because the writing is no longer on me. The work that used to compete with my judgment now runs beside it.
 
 A friend asked me recently what Werkmeister actually is. I said this: I log
 bugs, Claude logs bugs, and I'm managing the work as it's building itself. Wild.
@@ -118,18 +117,18 @@ work. And before I write a "find it and start on your own" milestone into the
 roadmap, I want to sit with a few people, watch them fumble around, and learn
 what's intuitive and what's friction.
 
-If that's you, let's pair up. Not because I need users. Because I want to find
-out whether this is useful to anyone but me. If it is, the "we" starts there.
+If that's you, let's pair up. I want to find out whether this is useful to
+anyone but me. If it is, the "we" starts there.
 
 ## The name
 
 **Werkmeister** is German for a works foreman: the person in charge of a workshop
 floor. Said roughly VAIRK-my-ster.
 
-A foreman doesn't build the thing. They run the building of it. They know what
-every bench is working on, hand out the next job, walk the floor, and step in
-when a decision needs someone who can see the whole shop. That is what this tool
-does for each feature, and the gates are the foreman's walk.
+A foreman runs the building of the thing. They know what every bench is working
+on, hand out the next job, walk the floor, and step in when a decision needs
+someone who can see the whole shop. Werkmeister does that for each feature, and
+the gates are the foreman's walk.
 
 The short command is `w9r`: w, nine letters, r, the same way k8s stands for
 Kubernetes.

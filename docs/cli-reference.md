@@ -1,6 +1,6 @@
 # CLI reference
 
-All commands are invoked as `werkmeister` (or `w9r`), which `pnpm link --global` (run in `apps/cli`) or a global install puts on your PATH; from a bare checkout use the `apps/cli/werkmeister` wrapper script. The examples below write `werkmeister`. Run `werkmeister --help` for a list of commands, or `werkmeister <command> --help` for command-specific help.
+Every command runs as `werkmeister` (or `w9r`), which `pnpm link --global` (run in `apps/cli`) or a global install puts on your PATH; from a bare checkout use the `apps/cli/werkmeister` wrapper script. The examples below use `werkmeister`. Run `werkmeister --help` for a list of commands, or `werkmeister <command> --help` for one command's help.
 
 Every command and option, grouped as `werkmeister --help` groups them. Each command's text below comes from its `apps/cli/src/commands/<command>.help.md`, which its `--help` also prints; `pnpm run docs:gen` writes this section, so edit the help.md, not this page.
 

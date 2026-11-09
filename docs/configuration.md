@@ -50,7 +50,7 @@ How to write a repo's fragment, and how its `test:` and `validate:` are used, is
 
 ### Infrastructure Services
 
-These are always served from k8s — they are never run locally:
+These always come from k8s and never run locally:
 
 | Service | k8s Forward Port | Internal Port | Namespace |
 |---|---|---|---|
@@ -59,13 +59,13 @@ These are always served from k8s — they are never run locally:
 
 ### Setup Services
 
-Monorepo services require initialization before the application services can start. Setup services install dependencies and build shared packages:
+Before a monorepo's application services can start, setup services install its dependencies and build its shared packages:
 
 | Setup Service | Repo | Monorepo Type | Memory Limit | Purpose |
 |---|---|---|---|---|
 | _(none)_ | — | — | — | The demo registry defines no setup services. Add them under `setup_services:` in `~/.werkmeister/services.yaml` for monorepos that need a shared install/build step before their services start. |
 
-Setup services are automatically included in generated Docker Compose files when a feature uses services from the corresponding monorepo.
+A feature that uses services from a monorepo gets that monorepo's setup services in its generated Docker Compose file.
 
 ### Self-hosting the Werkmeister repo
 
@@ -141,51 +141,51 @@ the pieces that are not obvious from the demo services:
   is the real one.
 - **Not covered:** the `gh` and `claude` binaries. Telepresence needs a daemon that owns the
   host's routing (or, with `--docker-daemon`, the Docker socket and a kubeconfig), so
-  `werkmeister infra intercept` and `werkmeister infra connect` must run on the host — either from a host
-  terminal, or through the `intercept` and `connect` tools on `apps/werkmeister-mcp`,
+  `werkmeister infra intercept` and `werkmeister infra connect` must run on the host, either from a host
+  terminal or through the `intercept` and `connect` tools on `apps/werkmeister-mcp`,
   which run host-side with exactly the authority a host terminal has.
 - **A container can instead hold no daemon at all.** `apps/werkmeister-mcp` is the host daemon
   (port 3002; kept up by launchd once `werkmeister machine setup` installs it on macOS, else started by
   `werkmeister infra connect`). It exposes every Werkmeister verb over authenticated HTTP, so a container
-  needs only `~/repos`, `~/features` and a token — no docker socket, no docker
-  CLI, no kubectl, no `werkmeister` binary. It is the only managed web server that binds
+  needs only `~/repos`, `~/features` and a token: no docker socket, docker
+  CLI, kubectl or `werkmeister` binary. It is the only managed web server that binds
   `0.0.0.0`, via a per-app `env` on its `WebApp` entry; never arrange that by exporting
   `HOST` before `werkmeister infra connect`, which would also expose the unauthenticated dashboard.
-  Its `mcp_servers.werkmeister` registry entry is deliberately in no archetype — `.mcp.json` is
+  Its `mcp_servers.werkmeister` registry entry is deliberately in no archetype, because `.mcp.json` is
   shared with host sessions, where `host.docker.internal` does not resolve. See
   `apps/werkmeister-mcp/README.md`.
 - **Wiring a service to drive Werkmeister that way** takes four edits to
-  `~/.werkmeister/services.yaml`, and the granularity is the *service*, not the workspace —
+  `~/.werkmeister/services.yaml`, and the granularity is the *service*, not the workspace:
   `services:` entries are machine-global, so a fresh workspace does not isolate a change.
   1. A top-level `x-mcp-client:` block **above** `services:` (YAML resolves anchors in
-     document order) holding `mounts: &mcp_client_mounts` — `~/repos` and `~/features` at
-     identical host paths — and `env: &mcp_client_env` — `HOME` and the `GIT_CONFIG_*`
-     `safe.directory` trio. Loaders read seven top-level keys, so `x-`-prefixed ones are
+     document order) holding `mounts: &mcp_client_mounts` (`~/repos` and `~/features` at
+     identical host paths) and `env: &mcp_client_env` (`HOME` and the `GIT_CONFIG_*`
+     `safe.directory` trio). Loaders read seven top-level keys, so `x-`-prefixed ones are
      ignored. No socket, no `~/.werkmeister`, no `~/.kube`, no tools volume: the host server
      holds all of that.
   2. `extra_volumes: *mcp_client_mounts` and `environment: *mcp_client_env` on the service.
   3. An archetype of its own carrying `mcp_servers: [werkmeister]`, worn only by that service.
-     Hand-adding `werkmeister` to a workspace's `.mcp.json` does **not** stick — the projection
+     Hand-adding `werkmeister` to a workspace's `.mcp.json` does **not** stick: the projection
      prunes any registry-known server the present archetypes don't want, so the next
      `init-workspace` deletes it.
   4. `WERKMEISTER_MCP_TOKEN` in `~/.werkmeister/secrets.env` (copy `~/.werkmeister/mcp-token`) *and*
      `secrets: [WERKMEISTER_MCP_TOKEN]` on the service entry, which routes it through the
      service's own `.env.<service>`. Never put `${WERKMEISTER_MCP_TOKEN}` in the service's `environment:`:
-     compose expands it from whichever shell ran it — for the `up` tool, the MCP
-     server's own env, where it is unset — and `environment:` beats `env_file:`, so it
+     compose expands it from whichever shell ran it (for the `up` tool, the MCP
+     server's own env, where it is unset), and `environment:` beats `env_file:`, so it
      would shadow the real value with an empty string.
 
   Then `werkmeister workspace init` and `werkmeister feature down <feature> && werkmeister feature up <feature>`. To
   check it, `docker exec` into the container and POST an MCP `initialize` to
   `http://host.docker.internal:3002/mcp` with `Authorization: Bearer $WERKMEISTER_MCP_TOKEN`
-  and `Accept: application/json, text/event-stream` — and no `Origin` header, which the
-  server rejects with 403. Drive a *different* feature than the container's own: tearing
+  and `Accept: application/json, text/event-stream`, with no `Origin` header (the
+  server rejects one with 403). Drive a *different* feature than the container's own: tearing
   down its own feature kills the caller mid-call.
 
 ### Running the agent itself in isolation
 
 The four-edits recipe above wires a *compose service* that Werkmeister manages. The
-same server also lets you put the whole agent — Claude Code, the editor, your shell —
+same server also lets you put the whole agent (Claude Code, the editor, your shell)
 somewhere isolated from the host, with port 3002 as the only bridge back. Shape 0 is
 generated for you; 1–3 are by hand, in order of how much they share with the host.
 
@@ -197,7 +197,7 @@ It does need:
   file holding an absolute `gitdir:` pointer into the main checkout's `.git/worktrees/`,
   so a different mount point breaks every git command in the workspace.
 - `HOME` matching the host user, and `GIT_CONFIG_COUNT=1`,
-  `GIT_CONFIG_KEY_0=safe.directory`, `GIT_CONFIG_VALUE_0=*` — the mounts arrive owned by
+  `GIT_CONFIG_KEY_0=safe.directory`, `GIT_CONFIG_VALUE_0=*`, because the mounts arrive owned by
   a different uid.
 - The workspace's own token, `.werkmeister/token`, which `init-workspace` writes, sent as
   `Authorization: Bearer <token>`. The token names the workspace, so no feature header is needed: the daemon lists only
@@ -241,7 +241,7 @@ The volume holds no plugins,
 so only the HTTP server's tools appear. Check it with `claude mcp list` inside: it should
 show `werkmeister` as connected.
 
-**1. A plain container, by hand.** Nothing Werkmeister-managed; the host just has to have
+**1. A plain container, by hand.** Nothing Werkmeister-managed; the host only needs
 the daemon up (`werkmeister machine setup` on macOS, else `werkmeister infra connect`).
 
 ```bash
@@ -266,7 +266,7 @@ here: that its network policy lets the VM reach the host gateway (the server ref
 nothing but a browser `Origin`, so an allow-rule for `host.docker.internal:3002` is all
 it needs), and that it can mount `~/repos` *and* `~/features` at host paths rather than
 only the directory you launched it from. `docker sandbox` is a Docker Desktop feature; <!-- name-check: ignore -->
-on a machine whose Docker context is OrbStack or Colima it is simply absent.
+on a machine whose Docker context is OrbStack or Colima it doesn't exist.
 
 **3. A full VM with its own stack.** An OrbStack Linux machine, Lima, or a cloud box
 running `werkmeister machine setup` end to end: its own `dockerd`, Caddy, `k8s-forwards` and
@@ -276,7 +276,7 @@ the one shape that isolates you from the host's *containers* as well as its daem
 it is a second complete install: `~/.werkmeister`, certificates, `/etc/hosts` and all. To use
 the host's browser against it, point the host's `*.local.werkmeister.io` entries at the VM's
 address instead of loopback, and copy the VM's CA into the browser's trust store. The
-apps/werkmeister-mcp server is irrelevant here — the CLI runs natively inside.
+apps/werkmeister-mcp server isn't used here: the CLI runs natively inside.
 
 Pick 1 when you want the agent off the host's Docker socket and nothing more. Pick 2
 when the runner is already part of your workflow. Pick 3 only when a wrong `werkmeister
@@ -331,7 +331,7 @@ To move a machine off `~/.sandbox`, stop its workspaces and the shared infra, th
 
 ### ~/.werkmeister/services.yaml (generated)
 
-The central service registry. Defines all services, their repos, paths, ports, k8s details, and dependencies.
+The central service registry: every service, with its repo, path, ports, k8s details and dependencies.
 
 Generated by `werkmeister registry sync` from every `<repo>/.werkmeister/services.yaml`
 (see "Writing a fragment"); `archetypes:` and `mcp_servers:` come from Werkmeister's
@@ -339,9 +339,9 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
 
 **Top-level keys:**
 
-- **`services`** — Map of service name to service definition. Each service has:
-  - `repo` (string | omitted) — Repository name (directory name in workspace). Omit it, and set `image`, for an image-only service
-  - `image` (string) — Container image, default `node:22`. With no `repo` the service is **image-only**: no repo mount, no build, and the image's own CMD unless `command` is set (run with `/bin/sh -c`). Useful for a stock container such as `nginx:alpine` in a fixture workspace. Declare it in the machine `services.yaml` (or its overrides), not in a repo fragment, which always ties a service to its repo:
+- **`services`**: Map of service name to service definition. Each service has:
+  - `repo` (string | omitted): Repository name (directory name in workspace). Omit it, and set `image`, for an image-only service
+  - `image` (string): Container image, default `node:22`. With no `repo` the service is **image-only**: no repo mount, no build, and the image's own CMD unless `command` is set (run with `/bin/sh -c`). Useful for a stock container such as `nginx:alpine` in a fixture workspace. Declare it in the machine `services.yaml` (or its overrides), not in a repo fragment, which always ties a service to its repo:
 
     ```yaml
     services:
@@ -351,32 +351,32 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
         port_offset: 0
         command: nginx -g 'daemon off;'   # optional
     ```
-  - `path` (string) — Path within the repo (`.` for entire repo, `apps/frontend` for monorepo packages) <!-- docs-check: ignore -->
-  - `type` (string) — Service category: `web`, `api`, `graphql-subgraph` (also `graphql`, `subgraph`, `federation`), `graphql-gateway`
-  - `internal_port` (int) — Port the service listens on inside its container
-  - `port_offset` (int) — Offset within the feature slot range (0–19)
-  - `k8s_deployment` (string | null) — Kubernetes deployment name
-  - `k8s_namespace` (string | null) — Kubernetes namespace
-  - `k8s_port` (int | null) — Port the k8s pod listens on
-  - `k8s_pod_prefix` (string | null) — Pod name prefix for kubectl
-  - `health_endpoint` (string) — HTTP path for health checks
-  - `monorepo` (string | null) — `turbo` or `nx` if part of a monorepo
-  - `setup_service` (string | null) — Required setup service name
-  - `memory_limit` (string) — Docker memory limit (e.g., `2G`, `2560M`)
-  - `memory_reservation` (string) — Docker memory reservation
-  - `environment` (map | null) — Additional env vars for the service
-  - `command` (string | null) — Custom startup command
-  - `depends_on` (list | null) — Service dependencies
-  - `extra_services` (map | null) — Sidecar containers (e.g., Redis instances)
-  - `dockerfile` (string | null) — Dockerfile in the service's `path`, built into the service's image and tagged `image:` (a local tag, never pulled)
-  - `node_modules_volume` (bool) — Whether to use a named volume for node_modules
-  - `extra_volumes` (list | null) — Additional volume mounts: a host path (`${REPO}/.git:/app/.git:ro`), a bare name for a per-feature named volume (`turbo-cache:/app/.turbo`, created as `<feature>-turbo-cache`), or `^name` for one volume every feature shares (`^werkmeister-pnpm-store:/pnpm-store`). A shared volume is created on `werkmeister feature up` and declared `external`, so no feature's `down --volumes`, close-out or `clean` removes it; drop it by hand with `docker volume rm <name>`
-  - `caches` (list | null) — Keys in the registry's `caches:`. Unset, a service gets its archetype's `caches` plus every cache whose `detect` file is in its directory or a parent up to its repo root; a list replaces both, and `[]` opts out
+  - `path` (string): Path within the repo (`.` for entire repo, `apps/frontend` for monorepo packages) <!-- docs-check: ignore -->
+  - `type` (string): Service category: `web`, `api`, `graphql-subgraph` (also `graphql`, `subgraph`, `federation`), `graphql-gateway`
+  - `internal_port` (int): Port the service listens on inside its container
+  - `port_offset` (int): Offset within the feature slot range (0–19)
+  - `k8s_deployment` (string | null): Kubernetes deployment name
+  - `k8s_namespace` (string | null): Kubernetes namespace
+  - `k8s_port` (int | null): Port the k8s pod listens on
+  - `k8s_pod_prefix` (string | null): Pod name prefix for kubectl
+  - `health_endpoint` (string): HTTP path for health checks
+  - `monorepo` (string | null): `turbo` or `nx` if part of a monorepo
+  - `setup_service` (string | null): Required setup service name
+  - `memory_limit` (string): Docker memory limit (e.g., `2G`, `2560M`)
+  - `memory_reservation` (string): Docker memory reservation
+  - `environment` (map | null): Additional env vars for the service
+  - `command` (string | null): Custom startup command
+  - `depends_on` (list | null): Service dependencies
+  - `extra_services` (map | null): Sidecar containers (e.g., Redis instances)
+  - `dockerfile` (string | null): Dockerfile in the service's `path`, built into the service's image and tagged `image:` (a local tag, never pulled)
+  - `node_modules_volume` (bool): Whether to use a named volume for node_modules
+  - `extra_volumes` (list | null): Additional volume mounts: a host path (`${REPO}/.git:/app/.git:ro`), a bare name for a per-feature named volume (`turbo-cache:/app/.turbo`, created as `<feature>-turbo-cache`), or `^name` for one volume every feature shares (`^werkmeister-pnpm-store:/pnpm-store`). A shared volume is created on `werkmeister feature up` and declared `external`, so no feature's `down --volumes`, close-out or `clean` removes it; drop it by hand with `docker volume rm <name>`
+  - `caches` (list | null): Keys in the registry's `caches:`. Unset, a service gets its archetype's `caches` plus every cache whose `detect` file is in its directory or a parent up to its repo root; a list replaces both, and `[]` opts out
 
-- **`infrastructure`** — Infrastructure services (redis, postgres) with k8s forward ports
-- **`setup_services`** — Optional per-monorepo install/build steps that run before a repo's services start
-- **`caches`** — Build and package caches shared by every workspace, keyed by name. Each has a container `path`, the `env` that points the tool at it, the `detect` files (e.g. `yarn.lock`) that attach it, and at most one of `max_age` (`<N>d`, used by `werkmeister cache prune`) or `prune` (a command run in a throwaway container, `image:` default `node:22`). It lives in the shared volume `werkmeister-<key>` (or `volume:`), or in a host dir with `host:`. `turbo` and `pnpm-store` are built in; a repo's fragment may add caches but not redefine those. Example: `yarn-cache: {path: /yarn-cache, env: {YARN_CACHE_FOLDER: /yarn-cache}, detect: [yarn.lock], max_age: 30d}`
-- **`repos`** — Repo-to-service mapping with `path_mappings` for monorepos
+- **`infrastructure`**: Infrastructure services (redis, postgres) with k8s forward ports
+- **`setup_services`**: Optional per-monorepo install/build steps that run before a repo's services start
+- **`caches`**: Build and package caches shared by every workspace, keyed by name. Each has a container `path`, the `env` that points the tool at it, the `detect` files (e.g. `yarn.lock`) that attach it, and at most one of `max_age` (`<N>d`, used by `werkmeister cache prune`) or `prune` (a command run in a throwaway container, `image:` default `node:22`). It lives in the shared volume `werkmeister-<key>` (or `volume:`), or in a host dir with `host:`. `turbo` and `pnpm-store` are built in; a repo's fragment may add caches but not redefine those. Example: `yarn-cache: {path: /yarn-cache, env: {YARN_CACHE_FOLDER: /yarn-cache}, detect: [yarn.lock], max_age: 30d}`
+- **`repos`**: Repo-to-service mapping with `path_mappings` for monorepos
 
 ### ~/.werkmeister/ports.yaml
 
@@ -390,11 +390,11 @@ feature_slots:
 ```
 
 (k8s forward listen-ports live per-service in `services.yaml` as
-`k8s_forward_port:` — the single source of truth for the forward table.)
+`k8s_forward_port:`, the single source of truth for the forward table.)
 
 ### k8s forward table (in services.yaml)
 
-The k8s port-forward table is not a separate file — each forwarded service in
+The k8s port-forward table is not a separate file: each forwarded service in
 `services.yaml` carries its forward fields inline:
 
 ```yaml
@@ -459,7 +459,7 @@ None of these are required; each turns on only when configured.
 
 #### Issue tracker
 
-`werkmeister machine setup` asks which tracker this machine uses — `jira` (the default) or `github` —
+`werkmeister machine setup` asks which tracker this machine uses, `jira` (the default) or `github`,
 and stores it as `overrides.issue_tracker` in `~/.werkmeister/config.yaml`. With `github`, a
 workspace's issue ID is `owner/repo#n` and issues are filed in the registry repos under
 `overrides.github_org`.
@@ -486,14 +486,14 @@ without that type gets a Task labelled with it. Write the body and `--comment` i
 lists, bold, code spans, fenced blocks and links are converted to Jira wiki markup on the way in.
 GitHub issues are filed with `gh issue create`.
 
-`ref` is optional inside a workspace — it defaults to the workspace's `issue_id`. On GitHub,
+`ref` is optional inside a workspace, where it defaults to the workspace's `issue_id`. On GitHub,
 `--status closed` or `done` closes the issue, `open` reopens it, and any other status is added
 as a label.
 
 #### Projects
 
 A machine with one tracker needs nothing below. When you work on products that track their
-work in different places — one in Jira, one in GitHub issues — give each a project in
+work in different places (one in Jira, one in GitHub issues), give each a project in
 `~/.werkmeister/config.yaml`. A project is a tracking strategy: a tracker with its scope, and
 optionally a board and its own status names. It holds no repos or services.
 
@@ -575,7 +575,7 @@ When you run `werkmeister feature up <feature>`, `compose.yml` and `.env` are ge
 
 ### compose.yml
 
-Workspaces generated before this name (`docker-compose.yml`) are renamed on the next `werkmeister workspace init` or `werkmeister feature up`; until then `down`, `logs` and `close-out` still read the old name. The running stack is unaffected — Compose keys it by the file's `name:`, not its path.
+Workspaces generated before this name (`docker-compose.yml`) are renamed on the next `werkmeister workspace init` or `werkmeister feature up`; until then `down`, `logs` and `close-out` still read the old name. The running stack is unaffected, because Compose keys it by the file's `name:`, not its path.
 
 Per-feature Docker Compose stack containing:
 - **Network**: An isolated bridge network named `werkmeister-<feature>`
@@ -599,7 +599,7 @@ Environment file loaded by Docker Compose, containing:
 
 ### supergraph-config.yml
 
-Optional — generated only when a service has a GraphQL type (`graphql-subgraph`, `graphql`, `subgraph`, `federation`). Lists each subgraph with its URL for an Apollo-compatible gateway — local services point to slot ports, remote services point to k8s forwards.
+Optional: generated only when a service has a GraphQL type (`graphql-subgraph`, `graphql`, `subgraph`, `federation`). It lists each subgraph's URL for an Apollo-compatible gateway; local services point to slot ports and remote services to k8s forwards.
 
 ## Environment Variables
 

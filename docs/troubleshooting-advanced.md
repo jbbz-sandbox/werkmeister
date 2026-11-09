@@ -18,7 +18,7 @@ Without the plugin, `werkmeister infra proxy-reload` and `werkmeister infra stat
 
 ## Manual debugging
 
-When something doesn't work, follow this layered approach:
+When something doesn't work, check it layer by layer:
 
 ```
 1. Is the container running?           → docker ps
@@ -51,7 +51,7 @@ curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
 
 ### If Caddy returns Size: 0 but Direct works
 
-**Cause:** Caddy routing misconfiguration — the route for this path was silently dropped.
+**Cause:** Caddy's routing is misconfigured: the route for this path was silently dropped.
 
 **Verify** (read-only: it leaves the live config alone):
 ```bash
@@ -263,7 +263,7 @@ WERKMEISTER_NODE=/opt/homebrew/bin/node werkmeister --help
 ```
 
 > `werkmeister internal gate` deliberately bypasses the CLI import chain via
-> `dist/lib/gate.js` for a fast PreToolUse cold start — if the gate misbehaves,
+> `dist/lib/gate.js` for a fast PreToolUse cold start, so if the gate misbehaves,
 > confirm `dist/` is built before debugging further.
 
 ### Stale Slot Data

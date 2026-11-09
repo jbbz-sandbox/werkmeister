@@ -12,18 +12,18 @@ A workspace runs only the services its ticket changes. Every other service comes
 
 ## Core Design Principles
 
-1. **Minimal local footprint** — only run containers for services with code changes; everything else comes from the baseline (a cluster through `kubectl port-forward`, or any `host:port`).
-2. **Feature isolation** — each feature gets its own Docker network, port range, and routing identity. No cross-contamination.
-3. **Declared services** — the workspace's `.werkmeister/workspace.yml` lists the services that run locally; everything else comes from the baseline.
-4. **Shared state** — a single shared dev database and Redis, served from the cluster through the forward table. No per-feature data isolation needed.
-5. **Cookie-driven routing** — Caddy terminates each service's public hostname and resolves feature-vs-baseline per request from the `X-Feature` cookie, copying it onto the upstream call as a header so the app can read the selected feature.
+1. **Minimal local footprint**: only run containers for services with code changes; everything else comes from the baseline (a cluster through `kubectl port-forward`, or any `host:port`).
+2. **Feature isolation**: each feature gets its own Docker network, port range, and routing identity, so features don't interfere.
+3. **Declared services**: the workspace's `.werkmeister/workspace.yml` lists the services that run locally; everything else comes from the baseline.
+4. **Shared state**: a single shared dev database and Redis, served from the cluster through the forward table. Features share that data; there is no per-feature data isolation.
+5. **Cookie-driven routing**: Caddy terminates each service's public hostname and resolves feature-vs-baseline per request from the `X-Feature` cookie, copying it onto the upstream call as a header so the app can read the selected feature.
 
 ---
 
 ## System Architecture
 
-For which *machine* each of these runs on — laptop, container runtime, or a cloud
-cluster — see [docs/topology.md](topology.md). This section is the request path.
+For which *machine* each of these runs on (laptop, container runtime, or a cloud
+cluster), see [docs/topology.md](topology.md). This section is the request path.
 
 ![The request path: the browser sends the X-Feature cookie to Caddy, which routes to a local feature container when the cookie matches one and to the k8s baseline otherwise](images/werkmeister-architecture/request-path.svg)
 
@@ -56,11 +56,11 @@ There are two kinds of hop:
 
 **Why Caddy**: native header/cookie matching, automatic config reload, simple config syntax, lightweight, built-in TLS support.
 
-**Role**: Caddy is the browser-facing entry point and the only routing layer. It terminates HTTPS, serves the feature selector UI, and reverse-proxies each service's public hostname straight to its upstream — the feature's local container when one is running, otherwise the k8s baseline.
+**Role**: Caddy is the browser-facing entry point and the only routing layer. It terminates HTTPS, serves the feature selector UI, and reverse-proxies each service's public hostname straight to its upstream: the feature's local container when one is running, otherwise the k8s baseline.
 
 **What Caddy does**:
 - Terminates HTTPS/TLS using local certificates (mounted from the directory named by `ingress.certs_dir` in `~/.werkmeister/config.yaml`).
-- Serves the feature selector UI at `/__werkmeister` on every host — a static page that lets the user pick a feature and sets the `X-Feature` cookie client-side. `/__werkmeister/features.json` is matched first (a real file); any other `/__werkmeister` path returns the picker.
+- Serves the feature selector UI at `/__werkmeister` on every host: a static page that lets the user pick a feature and sets the `X-Feature` cookie client-side. `/__werkmeister/features.json` is matched first (a real file); any other `/__werkmeister` path returns the picker.
 - Copies an `X-Feature` cookie value into an `X-Feature` header on the upstream call, so the app can read the selected feature.
 - Proxies to `host.docker.internal:<port>` for a local feature container, or to `k8s-<service>:<forward_port>` for the k8s baseline.
 
@@ -120,7 +120,7 @@ cookie is still copied onto the request as the `X-Feature` header
 
 Each feature slot (1–12) gets its own 20-port range, and a service's host port is the slot's base port plus the service's `port_offset`: deterministic, no collisions. **k8s port-forwards** listen on fixed 9xxx ports inside the `k8s-forwards` container, shared by every feature and reached by Docker DNS (e.g. `k8s-forwards:9052`). Both tables live in [Configuration § Port Allocation](configuration.md#port-allocation).
 
-**Shared infrastructure** (not k8s -- runs locally as containers):
+**Shared infrastructure** (not k8s; these run locally as containers):
 
 | Service | Docker DNS | Port |
 |---------|-----------|------|
@@ -130,8 +130,8 @@ Each feature slot (1–12) gets its own 20-port range, and a service's host port
 Jaeger and RedisInsight start only when `infra.profiles` in `~/.werkmeister/config.yaml` names them (see [third-party.md](third-party.md#optional-integrations)).
 
 Redis and Postgres themselves run in the k8s cluster and are reached through the
-forward table, not as compose services. The containers listed here are defined
-in `apps/cli/infra/compose/shared-infra.yml` and managed by Docker Compose.
+forward table, not as compose services. `apps/cli/infra/compose/shared-infra.yml` defines the
+containers listed here, and Docker Compose manages them.
 
 ### 3. Service Registry
 
@@ -238,7 +238,7 @@ services:
           - docs-architecture-docs-site
 ```
 
-**Key design choices**:
+**Design choices**:
 - Between containers, Docker DNS only: a feature's services, the k8s forwards and shared infra all reach each other by alias. `host.docker.internal` appears only in Caddy's hop to a published port (see [System Architecture](#system-architecture)).
 - Each container joins the per-feature network (isolation, short aliases like `docs-site`) and `werkmeister-shared` (shared infra, the forwards, and a feature-prefixed alias like `docs-architecture-docs-site`).
 - Each service gets `<PREFIX>_URL` / `_HOST` / `_PORT` in `.env`: a local sibling resolves to its Docker DNS alias (`http://<svc>:<port>`), any other service to its `baseline_upstream` when set, else to its forward (`http://k8s-forwards:<forward_port>`). This run had no cluster services, so its `.env` holds no service URLs: only the workspace metadata (`FEATURE`, `SERVICES`, `ISSUE_ID`, `DESCRIPTION`) and `WERKMEISTER_FEATURE`, `WERKMEISTER_SLOT`, `COMPOSE_PROJECT_NAME`.
@@ -257,7 +257,7 @@ A gateway in the cluster can't reach a feature's local subgraphs, so a feature w
 
 ### 7. k8s Port-Forward Manager (Containerized)
 
-All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rather than as host-level background processes. This simplifies lifecycle management, networking, and health monitoring.
+All k8s port-forwards run inside a single Docker container (`k8s-forwards`) instead of as host-level background processes, which makes their lifecycle, networking and health monitoring simpler.
 
 **Container details**:
 - Built from `apps/cli/infra/compose/k8s-port-forward/Dockerfile` (based on a digest-pinned `alpine`).
@@ -275,7 +275,7 @@ All k8s port-forwards run inside a single Docker container (`k8s-forwards`) rath
 
 **Health checks**: Docker Compose healthcheck runs `/usr/local/bin/probe.sh` (`apps/cli/infra/compose/k8s-port-forward/probe.sh`). The container reports healthy only when every forward in the table answers its protocol probe. Other containers (e.g., `redisinsight`) use `depends_on: k8s-forwards: condition: service_started` to wait.
 
-**Lifecycle**: Managed entirely by Docker Compose. Auto-restarts on failure (`restart: unless-stopped`). Logs are accessible via `docker logs w9r-k8s-forwards`. The `werkmeister infra status` command checks the container's health status.
+**Lifecycle**: Docker Compose manages it and restarts it on failure (`restart: unless-stopped`). Read its logs with `docker logs w9r-k8s-forwards`; `werkmeister infra status` checks the container's health.
 
 ### 8. Playwright Integration
 
@@ -376,7 +376,7 @@ There are two budgets: the memory you gave Docker, where containers live, and th
 
 ### Claude Code Agent Integration
 
-Each Claude Code agent operates in its own workspace and can invoke `werkmeister` commands:
+Each Claude Code agent works in its own workspace and can invoke `werkmeister` commands:
 
 ```bash
 # Agent starting work on a feature

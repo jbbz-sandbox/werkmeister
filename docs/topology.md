@@ -1,6 +1,6 @@
 # Topology: where each piece runs
 
-Which machine, and which container, every part of Werkmeister lives in — and what
+Which machine, and which container, every part of Werkmeister lives in, and what
 crosses the boundary between your laptop and the cluster.
 
 The short version: **containers are local, Kubernetes is remote, and telepresence
@@ -49,10 +49,10 @@ flowchart LR
 
 Only three things cross the boundary:
 
-1. **The kubeconfig** — how the CLI, `kubectl` and telepresence authenticate.
-2. **Port-forwards** — one per cluster service you are *not* running locally,
+1. **The kubeconfig**: how the CLI, `kubectl` and telepresence authenticate.
+2. **Port-forwards**: one per cluster service you are *not* running locally,
    held open by the `k8s-forwards` container.
-3. **Intercepted traffic** — during an intercept only, header-matched requests
+3. **Intercepted traffic**: during an intercept only, header-matched requests
    leaving the traffic-agent and arriving at your local container.
 
 Everything else is local: compose builds, Caddy routing, file watching, tests,
@@ -60,7 +60,7 @@ and the whole edit loop.
 
 The container runtime is the developer's own choice. Werkmeister speaks only the
 Docker API, and `apps/cli/infra/compose/shared-infra.yml` maps
-`host.docker.internal:host-gateway` — the portable form — so plain `dockerd` on
+`host.docker.internal:host-gateway`, the portable form, so plain `dockerd` on
 Linux behaves like Docker Desktop or OrbStack on a Mac.
 
 ---
@@ -77,7 +77,7 @@ Linux behaves like Docker Desktop or OrbStack on a Mac.
 | `intercept` | required | traffic-manager + a traffic-agent; refused unless the service declares `k8s_deployment`, `k8s_namespace` and `k8s_port` |
 
 A registry whose services declare no `k8s_forward_port` yields an empty forward
-table rather than an error — the shape a fully self-hosted registry
+table, not an error. That is the shape a fully self-hosted registry
 assumes, where nothing runs in a cluster at all and telepresence never enters the
 picture.
 
@@ -97,8 +97,8 @@ root  sudo -b -p [sudo: telepresence network daemon] Password:
 
 That third line is the password prompt people ask about. It is telepresence's own
 `sudo`, not Werkmeister's: root is needed for a TUN device, `/etc/resolver/*` and
-the routing table. It comes **once per root-daemon lifetime** — until
-`telepresence quit -s` or a reboot — not once per intercept.
+the routing table. It comes **once per root-daemon lifetime** (until
+`telepresence quit -s` or a reboot), not once per intercept.
 
 **Docker mode (`--docker-daemon`).** Both daemons in one container, on a network
 telepresence creates. Nothing telepresence-related runs on the host, so nothing
@@ -160,13 +160,13 @@ Most of it is already handled:
   so certificates and tokens are **inlined**, not left as host paths the
   container cannot see.
 - A `127.0.0.1` API address is rewritten to `host.docker.internal`, with CA
-  verification dropped — and left alone for a remote cluster, which needs neither.
+  verification dropped; a remote cluster's address, which needs neither, is left alone.
   Telepresence's docker mode does the same rewrite for the same reason. A local
   cluster is the special case here, not the cloud one.
   Source: [k8s.ts](../packages/werkmeister-core/src/k8s.ts).
 
 **Check first: `exec` credential plugins.** Managed clusters usually authenticate
-through one — `aws eks get-token`, `gke-gcloud-auth-plugin`, `az`, an OIDC
+through one: `aws eks get-token`, `gke-gcloud-auth-plugin`, `az`, an OIDC
 helper. That stanza survives `--flatten` as a command the *container* is then
 expected to run, and the `k8s-forwards` image
 (`apps/cli/infra/compose/k8s-port-forward/Dockerfile`) ships `kubectl`, a shell and probe clients, but no auth plugin.
@@ -182,7 +182,7 @@ Also worth knowing, none of it blocking:
 - **The traffic-manager is per cluster.** Install it once in the cloud cluster
   before the first intercept. Nothing else in Werkmeister needs anything
   installed there.
-- **Intercepted requests cross the internet** — cluster to laptop and back on
+- **Intercepted requests cross the internet**, cluster to laptop and back, on
   every matched request. Fine for a debug loop, visible in a latency-sensitive
   test.
 - **A private API endpoint means a VPN**, which is exactly what host mode's TUN
@@ -194,7 +194,7 @@ Also worth knowing, none of it blocking:
 ## Without Kubernetes
 
 Nothing above needs a cluster except the forwards and the intercepts, and only
-the intercepts have no stand-in. What holds today, checked against the code:
+the intercepts have no stand-in. What holds without one:
 
 1. **The forward table is empty.** A service with no `k8s_forward_port` gets no
    forward, so `k8s-forwards` has nothing to do and the shape collapses to Caddy
@@ -255,8 +255,8 @@ the intercepts have no stand-in. What holds today, checked against the code:
 A cluster on the same machine (OrbStack's built-in Kubernetes, kind, minikube,
 k3d) collapses the right-hand side of the first diagram into the same box as your
 containers, and its API server appears at `127.0.0.1`. That address is what the
-two rewrites above exist for. Everything else — slots, Caddy, forwards, the
-intercept path — behaves identically, which is why it works as a stand-in when
+two rewrites above exist for. Everything else (slots, Caddy, forwards, the
+intercept path) behaves the same, which is why it works as a stand-in when
 no cloud cluster is available.
 
 ---

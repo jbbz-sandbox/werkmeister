@@ -71,7 +71,7 @@ the UI its host can draw:
 
 Every tool also returns markdown, so any host works. Call the create tool directly:
 `mcp__plugin_werkmeister_werkmeister__create-workspace-form` (optionally
-`{ "issue": "<issue ID>" }`). Full tool table in the
+`{ "issue": "<issue ID>" }`). The full tool table is in the
 [server README](../../apps/werkmeister-mcp/README.md).
 
 ## Install

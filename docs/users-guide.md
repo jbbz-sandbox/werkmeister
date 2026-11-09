@@ -93,7 +93,7 @@ werkmeister feature services my-feature
 
 ### Running Multiple Features Simultaneously
 
-Each feature is fully isolated. Just `werkmeister feature up` each one:
+Features are isolated from each other, so start each one with `werkmeister feature up`:
 
 ```bash
 werkmeister feature up my-feature    # Gets slot 1
@@ -155,9 +155,9 @@ werkmeister feature restart my-feature
 
 ## Cleanup & Disk Usage
 
-Running multiple features concurrently creates per-feature Docker volumes for `node_modules` and build caches. These persist after `werkmeister feature down` (by design — to speed up subsequent `werkmeister feature up`).
+Running multiple features concurrently creates per-feature Docker volumes for `node_modules` and build caches. They stay after `werkmeister feature down` so the next `werkmeister feature up` starts faster.
 
-**Per-feature cleanup:**
+To clean up one feature:
 ```bash
 # Stop a feature and keep volumes (faster next startup)
 werkmeister feature down my-feature
@@ -166,7 +166,7 @@ werkmeister feature down my-feature
 werkmeister feature down my-feature --volumes
 ```
 
-**Bulk cleanup:**
+To clean up in bulk:
 ```bash
 # See what's orphaned (safe — no changes)
 werkmeister machine clean --dry-run
@@ -178,7 +178,7 @@ werkmeister machine clean
 werkmeister machine clean --all
 ```
 
-**Manual volume inspection:**
+To inspect volumes by hand:
 ```bash
 # List all Werkmeister-related Docker volumes
 docker volume ls | grep -E '^\S+-(backend|frontend)'
@@ -187,7 +187,7 @@ docker volume ls | grep -E '^\S+-(backend|frontend)'
 docker volume rm my-feature-frontend_node_modules
 ```
 
-Each feature's volumes follow the naming pattern `<feature>-<volume_name>` (e.g., `my-feature-frontend_node_modules`). This ensures concurrent features never share mutable Docker state.
+Each feature's volumes are named `<feature>-<volume_name>` (e.g., `my-feature-frontend_node_modules`), so concurrent features never share mutable Docker state.
 
 
 ## Troubleshooting
