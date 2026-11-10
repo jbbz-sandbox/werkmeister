@@ -170,6 +170,13 @@ test("each template renders with no undefined and a route per stage", async () =
           if (d.endsWith("_exercise")) assert.ok(manual > -1 && manual < review, `${wt}/${d}`);
           else assert.ok(manual > c.indexOf("Write `output/exercise.md`"), `${wt}/${d}`);
         }
+        // SW-653: the plan stages say commits belong to a later stage (the grouped text is asserted in the group test).
+        if (/_(spec|reproduce|scope)$/.test(d))
+          assert.match(
+            c,
+            /Code changes stay uncommitted until the propose stage, so plan the work and its checks, not commits\./,
+            `${wt}/${d}`,
+          );
         // SW-564: a permission-rule root cause lists every source of a matching rule.
         if (d.endsWith("_reproduce"))
           assert.match(
@@ -574,6 +581,12 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
       /check each member reads Done — `werkmeister issue view <KEY>` for `SW-2`, `SW-3`/,
     );
     assert.match(on.pipeline, /one per ticket in a grouped PR/);
+    // SW-653: a grouped spec leaves the per-ticket commits to implement and never says code stays uncommitted.
+    assert.match(
+      on.contracts[1],
+      /The implement stage makes those commits; plan the work and its checks, not finer commits\./,
+    );
+    assert.doesNotMatch(on.contracts[1], /stay uncommitted until the propose stage/);
     // SW-460: a grouped refactor nests scope.md's steps inside each ticket's commit.
     const refactorRoot = fs.mkdtempSync(path.join(os.tmpdir(), "icm-group-refactor-"));
     try {
