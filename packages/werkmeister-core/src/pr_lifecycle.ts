@@ -78,7 +78,7 @@ import {
   worktreeSources,
   // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 } from "./sandbox.js";
-import { hostLoadLimit, portHolders } from "./scheduler_state.js";
+import { portHolders, readHostLoad, waitForHostLoadNow } from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
 import { repoDirs } from "./standards.js";
 import { TEMP_HOME_SCRIPT } from "./temp_home.js";
@@ -777,45 +777,8 @@ async function mergeCheck(dir: string, file: PrFile, deps: Deps): Promise<string
   return `rebase allowed on ${base}`;
 }
 
-const LOAD_POLL_MS = 15_000;
-// with-temp-home's own wait: under an agent's default 2 min Bash timeout, so the call can't time out before its command starts (SW-469).
-const WRAPPER_LOAD_WAIT_MS = 90_000;
-const LOAD_PROGRESS_MS = 60_000;
-
-const readHostLoad = () => ({ load: os.loadavg(), cores: os.availableParallelism() });
-
-const minutes = (ms: number) => Number((ms / 60_000).toFixed(1));
-
-/**
- * The wait of `werkmeister internal wait-load`, which the generated with-temp-home runs first (SW-224):
- * up to 90 s for the 1-minute load to fall under the limit, saying so up front and printing progress
- * each minute (SW-262); the note for the wrapper's stderr, or "". The gate stopped waiting in SW-542.
- * Not on macOS: its loadavg counts idle daemons in R state (450-550 on a quiet host) and never the
- * Linux VM that runs the tests, so it is no signal to wait on and the wait was pure delay (SW-556).
- */
-export async function waitForHostLoadNow(
-  deps: Pick<Deps, "hostLoad" | "sleep"> = { hostLoad: readHostLoad, sleep: (ms) => delay(ms) },
-  platform: NodeJS.Platform = process.platform,
-): Promise<string> {
-  // WERKMEISTER_NO_WAIT skips it inside the command too, not only in with-temp-home's shell (SW-425).
-  if (platform === "darwin" || envVar("NO_WAIT")) return "";
-  let { load, cores } = deps.hostLoad();
-  const limit = hostLoadLimit(cores);
-  if (limit === 0 || load[0] <= limit) return "";
-  info(
-    `waiting up to ${minutes(WRAPPER_LOAD_WAIT_MS)} min for host load ${load[0].toFixed(1)} to fall to ${limit} (budget.host_load) before with-temp-home; --no-wait skips`,
-  );
-  for (let waited = LOAD_POLL_MS; waited <= WRAPPER_LOAD_WAIT_MS; waited += LOAD_POLL_MS) {
-    await deps.sleep(LOAD_POLL_MS);
-    ({ load } = deps.hostLoad());
-    if (load[0] <= limit) return `waited ${waited / 1000} s for host load`;
-    if (waited % LOAD_PROGRESS_MS === 0 && waited < WRAPPER_LOAD_WAIT_MS)
-      info(
-        `still waiting for host load: ${load[0].toFixed(1)} over ${limit}, ${waited / 1000} s so far, up to ${minutes(WRAPPER_LOAD_WAIT_MS - waited)} min left`,
-      );
-  }
-  return `ran with host load ${load[0].toFixed(1)} over ${limit}; the ${minutes(WRAPPER_LOAD_WAIT_MS)} min host-load wait is spent`;
-}
+// Moved beside hostLoadLimit so lifecycle's container starts can use it without an import cycle (SW-630).
+export { waitForHostLoadNow };
 
 async function gateChecks(
   ws: string,

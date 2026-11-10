@@ -18,7 +18,7 @@ The defaults come from `docker info`, so a new machine needs no setup:
 | `memory` | the Docker engine's memory minus 1G |
 | `cpus` | the engine's CPU count |
 | `preempt` | `true`: a start that doesn't fit may stop features whose session is idle or waiting on a person; a person's `up` may also stop a working autonomous one |
-| `host_load` | twice the host's CPU count: `with-temp-home` waits before its command while the host's 1-minute load is above it, for up to 90 s, on Linux only; on macOS it returns at once, because the load average is neither the test VM's nor usable. The pr gate stopped waiting. `0` turns the wait off |
+| `host_load` | twice the host's CPU count: while the host's 1-minute load is above it, `with-temp-home` waits up to 90 s before its command, and `feature up` and the gate's container starts wait up to 90 s before a setup service (the install) starts, then fail with the load (`HOST_LOAD`); none of them wait on macOS, whose load average is neither the test VM's nor usable; `0` turns the wait off |
 
 Override any of them in `~/.werkmeister/config.yaml`:
 
@@ -30,7 +30,7 @@ budget:
   host_load: 24
 ```
 
-`host_load` limits agents' direct test runs by live host load, not by reservations: they happen on the host where no reservation sees them, so `.werkmeister/bin/with-temp-home` runs the wait (`werkmeister internal wait-load`) before its command on Linux unless `WERKMEISTER_NO_WAIT=1` is set, and returns at once on macOS, whose load average is no usable signal. The gate's checks run inside a container that is already admitted and no longer wait. A failed gate check, and a failed `with-temp-home` run, end with the host load so a timeout under load reads as load.
+`host_load` limits the gate by live host load, not by reservations: the gate's checks run inside a container that is already admitted, and agents' direct test runs happen on the host where no reservation sees them, so `.werkmeister/bin/with-temp-home` runs the same wait (`werkmeister internal wait-load`) before its command unless `WERKMEISTER_NO_WAIT=1` is set, except on macOS, whose load average is no usable signal. A failed gate check, and a failed `with-temp-home` run, end with the host load so a timeout under load reads as load.
 
 ### Measured on a 16 GB laptop
 

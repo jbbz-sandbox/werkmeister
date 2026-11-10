@@ -10,6 +10,7 @@ import { test } from "node:test";
 
 import { readWaiting, waitingPath, writeWaiting } from "./dist/agent_state.js";
 import { grantWaiters, runningFeatures } from "./dist/lifecycle.js";
+import { withReporter } from "./dist/reporter.js";
 import {
   enqueue,
   featureCost,
@@ -19,6 +20,7 @@ import {
   readQueue,
   requestAdmission,
   serviceStarts,
+  waitForSetupLoad,
   writeLeases,
 } from "./dist/scheduler_state.js";
 import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
@@ -285,4 +287,82 @@ test("grantWaiters dequeues a waiter with no local services once up starts it (S
     if (prev === undefined) delete process.env.WERKMEISTER_FIXTURE;
     else process.env.WERKMEISTER_FIXTURE = prev;
   }
+});
+
+// SW-630: a setup service's install ran 78 min at load ~413 and compose's --wait gave up at 20 min.
+const SETUP_COMPOSE = `services:
+  install:
+    labels: { com.werkmeister.role: setup }
+  api:
+    depends_on: { install: { condition: service_completed_successfully } }
+  db: {}
+`;
+
+/** A fake host load reading *loads* in turn (the last repeats) on 4 cores: limit 8. */
+function hostLoads(...loads) {
+  const slept = [];
+  let i = 0;
+  return {
+    slept,
+    hostLoad: () => {
+      const l = loads[Math.min(i++, loads.length - 1)];
+      return { load: [l, l, l], cores: 4 };
+    },
+    sleep: async (ms) => slept.push(ms),
+  };
+}
+
+test("waitForSetupLoad: load still over budget after the wait fails with the load, not a compose timeout (SW-630)", async () => {
+  delete process.env.WERKMEISTER_NO_WAIT;
+  await withHome(async (home) => {
+    const ws = workspace(home, SETUP_COMPOSE);
+    const lines = [];
+    const stuck = hostLoads(90);
+    await assert.rejects(
+      withReporter({ emit: (e) => lines.push(e.msg) }, () =>
+        waitForSetupLoad(ws, serviceStarts(ws, "api"), stuck, "linux"),
+      ),
+      (e) =>
+        e.code === "HOST_LOAD" &&
+        /host load 90\.0 is over 8 \(budget\.host_load\)/.test(e.message) &&
+        /install/.test(e.message),
+    );
+    assert.equal(stuck.slept.length, 6);
+    assert.match(
+      lines[0],
+      /waiting up to 1\.5 min for host load 90\.0 to fall to 8 \(budget\.host_load\) before starting install/,
+    );
+  });
+});
+
+test("waitForSetupLoad: starts once load falls, and at once when under budget (SW-630)", async () => {
+  delete process.env.WERKMEISTER_NO_WAIT;
+  await withHome(async (home) => {
+    const ws = workspace(home, SETUP_COMPOSE);
+    const falls = hostLoads(90, 1);
+    await waitForSetupLoad(ws, serviceStarts(ws, "api"), falls, "linux");
+    assert.deepEqual(falls.slept, [15000]);
+    const calm = hostLoads(1);
+    await waitForSetupLoad(ws, undefined, calm, "linux"); // a whole `up` starts the install too
+    assert.deepEqual(calm.slept, []);
+  });
+});
+
+test("waitForSetupLoad: no setup among the starts, macOS, or WERKMEISTER_NO_WAIT: no wait (SW-630, SW-556)", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, SETUP_COMPOSE);
+    for (const [services, platform, noWait] of [
+      [serviceStarts(ws, "db"), "linux", false],
+      [["api"], "linux", false], // --no-deps: the install is current, so not started
+      [serviceStarts(ws, "api"), "darwin", false],
+      [serviceStarts(ws, "api"), "linux", true],
+    ]) {
+      if (noWait) process.env.WERKMEISTER_NO_WAIT = "1";
+      else delete process.env.WERKMEISTER_NO_WAIT;
+      const stuck = hostLoads(90);
+      await waitForSetupLoad(ws, services, stuck, platform);
+      assert.deepEqual(stuck.slept, [], `${services} on ${platform}`);
+    }
+    delete process.env.WERKMEISTER_NO_WAIT;
+  });
 });
