@@ -72,6 +72,17 @@ Jira rejects, are reported as a fault.
    through the local `claude` CLI and the Atlassian MCP, so nothing breaks, but you
    don't get the fast path.
 
+### Endpoints used
+
+For a proxy allow-list or token scopes. Werkmeister talks to Jira REST API v2, except the `myself` check:
+
+- `GET /rest/api/3/myself`: the health check
+- `GET /rest/api/2/issue/<KEY>`: issue cards, briefings, form prefill
+- `GET /rest/api/2/search/jql`: batch status lookup
+- `GET /rest/api/2/issue/createmeta/<PROJECT>/issuetypes` and `POST /rest/api/2/issue`: `issue create`
+- `GET` and `POST /rest/api/2/issue/<KEY>/transitions`, `POST /rest/api/2/issue/<KEY>/comment`: status moves and comments
+- `POST /rest/api/2/issueLink`: "relates to" links
+
 ### Renewal
 
 Tokens expire (max 1 year). Symptom: Jira status pills and cards quietly fall
