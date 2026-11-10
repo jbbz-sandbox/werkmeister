@@ -106,6 +106,7 @@ import {
   type Starting,
   serviceStarts,
   setupsCurrent,
+  waitForSetupLoad,
 } from "./scheduler_state.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
 import {
@@ -176,7 +177,8 @@ export interface UpResult {
  * Throws `NO_COMPOSE` when the workspace has no generated compose file,
  * `MISSING_SECRETS` when a secret this workspace's own services require is
  * absent, `SLOT_ALLOC` when no slot can be allocated, `FORWARDS_NEVER_READY`
- * when the forwards are restarted and their tunnels never reconnect, and
+ * when the forwards are restarted and their tunnels never reconnect, `HOST_LOAD`
+ * when host load stays over budget before a setup service starts (SW-630), and
  * `COMPOSE_UP_FAILED` when `docker compose up` reports failure, and
  * `INSIDE_OWN_CONTAINER` before any of it when run inside *feature*'s own container.
  *
@@ -223,6 +225,8 @@ export async function up(
   const [portStart, portEnd] = getPortRange(slot);
 
   if (localServices.length) {
+    // Before admission: a HOST_LOAD throw must not follow a preemption or a dequeue.
+    await waitForSetupLoad(workspace, undefined);
     const waiting = await admitOrQueue(feature, workspace, byPerson ?? !readAutonomous(workspace));
     if (waiting !== null) {
       warn(`Waiting for capacity, position ${waiting} — it starts when another feature stops`);
@@ -416,8 +420,8 @@ async function prepareSlot(
  * gate's own test command builds what it tests. `feature up --service` keeps the re-run, so a
  * service started alone after a pull gets a fresh dist/.
  *
- * Throws `INSIDE_OWN_CONTAINER`, `NO_COMPOSE`, `MISSING_SECRETS`, `SLOT_ALLOC`
- * or `COMPOSE_UP_FAILED`.
+ * Throws `INSIDE_OWN_CONTAINER`, `NO_COMPOSE`, `MISSING_SECRETS`, `SLOT_ALLOC`,
+ * `NO_CAPACITY`, `HOST_LOAD` or `COMPOSE_UP_FAILED`.
  */
 export async function startService(
   feature: string,
@@ -443,6 +447,8 @@ export async function startService(
   await prepareSlot(feature, workspace, config, readServicesFromWorkspace(workspace));
   const noDeps =
     skipCurrentSetups && (await setupsCurrent(path.join(workspace, composeName), service));
+  // Before admission, as in `up`: a HOST_LOAD throw must not follow a preemption.
+  await waitForSetupLoad(workspace, noDeps ? [service] : serviceStarts(workspace, service));
   await admitServiceStart(feature, workspace, service, { noDeps });
   requireSharedNetwork();
   const started = await withStartRecord(workspace, "gate", () =>

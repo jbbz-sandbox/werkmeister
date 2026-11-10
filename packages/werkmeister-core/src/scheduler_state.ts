@@ -15,7 +15,9 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
+import * as os from "node:os";
 import * as path from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import * as YAML from "yaml";
 
@@ -27,10 +29,12 @@ import {
   writeWaiting,
 } from "./agent_state.js";
 import { COMPOSE_FILE } from "./compose_file.js";
-import { sandboxHome } from "./config.js";
+import { envVar, sandboxHome } from "./config.js";
 import { docker } from "./docker.js";
+import { SandboxError } from "./errors.js";
 import { load as loadGlobalConfig } from "./global_config.js";
 import { sandboxLock } from "./locks.js";
+import { info } from "./reporter.js";
 import {
   admit,
   type Budget,
@@ -146,11 +150,92 @@ export async function loadBudget(
   return { memory, cpus, preempt: b["preempt"] !== false };
 }
 
-/** 1-min host load above which with-temp-home waits (SW-209, SW-542): `budget.host_load`, else 2 × cores; 0 is off. */
+/** 1-min host load above which with-temp-home and a setup start wait (SW-209, SW-542, SW-630): `budget.host_load`, else 2 × cores; 0 is off. */
 export function hostLoadLimit(cores: number): number {
   const cfg = loadGlobalConfig()["budget"];
   const v = isDict(cfg) ? Number(cfg["host_load"] ?? Number.NaN) : Number.NaN;
   return Number.isFinite(v) && v >= 0 ? v : 2 * cores;
+}
+
+const LOAD_POLL_MS = 15_000;
+// with-temp-home's own wait: under an agent's default 2 min Bash timeout, so the call can't time out before its command starts (SW-469).
+const WRAPPER_LOAD_WAIT_MS = 90_000;
+const LOAD_PROGRESS_MS = 60_000;
+
+export interface HostLoadDeps {
+  hostLoad: () => { load: number[]; cores: number };
+  sleep: (ms: number) => Promise<unknown>;
+}
+
+export const readHostLoad = () => ({ load: os.loadavg(), cores: os.availableParallelism() });
+const realHostLoad: HostLoadDeps = { hostLoad: readHostLoad, sleep: (ms) => delay(ms) };
+
+const minutes = (ms: number) => Number((ms / 60_000).toFixed(1));
+
+/**
+ * The wait of `werkmeister internal wait-load`, which the generated with-temp-home runs first (SW-224):
+ * up to 90 s for the 1-minute load to fall under the limit, saying so up front and printing progress
+ * each minute (SW-262); the note for the wrapper's stderr, or "". The gate stopped waiting in SW-542.
+ * Not on macOS: its loadavg counts idle daemons in R state (450-550 on a quiet host) and never the
+ * Linux VM that runs the tests, so it is no signal to wait on and the wait was pure delay (SW-556).
+ */
+export async function waitForHostLoadNow(
+  deps: HostLoadDeps = realHostLoad,
+  platform: NodeJS.Platform = process.platform,
+  before = "with-temp-home; --no-wait skips",
+): Promise<string> {
+  // WERKMEISTER_NO_WAIT skips it inside the command too, not only in with-temp-home's shell (SW-425).
+  if (platform === "darwin" || envVar("NO_WAIT")) return "";
+  let { load, cores } = deps.hostLoad();
+  const limit = hostLoadLimit(cores);
+  if (limit === 0 || load[0] <= limit) return "";
+  info(
+    `waiting up to ${minutes(WRAPPER_LOAD_WAIT_MS)} min for host load ${load[0].toFixed(1)} to fall to ${limit} (budget.host_load) before ${before}`,
+  );
+  for (let waited = LOAD_POLL_MS; waited <= WRAPPER_LOAD_WAIT_MS; waited += LOAD_POLL_MS) {
+    await deps.sleep(LOAD_POLL_MS);
+    ({ load } = deps.hostLoad());
+    if (load[0] <= limit) return `waited ${waited / 1000} s for host load`;
+    if (waited % LOAD_PROGRESS_MS === 0 && waited < WRAPPER_LOAD_WAIT_MS)
+      info(
+        `still waiting for host load: ${load[0].toFixed(1)} over ${limit}, ${waited / 1000} s so far, up to ${minutes(WRAPPER_LOAD_WAIT_MS - waited)} min left`,
+      );
+  }
+  return `ran with host load ${load[0].toFixed(1)} over ${limit}; the ${minutes(WRAPPER_LOAD_WAIT_MS)} min host-load wait is spent`;
+}
+
+/**
+ * Before compose starts a setup one-shot among *services* (undefined: what a whole `up` starts),
+ * wait on host load as with-temp-home does, and fail with the load once the wait is spent (SW-630):
+ * a setup install started at load ~413 ran 78 min, past compose's 20 min `--wait`, and ended 137.
+ *
+ * Throws `HOST_LOAD`.
+ */
+export async function waitForSetupLoad(
+  workspace: string,
+  services: string[] | undefined,
+  deps: HostLoadDeps = realHostLoad,
+  platform: NodeJS.Platform = process.platform,
+): Promise<void> {
+  const setups = Object.entries(composeServices(workspace))
+    .filter(([name, svc]) => (services ? services.includes(name) : !svc?.["profiles"]))
+    .filter(([, svc]) => svc?.["labels"]?.["com.werkmeister.role"] === "setup")
+    .map(([name]) => name);
+  if (!setups.length) return;
+  const what = setups.join(", ");
+  const note = await waitForHostLoadNow(
+    deps,
+    platform,
+    `starting ${what}; WERKMEISTER_NO_WAIT=1 skips`,
+  );
+  if (!note.startsWith("ran with")) return;
+  const { load, cores } = deps.hostLoad();
+  throw new SandboxError(
+    `host load ${load[0].toFixed(1)} is over ${hostLoadLimit(cores)} (budget.host_load) after the ` +
+      `${minutes(WRAPPER_LOAD_WAIT_MS)} min wait; ${what} not started. Retry when load falls, ` +
+      "or set WERKMEISTER_NO_WAIT=1 to start anyway.",
+    "HOST_LOAD",
+  );
 }
 
 type ComposeService = Record<string, any>;
