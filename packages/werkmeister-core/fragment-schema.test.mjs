@@ -146,6 +146,12 @@ test("plugins/ maps to a service whose test runs the plugin package (SW-580)", (
   assert.match(fragment.services[owner].test, /--filter=werkmeister-plugin\b/);
 });
 
+// SW-604: tests that need lsof skip without it, and node:22 lacks it.
+test("cli and werkmeister-core test rows install lsof when missing (SW-604)", () => {
+  for (const svc of ["cli", "werkmeister-core"])
+    assert.match(fragment.services[svc].test, /^\{ command -v lsof .*apt-get install -y -qq lsof/);
+});
+
 // SW-645: the host has no node_modules, so the exercise-rebuild step must be the container form.
 test("cli validate runs exercise-rebuild in the container (SW-645)", () => {
   assert.match(
