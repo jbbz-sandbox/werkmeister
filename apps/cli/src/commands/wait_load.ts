@@ -1,9 +1,11 @@
 /**
  * werkmeister internal wait-load
  *
- * The pr gate's host-load wait (SW-209), run by the generated with-temp-home
- * before its command (SW-224). Exits 75 when the wait is spent with load still
- * over the limit, so the wrapper doesn't run its command (SW-540).
+ * The host-load wait the generated with-temp-home runs before its command
+ * (SW-209, SW-224). Only with-temp-home waits: the pr gate stopped waiting in
+ * SW-542, and on macOS the wait returns at once (SW-556). Exits 75 when the
+ * wait is spent with load still over the limit, so the wrapper doesn't run its
+ * command (SW-540).
  */
 
 import * as os from "node:os";
