@@ -1087,15 +1087,110 @@ async function gateChecks(
   const releaseRuns =
     repo["ship"] === "tag" && Boolean(repo["release_check"]) && !reason(file.fm["skip_release"]);
 
+  // A branch id maps to the compose id that owns the same path.
+  const toRendered = (s: string): string | undefined => {
+    if (rendered.includes(s)) return s;
+    const at = Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>).find(
+      ([, name]) => name === s,
+    )?.[0];
+    return at === undefined
+      ? undefined
+      : ((machineRepo["path_mappings"] ?? {}) as Record<string, string>)[at];
+  };
+  const repoServices = (repo["services"] ?? []) as string[];
+  const repoContainer = () =>
+    touched.map(containerFor).find(Boolean) ?? containerFor(repoServices[0] ?? "");
+  // An earlier start failed on capacity that has since freed; this one runs the rows (SW-552).
+  const clearEarlierStart = (svc: string) => {
+    const earlier = checks.find((c) => c.name === `start ${svc}` && !c.ok);
+    if (earlier) {
+      earlier.ok = true;
+      earlier.detail = `started on the second attempt (first: ${earlier.detail})`;
+    }
+  };
+  const tested = touched.filter(
+    (s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes),
+  );
+  // A sibling can differ in image, toolchain and node_modules, so each test gets its own container (SW-336).
+  const testedIds = [...new Set(tested.map(toRendered).filter((s): s is string => Boolean(s)))];
+  // False when its port is taken: the ports row is written and the gate stops.
+  const startRepoContainer = async (prefer?: string): Promise<boolean> => {
+    const candidates = [
+      ...touched.map(toRendered).filter((s): s is string => Boolean(s)),
+      ...rendered,
+    ];
+    // Lint and release are repo-wide, so any one container serves them; an
+    // idle one only sleeps, where a web service would start its dev server.
+    const pick =
+      prefer ??
+      candidates.find((s) => IDLE_SERVICE_TYPES.includes(deps.services[s]?.["type"] ?? "")) ??
+      candidates[0];
+    if (!pick) return true;
+    if (!(await portsFree([pick]))) return false;
+    touchExecMarker(ws);
+    try {
+      await deps.startService(ws, feature, pick);
+      running.add(containerOf(feature, pick));
+      started.push(containerOf(feature, pick));
+      clearEarlierStart(pick);
+    } catch (e) {
+      add(`start ${pick}`, false, e instanceof Error ? e.message : String(e));
+    }
+    return true;
+  };
+
   // Running containers come from compose.yml, rendered from the machine registry; a
   // touched service whose branch settings render differently runs from compose.gate.yml (SW-118).
-  if (own) {
-    let changed: string[] = [];
+  let changed: string[] = [];
+  if (own)
     try {
       changed = deps.gateCompose(ws, feature, services).filter((s) => touched.includes(s));
     } catch (e) {
       add("containers", false, `branch compose: ${e instanceof Error ? e.message : String(e)}`);
     }
+
+  let release: GateResult["release"];
+  const runRelease = async (container: string): Promise<boolean> => {
+    const res = await execCheck("release", container, String(repo["release_check"]), 5);
+    if (res.code === 0 && nothingToBump(res.stdout + res.stderr)) release = "none";
+    return res.code === 0;
+  };
+  // SW-638: before any test container starts, so a missing changeset fails in seconds, not after
+  // the tests. A paused container or a failed start leaves it for after the tests, as before.
+  let setupRerun = false;
+  if (!testsOnly && repo["ship"] === "tag" && repo["release_check"]) {
+    const why = reason(file.fm["skip_release"]);
+    if (why) add("release", true, `skipped: ${why}`);
+    else {
+      const up = [...testedIds, ...rendered].filter((s) => running.has(containerOf(feature, s)));
+      // Not one compose.gate.yml recreates below: the check would see its old settings.
+      const kept = up.find((s) => !changed.includes(s));
+      let container: string | null = null;
+      if (!up.length) {
+        // A test's own container: the tests start it anyway, so a pass costs no extra one. Not one
+        // that starts from compose.gate.yml below, which would then be recreated (SW-118).
+        if (!(await startRepoContainer(testedIds.find((s) => !changed.includes(s)))))
+          return { ok: false, checks };
+        container = repoContainer();
+      } else if (kept && !paused.has(containerOf(feature, kept))) {
+        // Its setup one-shot first, so the check sees this branch's node_modules (SW-362, SW-541).
+        touchExecMarker(ws);
+        try {
+          await deps.startService(ws, feature, kept);
+          setupRerun = true;
+          container = containerOf(feature, kept);
+        } catch {
+          // Left for after the tests, whose own `up` re-runs it and reports a failure.
+        }
+      }
+      if (container && !(await runRelease(container))) {
+        add("tests", false, "not run — fix the rows above first");
+        return { ok: false, checks };
+      }
+    }
+  }
+
+  if (own) {
     if (!(await portsFree(changed))) return { ok: false, checks };
     for (const svc of changed) {
       const container = containerOf(feature, svc);
@@ -1117,16 +1212,6 @@ async function gateChecks(
     }
   }
 
-  // A branch id maps to the compose id that owns the same path.
-  const toRendered = (s: string): string | undefined => {
-    if (rendered.includes(s)) return s;
-    const at = Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>).find(
-      ([, name]) => name === s,
-    )?.[0];
-    return at === undefined
-      ? undefined
-      : ((machineRepo["path_mappings"] ?? {}) as Record<string, string>)[at];
-  };
   const renamed = touched.filter((s) => toRendered(s) && toRendered(s) !== s);
   if (renamed.length)
     add(
@@ -1135,16 +1220,13 @@ async function gateChecks(
       `compose.yml still names ${renamed.map((s) => `${s} as ${toRendered(s)}`).join(", ")} — ` +
         "resync the machine registry with `werkmeister registry`",
     );
-  const tested = touched.filter(
-    (s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes),
-  );
-  // A sibling can differ in image, toolchain and node_modules, so each test gets its own container (SW-336).
-  const testedIds = [...new Set(tested.map(toRendered).filter((s): s is string => Boolean(s)))];
   const ownStarts = testedIds.filter((s) => !running.has(containerOf(feature, s)));
-  // Services whose startService call is skipped because a container is up; a recreated one was restarted above.
+  // Services whose startService call is skipped because a container is up; a recreated one was restarted
+  // above, and one the release check started (SW-638) is the gate's own.
   const alreadyUp = testedIds
-    .filter((s) => running.has(containerOf(feature, s)) && !recreated.includes(s))
-    .map((s) => containerOf(feature, s));
+    .map((s) => [s, containerOf(feature, s)])
+    .filter(([s, c]) => running.has(c) && !recreated.includes(s) && !started.includes(c))
+    .map(([, c]) => c);
   if (!(await portsFree(ownStarts))) return { ok: false, checks };
   for (const svc of ownStarts) {
     touchExecMarker(ws);
@@ -1152,12 +1234,12 @@ async function gateChecks(
       await deps.startService(ws, feature, svc);
       running.add(containerOf(feature, svc));
       started.push(containerOf(feature, svc));
+      clearEarlierStart(svc);
     } catch (e) {
       add(`start ${svc}`, false, e instanceof Error ? e.message : String(e));
     }
   }
 
-  const repoServices = (repo["services"] ?? []) as string[];
   const needsContainer = releaseRuns || Boolean(repo["lint"]) || tested.some((s) => !toRendered(s));
   const serving = needsContainer ? repoServices.map(containerFor).find(Boolean) : null;
   // Not one this run started or recreated for the gate (SW-118): only a container left up counts.
@@ -1178,7 +1260,7 @@ async function gateChecks(
     );
     const upped = ownStarts.length || started.length || recreated.length;
     const frozen = alreadyUp.filter((c) => paused.has(c));
-    const rerun = upped || frozen.length ? undefined : kept;
+    const rerun = upped || frozen.length || setupRerun ? undefined : kept;
     if (rerun) {
       touchExecMarker(ws);
       try {
@@ -1192,40 +1274,12 @@ async function gateChecks(
       !frozen.length,
       frozen.length
         ? `kept (${alreadyUp.join(", ")} already up; ${frozen.join(", ")} paused)`
-        : `kept (${alreadyUp.join(", ")} already running${rerun ? ", setup one-shot re-run unless current" : ""})`,
+        : `kept (${alreadyUp.join(", ")} already running${rerun || setupRerun ? ", setup one-shot re-run unless current" : ""})`,
     );
   }
-  if (needsContainer && !repoServices.some(containerFor)) {
-    const candidates = [
-      ...touched.map(toRendered).filter((s): s is string => Boolean(s)),
-      ...rendered,
-    ];
-    // Lint and release are repo-wide, so any one container serves them; an
-    // idle one only sleeps, where a web service would start its dev server.
-    const pick =
-      candidates.find((s) => IDLE_SERVICE_TYPES.includes(deps.services[s]?.["type"] ?? "")) ??
-      candidates[0];
-    if (pick && !(await portsFree([pick]))) return { ok: false, checks };
-    if (pick) {
-      touchExecMarker(ws);
-      try {
-        await deps.startService(ws, feature, pick);
-        running.add(containerOf(feature, pick));
-        started.push(containerOf(feature, pick));
-        // Its own start above failed on capacity that has since freed; this container runs the rows (SW-552).
-        const earlier = checks.find((c) => c.name === `start ${pick}` && !c.ok);
-        if (earlier) {
-          earlier.ok = true;
-          earlier.detail = `started on the second attempt (first: ${earlier.detail})`;
-        }
-      } catch (e) {
-        add(`start ${pick}`, false, e instanceof Error ? e.message : String(e));
-      }
-    }
-  }
+  if (needsContainer && !repoServices.some(containerFor) && !(await startRepoContainer()))
+    return { ok: false, checks };
 
-  const repoContainer = () =>
-    touched.map(containerFor).find(Boolean) ?? containerFor(repoServices[0] ?? "");
   if (repo["lint"]) {
     const container = repoContainer();
     if (!container)
@@ -1291,17 +1345,12 @@ async function gateChecks(
     add(`baseline ${svc}`, code > 0 && code < 400, `GET ${url} → ${code || "unreachable"}`);
   }
 
-  let release: GateResult["release"];
-  if (repo["ship"] === "tag" && repo["release_check"]) {
-    const why = reason(file.fm["skip_release"]);
+  // Only when no container could run it before the tests (SW-638).
+  if (releaseRuns && !checks.some((c) => c.name === "release")) {
     const container = repoContainer();
-    if (why) add("release", true, `skipped: ${why}`);
-    else if (!container)
+    if (!container)
       add("release", false, "no running container for this repo — run `werkmeister feature up`");
-    else {
-      const res = await execCheck("release", container, repo["release_check"], 5);
-      if (res.code === 0 && nothingToBump(res.stdout + res.stderr)) release = "none";
-    }
+    else await runRelease(container);
   }
 
   return { ok: checks.every((c) => c.ok), checks, ...(release && { release }) };
