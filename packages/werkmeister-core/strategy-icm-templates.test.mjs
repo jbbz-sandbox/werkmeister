@@ -120,6 +120,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^3\. Check what is already installed.*against the installed tool.*`unverified: docs only`/m,
             `${wt}/${d}`,
           );
+        // SW-605: an external API or permission claim is checked live, read-only, or the option text says unverified.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^3\. .*external API, permission or platform behaviour.*checked live, read-only.*never a write\).*`unverified` in the option text itself/m,
+            `${wt}/${d}`,
+          );
         // SW-534: an exercise that changes code gets the review rerun on its delta.
         if (d.endsWith("_implement"))
           assert.match(c, /rerun the review on that delta/, `${wt}/${d}`);
