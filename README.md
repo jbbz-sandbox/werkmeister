@@ -119,7 +119,7 @@ and the other two compile optional native add-ons used only for Docker over SSH,
 which falls back to pure JS anyway. Allowing them just adds a `node-gyp` build
 that needs Xcode's tools.
 
-The package is a single esbuild bundle plus `infra/` — the templates, compose
+The package is a single esbuild bundle plus `apps/cli/infra/` — the templates, compose
 files, proxy UI and skills the CLI reads at runtime. `werkmeister-core` and the
 CLI's other libraries are bundled in, so the only dependencies npm resolves are
 `dockerode` and `@anthropic-ai/claude-agent-sdk` (the model behind refine, issue

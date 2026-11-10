@@ -41,6 +41,11 @@ test("flags broken relative links and missing repo paths, not pinned ones", () =
   assert.deepEqual(check("`docs/old.md` at 66703fc"), []);
 });
 
+test("flags a bare infra/ path that doesn't resolve from the repo root (SW-608)", () => {
+  assert.equal(check("`infra/compose/shared-infra.yml`").length, 1);
+  assert.deepEqual(check("`~/.werkmeister/infra/proxy/Caddyfile` `infra/**`"), []);
+});
+
 test("checks commands and flags only where a command starts", () => {
   assert.deepEqual(check("`werkmeister infra status`"), []);
   assert.equal(check("`werkmeister k9s`").length, 1);

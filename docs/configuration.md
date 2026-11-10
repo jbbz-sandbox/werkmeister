@@ -86,7 +86,7 @@ the pieces that are not obvious from the demo services:
   they get `/var/run/docker.sock` plus `~/.werkmeister`, `~/repos`, `~/features` and `~/.kube`
   bind-mounted at their *host* paths, `HOME` set to match, and the docker, compose and
   kubectl binaries from the per-feature `tools` volume that
-  `infra/compose/scripts/werkmeister-install-startup.sh` fills. The generated compose files carry
+  `apps/cli/infra/compose/scripts/werkmeister-install-startup.sh` fills. The generated compose files carry
   host bind-mount paths and the daemon is the host's, so the paths must be identical on both
   sides.
 - **`werkmeister-install` reinstalls only when the lockfile changes.** It skips
@@ -120,7 +120,7 @@ the pieces that are not obvious from the demo services:
   their own.
 - **`werkmeister` inside the container is the worktree's own build.** `PATH` puts
   `/app/apps/cli` first. `werkmeister_root` in `~/.werkmeister/config.yaml` still points at the main
-  checkout, so templates and `infra/` come from there (see the known issue on machine-global
+  checkout, so templates and `apps/cli/infra/` come from there (see the known issue on machine-global
   `werkmeister_root`). **Never run `werkmeister machine config --write` or `werkmeister machine setup` from a worktree**, on the
   host or in the container: it silently repoints the whole machine.
 - **The dashboard binds `HOST`.** It defaults to loopback for the reasons in `main.ts`; the

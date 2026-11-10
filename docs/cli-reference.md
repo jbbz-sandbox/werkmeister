@@ -745,7 +745,7 @@ Start all shared infrastructure (local + k8s port-forwards)
 
 - `--k8s`: Start/restart k8s port-forwards container only (replaces standalone k8s-connect command)
 
-**`--k8s`** starts or checks only the containerized k8s port-forwards. Starts the `k8s-forwards` Docker container (part of `infra/compose/shared-infra.yml`), which runs one `kubectl port-forward` process per entry in the generated forwards table, all inside a single container. If the container is already healthy, the command says so and does nothing.
+**`--k8s`** starts or checks only the containerized k8s port-forwards. Starts the `k8s-forwards` Docker container (part of `apps/cli/infra/compose/shared-infra.yml`), which runs one `kubectl port-forward` process per entry in the generated forwards table, all inside a single container. If the container is already healthy, the command says so and does nothing.
 
 The container runs on the `werkmeister-shared` Docker network and is accessible to other containers via the DNS name `k8s-forwards`. Port-forward processes inside the container auto-restart if they disconnect, managed by the container's entrypoint script.
 

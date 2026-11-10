@@ -1,7 +1,7 @@
 # Code conventions — `src/`
 
 Conventions this CLI holds itself to. They exist because the runtime data in
-`infra/` is consumed as-is and much of the output is
+`apps/cli/infra/` is consumed as-is and much of the output is
 contract-shaped: generated files, exit codes, and printed text are depended on
 by other tooling, so they are not free to drift.
 
@@ -14,7 +14,7 @@ by other tooling, so they are not free to drift.
 | `src/commands/<command>.help.md` | that command's long help: printed after its options by `--help`, and the source of its section in `docs/cli-reference.md` and its man page (`pnpm run docs:gen`) |
 | `src/lib/<name>.ts` | shared library modules |
 
-Runtime data dirs live alongside the source: `infra/`, `bin/`.
+Runtime data dirs live alongside the source: `apps/cli/infra/`, `bin/`.
 Path resolution: package root = `WERKMEISTER_ROOT` / `WERKMEISTER_ROOT` env, else the first
 ancestor holding `apps/cli` (`sandboxRoot()` / `infraRoot()` in
 `packages/werkmeister-core/src/config.ts`, re-exported by `src/lib/config.ts` as
@@ -31,7 +31,7 @@ ancestor holding `apps/cli` (`sandboxRoot()` / `infraRoot()` in
   output, exit codes, and JSON shapes are contracts. Changing one is a
   deliberate, breaking change — not a cleanup.
 - YAML via the `yaml` package (`parse`, `stringify`).
-- Templates in `infra/templates/` are rendered with `nunjucks`. They are shared
+- Templates in `apps/cli/infra/templates/` are rendered with `nunjucks`. They are shared
   verbatim with other consumers, so the environment options in `generate.ts`
   (autoescape, trim/lstrip) are load-bearing — see the notes there before
   touching them.

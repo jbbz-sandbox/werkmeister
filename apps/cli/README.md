@@ -42,12 +42,12 @@ feature name (`infra` plus the workspaces under the workspaces root).
 - `src/main.ts` — commander program (subcommand registry + dispatch)
 - `src/commands/` — one module per subcommand (`run(args)` entrypoints)
 - `src/lib/` — shared logic
-- `infra/`, `bin/` — runtime data the CLI consumes as-is
+- `apps/cli/infra/`, `bin/` — runtime data the CLI consumes as-is
 - `CONVENTIONS.md` — the code conventions used throughout
 
 ## Notes
 
-- CLI parsing is commander; templates in `infra/templates/*.njk` render through
+- CLI parsing is commander; templates in `apps/cli/infra/templates/*.njk` render through
   nunjucks with a small compat layer (`{% do %}`, dict truthiness,
   `map(attribute=…)`) so they stay shared verbatim with other consumers
 - `werkmeister internal mcp` runs the stdio proxy to the MCP daemon. Its source is
