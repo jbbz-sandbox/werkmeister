@@ -1078,7 +1078,7 @@ test("gate: a failing release check fails unless skip_release gives a reason", a
   const noChangeset = [/changeset status/, { code: 1, stderr: "no changesets were found" }];
   const ws = icmWorkspace();
   try {
-    assert.deepEqual(failed(await gate(ws, deps([DIFF_API, noChangeset]))), ["release"]);
+    assert.deepEqual(failed(await gate(ws, deps([DIFF_API, noChangeset]))), ["release", "tests"]);
   } finally {
     clean(ws);
   }
@@ -1087,6 +1087,51 @@ test("gate: a failing release check fails unless skip_release gives a reason", a
     assert.deepEqual(failed(await gate(skipped, deps([DIFF_API, noChangeset]))), []);
   } finally {
     clean(skipped);
+  }
+});
+
+test("gate: a missing changeset fails the release row before any test runs or test container starts (SW-638)", async () => {
+  const noChangeset = [/changeset status/, { code: 1, stderr: "no changesets were found" }];
+  const ws = icmWorkspace();
+  try {
+    const up = deps([DIFF_API, noChangeset]);
+    const g = await gate(ws, up);
+    assert.deepEqual(failed(g), ["release", "tests"]);
+    assert.equal(
+      g.checks.filter((c) => c.name === "tests").at(-1).detail,
+      "not run — fix the rows above first",
+    );
+    assert.ok(!up.calls.some((c) => c.includes("npm test")), up.calls.join("\n"));
+    // The kept container's setup one-shot re-runs first, so the check sees the branch's node_modules (SW-362).
+    const setup = up.calls.indexOf("start feat-api from compose.yml");
+    const check = up.calls.findIndex((c) => c.includes("changeset status"));
+    assert.ok(setup >= 0 && setup < check, up.calls.join("\n"));
+
+    // Nothing up: only api's own container starts, the one its test would have started anyway.
+    const cold = noServices(ws, [noChangeset]);
+    assert.deepEqual(failed(await gate(ws, cold)), ["release", "tests"]);
+    assert.deepEqual(cold.started, ["feat-api"]);
+    assert.ok(!cold.calls.some((c) => c.includes("npm test")), cold.calls.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: the early release check doesn't start a service the branch's settings recreate (SW-638, SW-118)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = noServices(ws, []);
+    const starts = [];
+    d.branchRegistry = () => REGISTRY;
+    d.gateCompose = () => ["api"];
+    d.startService = async (_ws, feature, service, composeName) => {
+      starts.push(`${feature}-${service} from ${composeName ?? "compose.yml"}`);
+    };
+    assert.deepEqual(failed(await gate(ws, d)), []);
+    // The release check ran in lib's container; api started once, from the branch's settings.
+    assert.deepEqual(starts, ["feat-lib from compose.yml", "feat-api from compose.gate.yml"]);
+  } finally {
+    clean(ws);
   }
 });
 
@@ -1481,7 +1526,8 @@ test("gate: a touched service whose branch settings change compose runs from com
     const g = await gate(ws, d);
     assert.deepEqual(failed(g), []);
     assert.deepEqual(rendered, [{ REDIS_URL: "redis://redis:6379" }]);
-    const order = d.calls.filter((c) => /^start |^docker exec feat-api sh -c npm/.test(c));
+    // The release check's setup `up` of the kept lib (SW-638) aside.
+    const order = d.calls.filter((c) => /^start feat-api|^docker exec feat-api sh -c npm/.test(c));
     assert.deepEqual(order, [
       "start feat-api from compose.gate.yml",
       "docker exec feat-api sh -c npm test -w api",
@@ -1497,7 +1543,8 @@ test("gate: a touched service whose branch settings change compose runs from com
     const r = stubRun([[/^docker ps/, { stdout: "feat-lib\n" }], DIFF_API]);
     Object.assign(cold, { run: r.run, calls: r.calls });
     assert.deepEqual(failed(await gate(ws, cold)), []);
-    assert.deepEqual(cold.started, ["feat-api"]);
+    // feat-lib: the release check's setup `up` of the running lib (SW-638), not a new container.
+    assert.deepEqual(cold.started, ["feat-lib", "feat-api"]);
     assert.ok(cold.calls.includes("docker stop feat-api"), cold.calls.join("\n"));
   } finally {
     clean(ws);
