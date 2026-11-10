@@ -234,6 +234,12 @@ const propose: Stage = {
   }),
 };
 
+// SW-653: a spec planned "commit each batch"; 02_spec cannot see that commits belong to a later stage.
+const noCommitPlan = (group: string[]) =>
+  group.length
+    ? " The implement stage makes those commits; plan the work and its checks, not finer commits."
+    : " Code changes stay uncommitted until the propose stage, so plan the work and its checks, not commits.";
+
 const feature: Stage[] = [
   {
     name: "research",
@@ -288,7 +294,7 @@ const feature: Stage[] = [
       doNotLoad:
         "source files already summarised in `inventory.md` (if it looks wrong, fix `inventory.md` and tell the person), `.werkmeister/*.yml`, other stages.",
       process: [
-        `Write \`output/spec.md\`: what changes, file by file; the interfaces or schemas added; the tests that will prove it; what is explicitly out of scope.${v.group.length ? " This is a grouped PR: list one commit per ticket (`<KEY> …`) and what each holds, but do not fix their order." : ""}`,
+        `Write \`output/spec.md\`: what changes, file by file; the interfaces or schemas added; the tests that will prove it; what is explicitly out of scope.${v.group.length ? " This is a grouped PR: list one commit per ticket (`<KEY> …`) and what each holds, but do not fix their order." : ""}${noCommitPlan(v.group)}`,
         "If the change has a machine-checkable artifact (a schema, an API document, a migration), write it in the repo and validate it with a command that needs no new dependency. Record the exact command in `spec.md`.",
         "Map each acceptance criterion in `BRIEF.md` to the step or test in `spec.md` that satisfies it. A criterion with no mapping is a defect in this stage.",
         // SW-288: a ticket-vs-standard conflict surfaced only in implement, after the code was written.
@@ -381,7 +387,7 @@ const bugfix: Stage[] = [
         NAME_HISTORY_STEP,
         // SW-564: sw-521's root cause was a permission rule; step 4 listed the callers of one builder and missed two other sources of a matching rule.
         "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source.",
-        "Write `output/repro.md`: steps 1–7, and a proposed fix in one paragraph under a `status: proposed` line.",
+        `Write \`output/repro.md\`: steps 1–7, and a proposed fix in one paragraph under a \`status: proposed\` line.${noCommitPlan(v.group)}`,
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
       humanCheck: `Read \`output/repro.md\`. Correct the root cause or the proposed fix if needed, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts the fix without asking again. ${CHAT_APPROVAL}`,
@@ -491,7 +497,7 @@ const refactor: Stage[] = [
         "State the invariants: observable behaviour that must be identical after the refactor.",
         "Name the existing tests that pin each invariant, and the gaps no test covers.",
         // SW-467: the grouped 02_implement takes "its scope.md steps" per ticket, so scope.md nests them that way.
-        `Write \`output/scope.md\`: steps 1–3, the sequence of small steps you propose${v.group.length ? ` under one heading per ticket key (the workspace's issue, then ${keys(v.group)})` : ""}, and a \`status: proposed\` line.`,
+        `Write \`output/scope.md\`: steps 1–3, the sequence of small steps you propose${v.group.length ? ` under one heading per ticket key (the workspace's issue, then ${keys(v.group)})` : ""}, and a \`status: proposed\` line.${noCommitPlan(v.group)}`,
       ],
       outputs: ["`output/scope.md`"],
       humanCheck: `Read \`output/scope.md\`. Correct the scope or invariants, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts without asking again. ${CHAT_APPROVAL}`,
