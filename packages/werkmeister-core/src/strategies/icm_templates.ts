@@ -62,6 +62,10 @@ const RELOAD_RULE =
   "Never run `werkmeister feature restart` or `werkmeister workspace init` to reload — " +
   "they are slower, and init rewrites the stage contracts.";
 
+// SW-612: sw-588 fell back to a published port after `feature up` warned a routed hostname did not resolve.
+const HOSTNAME_RULE =
+  "If `werkmeister feature up` warns that a routed hostname does not resolve to 127.0.0.1 (its last warning line points to `werkmeister machine setup`), stop before any browser check and ask the person to run `werkmeister machine setup` (it needs sudo for the hosts entries and certificate trust). Never click through or bypass a certificate warning. Use the container's published port instead only when the person says to skip setup, and record it in `exercise.md` as a deviation.";
+
 // SW-143: a library or CLI has nothing to restart. How to exercise one is the service's (or its archetype's)
 // `validate:` text, so app-specific steps stay out of the generic templates.
 const NO_SERVICE_RULE =
@@ -337,7 +341,7 @@ const feature: Stage[] = [
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
@@ -451,7 +455,7 @@ const bugfix: Stage[] = [
       ],
       doNotLoad: "`BRIEF.md` (`repro.md` carries the settled scope), `.werkmeister/*.yml`.",
       process: [
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
         "Exercise one neighbouring path through each caller `repro.md` listed. Capture the output.",
         `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
@@ -533,7 +537,7 @@ const refactor: Stage[] = [
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
-        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${NO_SERVICE_RULE}`,
+        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
