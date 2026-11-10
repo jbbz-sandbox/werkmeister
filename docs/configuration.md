@@ -592,7 +592,7 @@ Per-feature Docker Compose stack containing:
 ### .env
 
 Environment file loaded by Docker Compose, containing:
-- `SANDBOX_FEATURE`, `WERKMEISTER_SLOT`, `COMPOSE_PROJECT_NAME`
+- `WERKMEISTER_FEATURE` (and `SANDBOX_FEATURE`, its transition alias), `WERKMEISTER_SLOT`, `COMPOSE_PROJECT_NAME`
 - Node.js version and environment settings
 - Resolved URLs for every service (e.g., `FRONTEND_URL=http://frontend:3000`)
 - Database connection strings pointing to shared infrastructure (e.g., `REDIS_URL=redis://redis:6379`)
@@ -608,7 +608,8 @@ Optional: generated only when a service has a GraphQL type (`graphql-subgraph`, 
 | `WERKMEISTER_ROOT` | CLI, all commands | Auto-detected from script location | Root path of the Werkmeister repository. Set from `~/.zshenv` (not `~/.zshrc`) so non-interactive shells (Claude Code's Bash tool, cron, MCP servers) can see it. |
 | `WERKMEISTER_DEBUG` | CLI dispatcher | (not set) | When set to any value, print full stack traces on errors |
 | `WERKMEISTER_WORKSPACES_ROOT` | config, detect | `~/workspace` | Root directory containing feature workspaces. Set from `~/.zshenv` (not `~/.zshrc`) for the same non-interactive-shell reason as `WERKMEISTER_ROOT` above. Deprecated aliases (kept for back-compat, removed in v2): `WERKMEISTER_WORKSPACE_ROOT` (singular form), `WORKSPACE` (legacy), `VIBE_WORKSPACES_ROOT` (pre-VK-decoupling). |
-| `SANDBOX_FEATURE` | test command, .env | (not set) | Set in the environment of Playwright test processes |
+| `WERKMEISTER_FEATURE` | test command, .env | (not set) | Set in the environment of Playwright test processes |
+| `SANDBOX_FEATURE` | test command, .env | (not set) | Transition alias for `WERKMEISTER_FEATURE`, exported until suites move to the new name |
 | `WERKMEISTER_SLOT` | test command, .env | (not set) | Set in the environment of Playwright test processes |
 | `GITHUB_AUTH_TOKEN` | .env, containers | (required) | GitHub token for npm registry access |
 | `POSTGRES_INSTANCE` | .env | (required) | Cloud SQL Proxy instance connection string |
