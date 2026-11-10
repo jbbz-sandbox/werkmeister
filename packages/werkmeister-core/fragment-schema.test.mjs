@@ -146,6 +146,11 @@ test("plugins/ maps to a service whose test runs the plugin package (SW-580)", (
   assert.match(fragment.services[owner].test, /--filter=werkmeister-plugin\b/);
 });
 
+// SW-617: the dev server answers every path with one shell, so validate names the built page instead.
+test("docs-site validate checks the built page, not the dev server (SW-617)", () => {
+  assert.match(fragment.services["docs-site"].validate, /dist\/docs\/<page>\.html/);
+});
+
 // SW-644: docs-site is built from docs/, so a docs change must run its row, not skip it.
 test("docs/ maps to docs-site and is not a no-service path (SW-644)", () => {
   assert.equal(fragment.repo.path_mappings.docs, "docs-site");
