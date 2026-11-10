@@ -134,7 +134,7 @@ test("each template renders with no undefined and a route per stage", async () =
             /warns that a routed hostname does not resolve to 127\.0\.0\.1.*stop before any browser check and ask the person to run `werkmeister machine setup`.*Never click through or bypass a certificate warning/,
             `${wt}/${d}`,
           );
-          assert.doesNotMatch(c, /docs-site|localhost:/, `${wt}/${d}`);
+          assert.doesNotMatch(c, /docs-site/, `${wt}/${d}`);
         }
         // SW-619: the build stages re-check the base for the files their input doc changes, before any code.
         if (/_(implement|fix)$/.test(d)) {
@@ -190,6 +190,13 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(
             c,
             /Before asking for approval, list the exercise rows only a person can run .* one question per row \(pass \/ fail \/ not run\).*`MANUAL: not run \(person's reason\)`/,
+            `${wt}/${d}`,
+          );
+        // SW-613: each manual-row question names the URL, how to reach this workspace's copy, and what PASS looks like.
+        if (c.includes("Write `output/exercise.md`"))
+          assert.match(
+            c,
+            /Each question states the URL to open, how to reach this workspace's copy \(the `X-Feature` cookie or selector.*direct published port, `localhost:<port>`.*\), and the visible before → after that means PASS/,
             `${wt}/${d}`,
           );
         // SW-579: the bugfix review step rewrites exercise.md, so the MANUAL step comes before it; elsewhere it follows the exercise.md write.
