@@ -26,7 +26,7 @@ Run all four checks, then show the results as one table:
 
 If any row fails, **stop here**. Don't run machine setup: it would fail partway through. For each missing one, say what it is and how to install it:
 
-- Claude Code: <https://docs.claude.com/en/docs/claude-code/setup> (OpenCode and Codex also work, see werkmeister's Other harnesses page)
+- Claude Code: <https://docs.claude.com/en/docs/claude-code/setup> (OpenCode and Codex also work, see werkmeister's Harnesses page, docs/harnesses.md)
 - git: `xcode-select --install` on macOS, `sudo apt install git` on Debian/Ubuntu
 - Node.js 22: <https://nodejs.org>, or `nvm install 22`
 - Containers: OrbStack or Docker Desktop on macOS; Docker Engine with the compose plugin on Linux (<https://docs.docker.com/engine/install/>). If `docker` exists but `docker info` fails, the daemon isn't running: start it.
