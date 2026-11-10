@@ -20,6 +20,16 @@ function proseLines(f) {
     });
 }
 
+// SW-611: a heading id on the site must be the one GitHub and docs:check compute.
+test("site heading ids follow GitHub's slug rule", () => {
+  const { slugify } = config.markdown.anchor;
+  assert.equal(slugify("Slots & port ranges"), "slots--port-ranges");
+  assert.equal(
+    slugify("werkmeister.services.yaml (generated)"),
+    "werkmeisterservicesyaml-generated",
+  );
+});
+
 // VitePress runs Vue interpolation over prose and inline code; only fences are v-pre.
 test("no unescaped {{ }} in prose", () => {
   const hits = FILES.flatMap(proseLines)

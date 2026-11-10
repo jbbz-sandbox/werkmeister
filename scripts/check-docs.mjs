@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { slug } from "../apps/docs-site/slug.mjs";
 import {
   BUILD_FIRST,
   CLI_PACKAGE,
@@ -259,15 +260,7 @@ export function checkPlaceholders(text, report) {
   });
 }
 
-/** GitHub's heading id: link text kept, punctuation dropped, lowercased, spaces to hyphens. */
-export function slug(heading) {
-  return heading
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{M}\p{N}_ -]/gu, "")
-    .replace(/ /g, "-");
-}
+export { slug };
 
 /** Every `#id` a doc defines: heading slugs (GitHub suffixes repeats -1, -2, …) and `<a id|name>`. */
 export function anchors(text) {
