@@ -10,6 +10,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
+import { isDeepStrictEqual } from "node:util";
 import YAML from "yaml";
 
 import { clearNotice, raiseNotice, writeWakeNudge } from "./agent_state.js";
@@ -57,6 +58,7 @@ import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import {
   branchRegistry,
+  FRAGMENT_REL,
   type MergedRegistry,
   registryChanges,
   syncRegistry,
@@ -603,6 +605,46 @@ export function unmappedFiles(files: string[], repo: RepoEntry): string[] {
   return files.filter((f) => mappingFor(f, repo) === undefined);
 }
 
+type Rendered = {
+  services: ServicesConfig;
+  repos: Record<string, RepoEntry>;
+  setup_services: ServicesConfig;
+};
+
+/**
+ * What the repo's own fragment changes for its gate (SW-573): its services whose rendered
+ * entries differ from the base's (*before*), or `all` naming the change that reaches every
+ * service (a `repo:` key, its own `setup_services`). A mapping change counts only when it
+ * moves a file of this diff: otherwise it changes no test.
+ */
+export function fragmentTouched(
+  dir: string,
+  files: string[],
+  branch: Rendered,
+  before: Rendered,
+): { all: string | null; services: string[] } {
+  const br = branch.repos[dir] ?? {};
+  const mr = before.repos[dir] ?? {};
+  const mappingKeys = ["path_mappings", "no_service_paths"];
+  const moved = files.some((f) => mappingFor(f, br) !== mappingFor(f, mr));
+  const reasons = [...new Set([...Object.keys(br), ...Object.keys(mr)])]
+    .filter((k) => k !== "services" && !isDeepStrictEqual(br[k], mr[k]))
+    .filter((k) => moved || !mappingKeys.includes(k))
+    .sort()
+    .map((k) => `repo: ${k}`);
+  const ownSetup = (m: ServicesConfig) => Object.keys(m).filter((n) => m[n]?.["repo"] === dir);
+  const setup = [
+    ...new Set([...ownSetup(branch.setup_services), ...ownSetup(before.setup_services)]),
+  ];
+  for (const n of setup.sort())
+    if (!isDeepStrictEqual(branch.setup_services[n], before.setup_services[n]))
+      reasons.push(`setup_services: ${n}`);
+  const services = ((br["services"] ?? []) as string[])
+    .filter((s) => !isDeepStrictEqual(branch.services[s], before.services[s]))
+    .sort();
+  return { all: reasons.length ? reasons.join(", ") : null, services };
+}
+
 function readEnv(ws: string, key: string): string {
   try {
     for (const line of fs.readFileSync(path.join(ws, ".env"), "utf8").split(/\r?\n/)) {
@@ -976,9 +1018,45 @@ async function gateChecks(
   if (diff.code !== 0) {
     add("tests", false, `cannot diff against origin/${base}: ${diff.stderr.trim()}`);
   }
-  const files = diff.code === 0 ? diff.stdout.split("\n").filter(Boolean) : [];
-  const touched = mapTouched(files, repo);
+  const diffed = diff.code === 0 ? diff.stdout.split("\n").filter(Boolean) : [];
+  // The repo's own fragment maps to what its rendered entries change, not to every service (SW-573).
+  // Against the diff's own base, not the machine registry, which `registry --from` may have synced from this branch.
+  const baseRegistry = async (): Promise<MergedRegistry | null> => {
+    const mb = await deps.run("git", ["-C", dir, "merge-base", `origin/${base}`, "HEAD"]);
+    const show = mb.code
+      ? mb
+      : await deps.run("git", ["-C", dir, "show", `${mb.stdout.trim()}:${FRAGMENT_REL}`]);
+    if (show.code) return null;
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gate-base-"));
+    try {
+      fs.mkdirSync(path.dirname(path.join(tmp, FRAGMENT_REL)));
+      fs.writeFileSync(path.join(tmp, FRAGMENT_REL), show.stdout);
+      return deps.branchRegistry(file.dir, tmp);
+    } catch {
+      return null;
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  };
+  const before =
+    own && diffed.includes(FRAGMENT_REL) && mappingFor(FRAGMENT_REL, repo) === undefined
+      ? await baseRegistry()
+      : null;
+  // No base fragment (new, or unreadable): the file stays unmapped and every service runs.
+  const fragment = own && before ? fragmentTouched(file.dir, diffed, own, before) : null;
+  const files = fragment ? diffed.filter((f) => f !== FRAGMENT_REL) : diffed;
+  const touched = fragment?.all
+    ? [...((repo["services"] ?? []) as string[])].sort()
+    : [...new Set([...mapTouched(files, repo), ...(fragment?.services ?? [])])].sort();
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
+  if (fragment)
+    add(
+      "tests",
+      true,
+      fragment.all
+        ? `every service: ${FRAGMENT_REL} changes ${fragment.all}`
+        : `fragment: ${FRAGMENT_REL} changes ${fragment.services.join(", ") || "no service entry"}`,
+    );
   const unmapped = unmappedFiles(files, repo);
   const unmappedList = `${unmapped.slice(0, 5).join(", ")}${unmapped.length > 5 ? ", …" : ""}`;
   // Nothing touched yet unmapped files: the repo has no services to map to
