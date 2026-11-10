@@ -163,6 +163,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /Before asking for approval, list the exercise rows only a person can run .* one question per row \(pass \/ fail \/ not run\).*`MANUAL: not run \(person's reason\)`/,
             `${wt}/${d}`,
           );
+        // SW-579: the bugfix review step rewrites exercise.md, so the MANUAL step comes before it; elsewhere it follows the exercise.md write.
+        if (c.includes("Write `output/exercise.md`")) {
+          const manual = c.indexOf("Before asking for approval, list the exercise rows");
+          const review = c.indexOf("Review the diff: for each code worktree");
+          if (d.endsWith("_exercise")) assert.ok(manual > -1 && manual < review, `${wt}/${d}`);
+          else assert.ok(manual > c.indexOf("Write `output/exercise.md`"), `${wt}/${d}`);
+        }
         // SW-564: a permission-rule root cause lists every source of a matching rule.
         if (d.endsWith("_reproduce"))
           assert.match(

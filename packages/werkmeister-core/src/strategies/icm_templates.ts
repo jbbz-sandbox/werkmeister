@@ -447,11 +447,12 @@ const bugfix: Stage[] = [
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
         "Exercise one neighbouring path through each caller `repro.md` listed. Capture the output.",
         `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
+        // SW-579: the review step rewrites exercise.md, so recorded MANUAL results come first.
+        MANUAL_STEP,
         reviewStep(
           "rerun the test command exactly as `../../.werkmeister/werkmeister-context.md` states it (through `.werkmeister/bin/with-temp-home`), rerun steps 2–3 and update `exercise.md`",
           v.group,
         ),
-        MANUAL_STEP,
       ],
       outputs: [
         "`output/exercise.md`",
