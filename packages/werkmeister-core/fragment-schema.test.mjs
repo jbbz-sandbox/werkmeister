@@ -146,6 +146,14 @@ test("plugins/ maps to a service whose test runs the plugin package (SW-580)", (
   assert.match(fragment.services[owner].test, /--filter=werkmeister-plugin\b/);
 });
 
+// SW-645: the host has no node_modules, so the exercise-rebuild step must be the container form.
+test("cli validate runs exercise-rebuild in the container (SW-645)", () => {
+  assert.match(
+    fragment.services.cli.validate,
+    /docker exec -w \/app <container> \S+with-temp-home --no-wait node apps\/werkmeister-mcp\/scripts\/exercise-rebuild\.mjs \/app/,
+  );
+});
+
 // SW-617: the dev server answers every path with one shell, so validate names the built page instead.
 test("docs-site validate checks the built page, not the dev server (SW-617)", () => {
   assert.match(fragment.services["docs-site"].validate, /dist\/docs\/<page>\.html/);
