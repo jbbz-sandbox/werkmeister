@@ -9,7 +9,7 @@ werkmeister\-infra\-connect \- Start all shared infrastructure (local + k8s port
 Start/restart k8s port\-forwards container only (replaces standalone k8s\-connect command)
 .SH DESCRIPTION
 .PP
-\fB`\-\-k8s`\fR starts or checks only the containerized k8s port\-forwards. Starts the \fBk8s\-forwards\fR Docker container (part of \fBinfra/compose/shared\-infra.yml\fR), which runs one \fBkubectl port\-forward\fR process per entry in the generated forwards table, all inside a single container. If the container is already healthy, the command says so and does nothing.
+\fB`\-\-k8s`\fR starts or checks only the containerized k8s port\-forwards. Starts the \fBk8s\-forwards\fR Docker container (part of \fBapps/cli/infra/compose/shared\-infra.yml\fR), which runs one \fBkubectl port\-forward\fR process per entry in the generated forwards table, all inside a single container. If the container is already healthy, the command says so and does nothing.
 .PP
 The container runs on the \fBwerkmeister\-shared\fR Docker network and is accessible to other containers via the DNS name \fBk8s\-forwards\fR. Port\-forward processes inside the container auto\-restart if they disconnect, managed by the container's entrypoint script.
 .PP

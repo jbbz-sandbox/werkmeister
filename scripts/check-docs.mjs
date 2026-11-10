@@ -111,7 +111,7 @@ const SKIP = [
   /\.help\.md$/,
 ];
 
-const PATH_ROOTS = /^(apps|packages|plugins|docs|scripts|\.github)\//;
+const PATH_ROOTS = /^(apps|infra|packages|plugins|docs|scripts|\.github)\//;
 
 /** Inline code spans and fenced-block lines, each with its 1-based line number. */
 export function codeSpans(text) {

@@ -48,7 +48,7 @@ docker exec w9r-caddy caddy reload --config /tmp/Caddyfile
 
 ## A Second Checkout Runs Against the Installed One's Files
 
-**What you see:** a `werkmeister` built in a second checkout or worktree serves `infra/` and templates from the installed checkout. `paths.werkmeister_root` in `~/.werkmeister/config.yaml` is one value per machine, and only the installed CLI moves it.
+**What you see:** a `werkmeister` built in a second checkout or worktree serves `apps/cli/infra/` and templates from the installed checkout. `paths.werkmeister_root` in `~/.werkmeister/config.yaml` is one value per machine, and only the installed CLI moves it.
 
 **What to do:** for a one-off run, prefix the command with `WERKMEISTER_ROOT=<checkout>/apps/cli`. To switch for good, edit `paths.werkmeister_root` in `~/.werkmeister/config.yaml` and run `werkmeister machine config --write`.
 

@@ -168,17 +168,17 @@ the issue tracker and, on a terminal, offers `gh auth login`.
 
 ### Proxy Setup
 
-The Caddy proxy runs as part of shared infrastructure (`infra/compose/shared-infra.yml`):
+The Caddy proxy runs as part of shared infrastructure (`apps/cli/infra/compose/shared-infra.yml`):
 
 ```bash
 # Start (included in werkmeister connect)
-docker compose -f infra/compose/shared-infra.yml up -d caddy
+docker compose -f apps/cli/infra/compose/shared-infra.yml up -d caddy
 
 # Stop
-docker compose -f infra/compose/shared-infra.yml stop caddy
+docker compose -f apps/cli/infra/compose/shared-infra.yml stop caddy
 
 # View logs
-docker compose -f infra/compose/shared-infra.yml logs -f caddy
+docker compose -f apps/cli/infra/compose/shared-infra.yml logs -f caddy
 ```
 
 Container details:
@@ -215,12 +215,12 @@ curl -H "X-Feature: my-feature" https://frontend.local.werkmeister.io/
 
 ## k8s Port-Forwards (Containerized)
 
-k8s port-forwards run inside a Docker container. It is part of the shared infrastructure and is managed through `infra/compose/shared-infra.yml`.
+k8s port-forwards run inside a Docker container. It is part of the shared infrastructure and is managed through `apps/cli/infra/compose/shared-infra.yml`.
 
 ### Container Details
 
 - **Container name**: `w9r-k8s-forwards`
-- **Built from**: `infra/compose/k8s-port-forward/Dockerfile`
+- **Built from**: `apps/cli/infra/compose/k8s-port-forward/Dockerfile`
 - **Network**: `werkmeister-shared` (accessible to all feature containers via DNS name `k8s-forwards`)
 - **Health checks**: Managed by Docker health checks defined in the compose file
 
@@ -234,7 +234,7 @@ docker logs w9r-k8s-forwards
 docker logs -f w9r-k8s-forwards
 
 # Restart the container (re-establishes all port-forwards)
-docker compose -f infra/compose/shared-infra.yml restart k8s-forwards
+docker compose -f apps/cli/infra/compose/shared-infra.yml restart k8s-forwards
 
 # Check container health
 docker inspect --format='{{.State.Health.Status}}' w9r-k8s-forwards
