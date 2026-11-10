@@ -24,6 +24,7 @@ import {
   failedRowExcerpt,
   failureExcerpt,
   formatGate,
+  fragmentTouched,
   gatePrs,
   gateTests,
   lifecycleOf,
@@ -438,6 +439,220 @@ test("gate: an unmapped non-doc file still touches every service", async () => {
     assert.deepEqual(
       g.checks.filter((c) => c.name === "tests").map((c) => [c.ok, c.detail]),
       [[true, "every service: no path_mappings or no_service_paths entry for package.json"]],
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+// SW-573: the repo's own fragment touches what its rendered entries change.
+const MACHINE = { services: REGISTRY.services, repos: REGISTRY.repos, setup_services: {} };
+const withApp = (repo, services = REGISTRY.services, setup_services = {}) => ({
+  services,
+  repos: { app: { ...REGISTRY.repos.app, ...repo } },
+  setup_services,
+});
+const FRAG = ".werkmeister/services.yaml";
+
+test("fragmentTouched: a changed service entry touches that service; a repo: key every service (SW-573)", () => {
+  const apiTest = {
+    ...REGISTRY.services,
+    api: { ...REGISTRY.services.api, test: "npm test -w api -- --x" },
+  };
+  assert.deepEqual(fragmentTouched("app", [FRAG], withApp({}, apiTest), MACHINE), {
+    all: null,
+    services: ["api"],
+  });
+  assert.deepEqual(fragmentTouched("app", [FRAG], withApp({}), MACHINE), {
+    all: null,
+    services: [],
+  });
+  assert.deepEqual(fragmentTouched("app", [FRAG], withApp({ lint: "biome ci ." }), MACHINE), {
+    all: "repo: lint",
+    services: [],
+  });
+  const install = { "app-install": { repo: "app", image: "node:22" } };
+  assert.equal(
+    fragmentTouched("app", [FRAG], withApp({}, REGISTRY.services, install), MACHINE).all,
+    "setup_services: app-install",
+  );
+  assert.equal(
+    fragmentTouched(
+      "app",
+      [FRAG],
+      withApp({}, REGISTRY.services, { other: { repo: "x" } }),
+      MACHINE,
+    ).all,
+    null,
+    "another repo's setup service is not this repo's change",
+  );
+});
+
+test("fragmentTouched: a mapping change counts only when it moves a file of this diff (SW-573)", () => {
+  const nsp = withApp({ no_service_paths: [...REGISTRY.repos.app.no_service_paths, "scripts"] });
+  assert.equal(fragmentTouched("app", [FRAG, "docs/a.md"], nsp, MACHINE).all, null);
+  assert.equal(
+    fragmentTouched("app", [FRAG, "scripts/x.mjs"], nsp, MACHINE).all,
+    "repo: no_service_paths",
+  );
+  const remap = withApp({ path_mappings: { ...REGISTRY.repos.app.path_mappings, tools: "api" } });
+  assert.equal(
+    fragmentTouched("app", [FRAG, "tools/x.ts"], remap, MACHINE).all,
+    "repo: path_mappings",
+  );
+});
+
+test("fragmentTouched: SW-563's own diff touches only werkmeister-dashboard and werkmeister-core (SW-573)", () => {
+  // 04787d28..0a8c00b9 in the werkmeister repo: four no_service_paths entries and the dashboard's test filter.
+  const svcs = [
+    "cli",
+    "docs-site",
+    "werkmeister-core",
+    "werkmeister-dashboard",
+    "werkmeister-vscode",
+  ];
+  const base = {
+    services: svcs,
+    path_mappings: {
+      "apps/cli": "cli",
+      "apps/docs-site": "docs-site",
+      "packages/werkmeister-core": "werkmeister-core",
+      "apps/werkmeister-dashboard": "werkmeister-dashboard",
+      "apps/werkmeister-vscode": "werkmeister-vscode",
+      "apps/werkmeister-mcp": "cli",
+      plugins: "werkmeister-core",
+    },
+    no_service_paths: [
+      "docs",
+      ".changeset",
+      ".gitignore",
+      "README.md",
+      ".github",
+      ".vscode",
+      ".claude",
+    ],
+  };
+  const dashboard = { path: "apps/werkmeister-dashboard", type: "web" };
+  const entries = (test) =>
+    Object.fromEntries(
+      svcs.map((s) => [s, s === "werkmeister-dashboard" ? { ...dashboard, test } : { path: s }]),
+    );
+  const machine = {
+    services: entries("pnpm turbo run test --continue --filter=werkmeister-dashboard"),
+    repos: { werkmeister: base },
+    setup_services: {},
+  };
+  const branchRepo = {
+    ...base,
+    no_service_paths: [
+      ...base.no_service_paths,
+      "scripts",
+      "bin",
+      "LICENSE",
+      "NOTICE",
+      ".git-blame-ignore-revs",
+    ],
+  };
+  const branch = {
+    services: entries(
+      "pnpm turbo run test --continue --filter=werkmeister-dashboard --filter=werkmeister-ui",
+    ),
+    repos: { werkmeister: branchRepo },
+    setup_services: {},
+  };
+  const files = [
+    ".changeset/sw-552-gate-start-row-cleared.md",
+    ".changeset/sw-563-gate-touched-services.md",
+    FRAG,
+    "docs/workspace-lifecycle.md",
+    "packages/werkmeister-core/pr-lifecycle.test.mjs",
+    "packages/werkmeister-core/src/pr_lifecycle.ts",
+  ];
+  const frag = fragmentTouched("werkmeister", files, branch, machine);
+  assert.deepEqual(frag, { all: null, services: ["werkmeister-dashboard"] });
+  const rest = mapTouched(
+    files.filter((f) => f !== FRAG),
+    branchRepo,
+  );
+  assert.deepEqual([...new Set([...rest, ...frag.services])].sort(), [
+    "werkmeister-core",
+    "werkmeister-dashboard",
+  ]);
+});
+
+test("gate: a fragment diff that changes one service's test: runs only that service's row (SW-573)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const api = { ...REGISTRY.services.api, test: "npm test -w api -- --ci" };
+    const d = deps([[/diff --name-only/, { stdout: `${FRAG}\n` }]], {
+      branchRegistry: (_repo, wt) =>
+        wt.includes("gate-base-") ? MACHINE : withApp({}, { ...REGISTRY.services, api }),
+    });
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.deepEqual(
+      g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name),
+      ["test api"],
+    );
+    assert.ok(d.calls.includes("docker exec feat-api sh -c npm test -w api -- --ci"));
+    assert.deepEqual(
+      g.checks.filter((c) => c.name === "tests").map((c) => c.detail),
+      [`fragment: ${FRAG} changes api`, "not touched, not run: lib"],
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: the fragment is compared with its base, not a machine registry synced from the branch (SW-573)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const api = { ...REGISTRY.services.api, test: "npm test -w api -- --ci" };
+    const branch = withApp({}, { ...REGISTRY.services, api });
+    // `registry --from` left the branch in the machine registry; the base still differs.
+    const synced = deps([[/diff --name-only/, { stdout: `${FRAG}\n` }]], {
+      services: branch.services,
+      branchRegistry: (_repo, wt) => (wt.includes("gate-base-") ? MACHINE : branch),
+    });
+    const g = await gate(ws, synced);
+    assert.deepEqual(
+      g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name),
+      ["test api"],
+    );
+
+    // No fragment on the base: unmapped as before, every service.
+    const added = deps(
+      [
+        [/diff --name-only/, { stdout: `${FRAG}\n` }],
+        [/ show \S*:\.werkmeister\/services\.yaml$/, { code: 128, stderr: "does not exist" }],
+      ],
+      { branchRegistry: () => branch },
+    );
+    const g2 = await gate(ws, added);
+    assert.deepEqual(
+      g2.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name),
+      ["test api", "test lib"],
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a fragment repo: change still tests every service (SW-573)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([[/diff --name-only/, { stdout: `${FRAG}\n` }]], {
+      branchRegistry: (_repo, wt) =>
+        wt.includes("gate-base-") ? MACHINE : withApp({ release_tag: "app@*" }),
+    });
+    const g = await gate(ws, d);
+    assert.deepEqual(
+      g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name),
+      ["test api", "test lib"],
+    );
+    assert.deepEqual(
+      g.checks.filter((c) => c.name === "tests").map((c) => c.detail),
+      [`every service: ${FRAG} changes repo: release_tag`],
     );
   } finally {
     clean(ws);
