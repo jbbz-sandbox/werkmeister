@@ -136,6 +136,19 @@ test("each template renders with no undefined and a route per stage", async () =
           );
           assert.doesNotMatch(c, /docs-site|localhost:/, `${wt}/${d}`);
         }
+        // SW-619: the build stages re-check the base for the files their input doc changes, before any code.
+        if (/_(implement|fix)$/.test(d)) {
+          const doc = { feature: "spec", bugfix: "repro", refactor: "scope" }[wt];
+          if (doc)
+            assert.match(
+              c,
+              new RegExp(
+                `^\\d+\\. Before writing code, fetch the base and list .git log --oneline HEAD\\.\\.origin/<base> -- <the files .${doc}\\.md. changes>.*ask the person before writing code\\.`,
+                "m",
+              ),
+              `${wt}/${d}`,
+            );
+        }
         // SW-534: an exercise that changes code gets the review rerun on its delta.
         if (d.endsWith("_implement"))
           assert.match(c, /rerun the review on that delta/, `${wt}/${d}`);

@@ -75,6 +75,11 @@ const IMPLEMENT_STEPS = [
   "Confirm ponytail is active (see `_shared/standards.md`; invoke the skill only if it is not), then read the standards rows above. Restate the rule you are applying beside each edit.",
 ];
 
+// SW-619: sw-597's decision rested on a ticket that merged to main between research and implement; only `issue start` fetched the base.
+const baseCheck = (doc: string) =>
+  `Before writing code, fetch the base and list \`git log --oneline HEAD..origin/<base> -- <the files \`${doc}\` changes>\` (\`<base>\` is \`main\` unless the workspace's PR base differs; name those files, never the whole tree), and run \`werkmeister issue view <KEY>\` for each ticket a decided question names. ` +
+  "If the branch has no commits of its own and the tree is clean, rebase onto the base; with uncommitted changes, never stash (the stash stack is shared) — commit them first or leave the rebase to the person. When a new commit or a ticket change bears on a decided question, stop and ask the person before writing code.";
+
 // SW-124: one wrapper, so no session or subagent hand-rolls (or forgets) its temp HOME.
 // SW-316: a host run misses the container's env; the tests-only gate runs where pr open will.
 // SW-547: sw-526's over-width test lines surfaced only at the lint chain, after 7 commits.
@@ -333,6 +338,7 @@ const feature: Stage[] = [
       doNotLoad: `\`BRIEF.md\` (\`decisions.md\` and \`spec.md\` carry the settled scope), \`inventory.md\`, \`.werkmeister/*.yml\`, \`${COMPOSE_FILE}\`, other stages.`,
       process: [
         ...IMPLEMENT_STEPS,
+        baseCheck("spec.md"),
         ...groupStep(v),
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
@@ -420,6 +426,7 @@ const bugfix: Stage[] = [
         "`BRIEF.md` (`repro.md` carries the settled scope), `.werkmeister/*.yml`, other stages.",
       process: [
         ...IMPLEMENT_STEPS,
+        baseCheck("repro.md"),
         ...groupStep(v),
         "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
         diffCheck("repro.md"),
@@ -530,6 +537,7 @@ const refactor: Stage[] = [
         "`BRIEF.md` (`scope.md` carries the settled scope), `.werkmeister/*.yml`, other stages.",
       process: [
         ...IMPLEMENT_STEPS,
+        baseCheck("scope.md"),
         ...groupStep(v),
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
         // SW-460: groupStep commits per ticket; say how scope.md's steps nest so no step gets its own commit.
