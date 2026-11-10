@@ -27,10 +27,11 @@ repo:
   # scripts/: its tests and checks all run in the lint row above (licenses, docs:check, name:check); SW-563.
   # Anything else outside a service's `path` still touches every service, and the gate's tests row names it.
   # packages/werkmeister-ui stays unmapped on purpose: the dashboard, the MCP app and the vscode extension all import it.
-  no_service_paths: [docs, .changeset, .gitignore, README.md, .github, .vscode, .claude, scripts, bin, LICENSE, NOTICE, .git-blame-ignore-revs]
+  no_service_paths: [.changeset, .gitignore, README.md, .github, .vscode, .claude, scripts, bin, LICENSE, NOTICE, .git-blame-ignore-revs]
   # SW-450: paths no service owns by path, so a change there doesn't test all five.
   path_mappings:
     apps/werkmeister-mcp: cli # cli's row runs --filter=werkmeister-mcp
+    docs: docs-site # SW-644: the site builds from docs/, so a docs change runs its build and dead-link check
     plugins: werkmeister-core # plugin tests live in core; core's row also runs cli's filters and the plugin's typecheck + test (SW-580)
 
 services:
