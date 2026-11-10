@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitepress";
 import { repoLinks } from "../repo-links.mjs";
+import { slug } from "../slug.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const REPO = "https://github.com/jbbz-sandbox/werkmeister";
@@ -91,6 +92,8 @@ export default defineConfig({
     server: { allowedHosts: process.env.DOCS_ALLOWED_HOSTS?.split(",") },
   },
   markdown: {
+    // SW-611: one slug rule. docs:check validates #anchors with GitHub's slug(), so the site must build its ids with it.
+    anchor: { slugify: slug },
     config: (md) =>
       repoLinks(md, {
         root: ROOT,
