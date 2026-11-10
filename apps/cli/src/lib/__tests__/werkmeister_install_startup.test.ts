@@ -101,7 +101,12 @@ beforeEach(() => {
   );
   writeExec(path.join(tmp, "pnpm-stub"), 'echo "pnpm $*" >> "$LOG"');
   writeExec(path.join(tmp, "tools", "bin", "pnpm"), 'echo "pnpm $*" >> "$LOG"');
-  for (const tool of ["bin/docker", "bin/kubectl", "docker/cli-plugins/docker-compose"]) {
+  for (const tool of [
+    "bin/docker",
+    "bin/kubectl",
+    "bin/claude", // SW-580
+    "docker/cli-plugins/docker-compose",
+  ]) {
     writeExec(path.join(tmp, "tools", tool), "exit 0");
   }
 });

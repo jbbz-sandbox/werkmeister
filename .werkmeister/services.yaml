@@ -31,7 +31,7 @@ repo:
   # SW-450: paths no service owns by path, so a change there doesn't test all five.
   path_mappings:
     apps/werkmeister-mcp: cli # cli's row runs --filter=werkmeister-mcp
-    plugins: werkmeister-core # plugin tests live in core; core's row also runs cli's filters
+    plugins: werkmeister-core # plugin tests live in core; core's row also runs cli's filters and the plugin's typecheck + test (SW-580)
 
 services:
   # --- The werkmeister repo's own workspaces (self-hosting) -----------------------
@@ -145,7 +145,7 @@ services:
     type: library
     archetype: node-tool
     # SW-557: same cheap checks first as cli's row.
-    test: "pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm run name:check && pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core"
+    test: "pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm run name:check && pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core --filter=werkmeister-plugin"
     # Bundled into the CLI, so a core change is exercised through the built binary, not node-tool's "run the tests".
     validate: *cli_validate
     internal_port: 3999
