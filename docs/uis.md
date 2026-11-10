@@ -5,7 +5,7 @@ to see them: the browser dashboard, the Claude Code pane, the VS Code extension
 and Claude Desktop. Each shows the same workspaces. Pick the one where you
 already are.
 
-Every screenshot on this page shows demo data.
+Every screenshot on this page shows demo data. To make them, run `scripts/docs-demo-home.sh [features root]`: it seeds three demo workspaces in a throwaway home and prints the env to export before starting the dashboard. The Claude Code pane has no script, because `claude` needs your real login, so its buttons would write your real `~/.werkmeister`: point a demo daemon at that env by hand and click nothing.
 
 ## Workspaces dashboard
 
