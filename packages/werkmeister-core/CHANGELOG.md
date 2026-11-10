@@ -1,5 +1,16 @@
 # sandbox-core
 
+## 0.86.3
+
+### Patch Changes
+
+- dd1c412: The ICM bug-fix exercise stage collects each manual row's result before the review step, so the review's rerun of `exercise.md` cannot drop a recorded `MANUAL: not run` line.
+- 7162800: The ICM research stage checks a recommended answer that rests on an external API, permission or platform behaviour live and read-only before it goes into `decisions.md`; when it cannot, the option text itself says `unverified`, so the person is asked with the word in front of them.
+- 5d768ab: The ICM exercise step stops before any browser check when `werkmeister feature up` warns that a routed hostname does not resolve, and asks the person to run `werkmeister machine setup`. It never bypasses a certificate warning; a published-port fallback is recorded in `exercise.md` as a deviation only when the person says to skip setup.
+- c06f99d: The ICM exercise stages require each manual-row question to state the URL to open, how to reach this workspace's copy (the `X-Feature` cookie or selector for a routed hostname, or the container's published port), and the visible before → after that means PASS, so the person is not left asking what to look for or checking another workspace's build.
+- 44922a4: The ICM build stages (feature implement, bug-fix fix, refactor implement) start by fetching the base and listing the commits on it that touch the files `spec.md`, `repro.md` or `scope.md` changes, plus the status of any ticket a decided question names. A new commit or ticket change that bears on a decision stops the stage for the person before code is written.
+- 5030975: The ICM plan stages (feature spec, bug-fix reproduce, refactor scope) say code changes stay uncommitted until the propose stage, so a spec plans the work and its checks, not commits. A grouped PR's contracts say the implement stage makes the per-ticket commits.
+
 ## 0.86.2
 
 ## 0.86.1
