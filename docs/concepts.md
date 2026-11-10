@@ -147,7 +147,7 @@ infra:
   profiles: [redisinsight, jaeger]
 ```
 
-For a one-off, `COMPOSE_PROFILES=redisinsight werkmeister connect`. `werkmeister infra down` removes them either way.
+For a one-off, `COMPOSE_PROFILES=redisinsight werkmeister infra connect`. `werkmeister infra down` removes them either way.
 
 No cluster? `infra.baseline` runs the base services you aren't changing from digest-pinned images, and each service's `baseline_upstream` in `services.yaml` points `{service}` references at them. See [Without Kubernetes](topology.md#without-kubernetes).
 
@@ -171,7 +171,7 @@ the issue tracker and, on a terminal, offers `gh auth login`.
 The Caddy proxy runs as part of shared infrastructure (`apps/cli/infra/compose/shared-infra.yml`):
 
 ```bash
-# Start (included in werkmeister connect)
+# Start (included in werkmeister infra connect)
 docker compose -f apps/cli/infra/compose/shared-infra.yml up -d caddy
 
 # Stop
