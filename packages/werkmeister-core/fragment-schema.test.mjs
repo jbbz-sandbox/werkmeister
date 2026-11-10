@@ -145,3 +145,9 @@ test("plugins/ maps to a service whose test runs the plugin package (SW-580)", (
   const owner = fragment.repo.path_mappings.plugins;
   assert.match(fragment.services[owner].test, /--filter=werkmeister-plugin\b/);
 });
+
+// SW-644: docs-site is built from docs/, so a docs change must run its row, not skip it.
+test("docs/ maps to docs-site and is not a no-service path (SW-644)", () => {
+  assert.equal(fragment.repo.path_mappings.docs, "docs-site");
+  assert.ok(!fragment.repo.no_service_paths.includes("docs"));
+});

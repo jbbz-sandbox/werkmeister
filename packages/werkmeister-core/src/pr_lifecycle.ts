@@ -574,7 +574,7 @@ function reviewRequired(ws: string): boolean {
 
 /**
  * The longest `path_mappings` or `no_service_paths` prefix covering *file*: its service,
- * `null` for a no-service path (e.g. docs), `undefined` when nothing covers it.
+ * `null` for a no-service path (e.g. .github), `undefined` when nothing covers it.
  */
 function mappingFor(file: string, repo: RepoEntry): string | null | undefined {
   const mappings: [string, string | null][] = [
