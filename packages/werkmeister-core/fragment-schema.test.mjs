@@ -139,3 +139,9 @@ test("baseline_upstream must be host:port (SW-102)", () => {
     assert.equal(validate(frag(bad)), false, String(bad));
   }
 });
+
+// SW-580: a change under plugins/ must reach a row that runs the plugin's typecheck and tests.
+test("plugins/ maps to a service whose test runs the plugin package (SW-580)", () => {
+  const owner = fragment.repo.path_mappings.plugins;
+  assert.match(fragment.services[owner].test, /--filter=werkmeister-plugin\b/);
+});

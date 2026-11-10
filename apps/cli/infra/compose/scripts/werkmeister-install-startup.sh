@@ -119,6 +119,15 @@ if [ ! -x "$TOOLS/bin/kubectl" ]; then
   chmod +x "$TOOLS/bin/kubectl"
 fi
 
+# SW-580: the plugin's gen-types, `claude plugin validate` and `claude plugin test` need `claude`.
+# The version is CI's pin (.github/workflows/ci.yml); none of them needs a login.
+CLAUDE_CODE_VERSION=2.1.316
+if [ ! -x "$TOOLS/bin/claude" ]; then
+  npm install --prefix "$TOOLS/claude-code" "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
+  ln -sf "$TOOLS/claude-code/node_modules/.bin/claude" "$TOOLS/bin/claude"
+fi
+
 "$TOOLS/bin/docker" --version
+"$TOOLS/bin/claude" --version
 DOCKER_CONFIG="$TOOLS/docker" "$TOOLS/bin/docker" compose version
 "$TOOLS/bin/kubectl" version --client
