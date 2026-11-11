@@ -8,8 +8,6 @@ The Claude Code plugin for Werkmeister: a pane of your workspaces, a band in eac
 
 ![The Claude Code workspaces pane: compact cards for three demo workspaces](../../docs/images/uis/claude-code-pane.png)
 
-*Screenshot pending: the image above is a placeholder.*
-
 A docked pane with one compact card per workspace. It opens by itself when an interactive session starts in a folder of workspaces (one whose child holds `.werkmeister/workspace.yml`, e.g. `~/features`); type `/workspaces` to open it again.
 
 - **Line 1:** the name, the agent chip (`◌ Working` · `● Needs you` · `✓ Done` · `Idle`), and `⚙ Auto` for an autonomous run.
