@@ -1633,6 +1633,88 @@ test("gate: no push access fails in the quick rows, before lint and tests (SW-40
   }
 });
 
+const BEHIND = [/rev-list --count HEAD\.\.origin\/main$/, { stdout: "3\n" }];
+// Not pushed yet: the stub answers 0 to anything unlisted, which would read as a pushed branch.
+const UNPUSHED = [/rev-parse --verify -q refs\/remotes\/origin\/me\/ws$/, { code: 1 }];
+
+test("gate: a branch behind origin/<base> fails in the quick rows, after a fetch, before lint and tests (SW-669)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, BEHIND, UNPUSHED]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["base", "tests"]);
+    const row = g.checks.find((c) => c.name === "base").detail;
+    assert.match(row, /3 commits behind origin\/main/);
+    assert.match(row, /git -C \S+ rebase origin\/main/);
+    const fetchAt = d.calls.findIndex((c) => /fetch -q origin main$/.test(c));
+    const countAt = d.calls.findIndex((c) => /rev-list --count HEAD\.\.origin\/main$/.test(c));
+    assert.ok(fetchAt >= 0 && fetchAt < countAt, "fetches before it counts");
+    assert.deepEqual(
+      d.calls.filter((c) => /^docker exec/.test(c)),
+      [],
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a pushed branch behind origin/<base> passes the base row with a note, so a rerun or an open PR isn't blocked (SW-669)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, BEHIND]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.match(
+      g.checks.find((c) => c.name === "base").detail,
+      /3 commits behind origin\/main; me\/ws is already pushed.*--force-with-lease/,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a fetch that fails fails the base row, naming git's error (SW-669)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([
+      DIFF_API,
+      [/fetch -q origin main$/, { code: 128, stderr: "fatal: unable to access origin\n" }],
+    ]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["base", "tests"]);
+    assert.match(g.checks.find((c) => c.name === "base").detail, /unable to access origin/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a branch up to date with origin/<base> passes the base row (SW-669)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, [/rev-list --count HEAD\.\.origin\/main$/, { stdout: "0\n" }]]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.match(g.checks.find((c) => c.name === "base").detail, /up to date with origin\/main/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openPrs: a branch behind origin/<base> pushes and opens nothing (SW-669)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([DIFF_API, BEHIND, UNPUSHED]);
+    const r = await open(ws, d);
+    assert.equal(r.ok, false);
+    assert.deepEqual(
+      d.calls.filter((c) => /push -u origin|^gh pr create/.test(c)),
+      [],
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
 test("openPrs: no push access pushes and opens nothing (SW-408)", async () => {
   const ws = icmWorkspace();
   try {

@@ -130,6 +130,34 @@ test("the gate fixture's one-file change runs lib's test in its container, logge
   );
 });
 
+test("a gate fixture behind origin/main fails the base row after a fetch, before any docker exec (SW-669)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      assert.equal(
+        git(fx.repo, "rev-list", "--count", "HEAD..origin/main"),
+        "0",
+        "stale until fetched",
+      );
+      const { ok, lines } = await gatePrs(fx.workspace);
+      assert.equal(ok, false);
+      const out = lines.join("\n");
+      assert.match(out, /✗ base: 2 commits behind origin\/main — `git -C app rebase origin\/main`/);
+      assert.match(out, /✗ tests: not run — fix the rows above first/);
+      const calls = fs.existsSync(fx.dockerLog) ? fs.readFileSync(fx.dockerLog, "utf8") : "";
+      assert.doesNotMatch(calls, /^exec /m);
+      // After the rebase the command names, the same gate passes.
+      git(fx.repo, "rebase", "-q", "origin/main");
+      const again = await gatePrs(fx.workspace);
+      assert.equal(again.ok, true, again.lines.join("\n"));
+      assert.match(again.lines.join("\n"), /✓ base: up to date with origin\/main/);
+    },
+    { gate: true, behind: true },
+  );
+});
+
 test("with execRuns the gate's lint and test rows pass or fail on the registry's commands (SW-473)", async () => {
   const gate = (lint, libTest) =>
     withFixtureWorkspace(
