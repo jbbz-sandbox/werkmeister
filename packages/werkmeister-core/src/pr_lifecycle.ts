@@ -391,10 +391,14 @@ export interface GateCheck {
   name: string;
   ok: boolean;
   detail: string;
+  /** Failed only for want of capacity, or for a container a capacity-short start never brought up (SW-668). */
+  retry?: true;
 }
 export interface GateResult {
   ok: boolean;
   checks: GateCheck[];
+  /** Failed, and every failure is a capacity wait: rerun, not a FAIL of the change (SW-668). */
+  retry?: true;
   /** `none` when the release check ran and found nothing to bump: the merge ships without a tag (SW-193). */
   release?: "none";
 }
@@ -791,7 +795,31 @@ async function gateChecks(
 ): Promise<GateResult> {
   const followUps = testsOnly ? null : followUpsCheck(ws);
   const checks: GateCheck[] = testsOnly ? [] : [stagesCheck(ws), ...(followUps ? [followUps] : [])];
-  const add = (name: string, ok: boolean, detail: string) => checks.push({ name, ok, detail });
+  let capacityShort = false;
+  // After a NO_CAPACITY start, the rows that then find no container are its consequence, not a verdict.
+  const NO_CONTAINER = /no running container|container not running|not run — fix the rows above/;
+  const add = (name: string, ok: boolean, detail: string) =>
+    checks.push({
+      name,
+      ok,
+      detail,
+      ...(!ok && capacityShort && NO_CONTAINER.test(detail) && { retry: true as const }),
+    });
+  const startFailed = (name: string, e: unknown, prefix = "") => {
+    const capacity = (e as { code?: string }).code === "NO_CAPACITY";
+    if (capacity) capacityShort = true;
+    checks.push({
+      name,
+      ok: false,
+      detail: prefix + (e instanceof Error ? e.message : String(e)),
+      ...(capacity && { retry: true as const }),
+    });
+  };
+  const done = (extra: Partial<GateResult> = {}): GateResult => {
+    const ok = checks.every((c) => c.ok);
+    const retry = !ok && checks.every((c) => c.ok || c.retry);
+    return { ok, checks, ...extra, ...(retry && { retry: true as const }) };
+  };
   // A failure ends with the host load, so a timeout under load reads as load (SW-209).
   // No wait on host load first (SW-542): the 1-min load counts the gate's own install and
   // rows and, on macOS, stalls no CPU shows; admission already priced these containers.
@@ -948,7 +976,7 @@ async function gateChecks(
     // These rows take seconds; lint and the tests can take ten minutes cold (SW-150, SW-364).
     if (checks.some((c) => !c.ok)) {
       add("tests", false, "not run — fix the rows above first");
-      return { ok: false, checks };
+      return { ...done(), ok: false };
     }
   }
 
@@ -1132,7 +1160,7 @@ async function gateChecks(
       started.push(containerOf(feature, pick));
       clearEarlierStart(pick);
     } catch (e) {
-      add(`start ${pick}`, false, e instanceof Error ? e.message : String(e));
+      startFailed(`start ${pick}`, e);
     }
     return true;
   };
@@ -1168,7 +1196,7 @@ async function gateChecks(
         // A test's own container: the tests start it anyway, so a pass costs no extra one. Not one
         // that starts from compose.gate.yml below, which would then be recreated (SW-118).
         if (!(await startRepoContainer(testedIds.find((s) => !changed.includes(s)))))
-          return { ok: false, checks };
+          return { ...done(), ok: false };
         container = repoContainer();
       } else if (kept && !paused.has(containerOf(feature, kept))) {
         // Its setup one-shot first, so the check sees this branch's node_modules (SW-362, SW-541).
@@ -1183,13 +1211,13 @@ async function gateChecks(
       }
       if (container && !(await runRelease(container))) {
         add("tests", false, "not run — fix the rows above first");
-        return { ok: false, checks };
+        return { ...done(), ok: false };
       }
     }
   }
 
   if (own) {
-    if (!(await portsFree(changed))) return { ok: false, checks };
+    if (!(await portsFree(changed))) return { ...done(), ok: false };
     for (const svc of changed) {
       const container = containerOf(feature, svc);
       const wasRunning = running.has(container);
@@ -1201,11 +1229,7 @@ async function gateChecks(
         if (!wasRunning) started.push(container);
         running.add(container);
       } catch (e) {
-        add(
-          `start ${svc}`,
-          false,
-          `with the branch's container settings: ${e instanceof Error ? e.message : String(e)}`,
-        );
+        startFailed(`start ${svc}`, e, "with the branch's container settings: ");
       }
     }
   }
@@ -1225,7 +1249,7 @@ async function gateChecks(
     .map((s) => [s, containerOf(feature, s)])
     .filter(([s, c]) => running.has(c) && !recreated.includes(s) && !started.includes(c))
     .map(([, c]) => c);
-  if (!(await portsFree(ownStarts))) return { ok: false, checks };
+  if (!(await portsFree(ownStarts))) return { ...done(), ok: false };
   for (const svc of ownStarts) {
     touchExecMarker(ws);
     try {
@@ -1234,7 +1258,7 @@ async function gateChecks(
       started.push(containerOf(feature, svc));
       clearEarlierStart(svc);
     } catch (e) {
-      add(`start ${svc}`, false, e instanceof Error ? e.message : String(e));
+      startFailed(`start ${svc}`, e);
     }
   }
 
@@ -1264,7 +1288,7 @@ async function gateChecks(
       try {
         await deps.startService(ws, feature, rerun);
       } catch (e) {
-        add(`start ${rerun}`, false, e instanceof Error ? e.message : String(e));
+        startFailed(`start ${rerun}`, e);
       }
     }
     add(
@@ -1276,7 +1300,7 @@ async function gateChecks(
     );
   }
   if (needsContainer && !repoServices.some(containerFor) && !(await startRepoContainer()))
-    return { ok: false, checks };
+    return { ...done(), ok: false };
 
   if (repo["lint"]) {
     const container = repoContainer();
@@ -1327,7 +1351,7 @@ async function gateChecks(
     await execCheck(`test ${svc}`, container, cmd, 15);
   }
 
-  if (testsOnly) return { ok: checks.every((c) => c.ok), checks };
+  if (testsOnly) return done();
 
   const slot = Number(readEnv(ws, "WERKMEISTER_SLOT"));
   // Only a served endpoint has a baseline; the test check already proved a container ran the rest.
@@ -1351,7 +1375,7 @@ async function gateChecks(
     else await runRelease(container);
   }
 
-  return { ok: checks.every((c) => c.ok), checks, ...(release && { release }) };
+  return done(release ? { release } : {});
 }
 
 /** Files changed since *base*, committed or not, plus untracked ones, as one `git diff --name-only`-shaped result. */
@@ -1390,7 +1414,7 @@ export function failedRowExcerpt(output: string, tail: number): string {
 
 export function formatGate(dir: string, g: GateResult): string[] {
   return [
-    `${dir}: gate ${g.ok ? "passed" : "FAILED"}`,
+    `${dir}: gate ${g.ok ? "passed" : g.retry ? "retry later (no capacity)" : "FAILED"}`,
     ...g.checks.map(
       (c) => `  ${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail.replace(/\n/g, "\n      ")}`,
     ),
@@ -1403,17 +1427,20 @@ export async function gatePrs(
   ws: string,
   only?: string,
   deps: Deps = defaultDeps(),
-): Promise<{ ok: boolean; lines: string[] }> {
+): Promise<{ ok: boolean; lines: string[]; retry?: true }> {
   const all = readPrFiles(ws);
   const files = selectFiles(ws, all, only, (f) => !superseded(f, all));
   const lines: string[] = [];
   let ok = true;
+  // Every failure a capacity wait: the command exits 75, rerun (SW-668).
+  let retryOnly = true;
   for (const f of files) {
     const g = await runGate(ws, f, deps);
     ok &&= g.ok;
+    if (!g.ok && !g.retry) retryOnly = false;
     lines.push(...formatGate(f.stem, g));
   }
-  return { ok, lines };
+  return { ok, lines, ...(!ok && retryOnly && { retry: true as const }) };
 }
 
 /** `pr gate --tests`: each code worktree's lint and test rows, no PR file needed (SW-316). */
@@ -1421,7 +1448,7 @@ export async function gateTests(
   ws: string,
   only?: string,
   deps: Deps = defaultDeps(),
-): Promise<{ ok: boolean; lines: string[] }> {
+): Promise<{ ok: boolean; lines: string[]; retry?: true }> {
   const all = readPrFiles(ws);
   let dirs = repoDirs(ws).map((d) => path.basename(d));
   if (only) {
@@ -1433,6 +1460,8 @@ export async function gateTests(
   }
   const lines: string[] = [];
   let ok = true;
+  // Every failure a capacity wait: the command exits 75, rerun (SW-668).
+  let retryOnly = true;
   for (const dir of dirs) {
     // A PR file, when one exists, supplies its base and skip_tests.
     const file = all.filter((f) => f.dir === dir && !superseded(f, all)).at(-1) ?? {
@@ -1445,9 +1474,10 @@ export async function gateTests(
     };
     const g = await runGate(ws, file, deps, { testsOnly: true });
     ok &&= g.ok;
+    if (!g.ok && !g.retry) retryOnly = false;
     lines.push(...formatGate(dir, g));
   }
-  return { ok, lines };
+  return { ok, lines, ...(!ok && retryOnly && { retry: true as const }) };
 }
 
 /** A merged PR whose worktree has since moved on to a follow-up PR file. */
@@ -1497,11 +1527,12 @@ export async function openPrs(
   ws: string,
   only?: string,
   deps: Deps = defaultDeps(),
-): Promise<{ ok: boolean; lines: string[] }> {
+): Promise<{ ok: boolean; lines: string[]; retry?: true }> {
   const all = readPrFiles(ws);
   const files = selectFiles(ws, all, only, (f) => statusOf(f) === "approved");
   const lines: string[] = [];
   let ok = true;
+  let retryOnly = true;
   const opened: string[] = [];
   for (const f of files) {
     const branch = String(f.fm["branch"] ?? "");
@@ -1514,7 +1545,7 @@ export async function openPrs(
         ["merged", "shipped", "closed"].includes(statusOf(g)),
     );
     if (used) {
-      ok = false;
+      ok = retryOnly = false;
       lines.push(
         `${f.stem}: branch ${branch} was already used by ${used.stem} (${statusOf(used)}) — cut a new one with \`werkmeister pr new ${f.dir} --slug <slug>\``,
       );
@@ -1524,6 +1555,7 @@ export async function openPrs(
     lines.push(...formatGate(f.stem, g));
     if (!g.ok) {
       ok = false;
+      if (!g.retry) retryOnly = false;
       continue;
     }
     const dir = path.join(ws, f.dir);
@@ -1532,7 +1564,7 @@ export async function openPrs(
       : await pushWithRetry(dir, branch, deps);
     if (!push) lines.push(`${f.stem}: push skipped (fixture)`);
     else if (push.code !== 0) {
-      ok = false;
+      ok = retryOnly = false;
       lines.push(`${f.stem}: push failed — ${push.stderr.trim()}`);
       if (TRANSIENT_PUSH.test(push.stderr)) lines.push(`  ${GITHUB_HINT}`);
       continue;
@@ -1588,7 +1620,7 @@ export async function openPrs(
       held = !!hold;
       url = created.stdout.trim().split("\n").pop() ?? "";
       if (created.code !== 0 || !url.startsWith("http")) {
-        ok = false;
+        ok = retryOnly = false;
         lines.push(
           `${f.stem}: gh pr create failed — ${created.stderr.trim() || created.stdout.trim()}`,
         );
@@ -1655,7 +1687,7 @@ export async function openPrs(
   }
   // A failed file still needs the containers to be fixed and re-gated.
   if (ok && opened.length) lines.push(await deps.stop(ws));
-  return { ok, lines };
+  return { ok, lines, ...(!ok && retryOnly && { retry: true as const }) };
 }
 
 export async function refreshPrStatus(

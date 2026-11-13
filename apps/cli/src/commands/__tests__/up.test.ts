@@ -126,4 +126,22 @@ describe("sandbox up", () => {
       delete process.env.WERKMEISTER_DEV;
     }
   });
+
+  // T10. SW-675: a queued up exited 0, so `feature up | tail` read as started.
+  it("a queued feature prints who holds the budget and exits 75", async () => {
+    vi.mocked(upFeature).mockResolvedValue(
+      result({
+        containersStarted: false,
+        waiting: 2,
+        waitingNote: "running: never-fits (3 CPUs, 0.8 GiB, waiting on a person)",
+      }),
+    );
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    await go({ feature: "demo" });
+    expect(exit).toHaveBeenCalledWith(75);
+    expect(lines.join("\n")).toContain("is waiting for capacity (position 2)");
+    expect(lines.join("\n")).toContain(
+      "  running: never-fits (3 CPUs, 0.8 GiB, waiting on a person)",
+    );
+  });
 });

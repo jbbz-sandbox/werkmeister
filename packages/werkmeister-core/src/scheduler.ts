@@ -33,7 +33,22 @@ export interface Request {
   byPerson: boolean;
   /** Set for a start of these services (SW-540): *cost* is what they add to a running feature. */
   services?: string[];
+  /** A gate that released its own containers to wait for them and its new ones together (SW-675). */
+  gate?: boolean;
 }
+
+/** A queued request as admission sees it (SW-675). */
+export interface Waiter {
+  feature: string;
+  /** Since its first wait; 0 when unknown. */
+  waitedMs: number;
+  /** A services start for a feature that already runs containers: a gate, or `up --service` beside them. */
+  gate: boolean;
+}
+
+/** How long the queue head waits before backfill stops passing it and a plain `up` head may preempt (SW-675). */
+// Well inside the 10-min service wait, so a service start reaches it before it times out (SW-675 review).
+export const STARVE_MS = 5 * 60_000;
 
 export type Decision =
   | { kind: "admit" }
@@ -61,11 +76,16 @@ export function parseSize(s: string | number): number {
 
 const RANK_ORDER: Rank[] = ["idle", "human-check", "working"];
 
+/** Gate waiters first, then the rest, each first come first served: a gate frees its whole feature soonest (SW-675). */
+export function queueOrder(queue: Waiter[]): Waiter[] {
+  return [...queue.filter((w) => w.gate), ...queue.filter((w) => !w.gate)];
+}
+
 /**
  * Whether *req* may start now. *running* is ordered longest-inactive first;
- * *queue* is the waiting features, first come first served.
+ * *queue* is the waiting requests, first come first served.
  */
-export function admit(budget: Budget, running: Lease[], queue: string[], req: Request): Decision {
+export function admit(budget: Budget, running: Lease[], queue: Waiter[], req: Request): Decision {
   if (!req.services && running.some((l) => l.feature === req.feature)) return { kind: "admit" };
   if (req.cost.memory > budget.memory || req.cost.cpus > budget.cpus) {
     return { kind: "never-fits", cost: req.cost };
@@ -79,14 +99,22 @@ export function admit(budget: Budget, running: Lease[], queue: string[], req: Re
     used.memory - freed.memory + req.cost.memory <= budget.memory &&
     used.cpus - freed.cpus + req.cost.cpus <= budget.cpus;
 
-  const ahead = queue.indexOf(req.feature);
-  const nobodyAhead = ahead === -1 ? queue.length === 0 : ahead === 0;
-  if (fits({ memory: 0, cpus: 0 }) && (req.byPerson || nobodyAhead)) return { kind: "admit" };
+  const gate = !!req.gate || (!!req.services && running.some((l) => l.feature === req.feature));
+  const queued = queue.find((w) => w.feature === req.feature);
+  const self = { feature: req.feature, waitedMs: queued?.waitedMs ?? 0, gate };
+  const order = queueOrder(queued ? queue.map((w) => (w === queued ? self : w)) : [...queue, self]);
+  const position = order.indexOf(self) + 1;
+  const isHead = position === 1;
+  // Backfill: what fits starts past a head that doesn't, unless the head is a gate (it frees its whole
+  // feature soonest) or has waited STARVE_MS (SW-675).
+  const headHolds = !isHead && (order[0].gate || order[0].waitedMs >= STARVE_MS);
+  if (fits({ memory: 0, cpus: 0 }) && (req.byPerson || !headHolds)) return { kind: "admit" };
 
-  // An idle or human-check lease (a session parked on a question) has nobody in it, so a service start
-  // that doesn't fit takes it (SW-546); only a person's start takes a working one. A plain `up` not by a
-  // person (a grant's re-up of a victim) keeps waiting, or two preempted features would evict each other.
-  if (budget.preempt && (req.byPerson || (req.services && nobodyAhead))) {
+  // An idle or human-check lease (a session parked on a question) has nobody in it, so the queue head
+  // takes it (SW-546); only a person's start takes a working one. A plain `up` head (a grant's re-up of
+  // a victim among them) waits STARVE_MS first, or two preempted features would evict each other.
+  const headMayPreempt = isHead && (!!req.services || self.waitedMs >= STARVE_MS);
+  if (budget.preempt && (req.byPerson || headMayPreempt)) {
     const ranks = req.byPerson ? RANK_ORDER : RANK_ORDER.slice(0, 2);
     // Never its own lease (stopping what it runs to start one more service of it), nor one that
     // frees nothing (containers with no reservation or CPU limit): stopped for no gain.
@@ -106,7 +134,7 @@ export function admit(budget: Budget, running: Lease[], queue: string[], req: Re
     }
   }
 
-  return { kind: "wait", position: ahead === -1 ? queue.length + 1 : ahead + 1 };
+  return { kind: "wait", position };
 }
 
 /**

@@ -693,6 +693,49 @@ test("gate: a start that failed, then succeeded as the gate's on-demand start, d
   }
 });
 
+// T8. SW-668: a gate whose only failures are capacity waits is a retry (exit 75), not a FAIL.
+test("gate: failing only for want of capacity is a retry; a real failure beside it is not (SW-668)", async () => {
+  const ws = icmWorkspace();
+  const noCapacity = () =>
+    Object.assign(new Error("No capacity to start lib for 'feat' after 10 min"), {
+      code: "NO_CAPACITY",
+    });
+  try {
+    const d = deps([], {
+      services: {
+        ...REGISTRY.services,
+        lib: { ...REGISTRY.services.lib, test: "npm test -w lib" },
+      },
+    });
+    const r = stubRun([
+      [/^docker ps/, { stdout: "" }],
+      [/diff --name-only/, { stdout: "packages/lib/x.ts\n" }],
+    ]);
+    d.run = r.run;
+    d.startService = async () => {
+      throw noCapacity();
+    };
+    const g = await gate(ws, d);
+    assert.equal(g.ok, false);
+    assert.equal(g.retry, true);
+    assert.ok(
+      g.checks.filter((c) => !c.ok).every((c) => c.retry),
+      JSON.stringify(g.checks),
+    );
+    assert.match(formatGate("app", g)[0], /gate retry later \(no capacity\)/);
+
+    // Any other failure makes it a FAIL again.
+    d.startService = async () => {
+      throw new Error("compose said no");
+    };
+    const real = await gate(ws, d);
+    assert.equal(real.ok, false);
+    assert.equal(real.retry, undefined);
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gate: changed files that map to no service fail a tests row unless skip_tests.tests gives a reason (SW-278)", async () => {
   const diff = [/diff --name-only/, { stdout: "src/x.ts\n" }];
   const noRepo = { repos: {} }; // no `repos:` entry for the worktree

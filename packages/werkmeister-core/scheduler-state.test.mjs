@@ -156,7 +156,15 @@ test("a feature whose services are all on-demand does not cost 0 at admission", 
       kind: "wait",
       position: 1,
     });
-    assert.deepEqual(readWaiting(ws), { position: 1, reason: "waiting for capacity", ...starting });
+    const first = readWaiting(ws);
+    assert.deepEqual(
+      { ...first, since: undefined },
+      { position: 1, reason: "waiting for capacity", ...starting, since: undefined },
+    );
+    // T6. SW-675: the first wait's time survives each re-poll; the starvation bound reads it.
+    assert.match(first.since, /^\d{4}-\d\d-\d\dT/);
+    await requestAdmission("f", ws, false, full, budget, starting);
+    assert.equal(readWaiting(ws).since, first.since);
   });
 });
 
@@ -184,7 +192,9 @@ test("a service waiter whose poll stopped leaves the queue and its waiting.json;
     fs.writeFileSync(path.join(mine, "compose.yml"), COMPOSE);
     writeLeases({ dead: { slot: 1, workspace: dead } });
     await enqueue("dead", dead);
-    writeWaiting(dead, { position: 1, reason: "waiting for capacity", services: ["api"] });
+    // Waited past the starvation bound (SW-675), so a live head holds the room against backfill.
+    const since = new Date(Date.now() - 11 * 60_000).toISOString();
+    writeWaiting(dead, { position: 1, reason: "waiting for capacity", services: ["api"], since });
     const budget = { memory: 8 * G, cpus: 8, preempt: true };
     // Fresh: its poll may still come back, so it keeps the head and mine waits.
     assert.deepEqual(await requestAdmission("mine", mine, false, [], budget), {

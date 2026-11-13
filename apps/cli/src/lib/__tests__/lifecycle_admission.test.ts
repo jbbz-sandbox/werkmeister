@@ -23,6 +23,11 @@ vi.mock("werkmeister-core/slots", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/slots")>()),
   getSlot: vi.fn(async () => 1),
 }));
+const started: string[] = [];
+vi.mock("werkmeister-core/docker", async (orig) => ({
+  ...(await orig<typeof import("werkmeister-core/docker")>()),
+  docker: () => ({ getContainer: (name: string) => ({ start: async () => started.push(name) }) }),
+}));
 vi.mock("werkmeister-core/reporter", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/reporter")>()),
   info: vi.fn(),
@@ -252,6 +257,98 @@ describe("admitServiceStart", () => {
       { name: "mine-api", status: "running", service: "api" } as never,
     ]);
     await admitServiceStart("mine", mine, "api", { sleep: async () => expect.fail("waited") });
+    expect(readQueue()).toEqual([]);
+  });
+
+  // SW-675: two features each holding core and each gate waiting for one more service deadlock a
+  // full budget. *mineCpus*: what mine's own running core holds, or 0 once it is stopped.
+  const both = (other: string, mine: string, otherCpus: number, mineCpus: () => number) =>
+    vi.mocked(run).mockImplementation((cmd: string[]) =>
+      cmd[1] === "ps"
+        ? { status: 0, stdout: "id1\nid2\n", stderr: "" }
+        : {
+            status: 0,
+            stdout:
+              `other\t${other}\t2026-11-06T10:00:00Z\t0\t${otherCpus * 1e9}\n` +
+              (mineCpus() ? `mine\t${mine}\t2026-11-06T10:00:00Z\t0\t${mineCpus() * 1e9}\n` : ""),
+            stderr: "",
+          },
+    );
+  const CORE_AND_API =
+    "services:\n  core:\n    deploy:\n      resources:\n        limits: { cpus: '3' }\n  api:\n    profiles: [on-demand]\n    deploy:\n      resources:\n        limits: { cpus: '1' }\n";
+
+  it("releases its own running containers while it waits, then starts them with the new one", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ mine: { slot: 2, workspace: mine } });
+    let mineCpus = 3;
+    both(other, mine, 3, () => mineCpus);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      { name: "mine-core", status: "running", service: "core" } as never,
+    ]);
+    vi.mocked(composeStop).mockImplementation(async (f: string) => {
+      if (f === "mine") mineCpus = 0;
+      return true;
+    });
+    started.length = 0;
+    const sleep = async () => {
+      // Released: it holds nothing and waits for core + api (4 CPUs) as one gate request.
+      expect(composeStop).toHaveBeenCalledWith("mine");
+      expect(readWaiting(mine)).toMatchObject({ services: ["core", "api"], gate: true });
+      both(other, mine, 0, () => mineCpus); // the other gate finished
+    };
+    await admitServiceStart("mine", mine, "api", { sleep });
+    expect(started).toEqual(["mine-core"]);
+    expect(readQueue()).toEqual([]);
+  });
+
+  it("a person's workspace keeps its running containers while it waits (review, SW-675)", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: false });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ mine: { slot: 2, workspace: mine } });
+    both(other, mine, 3, () => 3);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      { name: "mine-core", status: "running", service: "core" } as never,
+    ]);
+    vi.mocked(composeStop).mockClear();
+    await expect(
+      admitServiceStart("mine", mine, "api", { sleep: async () => {}, waitMs: 0 }),
+    ).rejects.toMatchObject({ code: "NO_CAPACITY" });
+    expect(composeStop).not.toHaveBeenCalledWith("mine");
+  });
+
+  it("a timed-out wait names the holders, says it stayed stopped, and that a rerun needs no person", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ other: { slot: 1, workspace: other }, mine: { slot: 2, workspace: mine } });
+    let mineCpus = 3;
+    both(other, mine, 3, () => mineCpus);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      { name: "mine-core", status: "running", service: "core" } as never,
+    ]);
+    vi.mocked(composeStop).mockImplementation(async (f: string) => {
+      if (f === "mine") mineCpus = 0;
+      return true;
+    });
+    const err = await admitServiceStart("mine", mine, "api", {
+      sleep: async () => {},
+      waitMs: 0,
+    }).catch((e) => e);
+    expect(err).toMatchObject({ code: "NO_CAPACITY" });
+    expect(err.message).toContain(
+      "core stayed stopped; `werkmeister feature up` starts the feature again.",
+    );
+    expect(err.message).toContain("running: other (3 CPUs, 0.0 GiB, working)");
+    expect(err.message).toContain("Rerun the same command; nothing to ask a person.");
     expect(readQueue()).toEqual([]);
   });
 });

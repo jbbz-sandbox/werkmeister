@@ -65,8 +65,8 @@ test("liveSessions: the hooks' record with each status; a day-old record and jun
     junk: { status: "asleep", at: at(NOW) },
   });
   assert.deepEqual(liveSessions(ws, NOW), [
-    { sessionId: "a", status: "idle", statusUpdatedAt: NOW - 5 * MIN },
-    { sessionId: "b", status: "busy", statusUpdatedAt: NOW - 23 * 60 * MIN },
+    { sessionId: "a", status: "idle", statusUpdatedAt: NOW - 5 * MIN, asking: false },
+    { sessionId: "b", status: "busy", statusUpdatedAt: NOW - 23 * 60 * MIN, asking: false },
   ]);
   assert.deepEqual(liveSessions("/nonexistent/ws", NOW), []);
 });
@@ -178,4 +178,40 @@ test("idleStopMinutes: 30 by default, overrides.idle_stop_minutes when a whole n
   } finally {
     process.env.WERKMEISTER_CONFIG_FILE = prev;
   }
+});
+
+// T7. SW-675: AskUserQuestion keeps the session `busy`, so a container at 0% CPU whose session waits
+// on a person was never reaped. It is now, past the cutoff, but only while someone waits for room.
+test("stopIdle: a session waiting on a person past the cutoff is reaped only while others queue", async () => {
+  const asked = new Date(NOW - 60 * MIN).toISOString();
+  const ws = workspaceWith({
+    s1: { status: "busy", at: asked, ask: { kind: "question", what: "Approve?", at: asked } },
+  });
+  const run = docker([["never-fits", ws, new Date(NOW - 120 * MIN).toISOString()]]);
+  const stopped = [];
+  const stop = async (f) => stopped.push(f);
+  const queued = await stopIdle(10, { now: NOW, run, stop, queued: true });
+  assert.deepEqual(queued.lines, [
+    "never-fits: stopped (waiting on a person ≥ 10 min, others queued)",
+  ]);
+  assert.deepEqual(stopped, ["never-fits"]);
+  const alone = await stopIdle(10, {
+    now: NOW,
+    run,
+    stop: async () => assert.fail(),
+    queued: false,
+  });
+  assert.deepEqual(alone.lines, ["never-fits: kept (session active)"]);
+  // A question asked within the cutoff keeps it even with a queue.
+  const fresh = new Date(NOW - 5 * MIN).toISOString();
+  const recent = workspaceWith({
+    s1: { status: "busy", at: fresh, ask: { kind: "question", what: "Approve?", at: fresh } },
+  });
+  const r = await stopIdle(10, {
+    now: NOW,
+    run: docker([["never-fits", recent, new Date(NOW - 120 * MIN).toISOString()]]),
+    stop: async () => assert.fail(),
+    queued: true,
+  });
+  assert.deepEqual(r.lines, ["never-fits: kept (session active)"]);
 });

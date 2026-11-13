@@ -94,11 +94,12 @@ import { type RunResult, run } from "./proc.js";
 import { workspaceServices } from "./registry_sync.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { withStartRecord } from "./resources.js";
-import type { Lease, Rank } from "./scheduler.js";
+import { type Lease, queueOrder, type Rank, STARVE_MS } from "./scheduler.js";
 import { schedulerOp, waitingQueue } from "./scheduler_client.js";
 import {
   dequeue,
   enqueue,
+  featureCost,
   loadBudget,
   readLeases,
   readQueue,
@@ -106,6 +107,7 @@ import {
   type Starting,
   serviceStarts,
   setupsCurrent,
+  waiters,
   waitForSetupLoad,
 } from "./scheduler_state.js";
 import { getSecretsPath, loadSecrets, resolveSecrets } from "./secrets.js";
@@ -162,6 +164,8 @@ export interface UpResult {
   caddy: "reloaded" | "started" | "skipped";
   /** Queue position when the budget had no room: nothing was started (SW-181). */
   waiting?: number;
+  /** With *waiting*: who holds the budget and what happens next (SW-675). */
+  waitingNote?: string;
 }
 
 /**
@@ -231,6 +235,7 @@ export async function up(
     if (waiting !== null) {
       warn(`Waiting for capacity, position ${waiting} — it starts when another feature stops`);
       return {
+        waitingNote: capacityWait(feature, waiting, true),
         feature,
         slot,
         portRange: [portStart, portEnd],
@@ -485,9 +490,8 @@ export async function admitServiceStart(
     noDeps = false,
   }: { sleep?: (ms: number) => Promise<unknown>; waitMs?: number; noDeps?: boolean } = {},
 ): Promise<void> {
-  const up = new Set(
-    (await getContainerStatus(feature)).filter((c) => c.status === "running").map((c) => c.service),
-  );
+  const ownRunning = (await getContainerStatus(feature)).filter((c) => c.status === "running");
+  const up = new Set(ownRunning.map((c) => c.service));
   const services = (noDeps ? [service] : serviceStarts(workspace, service)).filter(
     (s) => !up.has(s),
   );
@@ -501,28 +505,37 @@ export async function admitServiceStart(
       "NO_CAPACITY",
     );
   }
-  const starting: Starting = { services };
+  let starting: Starting = { services };
+  let released: string[] = [];
   let admitted = false;
   try {
     for (let waited = 0; ; waited += SERVICE_POLL_MS) {
       // Never byPerson: an agent's gate in a person's workspace must not stop another run's containers.
-      const position = await admitOrQueue(feature, workspace, false, starting);
+      let position = await admitOrQueue(feature, workspace, false, starting);
+      // Not in a person's workspace: their running app must not go down because they asked for one more service.
+      if (position !== null && ownRunning.length && !released.length && readAutonomous(workspace)) {
+        // Release instead of hold (SW-675): two gates each holding core while waiting for one more
+        // service deadlock a full budget. Stopped, not removed: one request then brings back the set.
+        await stop(feature, { grant: false });
+        released = ownRunning.map((c) => c.name);
+        starting = { services: [...up, ...services], gate: true };
+        info(`Stopped ${[...up].join(", ")} while waiting, so '${feature}' holds no capacity`);
+        position = await admitOrQueue(feature, workspace, false, starting);
+      }
       if (position === null) {
         admitted = true;
+        for (const name of released) await docker().getContainer(name).start();
         if (waited) await grantWaitersQuietly(); // room left over may fit the next waiter
         return;
       }
       if (waited >= waitMs) {
-        const holders = (runningLeases() ?? [])
-          .map(
-            (l) =>
-              `${l.feature} (${l.cost.cpus} CPUs, ${(l.cost.memory / 2 ** 30).toFixed(1)} GiB)`,
-          )
-          .join(", ");
         throw new SandboxError(
           `No capacity to start ${services.join(", ")} for '${feature}' after ${waitMs / 60_000} min ` +
-            `(queue position ${position}); running: ${holders || "nothing werkmeister started"}. ` +
-            "Stop a feature or raise budget: in ~/.werkmeister/config.yaml, then retry.",
+            `(queue position ${position}).` +
+            (released.length
+              ? ` ${[...up].join(", ")} stayed stopped; \`werkmeister feature up\` starts the feature again.`
+              : "") +
+            `\n${capacityWait(feature, position, false)}`,
           "NO_CAPACITY",
         );
       }
@@ -539,6 +552,53 @@ export async function admitServiceStart(
       clearWaiting(workspace);
     }
   }
+}
+
+const gib = (b: number) => `${(b / 2 ** 30).toFixed(1)} GiB`;
+const cpus = (n: number) => `${Number(n.toFixed(1))} CPUs`;
+
+export const RANK_WORD: Record<Rank, string> = {
+  idle: "idle",
+  "human-check": "waiting on a person",
+  working: "working",
+  person: "a person's workspace",
+};
+
+/** A running lease for a person to read: `name (3 CPUs, 0.8 GiB, idle, gate running)`. */
+export function describeLease(l: Lease): string {
+  return `${l.feature} (${cpus(l.cost.cpus)}, ${gib(l.cost.memory)}, ${RANK_WORD[l.rank]}${l.busy ? ", gate running" : ""})`;
+}
+
+/**
+ * Who holds the budget, the head *feature* waits behind, and what happens next: the same lines for a
+ * queued `up` and a timed-out service start (SW-675). *stays*: still queued, so the grant starts it.
+ */
+export function capacityWait(feature: string, position: number, stays: boolean): string {
+  const running = runningLeases() ?? [];
+  const lines = [
+    `running: ${running.map(describeLease).join(", ") || "nothing werkmeister started"}`,
+  ];
+  const head = position > 1 ? queueOrder(waiters(readQueue(), running))[0] : undefined;
+  if (head && head.feature !== feature) {
+    const ws = readLeases()[head.feature]?.workspace;
+    const need = ws ? featureCost(ws, readWaiting(ws)?.services) : null;
+    lines.push(
+      `behind ${head.feature}${need ? ` (needs ${cpus(need.cpus)}, ${gib(need.memory)})` : ""}` +
+        (head.waitedMs >= STARVE_MS
+          ? `, which has waited ${STARVE_MS / 60_000} min and gets the next free room`
+          : ""),
+    );
+  }
+  lines.push(
+    stays
+      ? "It starts by itself when room frees, and the session is told to continue. Exit 75: queued, not a failure."
+      : "Exit 75: no capacity yet, not a failure of the change. Rerun the same command; nothing to ask a person.",
+  );
+  if (running.length && running.every((l) => l.rank === "person"))
+    lines.push(
+      `Only a person can free room: werkmeister feature stop ${running.map((l) => l.feature).join(" or ")}.`,
+    );
+  return lines.join("\n");
 }
 
 /** Throws `COMPOSE_UP_FAILED` when the external network every feature compose joins can't be made. */
@@ -679,6 +739,8 @@ export interface LiveSession {
   status: "busy" | "idle";
   /** Epoch ms of the last status change. */
   statusUpdatedAt: number;
+  /** Parked on a question, permission or plan prompt for a person. */
+  asking: boolean;
 }
 
 /** The open sessions in *workspaceRoot*, as Werkmeister's hooks recorded them. */
@@ -690,6 +752,7 @@ export function liveSessions(workspaceRoot: string, now = Date.now()): LiveSessi
         sessionId,
         status: s.status,
         statusUpdatedAt: Date.parse(s.last ?? s.at),
+        asking: s.ask !== undefined,
       }))
       // readSessions keeps idle records and asks of any age; a day-silent one isn't open.
       .filter((s) => now - s.statusUpdatedAt < STALE_SESSION_MS)
@@ -719,17 +782,23 @@ export interface IdleInput {
   minutes: number;
   now: number;
   running: RunningFeature[];
-  sessions: (workspace: string) => Pick<LiveSession, "status" | "statusUpdatedAt">[];
+  sessions: (
+    workspace: string,
+  ) => (Pick<LiveSession, "status" | "statusUpdatedAt"> & { asking?: boolean })[];
+  /** Someone waits for capacity: then a session parked on a person past the cutoff is reclaimable (SW-675). */
+  queued?: boolean;
   /** Epoch ms the gate last ran `docker exec` in *workspace*, or null. */
   lastExec: (workspace: string) => number | null;
 }
 
 /** Why a running feature is not idle, or null when it is. */
 function busyReason(f: RunningFeature, input: IdleInput, cutoff: number): string | null {
-  // An open session that has sat idle past the cutoff does not count (SW-39 D3).
+  // An open session that has sat idle past the cutoff does not count (SW-39 D3), nor, while others
+  // queue, one that has waited on a person that long: its status stays busy through the ask (SW-675).
+  const recent = (s: { statusUpdatedAt: number }) => (s.statusUpdatedAt ?? Infinity) > cutoff;
   const active = input
     .sessions(f.workspace)
-    .some((s) => s.status !== "idle" || (s.statusUpdatedAt ?? Infinity) > cutoff);
+    .some((s) => (s.asking && input.queued ? recent(s) : s.status !== "idle" || recent(s)));
   if (active) return "session active";
   if (f.startedAt.some((t) => t > cutoff)) return `started < ${input.minutes} min ago`;
   if ((input.lastExec(f.workspace) ?? 0) > cutoff) return `gate ran < ${input.minutes} min ago`;
@@ -806,6 +875,8 @@ export interface StopIdleOptions {
   now?: number;
   run?: (cmd: string[]) => RunResult;
   stop?: (feature: string) => Promise<unknown>;
+  /** Override for whether anyone waits for capacity; default: the queue file. */
+  queued?: boolean;
 }
 
 /**
@@ -829,6 +900,7 @@ export async function stopIdle(
     running,
     sessions: (ws) => liveSessions(ws, now),
     lastExec: (ws) => mtimeMs(lastExecMarker(ws)),
+    queued: opts.queued ?? readQueue().length > 0,
   };
   const cutoff = input.now - minutes * 60_000;
   const lines: string[] = [];
@@ -844,9 +916,14 @@ export async function stopIdle(
       lines.push(`${f.feature}: kept (${why})`);
       continue;
     }
+    const asking = input.sessions(f.workspace).some((s) => s.asking);
     try {
       await (opts.stop ?? stop)(f.feature);
-      lines.push(`${f.feature}: stopped (idle ≥ ${minutes} min)`);
+      lines.push(
+        asking
+          ? `${f.feature}: stopped (waiting on a person ≥ ${minutes} min, others queued)`
+          : `${f.feature}: stopped (idle ≥ ${minutes} min)`,
+      );
     } catch (e) {
       ok = false;
       lines.push(`${f.feature}: stop failed — ${(e as Error).message}`);
@@ -978,7 +1055,7 @@ async function admitOrQueueHere(
 }
 
 /**
- * Start queued features, first come first served, until one still doesn't fit.
+ * Start each queued feature that fits now, first come first served.
  * Each started one's live session gets a "continue". Returns those started.
  */
 export function grantWaiters(): Promise<string[]> {
@@ -1011,7 +1088,8 @@ async function grantWaitersNow(): Promise<string[]> {
     // A service start's own poll admits it; `up` would start the wrong set and dequeue it.
     if (readWaiting(workspace)?.services) continue;
     const r = await up(feature, workspace, { byPerson: false });
-    if (r.waiting !== undefined) break;
+    // Backfill (SW-675): a later waiter may fit; admission itself holds the room for a starved head.
+    if (r.waiting !== undefined) continue;
     started.push(feature);
     if (liveSessions(workspace).length) writeNudge(workspace, GRANTED_NUDGE);
   }
