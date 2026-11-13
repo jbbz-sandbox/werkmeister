@@ -25,7 +25,7 @@ Resolves the workspace (\fB\-\-workspace\fR, else \fBpaths.workspaces_root\fR fr
 .IP 3. 3
 Allocates a slot (1–12) if the feature doesn't already have one
 .IP 4. 3
-When the workspace has local services, checks the host's memory and CPU budget (\fBwerkmeister budget status\fR). If the feature doesn't fit it waits in a queue and starts when another feature stops. A service start that doesn't fit may instead stop features whose session is idle or waiting on a person, oldest first, and says which; a feature a person starts may also stop working autonomous ones (\fBbudget.preempt: false\fR turns both off)
+When the workspace has local services, checks the host's memory and CPU budget (\fBwerkmeister budget status\fR). If the feature doesn't fit it waits in a queue and starts when another feature stops. A start that fits goes ahead of a queue head that doesn't, unless that head is a gate's start or has waited 5 minutes. The queue head may stop features whose session is idle or waiting on a person, oldest first, and says which: a service start at once, a plain \fBfeature up\fR after 5 minutes. A feature a person starts may also stop working autonomous ones (\fBbudget.preempt: false\fR turns all of it off). A \fB\-\-service\fR start that has to wait while an autonomous workspace's feature already runs containers stops them first, so it holds nothing while it waits, then starts them again with the new service
 .IP 5. 3
 Generates per\-feature files in the feature's workspace:
 .IP \(bu 6
@@ -80,7 +80,7 @@ Warns about routed hostnames that do not resolve to 127.0.0.1 on this machine an
 .PP
 \fBIf the workspace lists no services\fR, the command still proceeds — the feature is registered and routes entirely to k8s. To add services later, list them in \fB.werkmeister/workspace.yml\fR, rerun \fBwerkmeister workspace init\fR, then \fBwerkmeister feature up\fR.
 .PP
-\fBIf the feature has to wait for capacity\fR, the command exits successfully without starting containers and prints \fB=== Feature '<name>' is waiting for capacity (position N) ===\fR. \fBwerkmeister feature status\fR shows the queue.
+\fBIf the feature has to wait for capacity\fR, the command exits 75 without starting containers. It prints \fB=== Feature '<name>' is waiting for capacity (position N) ===\fR, who holds the budget, and the head it waits behind. The feature stays queued and starts by itself when room frees, and its session is told to continue. A \fB\-\-service\fR start waits up to 10 minutes, then exits 75 the same way. Exit 75 means no capacity yet, not a failure: rerun the command. \fBwerkmeister budget status\fR shows the queue.
 .PP
 \fBIf every slot is taken\fR (12 by default, \fBfeature_slots.count\fR), the command exits with an error. Free a slot by running \fBwerkmeister feature down\fR on another feature.
 .PP

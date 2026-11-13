@@ -247,13 +247,15 @@ A workspace's feature containers stop at these points. Stopping keeps the contai
 - `werkmeister pr open`: once a pass opens a PR and nothing in it failed. If any file failed its gate or push, the containers stay up so the session can fix it. A session woken for a CI fix runs `werkmeister feature up` before it re-gates.
 - `werkmeister pr status`: when a pass records a PR as merged or shipped.
 - The idle reaper: `werkmeister internal reap <minutes> [feature]` stops each feature that nothing has used for that many minutes. Without `[feature]` it covers every workspace. Something counts as use when:
-  - a Claude session in the workspace is busy, or became idle less than N minutes ago (an open session that has sat idle longer does not keep the containers);
+  - a Claude session in the workspace is busy, or became idle less than N minutes ago (an open session that has sat idle longer does not keep the containers). A session waiting on a person's answer (a question, permission or plan prompt) for N minutes or more does not count while another feature waits for capacity: its containers stop and the line reads `stopped (waiting on a person ≥ N min, others queued)`. With nobody queued it keeps them;
   - a container started less than N minutes ago;
   - the gate ran a `docker exec` less than N minutes ago (it touches `.werkmeister/last-exec`).
 
 Every PR callback pass (the werkmeister mod's 10-minute timer and `werkmeister pr watch`) ends with one reaper pass, using N from `overrides.idle_stop_minutes` in `~/.werkmeister/config.yaml`. The default is 30, and `0` turns the reaper off. The pass takes its own lock, `~/.werkmeister/idle-stop.lock`.
 
 A `docker exec` typed by hand in a terminal outside Claude is not seen.
+
+When `pr gate` or `pr open` fails only because a container could not get capacity (a start that waited 10 minutes, and the rows that then found no container), the gate reads `retry later (no capacity)` instead of `FAILED` and the command exits 75. Rerun it; nothing about the change failed.
 
 `auto_stop` (a SessionEnd hook, `werkmeister internal session-end`) is on by default for `autonomous` workspaces. Set `auto_stop: false` in `.werkmeister/workspace.yml` to turn it off.
 

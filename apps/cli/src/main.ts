@@ -1698,8 +1698,7 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
     // subclass whose ~45 sites have always printed `Error: <msg>`, so it stays
     // on the second branch.
     //
-    // ponytail: every code exits 1, so there is no code → status table. Add one
-    // when a code first needs a different status.
+    // NO_CAPACITY exits 75 (EX_TEMPFAIL), the only code with its own status: no room yet, rerun (SW-675).
     if (e instanceof SandboxError && e.code !== WORKSPACE_ERROR_CODE) {
       error(e.message);
     } else {
@@ -1708,7 +1707,7 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
     if (envVar("DEBUG")) {
       throw e;
     }
-    process.exit(1);
+    process.exit(e instanceof SandboxError && e.code === "NO_CAPACITY" ? 75 : 1);
   }
 }
 

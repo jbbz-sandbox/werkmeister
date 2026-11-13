@@ -398,6 +398,10 @@ export interface WaitingFile {
   reason: string;
   /** A service start blocked on capacity (SW-540): its own poll admits it, not the grant. */
   services?: string[];
+  /** Released its own containers to wait for the whole set: keeps its gate place (SW-675). */
+  gate?: true;
+  /** ISO time of the first wait, kept across re-polls: the queue's starvation bound reads it (SW-675). */
+  since?: string;
 }
 
 /** The waiting record, or null when there is none or it doesn't parse. */
@@ -409,6 +413,8 @@ export function readWaiting(root: string): WaitingFile | null {
       position: o.position,
       reason: String(o.reason ?? ""),
       ...(Array.isArray(o.services) ? { services: o.services.map(String) } : {}),
+      ...(o.gate === true ? { gate: true as const } : {}),
+      ...(typeof o.since === "string" ? { since: o.since } : {}),
     };
   } catch {
     return null;

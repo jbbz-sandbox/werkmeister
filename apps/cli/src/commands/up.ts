@@ -23,9 +23,11 @@ function printSummary(result: UpResult): void {
   if (result.waiting !== undefined) {
     console.log(
       `\n${Colors.CYAN}${Colors.BOLD}=== Feature '${feature}' is waiting for capacity (position ${result.waiting}) ===${Colors.RESET}\n` +
-        "  It starts when another feature stops; `werkmeister feature status` shows the queue.\n",
+        "  It starts when another feature stops; `werkmeister feature status` shows the queue.\n" +
+        (result.waitingNote ? `${result.waitingNote.replace(/^/gm, "  ")}\n` : ""),
     );
-    return;
+    // Nothing started: a 0 here read as success through `| tail` (SW-675).
+    process.exit(75);
   }
 
   console.log(

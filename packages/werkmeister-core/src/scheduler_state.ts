@@ -42,6 +42,7 @@ import {
   type Decision,
   type Lease,
   parseSize,
+  type Waiter,
 } from "./scheduler.js";
 
 export interface SlotLease {
@@ -114,7 +115,11 @@ export function enqueue(feature: string, workspace: string): Promise<void> {
     async () => {
       const queue = readQueue().filter((f) => f !== feature);
       // waiting.json first: if it can't be written, the queue must not move (SW-246).
-      writeWaiting(workspace, { position: queue.length + 1, reason: "preempted" });
+      writeWaiting(workspace, {
+        position: queue.length + 1,
+        reason: "preempted",
+        since: new Date().toISOString(),
+      });
       writeQueue([...queue, feature]);
     },
     { timeout: LOCK_TIMEOUT },
@@ -336,6 +341,8 @@ function installStamped(svc: ComposeService | undefined): boolean {
 /** A start of named services, held by the process polling for it (SW-540). */
 export interface Starting {
   services: string[];
+  /** Released its own running containers to wait for them and these together (SW-675). */
+  gate?: true;
 }
 
 /** Four of the start's 15 s polls, each of which rewrites its waiting.json. */
@@ -354,6 +361,21 @@ function withoutDeadWaiters(queue: string[]): string[] {
     if (Date.now() - at < WAITER_STALE_MS) return true;
     clearWaiting(ws);
     return false;
+  });
+}
+
+/** *queue* as admission sees it: each waiter's wait so far and whether it is a gate (SW-675). */
+export function waiters(queue: string[], running: Lease[], now = Date.now()): Waiter[] {
+  const leases = readLeases();
+  return queue.map((feature) => {
+    const ws = leases[feature]?.workspace;
+    const w = ws ? readWaiting(ws) : null;
+    const since = w?.since ? Date.parse(w.since) : Number.NaN;
+    return {
+      feature,
+      waitedMs: Number.isFinite(since) ? Math.max(0, now - since) : 0,
+      gate: !!w?.gate || (!!w?.services && running.some((l) => l.feature === feature)),
+    };
   });
 }
 
@@ -379,11 +401,12 @@ export function requestAdmission(
     async () => {
       const stored = readQueue();
       const queue = withoutDeadWaiters(stored);
-      const d = admit(budget, running, queue, {
+      const d = admit(budget, running, waiters(queue, running), {
         feature,
         cost,
         byPerson,
         services: starting?.services,
+        ...(starting?.gate && { gate: true }),
       });
       let next = queue;
       if (d.kind === "wait") {
@@ -392,6 +415,7 @@ export function requestAdmission(
           position: d.position,
           reason: "waiting for capacity",
           ...starting,
+          since: readWaiting(workspace)?.since ?? new Date().toISOString(),
         });
         if (!queue.includes(feature)) next = [...queue, feature];
       } else {

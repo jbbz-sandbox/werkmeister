@@ -64,12 +64,21 @@ export async function run(args: Record<string, unknown>): Promise<void> {
             ? await openPrs(ws, repo)
             : { ok: true, ...(await refreshPrStatus(ws)) };
   // SW-527: a bare redirected `pr open > pr-open.log` has no echo, so the log ends with its own exit line.
-  if (args.action === "open" && !args.json) result.lines.push(`pr open: exit ${result.ok ? 0 : 1}`);
+  if (args.action === "open" && !args.json)
+    result.lines.push(
+      `pr open: ${"retry" in result && result.retry ? "retry later (no capacity), " : ""}exit ${exitOf(result)}`,
+    );
   print(result, args);
 }
 
-function print(result: { ok: boolean; lines: string[] }, args: Record<string, unknown>): void {
+/** 75 (EX_TEMPFAIL) when every failure was a capacity wait: rerun, nothing for a person to answer (SW-668). */
+const exitOf = (r: { ok: boolean; retry?: true }) => (r.ok ? 0 : r.retry ? 75 : 1);
+
+function print(
+  result: { ok: boolean; lines: string[]; retry?: true },
+  args: Record<string, unknown>,
+): void {
   if (args.json) console.log(JSON.stringify(result, null, 2));
   else console.log(result.lines.join("\n"));
-  if (!result.ok) process.exit(1);
+  if (!result.ok) process.exit(exitOf(result));
 }

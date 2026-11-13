@@ -27,7 +27,7 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 1. Loads the service registry and port configuration, and stops with a clear message if a secret one of the workspace's services needs is missing
 2. Resolves the workspace (`--workspace`, else `paths.workspaces_root` from the config, else the nearest enclosing repo's parent, else `~/workspace/`) and reads its local services from the `SERVICES=` line `werkmeister workspace init` wrote to the workspace `.env`
 3. Allocates a slot (1–12) if the feature doesn't already have one
-4. When the workspace has local services, checks the host's memory and CPU budget (`werkmeister budget status`). If the feature doesn't fit it waits in a queue and starts when another feature stops. A service start that doesn't fit may instead stop features whose session is idle or waiting on a person, oldest first, and says which; a feature a person starts may also stop working autonomous ones (`budget.preempt: false` turns both off)
+4. When the workspace has local services, checks the host's memory and CPU budget (`werkmeister budget status`). If the feature doesn't fit it waits in a queue and starts when another feature stops. A start that fits goes ahead of a queue head that doesn't, unless that head is a gate's start or has waited 5 minutes. The queue head may stop features whose session is idle or waiting on a person, oldest first, and says which: a service start at once, a plain `feature up` after 5 minutes. A feature a person starts may also stop working autonomous ones (`budget.preempt: false` turns all of it off). A `--service` start that has to wait while an autonomous workspace's feature already runs containers stops them first, so it holds nothing while it waits, then starts them again with the new service
 5. Generates per-feature files in the feature's workspace:
    - `compose.yml` — Docker Compose stack definition (workspace root)
    - `.env` — Environment variables with resolved service URLs (workspace root)
@@ -72,7 +72,7 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 
 **If the workspace lists no services**, the command still proceeds — the feature is registered and routes entirely to k8s. To add services later, list them in `.werkmeister/workspace.yml`, rerun `werkmeister workspace init`, then `werkmeister feature up`.
 
-**If the feature has to wait for capacity**, the command exits successfully without starting containers and prints `=== Feature '<name>' is waiting for capacity (position N) ===`. `werkmeister feature status` shows the queue.
+**If the feature has to wait for capacity**, the command exits 75 without starting containers. It prints `=== Feature '<name>' is waiting for capacity (position N) ===`, who holds the budget, and the head it waits behind. The feature stays queued and starts by itself when room frees, and its session is told to continue. A `--service` start waits up to 10 minutes, then exits 75 the same way. Exit 75 means no capacity yet, not a failure: rerun the command. `werkmeister budget status` shows the queue.
 
 **If every slot is taken** (12 by default, `feature_slots.count`), the command exits with an error. Free a slot by running `werkmeister feature down` on another feature.
 
@@ -1090,7 +1090,7 @@ The scheduler's budget, the slots held and the features Waiting for room
 
 `werkmeister budget [command]`
 
-Shows the scheduler's budget and who is using it: the memory and CPUs a feature's containers may take in total (`budget:` in `~/.werkmeister/config.yaml`, else the Docker engine's memory less 1 GiB and every CPU), the host-load ceiling `with-temp-home`, and a start that runs a setup service, wait under (not on macOS), whether a start that doesn't fit may stop features whose session is idle or waiting on a person (and a person's `feature up` a working autonomous one), the features holding a slot, and the features **Waiting** for room in the order they will start.
+Shows the scheduler's budget and who is using it: the memory and CPUs a feature's containers may take in total (`budget:` in `~/.werkmeister/config.yaml`, else the Docker engine's memory less 1 GiB and every CPU), the host-load ceiling `with-temp-home`, and a start that runs a setup service, wait under (not on macOS), whether a start that doesn't fit may stop features whose session is idle or waiting on a person (and a person's `feature up` a working autonomous one), the features holding a slot, each **Running** feature with the CPUs and memory it holds, its session state (idle, waiting on a person, working, a person's workspace) and whether a gate is running, and the features **Waiting** for room in admission order (gate starts first), each with what it waits to start, what that costs, and how long it has waited.
 
 It reads only: with the host daemon up it asks the daemon for the queue, otherwise it reads `~/.werkmeister/scheduler/` itself.
 
