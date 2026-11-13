@@ -259,10 +259,10 @@ test("autonomous rules reach nothing shared: no blanket command or server, deny 
   assert.ok(!AUTONOMOUS_RULES.some((r) => blanket.test(r)), "no blanket rule");
   assert.ok(!AUTONOMOUS_RULES.includes("mcp__plugin_werkmeister_werkmeister"), "no whole server");
   assert.ok(!AUTONOMOUS_RULES.some((r) => r.startsWith("Bash(npm install")), "no npm install");
-  // SW-31: the only pnpm install is the lockfile one; adding a dependency waits for a person.
+  // SW-649: no fixed install; the repo's exact lockfile one comes from workspaceAllowRules.
   assert.deepEqual(
-    AUTONOMOUS_RULES.filter((r) => /^Bash\(pnpm (install|i|add)\b/.test(r)),
-    ["Bash(pnpm install --frozen-lockfile)"],
+    AUTONOMOUS_RULES.filter((r) => /^Bash\((npm|pnpm|yarn|uv) (ci|install|i|add|sync)\b/.test(r)),
+    [],
   );
   for (const r of [
     "Bash(werkmeister infra proxy-reload:*)",
@@ -351,9 +351,8 @@ test("SW-560: no route past the registered commands to scripts, readers, docker 
       "git init --template=/x sub",
     ])
       assert.ok(!runs(cmd), cmd);
+    // SW-649: a repo-less workspace has no lockfile install; the per-repo ones are tested below.
     for (const cmd of [
-      "npm ci",
-      "pnpm install --frozen-lockfile",
       "git status",
       "git -C werkmeister diff",
       "git commit -m x",
@@ -717,5 +716,38 @@ test("SW-660: the headless wake passes the workspace's rules, lint and sh -c for
         "services:\n  api:\n    type: library\n    repo: demo\n    path: api\n    test: pnpm test\n" +
         `  core:\n    type: library\n    repo: demo\n    path: core\n    test: "${BRACE}"\n`,
     },
+  );
+});
+
+test("SW-649: an autonomous workspace pre-approves each repo's own frozen install, nothing else", async () => {
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  const INSTALLS = /^Bash\((npm|pnpm|yarn|uv) /;
+  // *main*: files in the repo's checkout under repos_root; *worktree*: files only the agent wrote.
+  const installs = (main, { worktree = [], on = true } = {}) => {
+    const reposRoot = fs.mkdtempSync(path.join(os.tmpdir(), "repos-root-"));
+    fs.mkdirSync(path.join(reposRoot, "app"));
+    for (const f of main) fs.writeFileSync(path.join(reposRoot, "app", f), "");
+    return withSandboxHome(
+      () => {
+        const root = workspace();
+        fs.mkdirSync(path.join(root, "app", ".git"), { recursive: true });
+        for (const f of worktree) fs.writeFileSync(path.join(root, "app", f), "");
+        return workspaceAllowRules(root, on).filter((r) => INSTALLS.test(r));
+      },
+      { config: `paths:\n  repos_root: ${reposRoot}\n` },
+    );
+  };
+  assert.deepEqual(await installs(["yarn.lock"]), ["Bash(yarn install --frozen-lockfile)"]);
+  assert.deepEqual(await installs(["yarn.lock", ".yarnrc.yml"]), [
+    "Bash(yarn install --immutable)",
+  ]);
+  assert.deepEqual(await installs(["uv.lock"]), ["Bash(uv sync --frozen)"]);
+  assert.deepEqual(await installs(["pnpm-lock.yaml"]), ["Bash(pnpm install --frozen-lockfile)"]);
+  assert.deepEqual(await installs(["requirements.txt"]), []);
+  assert.deepEqual(await installs(["pnpm-lock.yaml"], { on: false }), [], "autonomous only");
+  assert.deepEqual(
+    await installs([], { worktree: ["yarn.lock", ".yarnrc.yml"] }),
+    [],
+    "a lockfile only the worktree holds grants nothing",
   );
 });
