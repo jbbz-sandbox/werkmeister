@@ -322,6 +322,71 @@ test("hooks: a background shell is kept past its turn's Stop and dropped by the 
   assert.equal(rec(dir, "a").shell, undefined, "a resumed session has no shells");
 });
 
+// SW-681: a stopped session whose background shell still runs is working, and a turn that isn't the
+// shell's exit (a person's or a check-in courier's message) must not end the shell.
+test("hooks: a background shell outlives a later unrelated turn, and agentOf reads it as working", async () => {
+  const dir = workspace("i-shell-681", null);
+  const base = Date.now() - 10_000;
+  const t = (n) => new Date(base + n * 1000);
+  const fire = (event, n, extra = {}) =>
+    record({ hook_event_name: event, cwd: dir, session_id: "a", ...extra }, t(n));
+  const bg = { command: "werkmeister pr open --watch", run_in_background: true };
+  fire("UserPromptSubmit", 0);
+  fire("PreToolUse", 1, { tool_name: "Bash", tool_input: bg });
+  const started = { tool_name: "Bash", tool_input: bg, tool_response: { backgroundTaskId: "bg1" } };
+  fire("PostToolUse", 1, started);
+  assert.equal(rec(dir, "a").shell.id, "bg1");
+  fire("Stop", 2, { last_assistant_message: "pr open is running in the background." });
+  assert.equal(badge(dir).agent, "working", "the shell still runs after Stop");
+  // A check-in courier's message: a new turn that is not the shell's exit.
+  const transcript = path.join(dir, "transcript.jsonl");
+  write(transcript, `${JSON.stringify({ type: "user", message: { content: "check-in" } })}\n`);
+  fire("UserPromptSubmit", 3);
+  fire("Stop", 4, {
+    last_assistant_message: "Still waiting on pr open.",
+    transcript_path: transcript,
+  });
+  assert.equal(rec(dir, "a").shell?.command, bg.command, "the shell has not exited");
+  assert.equal(badge(dir).agent, "working");
+  // The agent quoting the tag (a grep of its own transcript, a fixture it writes) is no exit.
+  const quoted = {
+    type: "user",
+    message: {
+      content: [{ type: "tool_result", content: '"queued_command" <task-id>bg1</task-id>' }],
+    },
+  };
+  fs.appendFileSync(transcript, `${JSON.stringify(quoted)}\n`);
+  fire("Stop", 4, { last_assistant_message: "Grepped it.", transcript_path: transcript });
+  assert.equal(rec(dir, "a").shell?.id, "bg1", "a quoted tag doesn't end the shell");
+  // Its exit notice (seen live: a queued_command attachment), mid-turn or in a wake turn of its own, ends it.
+  const notice = "<task-notification>\n<task-id>bg1</task-id>\n<status>completed</status>";
+  fs.appendFileSync(
+    transcript,
+    `${JSON.stringify({ type: "attachment", attachment: { type: "queued_command", prompt: notice } })}\n`,
+  );
+  fire("Stop", 5, { last_assistant_message: "pr open finished.", transcript_path: transcript });
+  assert.equal(rec(dir, "a").shell, undefined);
+  assert.equal(badge(dir).agent, "done");
+  // A TaskStop of it ends it too; one of another task doesn't.
+  fire("PreToolUse", 6, { tool_name: "Bash", tool_input: bg });
+  fire("PostToolUse", 6, { ...started, tool_response: { backgroundTaskId: "bg2" } });
+  fire("PostToolUse", 7, { tool_name: "TaskStop", tool_input: { task_id: "other" } });
+  assert.equal(rec(dir, "a").shell.id, "bg2");
+  fire("PostToolUse", 7, { tool_name: "TaskStop", tool_input: { task_id: "bg2" } });
+  assert.equal(rec(dir, "a").shell, undefined);
+  // A shell silent past SESSION_GONE_MS is no longer read as working.
+  const { SESSION_GONE_MS } = await import("./dist/agent_state.js");
+  const old = new Date(Date.now() - SESSION_GONE_MS - 60_000).toISOString();
+  const stale = {
+    status: "idle",
+    at: old,
+    last: old,
+    stopped: true,
+    shell: { command: "x", at: old },
+  };
+  assert.equal(agentOf({ a: stale }).agent, "done");
+});
+
 // SW-487 fault 7: an unlocked read-modify-write of one shared file lost updates.
 test("hooks: interleaved events from many sessions all land", () => {
   const dir = workspace("i-many", null);

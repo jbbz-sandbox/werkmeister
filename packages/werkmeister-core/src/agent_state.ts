@@ -46,8 +46,8 @@ export interface SessionRecord {
   tool?: { name: string; command?: string; at: string };
   /** Subagents started and not yet stopped. */
   subagents?: number;
-  /** The newest `run_in_background` Bash call, until the turn after it ends (SW-570). */
-  shell?: { command: string; at: string };
+  /** The newest `run_in_background` Bash call, until its exit shows up (SW-570, SW-681); `id` is its task id. */
+  shell?: { command: string; at: string; id?: string };
   ask?: SessionAsk;
   /** The last turn reached Stop, so the session is done rather than never started. */
   stopped?: true;
@@ -82,7 +82,12 @@ function sessionOf(s: any): SessionRecord | null {
   if (typeof s.last === "string") r.last = s.last;
   if (typeof s.tool?.name === "string" && typeof s.tool.at === "string") r.tool = s.tool;
   if (Number.isInteger(s.subagents) && s.subagents > 0) r.subagents = s.subagents;
-  if (typeof s.shell?.command === "string" && typeof s.shell.at === "string") r.shell = s.shell;
+  if (typeof s.shell?.command === "string" && typeof s.shell.at === "string")
+    r.shell = {
+      command: s.shell.command,
+      at: s.shell.at,
+      ...(typeof s.shell.id === "string" && { id: s.shell.id }),
+    };
   if (typeof s.ask?.what === "string" && typeof s.ask.at === "string") r.ask = s.ask;
   if (s.stopped === true) r.stopped = true;
   return r;
@@ -151,6 +156,9 @@ export function agentOf(
   if (ask) return { agent: "needs-you", at: ask.at, question: ask.what };
   const busy = list.find((s) => s.status === "busy" && !sessionGone(s, now));
   if (busy) return { agent: "working", at: busy.at, question: null };
+  // A background shell outlives the turn that started it (SW-681).
+  const shell = list.find((s) => s.shell && now - Date.parse(s.shell.at) < SESSION_GONE_MS)?.shell;
+  if (shell) return { agent: "working", at: shell.at, question: null };
   const newest = list.sort((a, b) => lastOf(b) - lastOf(a))[0];
   if (!newest) return null;
   if (newest.stopped) return { agent: "done", at: newest.at, question: null };
@@ -172,20 +180,23 @@ export function questionOf(text: string): string {
   return paragraphs[paragraphs.length - 1].trim().slice(0, 200);
 }
 
-/** The newest assistant text in a Claude Code transcript, from its last 64 KiB. */
-function lastAssistantText(transcript: string): string | null {
-  const fd = fs.openSync(transcript, "r");
-  let text: string;
+/** The last *bytes* of a file, as text. */
+function tailOf(file: string, bytes: number): string {
+  const fd = fs.openSync(file, "r");
   try {
     const size = fs.fstatSync(fd).size;
-    const len = Math.min(size, 65536);
+    const len = Math.min(size, bytes);
     const buf = Buffer.alloc(len);
     fs.readSync(fd, buf, 0, len, size - len);
-    text = buf.toString("utf8");
+    return buf.toString("utf8");
   } finally {
     fs.closeSync(fd);
   }
-  const lines = text.split("\n");
+}
+
+/** The newest assistant text in a Claude Code transcript, from its last 64 KiB. */
+function lastAssistantText(transcript: string): string | null {
+  const lines = tailOf(transcript, 65536).split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
     let entry: { type?: string; message?: { content?: unknown } };
     try {
@@ -201,6 +212,45 @@ function lastAssistantText(transcript: string): string | null {
     if (texts.length) return texts.map((b) => b.text).join("\n");
   }
   return null;
+}
+
+// shortcut: only the last 1 MiB is searched, so a turn writing more after the exit notice keeps the shell
+// until SESSION_GONE_MS; search from the shell's start if that misreads.
+const NOTICE_TAIL = 1 << 20;
+
+/**
+ * True when the background shell has exited. No hook reports an exit (SW-681): Claude Code writes a
+ * `<task-notification>` naming the task id into the transcript, mid-turn or as a turn of its own.
+ * A record without an id (written before SW-681, or by Codex) ends at the next turn's Stop, as before.
+ */
+function shellExited(
+  shell: NonNullable<SessionRecord["shell"]>,
+  turnFrom: string,
+  transcript: unknown,
+): boolean {
+  if (!shell.id) return shell.at < turnFrom;
+  if (typeof transcript !== "string") return false;
+  const tag = `<task-id>${shell.id}</task-id>`;
+  try {
+    return tailOf(transcript, NOTICE_TAIL)
+      .split("\n")
+      .some((line) => line.includes(tag) && isExitNotice(line, tag));
+  } catch {
+    return false;
+  }
+}
+
+/** Only Claude Code's own queue entries: a tool result or a Write quoting the tag is no exit (SW-681). */
+function isExitNotice(line: string, tag: string): boolean {
+  try {
+    const e = JSON.parse(line);
+    if (e?.type === "queue-operation") return String(e.content ?? "").includes(tag);
+    return (
+      e?.attachment?.type === "queued_command" && String(e.attachment.prompt ?? "").includes(tag)
+    );
+  } catch {
+    return false; // the tail's cut-off first line
+  }
 }
 
 /** A permission prompt for an AskUserQuestion or ExitPlanMode call is that question, not news. */
@@ -259,6 +309,8 @@ export function nextSession(
         ...(typeof command === "string" && { command: command.slice(0, 200) }),
         at,
       };
+      // shortcut: only the newest background shell is kept, so an older one still running after a newer
+      // one exits reads as done; keep a list keyed by task id if that misreads.
       if (tool === "Bash" && input["tool_input"]?.["run_in_background"] === true)
         s.shell = { command: typeof command === "string" ? command.slice(0, 200) : "", at };
       const wrapAsk = input["tool_input"]?.["ask"];
@@ -278,13 +330,25 @@ export function nextSession(
       return s;
     }
     case "PostToolUse":
-    case "PostToolUseFailure":
+    case "PostToolUseFailure": {
       status("busy");
       if (turnOnly) return s;
       delete s.tool;
+      // Claude Code names the task in its result; its exit notice and a TaskStop name the same id (SW-681).
+      const taskId = input["tool_response"]?.["backgroundTaskId"];
+      if (
+        s.shell &&
+        typeof taskId === "string" &&
+        input["tool_input"]?.["run_in_background"] === true
+      )
+        s.shell = { ...s.shell, id: taskId };
+      const stopped = input["tool_input"]?.["task_id"] ?? input["tool_input"]?.["shell_id"];
+      if ((tool === "TaskStop" || tool === "KillShell") && s.shell?.id && stopped === s.shell.id)
+        delete s.shell;
       // wrap_up returns at once; its ask still waits on the person.
       if (!(tool === WRAP_UP && s.ask?.via === "wrap_up")) delete s.ask;
       return s;
+    }
     case "Notification": {
       const type = input["notification_type"];
       const message = String(input["message"] ?? "");
@@ -327,10 +391,7 @@ export function nextSession(
       status("idle");
       if (turnOnly) return s;
       delete s.tool;
-      // shortcut: no hook reports a background shell's exit; the exit wakes the session, so the next
-      // turn's Stop ends it. Only the newest is kept, so a person's prompt or another shell's exit ends it
-      // early, and one that never exits (a dev server) holds for SESSION_GONE_MS. Probe processes if that misreads.
-      if (s.shell && s.shell.at < turnFrom) delete s.shell;
+      if (s.shell && shellExited(s.shell, turnFrom, input["transcript_path"])) delete s.shell;
       s.stopped = true;
       let text: string | null = null;
       if (typeof input["last_assistant_message"] === "string")

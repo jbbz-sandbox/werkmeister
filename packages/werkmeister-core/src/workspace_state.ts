@@ -115,8 +115,9 @@ export interface StateFacts {
 }
 
 const BEFORE_RELEASE = new Set<PhaseId>(["building", "pr-open", "merged"]);
-// While the agent is still on something, a proposed gate is its draft, not handed over (SW-570).
-const HOLDS_GATE = new Set<ActivityId>([
+// While the agent is still on something, a proposed gate is its draft, not handed over (SW-570),
+// and the badge reads working rather than done (SW-681).
+const STILL_ON_IT = new Set<ActivityId>([
   "queued",
   "starting",
   "testing",
@@ -149,6 +150,15 @@ function phaseOf(f: StateFacts): Phase {
   return p("building", stage ?? "Building", stage);
 }
 
+const queuedLabel = (w: WaitingFile) => `Queued for capacity (position ${w.position})`;
+
+/** "pr open" for `werkmeister pr open --watch`; else the command, cut for a card. */
+function backgroundWhat(command: string): string {
+  const sub = command.match(/\bwerkmeister\s+([a-z][\w-]*(?:\s+[a-z][\w-]*)?)/)?.[1];
+  if (sub) return sub;
+  return command.length > 40 ? `${command.slice(0, 39)}…` : command;
+}
+
 function activityOf(f: StateFacts): Activity {
   const a = (
     id: ActivityId,
@@ -163,8 +173,7 @@ function activityOf(f: StateFacts): Activity {
   });
   if (f.paused) return a("paused", "Paused", f.paused.at);
   // A service-start wait (SW-540) holds only that start; the session keeps working (SW-569).
-  if (f.waiting && !f.waiting.services)
-    return a("queued", `Queued for CPU · position ${f.waiting.position}`);
+  if (f.waiting && !f.waiting.services) return a("queued", queuedLabel(f.waiting));
   if (f.services.some((s) => s.state === "starting"))
     return a("starting", "Containers starting", f.started?.at ?? null);
   const now = f.now.getTime();
@@ -188,9 +197,9 @@ function activityOf(f: StateFacts): Activity {
     if (s.shell && now - Date.parse(s.shell.at) < SESSION_GONE_MS)
       return TEST_COMMAND.test(s.shell.command)
         ? a("testing", "Running tests", s.shell.at, id)
-        : a("tool", "Running a background shell", s.shell.at, id);
+        : a("tool", `Running in background: ${backgroundWhat(s.shell.command)}`, s.shell.at, id);
   // Only a service-start wait gets here: a live session's activity wins over it (SW-569).
-  if (f.waiting) return a("queued", `Waiting for capacity · position ${f.waiting.position}`);
+  if (f.waiting) return a("queued", queuedLabel(f.waiting));
   const gone = Object.entries(f.sessions).find(([, s]) => sessionGone(s, now));
   if (gone) return a("gone", "Session gone", gone[1].last ?? gone[1].at, gone[0]);
   return a("idle", "Idle");
@@ -231,7 +240,7 @@ export function workspaceState(f: StateFacts): WorkspaceState {
         source: "text",
       });
   }
-  const handedOver = !f.autonomous && !HOLDS_GATE.has(activity.id);
+  const handedOver = !f.autonomous && !STILL_ON_IT.has(activity.id);
   for (const g of handedOver ? f.gates : [])
     need({
       id: `gate:${g.file}`,
@@ -367,14 +376,20 @@ export function prNeeds(prs: RepoPr[]): { needs: NeedItem[]; phaseDetail: string
 
 /**
  * The one-word badge for readers that predate the model (VS Code, the dashboard, MCP `status`):
- * Needs you whenever the list has an item, else what the sessions say (SW-487 Q8).
+ * Needs you whenever the list has an item (SW-487 Q8); a done turn reads working while the activity is (SW-681);
+ * else what the sessions say.
  */
 export function legacyAgent(
   state: WorkspaceState,
   signal: { agent: AgentState; at: string | null; question: string | null },
 ): { agent: AgentState; at: string | null; question: string | null } {
   const first = state.needs[0];
-  if (!first || state.activity.id === "paused") return signal;
+  if (state.activity.id === "paused") return signal;
+  if (!first)
+    // Only a finished turn: an idle signal has no agent, so containers starting aren't its work.
+    return signal.agent === "done" && STILL_ON_IT.has(state.activity.id)
+      ? { agent: "working", at: state.activity.since ?? signal.at, question: null }
+      : signal;
   return signal.agent === "needs-you"
     ? signal
     : { agent: "needs-you", at: first.since, question: first.what };
