@@ -74,3 +74,39 @@ Use only one machine per queue. A second machine polling the same queue would ta
 ## Cost
 
 One poller makes 2,592,000 s ÷ 20 s ≈ 130k receive requests a month, however many repos there are. Each event adds about three requests (send, receive, delete) and one Lambda invocation. That's well within the SQS free tier (1M requests) and the Lambda free tier (1M invocations). Events from repos with no workspace still cross the queue before the daemon ignores them. The function URL is public: a bad signature is rejected cheaply, but every request is still an invocation.
+
+## Alternatives to the AWS backend
+
+The AWS path above is the only one that ships. Two alternatives exist for people who don't want an AWS account; neither is built into a release.
+
+| Backend | Status | Needs | Events while the machine is off |
+|---|---|---|---|
+| AWS: Lambda and SQS | shipped (this page) | an AWS account | kept for 14 days |
+| Google Cloud: Cloud Run and Pub/Sub | planned, no code yet | a Google Cloud project | kept, 7 days at most |
+| smee.io relay | prototype on a branch | nothing but a smee.io channel | lost; the 10-minute poll catches up |
+
+### Google Cloud (Pub/Sub)
+
+The same design on Google Cloud, as an alternative and not a replacement:
+
+| AWS | Google Cloud | What changes |
+|---|---|---|
+| Lambda with a public function URL | Cloud Run function, unauthenticated | The signature check stays the only gate. |
+| SQS queue | Pub/Sub topic and pull subscription | At-least-once, like SQS standard, so the daemon's delivery-id memory still matters. |
+| DLQ after 5 receives | Dead-letter topic, 5 delivery attempts | The Pub/Sub service agent needs publisher on the dead-letter topic and subscriber on the subscription, or dead-lettering silently doesn't happen. |
+| 14-day retention | 7 days on a subscription | The one real downgrade. |
+| IAM user that can only receive and delete | Service account with `roles/pubsub.subscriber` on the one subscription | |
+| Long poll, delete after the pass | Pull, ack after the pass, nack when it throws | Same redeliver-then-dead-letter behaviour. |
+| CDK | Terraform or Pulumi | Google has no first-party CDK. |
+
+The Lambda handler already takes its send function as a dependency, so the webhook side needs only a Pub/Sub sender. The daemon needs a Pub/Sub version of its queue client, and `github_ingest:` in `~/.werkmeister/config.yaml` needs a backend selector with a project and subscription name in place of the queue URL. The limits in the table are from memory: check them against Google's documentation before building.
+
+### smee.io relay
+
+No cloud account at all. The GitHub webhook points at a [smee.io](https://smee.io) channel, and the dashboard server holds an outbound connection to it, checks each event's `X-Hub-Signature-256`, and runs the same `pr watch` pass the timer runs.
+
+- **No queue.** Events sent while nothing is listening are lost, so the 10-minute poll stays as the fallback, and nothing may depend on the relay.
+- **A third party sees the payloads.** A smee channel is readable and writable by anyone who has its URL. The signature check is what stops a forged event; treat the URL as a secret anyway.
+- **Narrower than the AWS path.** The prototype acts on `pull_request` closed and `release` published only.
+
+The code is a prototype from October 2026 on the branch [`jayboyer/github-webhook-relay`](https://github.com/jbbz-sandbox/werkmeister/tree/jayboyer/github-webhook-relay): the relay (`github-relay.ts`), a smoke test, and the plugin hook that listens for it. Its design and plan are on that branch under `docs/superpowers/`. It predates the dashboard app's move to `apps/werkmeister-dashboard` and the daemon that now runs the AWS path, so it needs porting before it can merge.
