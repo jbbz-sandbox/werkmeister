@@ -1,0 +1,6 @@
+werkmeister-core
+Copyright 2026 Jay Boyer
+
+This package bundles no third-party code. Its dependencies install from npm
+under their own licences, listed in docs/third-party.md:
+https://github.com/jbbz-sandbox/werkmeister/blob/main/docs/third-party.md

@@ -1,12 +1,21 @@
 # Werkmeister SDK
 
-`werkmeister-core/sdk` is the one entry point that tools and UIs build on. It carries the
-semver promise; every other `werkmeister-core` export is internal and can change in any release.
-Its version moves with the CLI, and this reference matches the latest release.
+`werkmeister-core/sdk` is the one entry point that tools and UIs build on. This reference matches
+the latest release.
+
+Only `werkmeister-core/sdk` is public API and follows semver. Every other entry point, including
+the package root (`werkmeister-core`) and subpaths like `werkmeister-core/config`, is internal to
+werkmeister and can change in any release. `werkmeister-core` is versioned in lockstep with the
+werkmeister CLI: install the same version as the CLI you run. While the version is 0.x, a breaking
+change to `werkmeister-core/sdk` comes in a minor release, and its changelog entry says so.
 
 ## Install
 
-`werkmeister-core` is not on npm yet. Install steps land here with its first npm release.
+Install the same version as the CLI you run (`werkmeister --version`), on Node 22 or later:
+
+```sh
+npm i werkmeister-core@<your CLI version>
+```
 
 ## Example: list workspaces and their stage
 

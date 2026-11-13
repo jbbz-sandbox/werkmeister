@@ -5,19 +5,18 @@ A changeset is one file per user-visible change, written in the PR that makes it
 
 A change that ships nothing to a package (tests, CI, docs) still needs `pnpm changeset add --empty`: the gate's release check fails on any changed package without a changeset.
 
-**Name the CLI, not `werkmeister-core`.** `werkmeister` is the only
-package that publishes, and the changeset's text lands in the changelog of
-whichever package it names — a changeset naming `werkmeister-core` still releases,
-but its description ends up in a private package's changelog while the published
-one gets a bare version heading.
-
-`werkmeister-core` is `fixed` to the CLI in `config.json`, so its version tracks
-automatically. That mirrors the build: esbuild bundles core *into* the CLI, so
-the two are one shipped artifact and a core change is a CLI release.
+**Which package to name.** `werkmeister` and `werkmeister-core` both publish
+(SW-658), and `fixed` in `config.json` keeps them on one version, so naming either
+releases both. The changeset's text lands only in the changelog of each package it
+names; one not named gets a bare version heading. Name `werkmeister-core` for a
+change to its public SDK (`werkmeister-core/sdk`), the CLI for what CLI users see,
+and both when it is both. Changes to core's internal entry points name the CLI:
+the CLI bundles core, so they ship as a CLI release.
 
 `changeset status` only sees tracked files: `git add .changeset/<file>.md`
 before running it, or it fails with "Some packages have been changed but no
 changesets were found" even though the changeset exists.
 
-The other three workspaces are `ignore`d — they never publish and carry no
-changelog. A changeset naming one of them is an error, deliberately.
+`werkmeister-vscode` is in the `fixed` group but private: it versions, never
+publishes. The workspaces in `ignore` (dashboard, docs site, plugin) never
+publish and carry no changelog. A changeset naming one of them is an error, deliberately.

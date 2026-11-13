@@ -3,8 +3,26 @@
   "version": "0.88.2",
   "license": "Apache-2.0",
   "type": "module",
-  "private": true,
-  "description": "Shared werkmeister library: config/registry resolution, workspace creation and lifecycle, and issue-tracker helpers. Consumed by the CLI, werkmeister-dashboard, and the VS Code extension.",
+  "description": "werkmeister's shared library. Its public API is werkmeister-core/sdk; every other entry point is internal.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jbbz-sandbox/werkmeister.git",
+    "directory": "packages/werkmeister-core"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
   "main": "dist/sandbox.js",
   "types": "dist/sandbox.d.ts",
   "exports": {
