@@ -13,7 +13,7 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEMO_SERVICES_REPO,
   DEMO_SERVICES_REPO_URL,
@@ -58,9 +58,12 @@ let home: SandboxHome;
 
 beforeEach(() => {
   home = useSandboxHome({ fixtures: [] });
+  // SW-614: --check probes the daemon's address; a dead one keeps it off the host's :3002.
+  vi.stubEnv("WERKMEISTER_HOST", "http://127.0.0.1:1");
 });
 afterEach(() => {
   home.cleanup();
+  vi.unstubAllEnvs();
 });
 
 const detail = (steps: Step[], label: string): string =>

@@ -47,7 +47,7 @@ export function daemonToken(workspaceRoot?: string): string | null {
   );
 }
 
-/** The daemon is not listening (or did not answer in time): the caller may fall back. */
+/** The daemon is not listening, or something else holds its port: the caller may fall back. */
 export class DaemonUnavailable extends SandboxError {
   constructor(detail: string) {
     super(
@@ -63,13 +63,54 @@ function headers(token: string | null | undefined): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-async function send(url: string, init: RequestInit): Promise<Response> {
-  try {
-    return await fetch(url, init);
-  } catch (e) {
-    // fetch wraps ECONNREFUSED and timeouts as a TypeError/AbortError with a cause.
-    const err = e as Error & { cause?: { code?: string } };
-    throw new DaemonUnavailable(err.cause?.code ?? err.name);
+/** The daemon took the call but did not answer in time: it may still be running it, so never run it again here. */
+export class DaemonTimeout extends SandboxError {
+  constructor(detail: string) {
+    super(
+      `werkmeister daemon at ${daemonUrl()} took the call but did not answer in time (${detail}); ` +
+        "it may still be running it.",
+      "DAEMON_TIMEOUT",
+    );
+  }
+}
+
+const NOT_LISTENING: Record<string, string> = {
+  ECONNREFUSED: "ECONNREFUSED: nothing is listening, the daemon is not running",
+  ECONNRESET: "ECONNRESET: the daemon reset the connection while exiting or restarting",
+};
+
+// launchd waits up to 10 s to respawn a daemon that ran under 10 s, then it boots in ~1-2 s (SW-614).
+const restartGapMs = () => Number(envVar("DAEMON_RETRY_MS")) || 15_000;
+// Once a wait gave up, the daemon is down, not restarting: later calls in this process try once.
+let gaveUp = false;
+
+/** The error *code* comes after the request reached the daemon; a connect timeout never got there. */
+export const tookTheCall = (code: string) =>
+  code === "TimeoutError" || (code.startsWith("UND_ERR_") && code !== "UND_ERR_CONNECT_TIMEOUT");
+
+/**
+ * *retry*: wait out the daemon's own restart (SW-306) on a refused or reset connect,
+ * which the daemon never saw, so resending is safe.
+ */
+async function send(url: string, init: RequestInit, retry = true): Promise<Response> {
+  const deadline = Date.now() + (gaveUp ? 0 : restartGapMs());
+  for (;;) {
+    try {
+      const res = await fetch(url, init);
+      if (retry) gaveUp = false;
+      return res;
+    } catch (e) {
+      // fetch wraps ECONNREFUSED and timeouts as a TypeError/AbortError with a cause.
+      const err = e as Error & { cause?: { code?: string } };
+      const code = err.cause?.code ?? err.name;
+      if (tookTheCall(code)) throw new DaemonTimeout(code);
+      if (!(code in NOT_LISTENING)) throw new DaemonUnavailable(code);
+      if (!retry || Date.now() >= deadline) {
+        if (retry) gaveUp = true;
+        throw new DaemonUnavailable(NOT_LISTENING[code]);
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
   }
 }
 
@@ -145,10 +186,11 @@ export interface DaemonStatus {
 /** The daemon's own `GET /api/status`, or null when it is down or refuses. */
 export async function daemonStatus(): Promise<DaemonStatus | null> {
   try {
-    const res = await send(`${daemonUrl()}/api/status`, {
-      headers: headers(undefined),
-      signal: AbortSignal.timeout(5000),
-    });
+    const res = await send(
+      `${daemonUrl()}/api/status`,
+      { headers: headers(undefined), signal: AbortSignal.timeout(5000) },
+      false,
+    );
     return res.ok ? ((await res.json()) as DaemonStatus) : null;
   } catch {
     return null;
@@ -165,7 +207,8 @@ export interface ToolResult<T> {
 
 /**
  * Run daemon tool *name* with *args* over `POST /api/tool` (default timeout 120 s).
- * Throws `DaemonUnavailable` when the daemon is down and `SandboxError` when the tool fails.
+ * Throws `DaemonUnavailable` when the daemon is down, `DaemonTimeout` when it took the call but
+ * did not answer in time, and `SandboxError` when the tool fails.
  */
 export async function callTool<T = unknown>(
   name: string,
@@ -185,6 +228,16 @@ export async function callTool<T = unknown>(
     signal: opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout,
   });
   checkBuild(build, res);
+  // The daemon answers every /api/tool call in JSON, bar its empty 401/403 for a bad token or Origin.
+  if (
+    !res.headers.get("content-type")?.includes("json") &&
+    res.status !== 401 &&
+    res.status !== 403
+  ) {
+    throw new DaemonUnavailable(
+      `HTTP ${res.status}: the port is held by something that is not the werkmeister daemon`,
+    );
+  }
   const body = (await res.json().catch(() => ({}))) as {
     structuredContent?: T;
     text?: string;
