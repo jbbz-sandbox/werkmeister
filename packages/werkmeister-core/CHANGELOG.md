@@ -1,5 +1,7 @@
 # sandbox-core
 
+## 0.87.3
+
 ## 0.87.2
 
 ### Patch Changes
