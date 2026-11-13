@@ -1,6 +1,6 @@
 import type { On } from "claude-code";
 import type { Engine, Plugin } from "claude-code/testing";
-import { expect, mock, test } from "claude-code/testing";
+import { test as baseTest, expect, mock } from "claude-code/testing";
 import type { FormField, WorkspaceRow } from "../types";
 import {
   actionsFor,
@@ -16,6 +16,13 @@ import {
   withLivePrs,
 } from "./register";
 import { edit } from "./textarea";
+
+// SW-666: the engine's 5 s default timed out cases on a loaded host (SW-492 fixed one, then SW-153/SW-157 hit it).
+// 30 s for every case; a case's own `timeoutMs` wins.
+const test: typeof baseTest = (name, ...rest) => {
+  const [options, body] = rest.length === 1 ? [{}, rest[0]] : rest;
+  baseTest(name, { timeoutMs: 30_000, ...options }, body);
+};
 
 const SURFACES = ["terminal", "desktop"] as const;
 const WS = "plugin:werkmeister:workspaces";
