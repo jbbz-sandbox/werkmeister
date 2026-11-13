@@ -46,6 +46,7 @@ import {
 import { syncRegistry } from "./dist/registry_sync.js";
 import { withReporter } from "./dist/reporter.js";
 import { removeWorkspace, WorkspaceError } from "./dist/sandbox.js";
+import { lowMemory as lowMemoryNote } from "./dist/scheduler_state.js";
 import { TEMP_HOME_SCRIPT } from "./dist/temp_home.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
@@ -172,6 +173,7 @@ function deps(table, over = {}) {
     gateCompose: () => [],
     portHolders: async () => [],
     hostLoad: () => ({ load: [0.5, 0.5, 0.5], cores: 4 }),
+    hostMemory: () => ({ free: 8 * 2 ** 30, total: 16 * 2 ** 30 }),
     sleep: async () => {},
     ...over,
   };
@@ -723,6 +725,13 @@ test("gate: failing only for want of capacity is a retry; a real failure beside 
       JSON.stringify(g.checks),
     );
     assert.match(formatGate("app", g)[0], /gate retry later \(no capacity\)/);
+
+    // SW-620: a setup start that waited out load or low memory is a retry too.
+    d.startService = async () => {
+      throw Object.assign(new Error("memory is low after the 1.5 min wait"), { code: "HOST_LOAD" });
+    };
+    const host = await gate(ws, d);
+    assert.equal(host.retry, true, JSON.stringify(host.checks));
 
     // Any other failure makes it a FAIL again.
     d.startService = async () => {
@@ -2015,6 +2024,8 @@ test("runGate: touches the idle reaper's exec marker before docker exec (SW-39)"
 });
 
 /** A host whose 1-min load reads *loads* in turn (the last one repeats), on 4 cores: limit 8. */
+const plentyMemory = () => ({ free: 8 * 2 ** 30, total: 16 * 2 ** 30 });
+
 function loaded(loads) {
   const slept = [];
   let i = 0;
@@ -2024,6 +2035,7 @@ function loaded(loads) {
       const l = loads[Math.min(i++, loads.length - 1)];
       return { load: [l, l, l], cores: 4 };
     },
+    hostMemory: plentyMemory,
     sleep: async (ms) => {
       slept.push(ms);
     },
@@ -2094,6 +2106,88 @@ test("runGate: never waits on host load; admission prices its starts (SW-542)", 
   }
 });
 
+// SW-620: Claude Code reaps an idle background shell under memory pressure, so a gate that
+// starts containers then is killed before any row runs. Low memory is faked, never produced.
+const GiB = 2 ** 30;
+const lowMemory = () => ({ free: 0.5 * GiB, total: 16 * GiB });
+
+test("runGate: under low free memory it starts no container and is a retry (SW-620)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([], {
+      services: {
+        ...REGISTRY.services,
+        lib: { ...REGISTRY.services.lib, test: "npm test -w lib" },
+      },
+      hostMemory: lowMemory,
+    });
+    const r = stubRun([
+      [/^docker ps/, { stdout: "" }],
+      [/diff --name-only/, { stdout: "packages/lib/x.ts\n" }],
+    ]);
+    d.run = r.run;
+    const g = await gate(ws, d);
+    assert.deepEqual(d.started, []);
+    assert.equal(g.retry, true, JSON.stringify(g.checks));
+    assert.match(
+      g.checks.find((c) => c.name === "memory").detail,
+      /^low memory: 3% free, under budget\.free_memory 15%; no container started/,
+    );
+    assert.match(formatGate("app", g)[0], /gate retry later \(low memory\)/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("waitForHostLoadNow: low free memory counts on macOS too, where load does not (SW-620)", async () => {
+  const lines = [];
+  const host = { ...loaded([0.5]), hostMemory: lowMemory };
+  const note = await withSandboxHome(() =>
+    withReporter({ emit: (e) => lines.push(e.msg) }, () => waitForHostLoadNow(host, "darwin")),
+  );
+  assert.equal(host.slept.length, 6);
+  assert.equal(
+    note,
+    "ran with low memory (3% free, under budget.free_memory 15%); the 1.5 min host-load wait is spent",
+  );
+  assert.match(lines[0], /waiting up to 1\.5 min for free memory to rise \(3% free/);
+});
+
+test("waitForHostLoadNow: waits for memory to free on linux, and names what it waited for (SW-620)", async () => {
+  const reads = [lowMemory, lowMemory, plentyMemory];
+  const host = { ...loaded([0.5]), hostMemory: () => (reads.shift() ?? plentyMemory)() };
+  const note = await withSandboxHome(() => waitForHostLoadNow(host, "linux"));
+  assert.equal(note, "waited 30 s for free memory");
+});
+
+test("lowMemory: budget.free_memory 0 turns it off, and unreadable memory is not low (SW-620)", async () => {
+  await withSandboxHome(async () => {
+    assert.match(lowMemoryNote(lowMemory), /3% free, under budget\.free_memory 15%/);
+    const unreadable = () => {
+      throw new Error("sysctl: unknown oid");
+    };
+    assert.equal(lowMemoryNote(unreadable), "");
+    assert.equal(
+      lowMemoryNote(() => ({ free: 0, total: 0 })),
+      "",
+    );
+  });
+  await withSandboxHome(async () => assert.equal(lowMemoryNote(lowMemory), ""), {
+    config: "budget:\n  free_memory: 0\n",
+  });
+});
+
+test("waitForHostLoadNow: WERKMEISTER_NO_WAIT=1 skips the memory wait too (SW-620)", async () => {
+  process.env.WERKMEISTER_NO_WAIT = "1";
+  try {
+    const host = { ...loaded([0.5]), hostMemory: lowMemory };
+    assert.equal(await withSandboxHome(() => waitForHostLoadNow(host, "darwin")), "");
+    assert.deepEqual(host.slept, []);
+  } finally {
+    delete process.env.WERKMEISTER_NO_WAIT;
+  }
+});
+
 test("waitForHostLoadNow: with-temp-home's wait polls and says up front how long it may wait (SW-224, SW-262)", async () => {
   const lines = [];
   const reporter = { emit: (e) => lines.push(e.msg) };
@@ -2130,7 +2224,7 @@ test("waitForHostLoadNow: prints progress at the minute, not at the end (SW-262)
   const stuck = loaded([90]);
   await withSandboxHome(() => withReporter(reporter, () => waitForHostLoadNow(stuck, "linux")));
   assert.deepEqual(lines.slice(1), [
-    "still waiting for host load: 90.0 over 8, 60 s so far, up to 0.5 min left",
+    "still waiting: host load 90.0 over 8, 60 s so far, up to 0.5 min left",
   ]);
 });
 

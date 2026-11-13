@@ -255,7 +255,7 @@ Every PR callback pass (the werkmeister mod's 10-minute timer and `werkmeister p
 
 A `docker exec` typed by hand in a terminal outside Claude is not seen.
 
-When `pr gate` or `pr open` fails only because a container could not get capacity (a start that waited 10 minutes, and the rows that then found no container), the gate reads `retry later (no capacity)` instead of `FAILED` and the command exits 75. Rerun it; nothing about the change failed.
+When `pr gate` or `pr open` fails only because a container could not get capacity (a start that waited 10 minutes, and the rows that then found no container), the gate reads `retry later (no capacity)` instead of `FAILED` and the command exits 75. Rerun it; nothing about the change failed. The same holds when free memory is under `budget.free_memory` before the gate starts anything: a `memory` row, `retry later (low memory)`, exit 75.
 
 `auto_stop` (a SessionEnd hook, `werkmeister internal session-end`) is on by default for `autonomous` workspaces. Set `auto_stop: false` in `.werkmeister/workspace.yml` to turn it off.
 

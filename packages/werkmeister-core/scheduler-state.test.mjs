@@ -318,6 +318,7 @@ function hostLoads(...loads) {
       const l = loads[Math.min(i++, loads.length - 1)];
       return { load: [l, l, l], cores: 4 };
     },
+    hostMemory: () => ({ free: 8, total: 16 }),
     sleep: async (ms) => slept.push(ms),
   };
 }
@@ -341,6 +342,22 @@ test("waitForSetupLoad: load still over budget after the wait fails with the loa
     assert.match(
       lines[0],
       /waiting up to 1\.5 min for host load 90\.0 to fall to 8 \(budget\.host_load\) before starting install/,
+    );
+  });
+});
+
+// SW-620: on macOS, where load is no signal, low free memory still holds the install back.
+test("waitForSetupLoad: low free memory after the wait fails with the memory, on macOS too (SW-620)", async () => {
+  delete process.env.WERKMEISTER_NO_WAIT;
+  await withHome(async (home) => {
+    const ws = workspace(home, SETUP_COMPOSE);
+    const short = { ...hostLoads(500), hostMemory: () => ({ free: 1, total: 16 }) };
+    await assert.rejects(
+      waitForSetupLoad(ws, serviceStarts(ws, "api"), short, "darwin"),
+      (e) =>
+        e.code === "HOST_LOAD" &&
+        /^memory is low \(6% free, under budget\.free_memory 15%\)/.test(e.message) &&
+        !/host load/.test(e.message),
     );
   });
 });
