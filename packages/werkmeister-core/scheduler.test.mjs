@@ -58,6 +58,20 @@ test("a service start for an already-running feature still has to fit", () => {
   assert.deepEqual(admit(budget, [lease("a", 3, 3)], [], start), { kind: "admit" });
 });
 
+// SW-629: no preemption frees more than the whole budget, so such a start must not queue forever.
+test("a cost larger than the whole budget never fits, whoever asks and whatever runs", () => {
+  const over = { kind: "never-fits", cost: { memory: 1 * G, cpus: 6 } };
+  assert.deepEqual(admit(budget, [], [], req("b", 1, 6)), over);
+  assert.deepEqual(admit(budget, [lease("a", 1, 1)], ["x"], req("b", 1, 6, true)), over);
+  assert.deepEqual(admit(budget, [], [], { ...req("b", 1, 6), services: ["api"] }), over);
+  assert.deepEqual(admit(budget, [], [], req("b", 5, 1)), {
+    kind: "never-fits",
+    cost: { memory: 5 * G, cpus: 1 },
+  });
+  // Exactly the budget still fits an empty engine.
+  assert.deepEqual(admit(budget, [], [], req("b", 4, 4)), { kind: "admit" });
+});
+
 test("someone ahead in the queue: wait with a position, even when it fits", () => {
   assert.deepEqual(admit(budget, [], ["x", "y"], req("b", 1, 1)), { kind: "wait", position: 3 });
   assert.deepEqual(admit(budget, [], ["x", "b"], req("b", 1, 1)), { kind: "wait", position: 2 });

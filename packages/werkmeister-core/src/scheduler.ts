@@ -38,7 +38,9 @@ export interface Request {
 export type Decision =
   | { kind: "admit" }
   | { kind: "preempt"; victims: string[] }
-  | { kind: "wait"; position: number };
+  | { kind: "wait"; position: number }
+  /** *cost* alone exceeds the whole budget: no preemption or wait can ever make room (SW-629). */
+  | { kind: "never-fits"; cost: Cost };
 
 const UNITS: Record<string, number> = {
   "": 1,
@@ -65,6 +67,9 @@ const RANK_ORDER: Rank[] = ["idle", "human-check", "working"];
  */
 export function admit(budget: Budget, running: Lease[], queue: string[], req: Request): Decision {
   if (!req.services && running.some((l) => l.feature === req.feature)) return { kind: "admit" };
+  if (req.cost.memory > budget.memory || req.cost.cpus > budget.cpus) {
+    return { kind: "never-fits", cost: req.cost };
+  }
 
   const used = running.reduce(
     (a, l) => ({ memory: a.memory + l.cost.memory, cpus: a.cpus + l.cost.cpus }),
