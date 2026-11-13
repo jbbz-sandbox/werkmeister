@@ -40,6 +40,13 @@ it("--exec-runs is a fixture option only first, where the ask rule's prefix sees
   expect(later.steps?.[0]?.[0]).toBe("--exec-runs");
 });
 
+it("--slots-full is a fixture option, before the werkmeister args (SW-634)", () => {
+  const r = parse(["--slots-full", "workspace", "init", "--no-build"]);
+  expect(r.opts?.slotsFull).toBe(true);
+  expect(r.steps).toEqual([["workspace", "init", "--no-build"]]);
+  expect(parse(["workspace", "init"]).opts?.slotsFull).toBe(false);
+});
+
 it("--pr-field sets only fields that reach no git or Claude call, keeping any = in the value (SW-514)", () => {
   const r = parse(["--pr-field", "skip_release=a=b", "--pr-field", "release=none", "pr", "status"]);
   expect(r.opts?.prFields).toEqual({ skip_release: "a=b", release: "none" });

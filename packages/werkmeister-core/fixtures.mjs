@@ -191,7 +191,7 @@ export async function withAgentState(hooks) {
 /**
  * Run *fn* inside the seeded fixture `with-fixture-workspace` uses (SW-292): its registry, a
  * workspace whose code repo has a local bare origin, and logging fake gh and docker in the env.
- * `opts` is `seedFixture`'s, plus the `gate` / `bare` presets (fixturePreset). Restores the env and removes the dir.
+ * `opts` is `seedFixture`'s (e.g. `slotsFull` leases every slot to other features), plus the `gate` / `bare` presets (fixturePreset). Restores the env and removes the dir.
  */
 export async function withFixtureWorkspace(fn, opts = {}) {
   const { fixturePreset, seedFixture } = await import("./dist/fixture_workspace.js");

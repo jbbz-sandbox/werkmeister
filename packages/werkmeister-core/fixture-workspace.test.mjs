@@ -12,7 +12,7 @@ import { startIssue } from "./dist/issue_status.js";
 import { jiraCreds } from "./dist/jira-rest.js";
 import { closeOut, gatePrs, openPrs, refreshPrStatus } from "./dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { leasesPath } from "./dist/scheduler_state.js";
+import { readLeases } from "./dist/scheduler_state.js";
 import { initWorkspace } from "./dist/workspace_init.js";
 import { tokensDir } from "./dist/workspace_token.js";
 import { pinWerkmeisterRoot, withFakeDaemon, withFixtureWorkspace } from "./fixtures.mjs";
@@ -82,33 +82,38 @@ test("init under the fixture writes the context and wrappers inside the 10 s que
 
 // SW-551: with every slot leased, init skipped compose.yml and the context but still ended
 // "Workspace initialised.", so create handed the agent a container recipe it could not follow.
-test("init with every slot taken says the container step did not run and what to do", async () => {
-  await withFixtureWorkspace(async (fx) => {
-    const others = Object.fromEntries(
-      [1, 2, 3, 4].map((slot) => [`other-${slot}`, { slot, workspace: fx.workspace }]),
-    );
-    fs.mkdirSync(path.dirname(leasesPath()), { recursive: true });
-    fs.writeFileSync(leasesPath(), JSON.stringify(others));
-    const reporter = collectingReporter();
-    const result = await withReporter(reporter, () =>
-      initWorkspace({}, fx.workspace, { build: false }),
-    );
-    const out = reporter.text();
-    assert.equal(fs.existsSync(path.join(fx.workspace, "compose.yml")), false);
-    assert.equal(result.containers, false);
-    assert.doesNotMatch(out, /Workspace initialised\./);
-    assert.match(out, /container step did not run/i);
-    assert.match(out, /werkmeister feature down/);
-    assert.match(out, /werkmeister workspace init/);
-    // The stage contracts send the agent here for the container recipe, so it says so too.
-    const context = fs.readFileSync(
-      path.join(fx.workspace, ".werkmeister", "werkmeister-context.md"),
-      "utf8",
-    );
-    assert.match(context, /container step did not run/i);
-    assert.match(context, /All 4 feature slots are occupied|No available slots/);
-    assert.match(context, /werkmeister workspace init/);
-  });
+test("init with every slot taken (slotsFull) says the container step did not run and what to do", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      // SW-634: each lease's workspace must exist, or heldSlots prunes it and init gets a slot.
+      const leases = Object.entries(readLeases()).sort(([, a], [, b]) => a.slot - b.slot);
+      assert.deepEqual(
+        leases.map(([f, l]) => [f, l.slot]),
+        [1, 2, 3, 4].map((n) => [`other-${n}`, n]),
+      );
+      for (const [, l] of leases) assert.ok(fs.existsSync(l.workspace), l.workspace);
+      const reporter = collectingReporter();
+      const result = await withReporter(reporter, () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const out = reporter.text();
+      assert.equal(fs.existsSync(path.join(fx.workspace, "compose.yml")), false);
+      assert.equal(result.containers, false);
+      assert.doesNotMatch(out, /Workspace initialised\./);
+      assert.match(out, /container step did not run/i);
+      assert.match(out, /werkmeister feature down/);
+      assert.match(out, /werkmeister workspace init/);
+      // The stage contracts send the agent here for the container recipe, so it says so too.
+      const context = fs.readFileSync(
+        path.join(fx.workspace, ".werkmeister", "werkmeister-context.md"),
+        "utf8",
+      );
+      assert.match(context, /container step did not run/i);
+      assert.match(context, /All 4 feature slots are occupied|No available slots/);
+      assert.match(context, /werkmeister workspace init/);
+    },
+    { slotsFull: true },
+  );
 });
 
 test("the gate fixture's one-file change runs lib's test in its container, logged by the fake docker", async () => {
