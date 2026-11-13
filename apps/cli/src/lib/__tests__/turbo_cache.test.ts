@@ -52,7 +52,6 @@ describe("the built-in turbo cache on this repo's services", () => {
       (n) => services[n]?.setup_service === "werkmeister-install",
     );
     expect(fed.sort()).toEqual([
-      "cli",
       "docs-site",
       "github-ingest",
       "werkmeister-core",
