@@ -80,6 +80,53 @@ it("a person's up stops the autonomous feature, queues it as preempted, and is a
   expect(readWaiting(victim)).toMatchObject({ position: 1, reason: "preempted" });
 });
 
+// SW-629: `feature up` and the gate's starts fail at once, never queue, when the cost exceeds the budget.
+describe("a start larger than the whole budget", () => {
+  const COST =
+    "services:\n  api:\n    deploy:\n      resources:\n        limits: { cpus: '6' }\n        reservations: { memory: 1G }\n";
+  beforeEach(() => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 2G\n  cpus: 4\n");
+    vi.mocked(run).mockImplementation(() => ({ status: 0, stdout: "", stderr: "" }));
+  });
+
+  it("fails NEVER_FITS from up's admission, naming the numbers and the fix", async () => {
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), COST);
+    await expect(admitOrQueue("mine", mine, true)).rejects.toMatchObject({
+      code: "NEVER_FITS",
+      message: expect.stringMatching(/cost 6\.0 CPUs > budget 4.*budget\.cpus/s),
+    });
+    expect(readQueue()).toEqual([]);
+    expect(readWaiting(mine)).toBeNull();
+  });
+
+  it("fails NEVER_FITS from a service start without polling", async () => {
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(
+      path.join(mine, "compose.yml"),
+      COST.replace("api:\n", "api:\n    profiles: [on-demand]\n"),
+    );
+    const sleep = vi.fn(async () => {});
+    await expect(admitServiceStart("mine", mine, "api", { sleep })).rejects.toMatchObject({
+      code: "NEVER_FITS",
+    });
+    expect(sleep).not.toHaveBeenCalled();
+    expect(readQueue()).toEqual([]);
+  });
+
+  it("names memory when memory is what's over", async () => {
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(
+      path.join(mine, "compose.yml"),
+      COST.replace("'6'", "'1'").replace("1G", "3G"),
+    );
+    await expect(admitOrQueue("mine", mine, true)).rejects.toMatchObject({
+      code: "NEVER_FITS",
+      message: expect.stringMatching(/cost 3\.0 GiB memory > budget 2\.0 GiB.*budget\.memory/s),
+    });
+  });
+});
+
 // SW-540: an on-demand service start (the gate, `feature up --service`) asks admission for what it adds.
 describe("admitServiceStart", () => {
   const ON_DEMAND =

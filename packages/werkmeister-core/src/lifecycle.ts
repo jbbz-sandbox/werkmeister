@@ -421,7 +421,7 @@ async function prepareSlot(
  * service started alone after a pull gets a fresh dist/.
  *
  * Throws `INSIDE_OWN_CONTAINER`, `NO_COMPOSE`, `MISSING_SECRETS`, `SLOT_ALLOC`,
- * `NO_CAPACITY`, `HOST_LOAD` or `COMPOSE_UP_FAILED`.
+ * `NO_CAPACITY`, `NEVER_FITS`, `HOST_LOAD` or `COMPOSE_UP_FAILED`.
  */
 export async function startService(
   feature: string,
@@ -473,7 +473,7 @@ const SERVICE_WAIT_MS = 10 * 60_000;
  * only ones, so skipping admission here let a wave of 8 onto 12 cores. A fixed
  * poll, not a backoff: the queue is FIFO, so a sleeping head would idle freed room.
  *
- * Throws `NO_CAPACITY` when the wait is spent.
+ * Throws `NO_CAPACITY` when the wait is spent, `NEVER_FITS` at once when the start costs more than the whole budget.
  */
 export async function admitServiceStart(
   feature: string,
@@ -944,14 +944,21 @@ async function admitOrQueueHere(
   const running = runningLeases();
   // Docker unreadable: let compose up report it rather than queue on a guess.
   if (running === null) return null;
-  const decision = await requestAdmission(
-    feature,
-    workspace,
-    byPerson,
-    running,
-    await loadBudget(),
-    starting,
-  );
+  const budget = await loadBudget();
+  const decision = await requestAdmission(feature, workspace, byPerson, running, budget, starting);
+  if (decision.kind === "never-fits") {
+    const { cost } = decision;
+    const gib = (b: number) => `${(b / 2 ** 30).toFixed(1)} GiB`;
+    const over =
+      cost.cpus > budget.cpus
+        ? `cost ${cost.cpus.toFixed(1)} CPUs > budget ${budget.cpus}; raise the engine's CPUs or budget.cpus`
+        : `cost ${gib(cost.memory)} memory > budget ${gib(budget.memory)}; raise the engine's memory or budget.memory`;
+    throw new SandboxError(
+      `'${feature}' can never fit the budget${starting ? ` to start ${starting.services.join(", ")}` : ""}: ` +
+        `${over} in ~/.werkmeister/config.yaml, or start fewer services.`,
+      "NEVER_FITS",
+    );
+  }
   if (decision.kind === "wait") return decision.position;
   if (decision.kind === "preempt") {
     for (const victim of decision.victims) {
