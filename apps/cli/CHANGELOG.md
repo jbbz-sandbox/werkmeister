@@ -1,5 +1,15 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.87.0
+
+### Minor Changes
+
+- 6f567fb: The workspaces dashboard now ships in the npm package. `werkmeister infra connect` starts it on port 3001 and `werkmeister internal dashboard` runs it in the foreground on an `npm i -g` install, where both previously needed a checkout. The browser form (`werkmeister workspace new --browser-form`) and the Claude Desktop MCP App pages ship too, so a package install no longer falls back to text for them.
+
+### Patch Changes
+
+- ad48946: SW-570: a stage gate at `status: proposed` (a PR file at `status: draft`) is a Needs you item only once the agent has handed it over. While the session is busy, has a background shell running (`Running tests`, or `Running a background shell`), waits on capacity (`Waiting for capacity · position N` once its turn ends) or has containers starting, the /workspaces card, the VS Code tree and check-in show that activity and no Needs you dot. In an autonomous workspace a draft gate never needs the person. A background shell counts until the session's next turn ends, or for 30 minutes.
+
 ## 0.86.4
 
 ### Patch Changes
