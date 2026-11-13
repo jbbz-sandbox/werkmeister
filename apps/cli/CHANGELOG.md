@@ -1,5 +1,14 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.87.2
+
+### Patch Changes
+
+- 8a90281: SW-629: a start whose CPUs or memory alone are more than the whole scheduler budget fails at once with `NEVER_FITS`, naming the cost and the budget of the first resource over (`cost 5.0 CPUs > budget 4`) and the fix (raise the engine's CPUs or memory, or `budget.cpus` / `budget.memory` in `~/.werkmeister/config.yaml`, or start fewer services). Before, `feature up` queued it for good and the gate's service starts waited 10 minutes and failed `NO_CAPACITY`, though no preemption could ever make room.
+- aa2e36e: SW-649: an autonomous workspace pre-approves the exact frozen install each of its repos' root lockfiles pins (pnpm, npm, yarn v1, yarn berry with `.yarnrc.yml`, uv) instead of always the fixed npm and pnpm pair. The lockfiles are read from the repo's checkout under `repos_root`, not the workspace's worktree, so a lockfile an agent writes grants nothing. A repo with none of these lockfiles gets no install rule.
+- 238b387: SW-660: a workspace's allow rules now cover the test command exactly as werkmeister-context.md prints it, the repo's appended lint included. A test command of more than one command (an `&&` chain, a `{ …; }` group, `||`, `;`, a pipe) is printed and allowed as one exact `with-temp-home sh -c '…'` line, so every part runs under the temp HOME and the `{ …; }` rows are no longer a shell syntax error; the bare per-segment rules for the wrapped form are gone. One simple command keeps its `with-temp-home <cmd>:*` rule. `validate:` text still gets no rule. Existing workspaces pick the rules up on refresh or `werkmeister machine migrate`, and the headless wake passes the same list.
+- dc871e3: `werkmeister pr gate` and `pr open` now fetch `origin/<base>` before the tests. If a branch that isn't pushed yet is behind it, a `base` row fails and names how many commits behind it is and the `git -C <repo> rebase origin/<base>` to run. No lint or test row runs, and nothing is pushed, so a PR no longer opens conflicting after the gate ran on a stale base. A branch that's already pushed passes with a note pointing at `pr watch` and rule 5's force-with-lease hand-off. The ICM propose stage and `_shared/pr-rules.md` say to rebase before the first push. `with-fixture-workspace --behind` seeds a branch behind `origin/main`.
+
 ## 0.87.1
 
 ### Patch Changes
