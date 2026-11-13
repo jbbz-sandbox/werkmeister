@@ -181,6 +181,7 @@ export interface InterceptsSnapshot {
   remote_services: string[];
 }
 
+/** Every feature×service intercept row and the interceptable services: what `werkmeister feature status --intercepts --json` prints. */
 export async function interceptsSnapshot(): Promise<InterceptsSnapshot> {
   const state = await listIntercepts(STATUS_READ);
   const registry = loadServices();

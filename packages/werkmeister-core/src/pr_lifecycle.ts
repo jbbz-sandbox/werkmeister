@@ -1690,12 +1690,23 @@ export async function openPrs(
   return { ok, lines, ...(!ok && retryOnly && { retry: true as const }) };
 }
 
+/**
+ * `werkmeister pr status`: reads each of *ws*'s opened PRs from `gh`, writes merged/shipped/review
+ * state back to its PR file, moves the issue, and commits the record when anything changed.
+ */
 export async function refreshPrStatus(
   ws: string,
   deps: Deps = defaultDeps(),
   // `gh: false` is check-in's sweep (SW-65): open → merged stays with `gh` in `pr status`.
   opts: { gh?: boolean } = {},
-): Promise<{ lines: string[]; changed: boolean; views: Map<string, PrView> }> {
+): Promise<{
+  /** One status line per PR, then any issue move and record commit. */
+  lines: string[];
+  /** True when a PR file was rewritten. */
+  changed: boolean;
+  /** `gh pr view` of each PR still open, keyed by PR file path. */
+  views: Map<string, PrView>;
+}> {
   const lines: string[] = [];
   const changed: string[] = [];
   const views = new Map<string, PrView>();
@@ -2462,7 +2473,14 @@ export async function watchPrs(
   deps: Deps = defaultDeps(),
   send: (cb: PrCallback) => Promise<string[] | void> = deliverHeadless,
   idleLock = path.join(sandboxHome(), "idle-stop.lock"),
-): Promise<{ ok: boolean; lines: string[]; desktop: PrCallback[] }> {
+): Promise<{
+  /** Always true: a failing workspace is reported in `lines`, not here. */
+  ok: boolean;
+  /** What the pass did, one line per event. */
+  lines: string[];
+  /** With `desktop: true`, the messages for the caller to send to Desktop sessions. */
+  desktop: PrCallback[];
+}> {
   const { workspaces } = await listWorkspaces();
   let paths = workspaces.map((w) => w.path);
   // A pushed GitHub event (SW-583) names its repo; GitHub's full_name case can differ from the PR file's.
@@ -2686,16 +2704,25 @@ export async function newPr(
 
 /** The workspace's place in the lifecycle, from files only — cheap enough for the pane's poll. */
 export function lifecycleOf(ws: string): {
+  /** Where the workspace is, from its PR files and `closeout.md`. */
   state: Lifecycle;
+  /** One entry per PR file in the propose stage. */
   prs: Array<{
+    /** The code worktree's folder name. */
     dir: string;
+    /** The file name without `pr-` and `.md`. */
     stem: string;
+    /** The file's `status:` (`draft`, `approved`, `open`, `merged`, `shipped`, …). */
     status: string;
+    /** The opened PR's URL, or null before `pr open`. */
     url: string | null;
+    /** The release tag that shipped it, or null. */
     release: string | null;
+    /** True when the PR file opts out of waiting for a release. */
     skip_release: boolean;
     /** The merged PR changed its registry fragment and the sync hasn't run (SW-340). */
     registry_sync: boolean;
+    /** Absolute path of the PR file. */
     path: string;
   }>;
 } {
@@ -2899,7 +2926,16 @@ export async function closeOut(
   name: string,
   opts: { abandon?: string; skipPostmortem?: string; noPr?: string } = {},
   deps: Deps = defaultDeps(),
-): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
+): Promise<{
+  /** The equivalent CLI command, e.g. `werkmeister workspace close <name>`. */
+  command: string;
+  /** What close-out did, one step per line. */
+  output: string;
+  /** The workspace folder (removed on success). */
+  path: string;
+  /** Terminal `claude` sessions still running in the folder, for the person to `/exit`. */
+  terminals: string[];
+}> {
   const why = opts.abandon?.trim();
   if (opts.abandon !== undefined && !why) {
     throw new WorkspaceError(
