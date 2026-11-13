@@ -14,7 +14,7 @@ pinWerkmeisterRoot();
 
 const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
 
-/** The gate fixture, inited, with every git push recorded (and answered *pushCode*) instead of run. */
+/** The gate fixture, inited, with every git push (and, with *origin*, fetch) recorded and answered instead of run. */
 async function withGateFixture(fn, { origin, pushCode = 0, pushErr = "denied" } = {}) {
   await withFixtureWorkspace(
     async (fx) => {
@@ -26,6 +26,7 @@ async function withGateFixture(fn, { origin, pushCode = 0, pushErr = "denied" } 
       deps.sleep = async () => {};
       const real = deps.run;
       const pushes = [];
+      const fetches = [];
       deps.run = async (bin, args, cwd) => {
         if (bin === "git" && args.includes("push") && !args.includes("--delete")) {
           pushes.push(args);
@@ -34,9 +35,14 @@ async function withGateFixture(fn, { origin, pushCode = 0, pushErr = "denied" } 
           if (!args.includes("--dry-run") && Array.isArray(pushCode)) pushCode.shift();
           if (origin) return { code, stdout: "", stderr: code ? pushErr : "" };
         }
+        // SW-669: the gate's base row fetches; a GitHub origin here is fake, so answer it offline.
+        if (origin && bin === "git" && args.includes("fetch")) {
+          fetches.push(args);
+          return { code: 0, stdout: "", stderr: "" };
+        }
         return real(bin, args, cwd);
       };
-      await fn(fx, deps, pushes);
+      await fn(fx, deps, pushes, fetches);
     },
     { gate: true },
   );
@@ -67,9 +73,11 @@ test("a fixture with a local origin pushes there and opens through the fake gh",
 
 test("a fixture whose origin is GitHub skips the push and the gate's dry run, and says so", async () => {
   await withGateFixture(
-    async (fx, deps, pushes) => {
+    async (fx, deps, pushes, fetches) => {
       const { lines } = await openPrs(fx.workspace, undefined, deps);
       assert.deepEqual(pushes, []);
+      assert.deepEqual(fetches, [], "the base row counts against the local ref, no fetch (SW-669)");
+      assert.match(lines.join("\n"), /✓ base: up to date with origin\/main/);
       assert.ok(lines.includes("app: push skipped (fixture)"), lines.join("\n"));
       assert.match(lines.join("\n"), /✓ push: skipped \(fixture, origin is not local\)/);
     },

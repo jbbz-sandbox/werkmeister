@@ -840,6 +840,7 @@ async function gateChecks(
   };
 
   const dir = path.join(ws, file.dir);
+  const base = String(file.fm["base"] ?? "main");
   if (!testsOnly) {
     const manual: TableRow[] = [];
     const table = passTable(file.body, manual);
@@ -899,6 +900,41 @@ async function gateChecks(
           ? `${(push.stderr || push.stdout).trim()} — load a key (\`ssh-add\`) or fix origin's credentials, then rerun; ${GITHUB_HINT}`
           : `can push ${branch} to origin`,
       );
+    // SW-669: a stale origin/<base> hides a conflict until the PR is open; rebasing before the first push needs no force-push.
+    // A fixture whose origin is not local never reaches it (SW-381): count against the ref it has.
+    const fetched = push
+      ? await deps.run("git", ["-C", dir, "fetch", "-q", "origin", base])
+      : { code: 0, stdout: "", stderr: "" };
+    const behind = fetched.code
+      ? fetched
+      : await deps.run("git", ["-C", dir, "rev-list", "--count", `HEAD..origin/${base}`]);
+    const count = Number(behind.stdout.trim() || 0);
+    const commits = `${count} commit${count === 1 ? "" : "s"} behind origin/${base}`;
+    // A pushed branch can't be rebased without a force-push, so it never blocks a rerun or an open PR.
+    const pushed =
+      count > 0 &&
+      branch !== "HEAD" &&
+      (
+        await deps.run("git", [
+          "-C",
+          dir,
+          "rev-parse",
+          "--verify",
+          "-q",
+          `refs/remotes/origin/${branch}`,
+        ])
+      ).code === 0;
+    add(
+      "base",
+      behind.code === 0 && (count === 0 || pushed),
+      behind.code
+        ? `cannot check against origin/${base}: ${(behind.stderr || behind.stdout).trim()}`
+        : pushed
+          ? `${commits}; ${branch} is already pushed, so \`pr watch\` flags a conflict and rule 5's \`--force-with-lease\` hand-off applies`
+          : count
+            ? `${commits} — \`git -C ${file.dir} rebase origin/${base}\` (keeps one commit per ticket), rerun the tests, then rerun`
+            : `up to date with origin/${base}`,
+    );
     const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
     add(
       "clean",
@@ -974,7 +1010,6 @@ async function gateChecks(
     return false;
   };
 
-  const base = String(file.fm["base"] ?? "main");
   const diff = testsOnly
     ? await uncommittedDiff(dir, base, deps)
     : await deps.run("git", ["-C", dir, "diff", "--name-only", `origin/${base}...HEAD`]);

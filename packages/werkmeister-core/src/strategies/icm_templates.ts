@@ -126,6 +126,9 @@ const keys = (group: string[]) => group.map((k) => `\`${k}\``).join(", ");
 // The merge-base keeps the fold in place; `origin/main` would also move every commit onto an untested base.
 const FOLD =
   "`git commit --fixup <sha>`, then `git rebase --autosquash $(git merge-base HEAD origin/main)`";
+// SW-669: the gate's base row fails a branch behind its base; a rebase after the first push needs a force-push the agent can't run.
+const REBASE =
+  " Then, in each worktree, `git fetch origin <base>`; if `git rev-list --count HEAD..origin/<base>` is not 0, `git rebase origin/<base>` (keeping one commit per ticket) and rerun the tests before the PR file.";
 const groupStep = (v: IcmVars) =>
   v.group.length
     ? [
@@ -217,10 +220,10 @@ const propose: Stage = {
       "Walk every acceptance criterion in `BRIEF.md`. For each, write a row whose result cell is exactly PASS or FAIL (MANUAL for a criterion only the reviewer can check, e.g. it needs a real PR or the desktop app, with why in the evidence; never PASS for a check nobody ran), with the file and line in a prior `output/` that proves it in a separate evidence column. A FAIL routes back to the owning stage — do not fix it here.",
       v.group.length
         ? // Lint before the fold, so a lint fix lands in a commit and the gate's clean row holds.
-          `The commits are already made, one per ticket: keep them, never squash to one per repo. For a repo with \`ship: tag\` and a \`release_check\` in the registry, write the release entry it needs (the \`Release check:\` line in \`werkmeister-context.md\` names its command). Run ${LINT} Then fold everything uncommitted into its ticket's commit (${FOLD}), each ticket's release entry into that ticket's own commit, and check that \`git log --oneline origin/main..HEAD\` in each worktree shows one commit per ticket (the workspace's issue and ${keys(v.group)}), each message starting with its key.`
+          `The commits are already made, one per ticket: keep them, never squash to one per repo. For a repo with \`ship: tag\` and a \`release_check\` in the registry, write the release entry it needs (the \`Release check:\` line in \`werkmeister-context.md\` names its command). Run ${LINT} Then fold everything uncommitted into its ticket's commit (${FOLD}), each ticket's release entry into that ticket's own commit, and check that \`git log --oneline origin/main..HEAD\` in each worktree shows one commit per ticket (the workspace's issue and ${keys(v.group)}), each message starting with its key.${REBASE}`
         : "In each code worktree you touched (`git -C <repo>`), commit on its branch with a message that names the change, not the stage. For a repo with `ship: tag` and a `release_check` in the registry, add the release entry it needs (the `Release check:` line in `werkmeister-context.md` names its command) in the same commit. " +
           // SW-399: a changeset written after the last lint run failed the gate only at `pr open`.
-          `Before committing, run ${LINT}`,
+          `Before committing, run ${LINT}${REBASE}`,
       // SW-535: sw-385 promised a follow-up in decisions.md; nothing said to file it, so the first `pr open` stopped at the gate.
       "Before the PR file: for each follow-up a decided question in `decisions.md` promises, file it through `../../_shared/issues-report.md` and write its issue key beside that decision. The gate's follow-ups check stays as the backstop.",
       "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value). Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs (every table with a `result` column — the gate reads them all — has a result cell of exactly `PASS` and the output in its own column: a FAIL cell anywhere in the PR file stops the PR, so describe a pre-fix reproduction in prose, not as a FAIL row), the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub." +
