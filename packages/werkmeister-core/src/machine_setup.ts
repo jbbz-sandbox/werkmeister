@@ -64,6 +64,7 @@ import {
   sandboxRoot,
   servicesLocalYamlPath,
 } from "./config.js";
+import { daemonUrl } from "./daemon_client.js";
 import {
   configPath,
   type IngressSettings,
@@ -1719,6 +1720,8 @@ export interface DaemonAgentOptions {
   runner?: Runner;
   /** Stops the PID-file server before the first install (tests stub it). */
   stopPidServer?: () => Promise<unknown>;
+  /** Whether anything answers at the daemon's address (tests stub it). */
+  serving?: (url: string) => Promise<boolean>;
 }
 
 function resolveDaemonAgent(opts: DaemonAgentOptions) {
@@ -1774,6 +1777,16 @@ export function daemonPlist(opts: DaemonAgentOptions = {}): string | null {
 `;
 }
 
+/** Any HTTP reply at *url*: the daemon, or whatever holds its port. */
+async function anythingAnswers(url: string): Promise<boolean> {
+  try {
+    await fetch(url, { signal: AbortSignal.timeout(2000) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Setup's daemon step: with *install* (the wizard's yes), install or refresh the
  * launchd agent on macOS; otherwise only report it. Never installs uninvited, so
@@ -1786,7 +1799,21 @@ export async function syncDaemonAgent(
 ): Promise<Step[]> {
   const label = "werkmeister daemon";
   const r = resolveDaemonAgent(opts);
+  // SW-614: an installed agent, or none off macOS, says nothing about whether the daemon answers.
+  const url = opts.port === undefined ? daemonUrl() : `http://127.0.0.1:${opts.port}`;
+  const answers = () => (opts.serving ?? anythingAnswers)(url);
+  const notRunning = `nothing answers at ${url}: the daemon is not running`;
   if (!r.darwin) {
+    if (checkOnly && !(await answers())) {
+      return [
+        {
+          label,
+          ok: false,
+          optional: true,
+          detail: `not on macOS and ${notRunning} — run \`werkmeister infra connect\``,
+        },
+      ];
+    }
     return [{ label, ok: true, detail: "not on macOS: `werkmeister infra connect` starts it" }];
   }
   const plist = daemonPlist(opts);
@@ -1796,12 +1823,16 @@ export async function syncDaemonAgent(
   if (checkOnly || !install) {
     const existing = fs.existsSync(r.plist) ? fs.readFileSync(r.plist, "utf8") : null;
     const state = existing === null ? "not installed" : existing === plist ? "installed" : "stale";
+    const down =
+      checkOnly && existing === plist && !(await answers())
+        ? `, but ${notRunning} — see ${r.logFile}, or run \`werkmeister daemon restart\``
+        : "";
     return [
       {
         label,
-        ok: existing === plist,
+        ok: existing === plist && !down,
         optional: true,
-        detail: `launchd agent ${r.plist}: ${state}${existing === plist ? "" : " — run `werkmeister machine setup`"}`,
+        detail: `launchd agent ${r.plist}: ${state}${down}${existing === plist ? "" : " — run `werkmeister machine setup`"}`,
       },
     ];
   }

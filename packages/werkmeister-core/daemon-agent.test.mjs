@@ -44,6 +44,7 @@ const opts = (extra = {}) => ({
   stopPidServer: async () => {
     stopped++;
   },
+  serving: async () => true,
   ...extra,
 });
 
@@ -147,12 +148,38 @@ test("--check reports without installing", async () => {
   assert.equal(fs.existsSync(daemonPlistPath(home)), false);
 });
 
+test("--check on an installed agent says whether the daemon answers (SW-614)", async () => {
+  await syncDaemonAgent(false, true, opts());
+  const [up] = await syncDaemonAgent(true, false, opts());
+  assert.equal(up.ok, true);
+  assert.match(up.detail, /: installed$/);
+  const [down] = await syncDaemonAgent(true, false, opts({ serving: async () => false }));
+  assert.equal(down.ok, false);
+  assert.match(
+    down.detail,
+    /installed, but nothing answers at http:\/\/127\.0\.0\.1:3002: the daemon is not running/,
+  );
+});
+
 test("without the wizard's yes it only reports, so a setup run never installs uninvited", async () => {
   const [step] = await syncDaemonAgent(false, false, opts());
   assert.match(step.detail, /not installed/);
   assert.equal(step.optional, true);
   assert.deepEqual(calls, []);
   assert.equal(stopped, 0);
+});
+
+test("--check off macOS reports a daemon that does not answer (SW-614)", async () => {
+  const linux = (serving) => opts({ platform: "linux", serving: async () => serving });
+  const [up] = await syncDaemonAgent(true, false, linux(true));
+  assert.equal(up.ok, true);
+  assert.match(up.detail, /not on macOS: `werkmeister infra connect` starts it/);
+  const [down] = await syncDaemonAgent(true, false, linux(false));
+  assert.equal(down.ok, false);
+  assert.match(
+    down.detail,
+    /not on macOS and nothing answers at .*: the daemon is not running — run `werkmeister infra connect`/,
+  );
 });
 
 test("off macOS the step only points at `werkmeister infra connect`", async () => {
