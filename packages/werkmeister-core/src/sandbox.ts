@@ -24,12 +24,12 @@ import {
   agentOf,
   claimNudge,
   heldWakes,
+  liveWaiting,
   nudgePath,
   RESUME_NUDGE,
   readNotices,
   readPaused,
   readSessions,
-  readWaiting,
   sessionGone,
   writeNudge,
 } from "./agent_state.js";
@@ -1702,7 +1702,7 @@ async function stateFor(
     // Only when it decides something: it costs a `ps` and an `lsof`.
     processOpen: gone ? await claudeOpenIn(dir, s.harness).catch(() => null) : null,
     paused: s.paused,
-    waiting: readWaiting(dir),
+    waiting: liveWaiting(dir),
     services: s.services,
     crashLoops: s.crashLoops,
     started: s.started,
@@ -1729,6 +1729,7 @@ async function stateFor(
       agentOf(sessions) === null && s.claude.agent === "needs-you" && s.claude.question
         ? { what: s.claude.question, at: s.claude.at ?? new Date().toISOString() }
         : null,
+    autonomous: s.autonomous,
   });
 }
 
@@ -1827,7 +1828,8 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
           !working(r) &&
           !readyToClose.includes(r.name) &&
           (r.workspaceState?.needs.some((n) => COURIER_KINDS.has(n.kind)) ||
-            r.gates.length > 0 ||
+            // The state decides whether a gate is handed over (SW-570); raw gates only without one.
+            (!r.workspaceState && r.gates.length > 0) ||
             // Not needs-you: legacyAgent reads it for any item, crash loops and notices too (SW-559).
             (sinceMs === null ? r.claude.agent === "done" : r.changed)),
       )

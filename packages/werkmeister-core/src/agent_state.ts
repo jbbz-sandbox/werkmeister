@@ -46,6 +46,8 @@ export interface SessionRecord {
   tool?: { name: string; command?: string; at: string };
   /** Subagents started and not yet stopped. */
   subagents?: number;
+  /** The newest `run_in_background` Bash call, until the turn after it ends (SW-570). */
+  shell?: { command: string; at: string };
   ask?: SessionAsk;
   /** The last turn reached Stop, so the session is done rather than never started. */
   stopped?: true;
@@ -80,6 +82,7 @@ function sessionOf(s: any): SessionRecord | null {
   if (typeof s.last === "string") r.last = s.last;
   if (typeof s.tool?.name === "string" && typeof s.tool.at === "string") r.tool = s.tool;
   if (Number.isInteger(s.subagents) && s.subagents > 0) r.subagents = s.subagents;
+  if (typeof s.shell?.command === "string" && typeof s.shell.at === "string") r.shell = s.shell;
   if (typeof s.ask?.what === "string" && typeof s.ask.at === "string") r.ask = s.ask;
   if (s.stopped === true) r.stopped = true;
   return r;
@@ -239,7 +242,8 @@ export function nextSession(
     case "SessionStart":
       status("idle");
       // A new or resumed session has no subagents yet; a missed SubagentStop must not stick.
-      if (!turnOnly) for (const k of ["tool", "ask", "stopped", "subagents"] as const) delete s[k];
+      if (!turnOnly)
+        for (const k of ["tool", "ask", "stopped", "subagents", "shell"] as const) delete s[k];
       return s;
     case "UserPromptSubmit":
       status("busy");
@@ -255,6 +259,8 @@ export function nextSession(
         ...(typeof command === "string" && { command: command.slice(0, 200) }),
         at,
       };
+      if (tool === "Bash" && input["tool_input"]?.["run_in_background"] === true)
+        s.shell = { command: typeof command === "string" ? command.slice(0, 200) : "", at };
       const wrapAsk = input["tool_input"]?.["ask"];
       if (tool === WRAP_UP && typeof wrapAsk === "string" && wrapAsk.trim())
         s.ask = { kind: "question", what: wrapAsk.trim(), at, source: "session", via: "wrap_up" };
@@ -316,9 +322,15 @@ export function nextSession(
       return s;
     case "Stop":
     case "StopFailure": {
+      // `at` before the flip: this turn's start, or the previous Stop when no hook marked it busy.
+      const turnFrom = s.at;
       status("idle");
       if (turnOnly) return s;
       delete s.tool;
+      // shortcut: no hook reports a background shell's exit; the exit wakes the session, so the next
+      // turn's Stop ends it. Only the newest is kept, so a person's prompt or another shell's exit ends it
+      // early, and one that never exits (a dev server) holds for SESSION_GONE_MS. Probe processes if that misreads.
+      if (s.shell && s.shell.at < turnFrom) delete s.shell;
       s.stopped = true;
       let text: string | null = null;
       if (typeof input["last_assistant_message"] === "string")
@@ -401,6 +413,15 @@ export function readWaiting(root: string): WaitingFile | null {
   } catch {
     return null;
   }
+}
+
+/** {@link readWaiting}, without a service-start wait whose poll has died. */
+export function liveWaiting(root: string): WaitingFile | null {
+  const waiting = readWaiting(root);
+  // The poll rewrites the file every 15 s; a killed one leaves it behind (no finally on SIGTERM), and the
+  // scheduler drops such a waiter after 60 s, so an older file is a dead wait, not a live one.
+  const at = fs.statSync(waitingPath(root), { throwIfNoEntry: false })?.mtimeMs ?? 0;
+  return waiting?.services && Date.now() - at > 60_000 ? null : waiting;
 }
 
 export function writeWaiting(root: string, w: WaitingFile): void {
@@ -615,11 +636,8 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
  */
 export function serviceWaitContext(input: Record<string, any>, root: string): string | null {
   if (input["hook_event_name"] !== "UserPromptSubmit") return null;
-  const waiting = readWaiting(root);
+  const waiting = liveWaiting(root);
   if (!waiting?.services) return null;
-  // The poll rewrites the file every 15 s; a killed one leaves it behind (no finally on SIGTERM), and the
-  // scheduler drops such a waiter after 60 s, so an older file is a dead wait, not a live one.
-  if (Date.now() - fs.statSync(waitingPath(root)).mtimeMs > 60_000) return null;
   return (
     `This session's own service start is waiting for capacity (position ${waiting.position}): ` +
     `${waiting.services.join(", ")}. The werkmeister command that started it (pr gate, pr open or ` +

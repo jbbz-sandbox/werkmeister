@@ -14,7 +14,7 @@ Run all of these in one turn:
 - `check-in` (werkmeister MCP) → one JSON sweep. Don't call `list-workspaces` or `status` here: they render the workspaces UI inline.
   - `root`: the workspaces folder; every `<root>` below means this value.
   - `workspaces[]`: the ones the label filter kept (never `skip`; only `focus` ones when any carry it), each with `labels`, `containers`, `claude` (`state`; `agent`: `working` · `needs-you` · `done` · `idle`; `question` when it asked one), `gates` (paths of `status: proposed` outputs, relative to the workspace) and `changed` (transcript moved since the last check-in). `dropped` names the rest; leave them out of everything below. Labels live in a workspace's `.werkmeister/workspace.yml` as a YAML list (`labels: [skip]`); a bare `labels: skip` reads as no labels.
-  - `candidates`: the workspaces with a gate or a changed transcript (first run, `since: null`: those where Claude spoke last), never one with `claude.state: running`.
+  - `candidates`: the workspaces with a handed-over gate (a `gate` item in `workspaceState.needs`: never while the agent is busy, a background shell or capacity wait holds it, or in an autonomous run; SW-570) or a changed transcript (first run, `since: null`: those where Claude spoke last), never one with `claude.state: running`.
   - Each row's `lifecycle` (`working` · `ready` · `pr-open` · `merged` · `shipped` · `abandoned` · `closed-out`) and `prs[]` (`url`, `status`, `release`: the GitHub release tag that shipped it), and `readyToClose`: shipped or abandoned workspaces with no running session (SW-65). The sweep moves a merged PR to shipped itself once a release tag contains it, so a release needs no word from the person. A version-bump merge that published nothing doesn't count. Until SW-65 ships, these fields are missing: skip the close-out queue.
   - The call marks now as the last check-in, so call it once per run.
   - If the tool is missing or fails, say the werkmeister MCP is down and stop. The plugin's server is `werkmeister` (`werkmeister internal mcp`); a failed start is usually a stale build. Don't rebuild from here: tell the person to run the `install-check` skill, which brings the global install up to an up-to-date `main`, then reconnect the server.
@@ -44,7 +44,7 @@ Brief, verbatim, with `<root>` and `<ws>` filled in:
 
 ## 3. Queue (root)
 
-Print the cards with `needs a person: yes` first, numbered. Then a **Ready to close out** list, one line per `readyToClose` name: `<ws> — <lifecycle> — <release tag(s)> — <PR url(s)>`, plus an `abandoned` reason when there is one. A workspace can be on both lists; its card comes first. Wait for the person. Nothing else is read.
+A card whose only reason for `needs a person: yes` is its gate reads `no` when that workspace's `workspaceState.needs` has no `gate` item: the agent hasn't handed it over (SW-570). Print the cards with `needs a person: yes` first, numbered. Then a **Ready to close out** list, one line per `readyToClose` name: `<ws> — <lifecycle> — <release tag(s)> — <PR url(s)>`, plus an `abandoned` reason when there is one. A workspace can be on both lists; its card comes first. Wait for the person. Nothing else is read.
 
 Couriers report paths relative to their workspace (`stages/...`). Before showing one, prefix it with `<ws>/` so the link resolves from the root session and opens in the file viewer: `[pr.md](<ws>/stages/04_ship/output/pr.md)`, never `[pr.md](stages/04_ship/output/pr.md)`. <!-- docs-check: ignore -->
 

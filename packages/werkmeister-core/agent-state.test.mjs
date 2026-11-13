@@ -285,10 +285,41 @@ test("hooks: a second session or a subagent can't wipe a session's ask", async (
     registrySync: [],
     notices: {},
     transcriptAsk: null,
+    autonomous: false,
   };
   assert.equal(workspaceState({ ...blank, sessions: readSessions(dir) }).activity.id, "subagent");
   fire("SessionStart", "a");
   assert.equal(rec(dir, "a").subagents, undefined, "a resumed session starts with none");
+});
+
+// SW-570: a background shell outlives the turn that started it, like a background agent.
+test("hooks: a background shell is kept past its turn's Stop and dropped by the next turn's", () => {
+  const dir = workspace("i-shell", null);
+  const base = Date.now() - 10_000;
+  const t = (n) => new Date(base + n * 1000);
+  const fire = (event, n, extra = {}) =>
+    record({ hook_event_name: event, cwd: dir, session_id: "a", ...extra }, t(n));
+  const bg = { command: "werkmeister pr gate --tests", run_in_background: true };
+  fire("UserPromptSubmit", 0);
+  fire("PreToolUse", 1, { tool_name: "Bash", tool_input: { command: "git status" } });
+  fire("PostToolUse", 1, { tool_name: "Bash" });
+  assert.equal(rec(dir, "a").shell, undefined, "a foreground command is no shell");
+  fire("PreToolUse", 2, { tool_name: "Bash", tool_input: bg });
+  fire("PostToolUse", 2, { tool_name: "Bash" });
+  fire("Stop", 3, { last_assistant_message: "Waiting on the gate." });
+  assert.deepEqual(rec(dir, "a").shell, { command: bg.command, at: t(2).toISOString() });
+  // The shell's exit wakes the session for a turn of its own.
+  fire("UserPromptSubmit", 4);
+  fire("Stop", 5, { last_assistant_message: "Gate passed." });
+  assert.equal(rec(dir, "a").shell, undefined);
+  // A wake turn with no prompt hook or tool call still ends it.
+  fire("PreToolUse", 6, { tool_name: "Bash", tool_input: bg });
+  fire("Stop", 7, { last_assistant_message: "Waiting." });
+  fire("Stop", 8, { last_assistant_message: "Done." });
+  assert.equal(rec(dir, "a").shell, undefined);
+  fire("PreToolUse", 9, { tool_name: "Bash", tool_input: bg });
+  fire("SessionStart", 9);
+  assert.equal(rec(dir, "a").shell, undefined, "a resumed session has no shells");
 });
 
 // SW-487 fault 7: an unlocked read-modify-write of one shared file lost updates.
@@ -510,7 +541,9 @@ test("pause gate: PreToolUse ends the turn and denies, UserPromptSubmit blocks, 
 });
 
 // SW-181: waiting.json holds the session the same way; paused wins when both exist.
-const { writeWaiting, serviceWaitContext, writeWakeNudge } = await import("./dist/agent_state.js");
+const { writeWaiting, serviceWaitContext, writeWakeNudge, liveWaiting } = await import(
+  "./dist/agent_state.js"
+);
 
 test("waiting gate: denies tool calls and blocks prompts with the queue position", () => {
   const dir = workspace("j-wait", null);
@@ -581,7 +614,7 @@ test("pause gate: an unblocked prompt clears a stale resume nudge", () => {
 });
 
 // SW-545: the entry prints the wait as context, and the prompt still clears the nudge and is recorded.
-test("service-start wait: the hook entry adds context and records the prompt", () => {
+test("service-start wait: the hook entry adds context and records the prompt", async () => {
   const dir = workspace("l-wait-svc", null);
   writeWaiting(dir, { position: 3, reason: "waiting for capacity", services: ["lib"] });
   writeNudge(dir, "continue");
@@ -604,6 +637,16 @@ test("service-start wait: the hook entry adds context and records the prompt", (
   const stale = new Date(Date.now() - 61_000);
   fs.utimesSync(path.join(dir, ".werkmeister", "waiting.json"), stale, stale);
   assert.equal(hook({ hook_event_name: "UserPromptSubmit", cwd: dir, session_id: "s" }), null);
+  // SW-570: nor does the state read it, so a left-behind file can't hold a gate forever.
+  assert.equal(liveWaiting(dir), null);
+  hook({ hook_event_name: "Stop", cwd: dir, session_id: "s", last_assistant_message: "Done." });
+  const activity = async () =>
+    (await getWorkspaceStatuses()).statuses.find((s) => s.name === "l-wait-svc").workspaceState
+      .activity.id;
+  assert.equal(await activity(), "idle");
+  const fresh = new Date();
+  fs.utimesSync(path.join(dir, ".werkmeister", "waiting.json"), fresh, fresh);
+  assert.equal(await activity(), "queued", "a live wait still shows once the turn ends");
 });
 
 test("wake nudge: held until the session's next hook delivers it, once (SW-418)", () => {

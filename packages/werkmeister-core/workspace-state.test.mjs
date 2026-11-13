@@ -32,6 +32,7 @@ const facts = (over = {}) => ({
   registrySync: [],
   notices: {},
   transcriptAsk: null,
+  autonomous: false,
   ...over,
 });
 const kinds = (s) => s.needs.map((n) => n.kind);
@@ -287,4 +288,53 @@ test("legacyAgent: Needs you whenever the list has an item, else the session sig
     facts({ paused: { at: ago(MIN) }, gates: [{ file: "x", at: ago(MIN) }] }),
   );
   assert.deepEqual(legacyAgent(paused, signal), signal, "Paused replaces the badge, as before");
+});
+
+// SW-570: a draft gate needs the person only once the agent has handed it over.
+test("needs-you: a gate is not handed over while a background shell, a capacity wait or autonomy holds it", () => {
+  const gates = [{ file: "stages/02_fix/output/fix.md", at: ago(MIN) }];
+  const idle = { status: "idle", at: ago(MIN), last: ago(MIN), stopped: true };
+  const shell = (command, at = ago(MIN)) => ({ s: { ...idle, shell: { command, at } } });
+  const state = (over) => workspaceState(facts({ gates, ...over }));
+
+  // sw-567: the turn ended with the gate's test run still in a background shell.
+  const testing = state({ sessions: shell("werkmeister pr gate --tests") });
+  assert.deepEqual(kinds(testing), []);
+  assert.deepEqual([testing.activity.id, testing.activity.label], ["testing", "Running tests"]);
+  const other = state({ sessions: shell("sleep 600") });
+  assert.deepEqual(kinds(other), []);
+  assert.deepEqual(
+    [other.activity.id, other.activity.label],
+    ["tool", "Running a background shell"],
+  );
+  assert.deepEqual(
+    kinds(state({ sessions: shell("pnpm test", ago(SESSION_GONE_MS + MIN)) })),
+    ["gate"],
+    "a shell silent past the limit doesn't stick",
+  );
+
+  // sw-563: the gate's service start waits on capacity while the session is idle.
+  const queued = state({
+    sessions: { s: idle },
+    waiting: { position: 1, reason: "", services: ["werkmeister-vscode"] },
+  });
+  assert.deepEqual(kinds(queued), []);
+  assert.deepEqual(
+    [queued.activity.id, queued.activity.label],
+    ["queued", "Waiting for capacity · position 1"],
+  );
+  assert.deepEqual(kinds(state({ waiting: { position: 2, reason: "" } })), []);
+
+  // Still mid-turn: the draft isn't handed over yet.
+  for (const s of [busy(), busy({ tool: { name: "Edit", at: ago(MIN) } }), busy({ subagents: 1 })])
+    assert.deepEqual(kinds(state({ sessions: { s } })), []);
+  assert.deepEqual(kinds(state({ services: [{ name: "api", state: "starting" }] })), []);
+
+  // An autonomous workspace approves its own gates.
+  assert.deepEqual(kinds(state({ autonomous: true, sessions: { s: idle } })), []);
+
+  // Handed over: idle, nothing running, not autonomous.
+  assert.deepEqual(kinds(state({ sessions: { s: idle } })), ["gate"]);
+  assert.deepEqual(kinds(state({})), ["gate"]);
+  assert.deepEqual(kinds(state({ paused: { at: ago(MIN) } })), ["gate"], "paused still lists it");
 });
