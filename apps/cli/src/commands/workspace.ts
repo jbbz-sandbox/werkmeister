@@ -49,7 +49,7 @@ import { issueTracker, projectFor } from "werkmeister-core/issue_tracker";
 import { run as procRun } from "werkmeister-core/proc";
 import { WorkspaceInitError } from "werkmeister-core/workspace_init";
 import { resolveInputs, workspacePromptSpec } from "werkmeister-core/workspace_prompts";
-import { error, getMonorepoRoot, info, warn } from "../lib/config.js";
+import { error, getMonorepoRoot, getSandboxRoot, info, warn } from "../lib/config.js";
 import { askField, fieldsOf, runFormWizard } from "../lib/wizard.js";
 // init-workspace owns the piped-stdin reader; the prompt definitions and the
 // form schema built from them live in core, where the dashboard reaches them
@@ -198,16 +198,15 @@ export function browserFormCommand(
 }
 
 function runBrowserForm(args: Record<string, unknown>): void {
-  const cliJs = path.join(
-    getMonorepoRoot(),
-    "apps",
-    "werkmeister-dashboard",
-    "dist",
-    "form-cli.js",
-  );
-  if (!(fs.existsSync(cliJs) && fs.statSync(cliJs).isFile())) {
+  // The sibling app's build in a checkout, else the bundle this package ships (esbuild.mjs).
+  const cliJs =
+    [
+      path.join(getMonorepoRoot(), "apps", "werkmeister-dashboard", "dist", "form-cli.js"),
+      path.join(getSandboxRoot(), "dist", "form-cli.js"),
+    ].find((f) => fs.existsSync(f)) ?? "";
+  if (!cliJs) {
     error(
-      `Browser form not built: ${cliJs} is missing. ` +
+      "Browser form not built: form-cli.js is missing. " +
         "Run `npm --prefix apps/werkmeister-dashboard run build` (or `werkmeister internal dashboard` once) first.",
     );
     process.exit(1);

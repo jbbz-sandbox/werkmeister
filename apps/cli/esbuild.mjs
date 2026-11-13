@@ -16,7 +16,9 @@
  * `apps/werkmeister-mcp` workspace, which is private and not published, so they are
  * bundled here from source — the same reason werkmeister-core is. Without them the
  * daemon and the `werkmeister` plugin's MCP entry have no target on an
- * `npm i -g` install.
+ * `npm i -g` install. `dashboard` and `form-cli` are `apps/werkmeister-dashboard`'s
+ * two entries, bundled for the same reason; the single-file pages both apps'
+ * vite builds emit are copied in beside them (UI_PAGES).
  *
  * `dockerode` and `@anthropic-ai/claude-agent-sdk` are the exceptions, left
  * external and declared in package.json, the SDK as an optional dependency (its reason is
@@ -32,6 +34,7 @@
  * which is native here.
  */
 import { execFileSync } from "node:child_process";
+import { copyFileSync, mkdirSync } from "node:fs";
 import * as esbuild from "esbuild";
 import { writeLicenses } from "../../scripts/write-licenses.mjs";
 
@@ -59,6 +62,8 @@ const options = {
     { in: "src/lib/agent_state.ts", out: "lib/agent_state" },
     { in: "../werkmeister-mcp/src/main.ts", out: "mcp" },
     { in: "../werkmeister-mcp/src/proxy.ts", out: "mcp-proxy" },
+    { in: "../werkmeister-dashboard/src/main.ts", out: "dashboard" },
+    { in: "../werkmeister-dashboard/src/form-cli.ts", out: "form-cli" },
   ],
   bundle: true,
   outdir: "dist",
@@ -102,6 +107,17 @@ const options = {
   },
   logLevel: "info",
 };
+
+// Read at runtime from beside the bundle. A missing one means the sibling app
+// is unbuilt: turbo orders that through this package's devDependencies.
+const UI_PAGES = [
+  "../werkmeister-mcp/dist/mcp-app.html",
+  "../werkmeister-mcp/dist/mcp-list.html",
+  "../werkmeister-dashboard/dist/browser.html",
+  "../werkmeister-dashboard/dist/form.html",
+];
+mkdirSync("dist", { recursive: true });
+for (const page of UI_PAGES) copyFileSync(page, `dist/${page.split("/").pop()}`);
 
 if (watch) {
   const ctx = await esbuild.context(options);

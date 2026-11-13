@@ -54,6 +54,7 @@ feature name (`infra` plus the workspaces under the workspaces root).
   `apps/werkmeister-mcp`, bundled into `dist/mcp-proxy.js` (proxy) and `dist/mcp.js`
   (daemon) by `esbuild.mjs` so it ships in the npm
   package. `werkmeister internal dashboard` runs the localhost workspaces dashboard from
-  `apps/werkmeister-dashboard`, which is checkout-only
+  `apps/werkmeister-dashboard`, bundled the same way into `dist/dashboard.js` with its
+  pages (`dist/*.html`) copied in beside it
 - interactive prompts and process-spawn edges are async (`run()` is
   `async` throughout); core logic stays synchronous

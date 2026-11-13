@@ -1847,11 +1847,7 @@ export async function main(): Promise<void> {
   // anyone running dist/main.js directly. Neither takes a transport flag: the
   // wrapper launches `mcp` over stdio, and `werkmeister infra connect` starts the HTTP modes.
   for (const [name, description, help] of [
-    [
-      "dashboard",
-      "Run the localhost workspaces dashboard in the foreground (checkout only)",
-      dashboardHelp,
-    ],
+    ["dashboard", "Run the localhost workspaces dashboard in the foreground", dashboardHelp],
     [
       "mcp",
       "Launch the stdio proxy to the werkmeister daemon (Claude Desktop, the werkmeister plugin)",

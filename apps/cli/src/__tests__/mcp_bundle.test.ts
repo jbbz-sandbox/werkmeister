@@ -2,6 +2,7 @@
  * The bundled MCP entries (esbuild.mjs, from `../werkmeister-mcp/src/`) boot: the stdio
  * proxy (`dist/mcp-proxy.js`, proxy.ts) answers `initialize`, which needs no daemon, and
  * the daemon (`dist/mcp.js`, main.ts) refuses the `--stdio` it no longer serves (SW-344).
+ * The dashboard (`dist/dashboard.js`) serves its page from the bundle's own directory.
  *
  * This is the one thing an `npm i -g` install relies on that no other test
  * covers: that apps/werkmeister-mcp and its deps (express, the MCP SDK, zod, werkmeister-core)
@@ -10,6 +11,7 @@
  */
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
+import * as net from "node:net";
 import * as path from "node:path";
 import { expect, it, onTestFinished } from "vitest";
 
@@ -66,4 +68,31 @@ it("dist/mcp.js --stdio exits 1 and points at the proxy", async () => {
   const code = await new Promise((resolve) => child.on("exit", resolve));
   expect(code).toBe(1);
   expect(stderr).toContain("werkmeister internal mcp");
+});
+
+it("dist/dashboard.js serves the page copied in beside it", async () => {
+  const port = await new Promise<number>((resolve) => {
+    const s = net.createServer().listen(0, "127.0.0.1", () => {
+      const { port } = s.address() as net.AddressInfo;
+      s.close(() => resolve(port));
+    });
+  });
+  const child = spawn(process.execPath, [path.join(CLI_ROOT, "dist", "dashboard.js")], {
+    stdio: ["ignore", "ignore", "pipe"],
+    env: { ...process.env, WERKMEISTER_ROOT: CLI_ROOT, PORT: String(port) },
+  });
+  onTestFinished(() => void child.kill());
+  let stderr = "";
+  await new Promise<void>((resolve, reject) => {
+    child.stderr.on("data", (d) => {
+      stderr += d;
+      if (stderr.includes(`localhost:${port}`)) resolve();
+    });
+    child.on("exit", (code) => reject(new Error(`exited ${code}: ${stderr}`)));
+  });
+
+  const res = await fetch(`http://127.0.0.1:${port}/`);
+  expect(res.status).toBe(200);
+  const page = fs.readFileSync(path.join(CLI_ROOT, "dist", "browser.html"), "utf8");
+  expect(await res.text()).toBe(page);
 });

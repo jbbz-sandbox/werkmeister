@@ -69,6 +69,7 @@ export const DASHBOARD: WebApp = {
   stem: "mcp-server",
   entry: "dist/main.js",
   buildRef: "dist/main.js",
+  bundled: "dist/dashboard.js",
 };
 
 /**
