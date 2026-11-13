@@ -10,7 +10,10 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/README.md",
         "$TURBO_ROOT$/docs/*.md",
-        "$TURBO_ROOT$/plugins/werkmeister/README.md"
+        "$TURBO_ROOT$/plugins/werkmeister/README.md",
+        // The build generates the SDK reference from core first (typedoc.json).
+        "$TURBO_ROOT$/packages/werkmeister-core/src/**",
+        "$TURBO_ROOT$/packages/werkmeister-core/typedoc.sdk.json"
       ],
       "outputs": ["dist/**"]
     }

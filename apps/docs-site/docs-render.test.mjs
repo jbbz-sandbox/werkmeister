@@ -57,7 +57,7 @@ test("no table row outside its table", () => {
 
 // Readers can't open the tracker; git history keeps the keys. A key may stay as a link, or as an example in code.
 test("no Jira key in a sidebar page's prose", () => {
-  const pages = config.themeConfig.sidebar.flatMap((g) =>
+  const pages = config.themeConfig.sidebar["/"].flatMap((g) =>
     g.items.map((i) => `${i.link.slice(1)}.md`),
   );
   const hits = pages

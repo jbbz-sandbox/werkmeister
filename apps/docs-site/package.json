@@ -6,12 +6,15 @@
   "private": true,
   "description": "The public docs site: VitePress over the repo's docs, in place.",
   "scripts": {
-    "build": "vitepress build .",
+    "build": "typedoc && vitepress build .",
     "dev": "vitepress dev .",
     "preview": "vitepress preview .",
     "test": "node --test"
   },
   "devDependencies": {
+    "typedoc": "0.28.20",
+    "typedoc-plugin-markdown": "^4.14.1",
+    "typedoc-vitepress-theme": "^1.1.4",
     "vitepress": "~1.6.4"
   }
 }
