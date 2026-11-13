@@ -530,7 +530,7 @@ test("SW-398: every allow rule werkmeister-context.md names is generated", async
   );
 });
 
-test("SW-398: a chained stage test command gets the wrapped first segment and a rule per later one", () => {
+test("SW-398, SW-660: a chained test command through the wrapper is one exact sh -c rule, no bare segment", () => {
   const w = "/ws/w/.werkmeister/bin/with-temp-home";
   const rules = buildAllowRules(
     "",
@@ -541,8 +541,10 @@ test("SW-398: a chained stage test command gets the wrapped first segment and a 
     [],
     ["cli"],
   );
-  assert.ok(rules.includes(`Bash(${w} pnpm turbo run test:*)`));
-  assert.ok(rules.includes("Bash(pnpm --filter x run docs:links:*)"));
+  assert.ok(
+    rules.includes(`Bash(${w} sh -c 'pnpm turbo run test && pnpm --filter x run docs:links')`),
+  );
+  assert.ok(!rules.includes("Bash(pnpm --filter x run docs:links:*)"), "no part runs unwrapped");
   assert.ok(!rules.some((r) => r.includes("docker exec")), "host-only service: no container rule");
 });
 
@@ -591,4 +593,129 @@ test("--exec-runs forms of the fixture wrapper and built CLI ask; only node --te
     `Bash(${bin}/with-temp-home --no-wait ${cli}/werkmeister internal fixture --exec-runs:*)`,
     ...nodeTest(bin),
   ]);
+});
+
+// shortcut: approximates Claude Code's Bash matcher (each `&&` `||` `;` `|` part outside quotes needs an
+// exact or `:*` prefix rule); upgrade if the harness exposes its parser.
+function allowed(rules, cmd) {
+  const parts = [];
+  let cur = "";
+  let quoted = false;
+  for (let i = 0; i < cmd.length; i++) {
+    const c = cmd[i];
+    if (c === "'") quoted = !quoted;
+    const op =
+      !quoted && (["&&", "||"].includes(cmd.slice(i, i + 2)) ? 2 : ";|".includes(c) ? 1 : 0);
+    if (op) {
+      parts.push(cur.trim());
+      cur = "";
+      i += op - 1;
+    } else cur += c;
+  }
+  parts.push(cur.trim());
+  return parts.filter(Boolean).every((p) =>
+    rules.some((r) => {
+      const body = r.slice(5, -1);
+      if (!body.endsWith(":*")) return r.startsWith("Bash(") && body === p;
+      const prefix = body.slice(0, -2);
+      return p === prefix || p.startsWith(`${prefix} `);
+    }),
+  );
+}
+
+const W660 = "/ws/w/.werkmeister/bin/with-temp-home";
+const BRACE = "{ command -v lsof >/dev/null || apt-get install -y lsof; } && pnpm test";
+
+test("SW-660: the repo's lint the context file appends is allowed with the test, all under the temp HOME", async () => {
+  const { wrappedTestCommand } = await import("./dist/archetypes.js");
+  const services = { svc: { repo: "r", test: "pnpm test" } };
+  const repos = { r: { lint: "pnpm lint && pnpm run docs:check" } };
+  const rules = buildAllowRules("", [], services, {}, W660, [], ["svc"], repos);
+  const printed = wrappedTestCommand(W660, "pnpm test", repos.r.lint);
+  assert.equal(printed, `${W660} sh -c 'pnpm test && pnpm lint && pnpm run docs:check'`);
+  assert.ok(allowed(rules, printed), rules.join("\n"));
+  assert.ok(
+    allowed(rules, `${W660} --no-wait sh -c 'pnpm test && pnpm lint && pnpm run docs:check'`),
+  );
+  assert.ok(!allowed(rules, `${printed} && rm -rf x`), "nothing rides after the quote");
+  assert.ok(!rules.some((r) => r.startsWith("Bash(pnpm ")), "no unwrapped lint rule");
+});
+
+test("SW-660: a { …; } / || test command is printed and allowed as one exact sh -c line that parses", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { wrappedTestCommand } = await import("./dist/archetypes.js");
+  const services = { svc: { repo: "r", test: BRACE } };
+  const repos = { r: { lint: "pnpm lint" } };
+  const rules = buildAllowRules("feat", ["svc"], services, {}, W660, [], [], repos);
+  const printed = wrappedTestCommand(W660, BRACE, "pnpm lint");
+  assert.equal(printed, `${W660} sh -c '${BRACE} && pnpm lint'`);
+  assert.equal(spawnSync("sh", ["-n", "-c", printed]).status, 0, "printed command is valid shell");
+  assert.ok(rules.includes(`Bash(${printed})`), rules.join("\n"));
+  assert.ok(rules.includes(`Bash(${W660} --no-wait sh -c '${BRACE} && pnpm lint')`));
+  assert.ok(allowed(rules, printed));
+  // Only the container form and the sh -c lines hold the group; no split-up segment rules.
+  const withBrace = rules.filter((r) => r.includes("}"));
+  assert.deepEqual(withBrace, [
+    `Bash(docker exec feat-svc sh -c '${BRACE}')`,
+    `Bash(${printed})`,
+    `Bash(${W660} --no-wait sh -c '${BRACE} && pnpm lint')`,
+  ]);
+});
+
+test("SW-660: a ' in a non-plain test command survives the sh -c quoting", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { wrappedTestCommand } = await import("./dist/archetypes.js");
+  const cmd = "printf '%s' a || true";
+  const printed = wrappedTestCommand("env", cmd);
+  const out = spawnSync("sh", ["-c", printed], { encoding: "utf8" });
+  assert.equal(out.stdout, "a");
+});
+
+test("SW-660: only services.yaml's commands run through the wrapper; validate: adds nothing", () => {
+  const services = {
+    svc: { repo: "r", test: "pnpm test" },
+    brace: { repo: "r", test: BRACE },
+    prose: { repo: "r", validate: "pnpm test" },
+  };
+  const rules = buildAllowRules("", [], services, {}, W660, [], ["svc", "brace", "prose"]);
+  for (const probe of [
+    `${W660} rm -rf x`,
+    `${W660} node --test x.mjs`,
+    `${W660} pnpm test; rm -rf x`,
+    `${W660} pnpm test && rm -rf x`,
+    `${W660} sh -c 'rm -rf x'`,
+    `${W660} --no-wait rm -rf x`,
+  ])
+    assert.ok(!allowed(rules, probe), probe);
+  for (const blanket of [`Bash(${W660}:*)`, `Bash(${W660} *)`, `Bash(${W660} --no-wait:*)`])
+    assert.ok(!rules.includes(blanket), blanket);
+  assert.ok(!rules.some((r) => r.includes("sh -c:*")), "no sh -c prefix rule");
+  assert.deepEqual(
+    buildAllowRules("", [], { prose: services.prose }, {}, W660, [], ["prose"]),
+    READ_ONLY_GIT_RULES,
+  );
+});
+
+test("SW-660: the headless wake passes the workspace's rules, lint and sh -c forms included", async () => {
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  const { claudeSendArgs } = await import("./dist/harness/claude/session.js");
+  await withSandboxHome(
+    async () => {
+      const root = workspace();
+      fs.mkdirSync(dotDir(root), { recursive: true });
+      fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\nSERVICES=api,core\n");
+      const rules = workspaceAllowRules(root, true);
+      const w = path.join(dotDir(root), "bin", "with-temp-home");
+      assert.ok(rules.includes(`Bash(${w} sh -c 'pnpm test && pnpm lint')`), rules.join("\n"));
+      assert.ok(rules.includes(`Bash(${w} sh -c '${BRACE} && pnpm lint')`), rules.join("\n"));
+      const args = claudeSendArgs("hi", null, null, { allow: rules });
+      assert.deepEqual(args[args.indexOf("--allowedTools") + 1].split(","), rules);
+    },
+    {
+      services:
+        "repos:\n  demo:\n    lint: pnpm lint\n" +
+        "services:\n  api:\n    type: library\n    repo: demo\n    path: api\n    test: pnpm test\n" +
+        `  core:\n    type: library\n    repo: demo\n    path: core\n    test: "${BRACE}"\n`,
+    },
+  );
 });

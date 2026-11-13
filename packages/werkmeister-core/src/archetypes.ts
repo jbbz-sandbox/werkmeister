@@ -103,6 +103,24 @@ export function containerTestCommand(feature: string, svc: string, cmd: string):
   return `docker exec ${feature}-${svc} sh -c '${cmd}'`;
 }
 
+/** True when *cmd* is simple commands joined only by `&&`: no group, pipe, `||`, `;`, `&`, newline or substitution. */
+export function isPlainChain(cmd: string): boolean {
+  return !/[|;&{}()`\n]|\$\(/.test(cmd.split("&&").join(""));
+}
+
+/**
+ * The test command (plus the repo's lint) as werkmeister-context.md prints it and its allow rule
+ * matches it. One simple command is prefixed with *tempHome*; anything more goes through `sh -c`,
+ * so every part runs under the temp HOME (`with-temp-home a && b` wraps only `a`) and a `{ …; }`
+ * group is not a syntax error (SW-660).
+ */
+export function wrappedTestCommand(tempHome: string, test: string, lint?: string): string {
+  const full = lint ? `${test} && ${lint}` : test;
+  if (!tempHome) return full;
+  if (isPlainChain(full) && !full.includes("&&")) return `${tempHome} ${full}`;
+  return `${tempHome} sh -c '${full.split("'").join(`'\\''`)}'`;
+}
+
 /**
  * How to exercise a change to one service when it has no URL to hit.
  *

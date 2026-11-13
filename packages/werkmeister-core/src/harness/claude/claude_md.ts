@@ -18,6 +18,7 @@ import {
   serviceTestCommand,
   type ValidationRow,
   validationRows,
+  wrappedTestCommand,
 } from "../../archetypes.js";
 import {
   type ArchetypeRegistry,
@@ -408,8 +409,7 @@ export function buildSandboxContextMd(
   const lintOf = (repo: string) => reposConfig[repo]?.lint;
   const testCell = (r: ValidationRow) => {
     if (!r.test) return "—";
-    const lint = lintOf(r.repo);
-    return `\`${tempHome ? `${tempHome} ` : ""}${r.test}${lint ? ` && ${lint}` : ""}\``;
+    return `\`${wrappedTestCommand(tempHome, r.test, lintOf(r.repo))}\``;
   };
   const rows = validationRows(candidates, servicesConfig, archetypes, urlServices);
   // SW-646: contracts name no repo's toolchain; they send the agent here for the repo's own commands.
@@ -613,7 +613,7 @@ How to exercise a change to each service in this workspace.${
       : ""
   }${
     tempHome
-      ? ` Each test command runs through \`.werkmeister/bin/with-temp-home\`, which gives it a fresh temporary HOME and deletes it on exit: never hand-roll \`HOME=…\`. Start every exercise command with the script itself, never with env assignments or a \`cd\`, so one permission rule matches it: \`${tempHome} <test command>\`. A command that needs an env var takes it after the script (\`${tempHome} env WERKMEISTER_ROOT=… <cmd>\`); no rule pre-approves that form, so it asks. Put \`--no-wait\` first (\`${tempHome} --no-wait <cmd>\`) to skip its host-load wait; the allow rules below cover that form too. That wait lasts up to 90 s; if load is still over then, the script exits 75 without running the command (retry later). It prints only on stderr, so a foreground call shows nothing until it ends and its only child is \`werkmeister internal wait-load\`: that is the wait, not a hang. The allow rule that covers them is \`Bash(${tempHome} <test command>:*)\` for each test command below: run those for a test without a prompt. Neither \`node --test\` through the script nor the script alone is allowed, since both run any file (SW-510). The temp HOME only keeps a run from writing to the real one by accident; it is not an isolation boundary. A pre-approved test command or built CLI still runs whatever the worktree holds, a test written in this run included, and that code can reach absolute paths, the caller's env, the network, docker and gh (SW-522).`
+      ? ` Each test command runs through \`.werkmeister/bin/with-temp-home\`, which gives it a fresh temporary HOME and deletes it on exit: never hand-roll \`HOME=…\`. Start every exercise command with the script itself, never with env assignments or a \`cd\`, so one permission rule matches it: \`${tempHome} <test command>\`. A command that needs an env var takes it after the script (\`${tempHome} env WERKMEISTER_ROOT=… <cmd>\`); no rule pre-approves that form, so it asks. Put \`--no-wait\` first (\`${tempHome} --no-wait <cmd>\`) to skip its host-load wait; the allow rules below cover that form too. That wait lasts up to 90 s; if load is still over then, the script exits 75 without running the command (retry later). It prints only on stderr, so a foreground call shows nothing until it ends and its only child is \`werkmeister internal wait-load\`: that is the wait, not a hang. The allow rule that covers them is \`Bash(${tempHome} <test command>:*)\` for each test command below: run those for a test without a prompt. A test command of more than one command (an \`&&\` chain, a \`{ …; }\` group, \`||\`, \`;\` or a pipe) is shown as \`${tempHome} sh -c '…'\`, so every part runs under the temp HOME, and its rule allows that exact line: run it as shown, with no extra arguments. Neither \`node --test\` through the script nor the script alone is allowed, since both run any file (SW-510). The temp HOME only keeps a run from writing to the real one by accident; it is not an isolation boundary. A pre-approved test command or built CLI still runs whatever the worktree holds, a test written in this run included, and that code can reach absolute paths, the caller's env, the network, docker and gh (SW-522).`
       : ""
   }${
     linted
