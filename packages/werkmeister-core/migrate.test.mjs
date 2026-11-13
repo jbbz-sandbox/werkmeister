@@ -520,3 +520,45 @@ test("SW-577: a Codex workspace with no models.codex is not ok and names the key
   );
   assert.doesNotMatch(step.detail, /gm/);
 });
+
+// SW-660: a workspace inited before the lint segments and sh -c forms had rules gets them on migrate.
+test("SW-660: migrate adds the test-command rules an older init is missing", async () => {
+  const { workspaceAllowRules, writeWorkspaceSettings } = await import(
+    "./dist/harness/claude/hooks_gen.js"
+  );
+  movedHome();
+  // The init below reads the rendered registry; migrate's sync re-renders it from the fragment.
+  write(
+    path.join(target, "services.yaml"),
+    "repos:\n  demo:\n    lint: pnpm lint\n" +
+      "services:\n  api:\n    type: library\n    repo: demo\n    path: api\n    test: pnpm test\n",
+  );
+  write(
+    path.join(home, "repos", "demo", ".werkmeister", "services.yaml"),
+    "repo:\n  lint: pnpm lint\n" +
+      "services:\n  api:\n    type: library\n    path: api\n    test: pnpm test\n",
+  );
+  const ws = path.join(features, "demo");
+  write(path.join(ws, ".werkmeister", "workspace.yml"), "feature: demo\n");
+  write(path.join(ws, ".env"), "FEATURE=demo\nSERVICES=api\n");
+  writeWorkspaceSettings(ws);
+  const { tempHomeWrapper } = await import("./dist/temp_home.js");
+  const chain = `Bash(${tempHomeWrapper(ws)} sh -c 'pnpm test && pnpm lint')`;
+  const settingsFile = path.join(ws, ".claude", "settings.json");
+  const record = path.join(ws, ".werkmeister", "claude-permissions.json");
+  for (const file of [settingsFile, record]) {
+    const json = JSON.parse(fs.readFileSync(file, "utf8"));
+    const perms = file === record ? json : json.permissions;
+    perms.allow = perms.allow.filter((r) => r !== chain);
+    write(file, JSON.stringify(json));
+  }
+
+  const steps = await run();
+  assert.ok(
+    steps.every((s) => s.ok),
+    JSON.stringify(steps, null, 2),
+  );
+  const { permissions } = JSON.parse(fs.readFileSync(settingsFile, "utf8"));
+  assert.ok(permissions.allow.includes(chain), permissions.allow.join("\n"));
+  for (const r of workspaceAllowRules(ws)) assert.ok(permissions.allow.includes(r), r);
+});

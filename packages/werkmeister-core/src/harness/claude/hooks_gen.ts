@@ -48,7 +48,9 @@ import * as path from "node:path";
 import {
   candidateServiceNames,
   containerTestCommand,
+  isPlainChain,
   serviceTestCommand,
+  wrappedTestCommand,
 } from "../../archetypes.js";
 import {
   type ArchetypeRegistry,
@@ -56,6 +58,7 @@ import {
   loadArchetypes,
   loadReposConfig,
   loadServices,
+  type ReposConfig,
   type ServicesConfig,
 } from "../../config.js";
 import { info } from "../../reporter.js";
@@ -490,6 +493,8 @@ const permissionsRecord = (workspaceRoot: string) =>
  * form werkmeister-context.md states; never the wrapper alone, which runs anything).
  * A service with no command gets none. Each of *builtClis* (SW-172) also gets
  * the wrapped form: the temp HOME is what makes running it safe to pre-approve.
+ * The wrapped form carries the repo's lint from *reposConfig*, as werkmeister-context.md prints it (SW-660).
+ * `validate:` never gets a rule: it is prose, never executed (docs/registry-fragments.md).
  */
 export function buildAllowRules(
   feature: string,
@@ -500,21 +505,27 @@ export function buildAllowRules(
   builtClis: string[] = [],
   // Services whose tests run on the host only (no container): wrapped rules, no container form.
   hostServices: string[] = [],
+  reposConfig: ReposConfig = {},
 ): string[] {
   const rules: string[] = [];
-  // SW-398: a Claude rule matches each `&&` segment on its own, so a chained test command
-  // needs one rule per segment; the first is the one the context file runs through tempHome.
+  // SW-398: a Claude rule matches each `&&` segment on its own, so a chained command run in its
+  // container shell needs one rule per segment; through tempHome a chain is one `sh -c` line (SW-660).
   const segments = (cmd: string) => cmd.split(/\s*&&\s*/).filter(Boolean);
   for (const svc of [...services, ...hostServices]) {
     const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
     if (!cmd) continue;
-    const [first = cmd, ...rest] = segments(cmd);
     if (services.includes(svc)) {
       rules.push(`Bash(${containerTestCommand(feature, svc, cmd)})`);
-      rules.push(...segments(cmd).map((c) => `Bash(${c}:*)`));
+      // Splitting a `{ …; }` group or `||` on `&&` gives rules no shell command matches.
+      if (isPlainChain(cmd)) rules.push(...segments(cmd).map((c) => `Bash(${c}:*)`));
     }
-    if (tempHome) rules.push(`Bash(${tempHome} ${first}:*)`);
-    if (tempHome) rules.push(...rest.map((c) => `Bash(${c}:*)`));
+    if (!tempHome) continue;
+    const lint = reposConfig[String(servicesConfig[svc]?.["repo"] ?? "")]?.lint;
+    const wrapped = wrappedTestCommand(tempHome, cmd, lint);
+    // Exact for an `sh -c` line: a prefix would let `; <anything>` ride after the quote.
+    rules.push(
+      wrapped.startsWith(`${tempHome} sh -c '`) ? `Bash(${wrapped})` : `Bash(${wrapped}:*)`,
+    );
   }
   if (tempHome) for (const cli of builtClis) rules.push(`Bash(${tempHome} ${cli}:*)`);
   // SW-292: its sibling runs only the workspace's own built CLI, in a fixture, so it is safe whole;
@@ -569,9 +580,13 @@ export function workspaceAllowRules(
   // SW-398: the context file lists every service of the workspace's repos, so their test commands are allowed too.
   const repoNames = repoDirs(workspaceRoot).map((d) => path.basename(d));
   let hostServices: string[] = [];
+  let reposConfig: ReposConfig = {};
   try {
     // loadReposConfig warns when the machine has no registry; a workspace without repos never needs it.
-    if (repoNames.length) hostServices = candidateServiceNames(repoNames, loadReposConfig());
+    if (repoNames.length || services.length) {
+      reposConfig = loadReposConfig();
+      hostServices = candidateServiceNames(repoNames, reposConfig);
+    }
   } catch {
     // No machine registry (services.yaml): only the selected services get rules.
   }
@@ -585,6 +600,7 @@ export function workspaceAllowRules(
     wrapper,
     builtClis,
     extra,
+    reposConfig,
   );
   return autonomous ? [...new Set([...rules, ...autonomousRules(feature, services)])] : rules;
 }
