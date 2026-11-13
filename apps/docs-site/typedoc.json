@@ -4,5 +4,7 @@
   "emit": "docs",
   "out": "sdk",
   "docsRoot": ".",
+  "readme": "sdk-index.md",
+  "mergeReadme": true,
   "sanitizeComments": true
 }
