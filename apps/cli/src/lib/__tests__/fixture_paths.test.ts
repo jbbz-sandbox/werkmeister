@@ -88,6 +88,39 @@ it("--services outside the current folder is refused before any fixture is made"
   }
 });
 
+it("--change takes a path inside the code repo, never one out of it or into .git (SW-664)", () => {
+  expect(parse(["--gate", "--change", "plugins/x/y.ts", "pr", "gate"]).opts?.change).toBe(
+    "plugins/x/y.ts",
+  );
+  for (const p of [
+    "/etc/hosts",
+    "../x",
+    "a/../../x",
+    ".git/hooks/pre-commit",
+    "./.git/config",
+    ".GIT/config",
+    "a/.git/x",
+    "--version",
+    "",
+  ])
+    expect(parse(["--gate", "--change", p, "pr", "gate"])).toEqual({ bad: "--change" });
+});
+
+it("--fragment-change outside the current folder is refused, and either option needs --gate (SW-664)", async () => {
+  expect(parse(["--gate", "--fragment-change", "/etc/hosts", "pr", "gate"])).toEqual({
+    bad: "--fragment-change",
+  });
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await run(["--change", "docs/z.md", "--version"]);
+    expect(process.exitCode).toBe(2);
+    expect(error.mock.calls[0]?.[0]).toMatch(/--change and --fragment-change need --gate/);
+  } finally {
+    error.mockRestore();
+    process.exitCode = 0;
+  }
+});
+
 it("--workspace takes only a YAML mapping under the current folder (SW-464)", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmp);
