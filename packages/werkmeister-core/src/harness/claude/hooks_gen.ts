@@ -55,12 +55,14 @@ import {
 import {
   type ArchetypeRegistry,
   dotDir,
+  getReposRoot,
   loadArchetypes,
   loadReposConfig,
   loadServices,
   type ReposConfig,
   type ServicesConfig,
 } from "../../config.js";
+import { frozenInstalls } from "../../fragment_detect/workspace.js";
 import { info } from "../../reporter.js";
 import { repoDirs } from "../../standards.js";
 import { tempHomeWrapper } from "../../temp_home.js";
@@ -439,10 +441,8 @@ export const AUTONOMOUS_RULES = [
   // SW-521: no `node`, `npx`, `pnpm exec` or `python3`, which run any file with the real HOME;
   // tests go through the registered wrapped and container forms (buildAllowRules).
   // SW-560: no generic `run`, `test` or `turbo` either, which run any script the agent adds;
-  // buildAllowRules allows each registered chain's segments. A fresh worktree still needs a lockfile install.
-  // Exact: `--prefix`, `--dir`/`-C` reach another workspace, `--script-shell` runs any file.
-  "Bash(npm ci)",
-  "Bash(pnpm install --frozen-lockfile)",
+  // buildAllowRules allows each registered chain's segments. A fresh worktree's lockfile install comes
+  // from its repo (SW-649, workspaceAllowRules).
   // SW-560: no `find` (`-exec`), `sed` (`-i`, `w`), `mkdir`, `ls` or the readers (`cat`, `grep`, `head`, …), which
   // write or read any path, ~/.ssh and other workspaces' .env included; Glob, Grep, Read and Write ask outside.
   // A plugin's pane tests; never `claude plugin:*`, which would also allow install/uninstall.
@@ -602,7 +602,15 @@ export function workspaceAllowRules(
     extra,
     reposConfig,
   );
-  return autonomous ? [...new Set([...rules, ...autonomousRules(feature, services)])] : rules;
+  if (!autonomous) return rules;
+  // Exact: `--prefix`, `--dir`/`-C` reach another workspace, `--script-shell` runs any file.
+  // Read from the main checkout, not the worktree: an agent-written `yarn.lock` + `.yarnrc.yml`
+  // `yarnPath` would otherwise grant itself an install that runs its own file.
+  const reposRoot = getReposRoot();
+  const installs = repoNames.flatMap((name) =>
+    frozenInstalls((f) => fs.existsSync(path.join(reposRoot, name, f))).map((c) => `Bash(${c})`),
+  );
+  return [...new Set([...rules, ...autonomousRules(feature, services), ...installs])];
 }
 
 function builtCliWrappers(workspaceRoot: string): string[] {

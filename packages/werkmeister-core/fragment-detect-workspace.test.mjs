@@ -103,3 +103,18 @@ test("an existing fragment's node_modules volume name is reused", () => {
   const ws = detectWorkspace(ctxFor(root), "demo-install", "node-modules");
   assert.equal(ws.setupFields.node_modules_volume.value, "node-modules");
 });
+
+test("SW-649: frozenInstalls names each root lockfile's exact install, nothing for none", async () => {
+  const { frozenInstalls } = await import("./dist/fragment_detect/index.js");
+  const of = (...files) => frozenInstalls((f) => files.includes(f));
+  assert.deepEqual(of("pnpm-lock.yaml"), ["pnpm install --frozen-lockfile"]);
+  assert.deepEqual(of("package-lock.json"), ["npm ci"]);
+  assert.deepEqual(of("yarn.lock"), ["yarn install --frozen-lockfile"]);
+  assert.deepEqual(of("yarn.lock", ".yarnrc.yml"), ["yarn install --immutable"]);
+  assert.deepEqual(of("uv.lock"), ["uv sync --frozen"]);
+  assert.deepEqual(of("pnpm-lock.yaml", "uv.lock"), [
+    "pnpm install --frozen-lockfile",
+    "uv sync --frozen",
+  ]);
+  assert.deepEqual(of("requirements.txt", "gradlew", "package.json"), []);
+});

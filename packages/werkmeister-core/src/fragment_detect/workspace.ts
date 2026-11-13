@@ -18,6 +18,21 @@ const LOCKED: Partial<Record<PackageManager, [lockfile: string, command: string]
   pnpm: ["pnpm-lock.yaml", "corepack enable && pnpm install --frozen-lockfile"],
 };
 
+/**
+ * The installs a repo's root lockfiles pin, each exact and unable to add a dependency, for the
+ * autonomous allow rules (SW-649). A repo can hold several (a Node app with a uv-managed tool).
+ */
+export function frozenInstalls(has: (file: string) => boolean): string[] {
+  return [
+    has("pnpm-lock.yaml") && "pnpm install --frozen-lockfile",
+    has("package-lock.json") && "npm ci",
+    // Berry reads .yarnrc.yml and dropped --frozen-lockfile for --immutable.
+    has("yarn.lock") &&
+      (has(".yarnrc.yml") ? "yarn install --immutable" : "yarn install --frozen-lockfile"),
+    has("uv.lock") && "uv sync --frozen",
+  ].filter((c): c is string => Boolean(c));
+}
+
 /** Glob patterns from `workspaces` / `pnpm-workspace.yaml` → the package dirs present in *files*. */
 export function expandWorkspaceGlobs(patterns: string[], files: string[]): string[] {
   const toRe = (pattern: string) =>
