@@ -64,7 +64,7 @@ test("activity: first match wins, in the order paused → queued → starting �
   assert.equal(act({ paused: { at: ago(MIN) }, sessions: { s: testing } }).id, "paused");
   assert.equal(
     act({ waiting: { position: 2, reason: "" }, sessions: { s: testing } }).label,
-    "Queued for CPU · position 2",
+    "Queued for capacity (position 2)",
   );
   // SW-569: a service start waiting on capacity holds only that start, so the live session shows.
   assert.equal(
@@ -305,7 +305,7 @@ test("needs-you: a gate is not handed over while a background shell, a capacity 
   assert.deepEqual(kinds(other), []);
   assert.deepEqual(
     [other.activity.id, other.activity.label],
-    ["tool", "Running a background shell"],
+    ["tool", "Running in background: sleep 600"],
   );
   assert.deepEqual(
     kinds(state({ sessions: shell("pnpm test", ago(SESSION_GONE_MS + MIN)) })),
@@ -321,7 +321,7 @@ test("needs-you: a gate is not handed over while a background shell, a capacity 
   assert.deepEqual(kinds(queued), []);
   assert.deepEqual(
     [queued.activity.id, queued.activity.label],
-    ["queued", "Waiting for capacity · position 1"],
+    ["queued", "Queued for capacity (position 1)"],
   );
   assert.deepEqual(kinds(state({ waiting: { position: 2, reason: "" } })), []);
 
@@ -337,4 +337,52 @@ test("needs-you: a gate is not handed over while a background shell, a capacity 
   assert.deepEqual(kinds(state({ sessions: { s: idle } })), ["gate"]);
   assert.deepEqual(kinds(state({})), ["gate"]);
   assert.deepEqual(kinds(state({ paused: { at: ago(MIN) } })), ["gate"], "paused still lists it");
+});
+
+// SW-681: a stopped turn that left a background shell or a capacity wait read "Done" on the card,
+// the VS Code badge, MCP status and the check-in sweep.
+test("legacyAgent: a background shell or a capacity wait reads working, not done", () => {
+  const stopped = { status: "idle", at: ago(MIN), last: ago(MIN), stopped: true };
+  const done = { agent: "done", at: ago(MIN), question: null };
+  const shell = (command) => ({ s: { ...stopped, shell: { command, at: ago(MIN) } } });
+
+  const prOpen = workspaceState(facts({ sessions: shell("werkmeister pr open --watch") }));
+  assert.equal(prOpen.activity.label, "Running in background: pr open");
+  assert.equal(legacyAgent(prOpen, done).agent, "working");
+
+  const tests = workspaceState(facts({ sessions: shell("werkmeister pr gate --tests") }));
+  assert.equal(legacyAgent(tests, done).agent, "working");
+
+  for (const waiting of [
+    { position: 2, reason: "" },
+    { position: 2, reason: "", services: ["werkmeister-core"] },
+  ]) {
+    const queued = workspaceState(facts({ sessions: { s: stopped }, waiting }));
+    assert.equal(queued.activity.label, "Queued for capacity (position 2)");
+    assert.equal(legacyAgent(queued, done).agent, "working");
+  }
+
+  const sub = workspaceState(facts({ sessions: { s: { ...stopped, subagents: 1 } } }));
+  assert.equal(legacyAgent(sub, done).agent, "working");
+  const starting = workspaceState(
+    facts({ sessions: { s: stopped }, services: [{ name: "core", state: "starting" }] }),
+  );
+  assert.equal(legacyAgent(starting, done).agent, "working");
+  const noAgent = { ...done, agent: "idle" };
+  assert.deepEqual(
+    legacyAgent(starting, noAgent),
+    noAgent,
+    "no session: containers starting aren't an agent at work",
+  );
+  const long = "until gh pr view 12 --json state; do sleep 30; done; echo merged";
+  assert.equal(
+    workspaceState(facts({ sessions: shell(long) })).activity.label,
+    "Running in background: until gh pr view 12 --json state; do sl…",
+  );
+  const stale = { s: { ...stopped, shell: { command: "x", at: ago(SESSION_GONE_MS + MIN) } } };
+  assert.deepEqual(legacyAgent(workspaceState(facts({ sessions: stale })), done), done);
+
+  // Nothing left running: done stays done.
+  const quiet = workspaceState(facts({ sessions: { s: stopped } }));
+  assert.deepEqual(legacyAgent(quiet, done), done);
 });

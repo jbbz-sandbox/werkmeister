@@ -171,6 +171,21 @@ test("pause freezes exactly the running containers, dependents first, after writ
   assert.match(JSON.stringify(settings.hooks.PreToolUse), /werkmeister internal agent-state/);
 });
 
+// SW-681: a turn that ended with a background shell still running is working, so Resume tells it to continue.
+test("pause records was_working for a stopped session whose background shell still runs", async () => {
+  const at = new Date().toISOString();
+  const stopped = { status: "idle", at, last: at, stopped: true };
+  fs.mkdirSync(path.join(dot, "sessions"), { recursive: true });
+  fs.writeFileSync(path.join(dot, "sessions", "s1.json"), JSON.stringify(stopped));
+  await pause("demo");
+  assert.equal(readPaused(ws).was_working, false, "a finished turn isn't working");
+  fs.rmSync(pausedFile);
+  const shell = { command: "werkmeister pr open", at, id: "b1" };
+  fs.writeFileSync(path.join(dot, "sessions", "s1.json"), JSON.stringify({ ...stopped, shell }));
+  await pause("demo");
+  assert.equal(readPaused(ws).was_working, true);
+});
+
 test("pause refuses twice and a feature with no slot", async () => {
   await pause("demo");
   await assert.rejects(pause("demo"), { code: "ALREADY_PAUSED" });

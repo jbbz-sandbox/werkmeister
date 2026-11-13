@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { readWaiting, waitingPath, writeWaiting } from "./dist/agent_state.js";
-import { grantWaiters, runningFeatures } from "./dist/lifecycle.js";
+import { grantWaiters, runningFeatures, runningLeases } from "./dist/lifecycle.js";
 import { withReporter } from "./dist/reporter.js";
 import {
   enqueue,
@@ -374,5 +374,29 @@ test("waitForSetupLoad: no setup among the starts, macOS, or WERKMEISTER_NO_WAIT
       assert.deepEqual(stuck.slept, [], `${services} on ${platform}`);
     }
     delete process.env.WERKMEISTER_NO_WAIT;
+  });
+});
+
+// SW-681: an autonomous workspace whose stopped turn left a background shell running (a gate, pr open)
+// ranks working, not idle, so preemption doesn't stop it under that run.
+test("preemption rank: a stopped session with a live background shell is working, without one idle", async () => {
+  await withHome(async (home) => {
+    const ws = path.join(home, "features", "auto");
+    const sessions = path.join(ws, ".werkmeister", "sessions");
+    fs.mkdirSync(sessions, { recursive: true });
+    fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "autonomous: true\n");
+    const at = new Date(Date.now() - 60_000).toISOString();
+    const stopped = { status: "idle", at, last: at, stopped: true };
+    const run = (cmd) =>
+      cmd[1] === "ps"
+        ? { status: 0, stdout: "id1\n" }
+        : { status: 0, stdout: `auto\t${ws}\t2026-10-29T10:00:00Z\t0\t0` };
+    const rank = () => runningLeases(run).find((l) => l.feature === "auto").rank;
+
+    fs.writeFileSync(path.join(sessions, "s.json"), JSON.stringify(stopped));
+    assert.equal(rank(), "idle");
+    const shell = { command: "werkmeister pr gate --tests", at, id: "b1" };
+    fs.writeFileSync(path.join(sessions, "s.json"), JSON.stringify({ ...stopped, shell }));
+    assert.equal(rank(), "working");
   });
 });

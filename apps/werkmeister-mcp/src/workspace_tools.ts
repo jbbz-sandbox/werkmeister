@@ -1045,13 +1045,17 @@ export function registerWorkspaceTools(server: McpServer): void {
           args.detail && !scope
             ? { ...(await statusSnapshot()), telepresence: await interceptsSnapshot() }
             : undefined;
-        const claudeNote = (c: { agent: string }): string =>
-          c.agent === "idle" ? "" : ` · claude: ${c.agent === "needs-you" ? "needs you" : c.agent}`;
+        const claudeNote = (c: { agent: string }, act?: { id: string; label: string }): string =>
+          c.agent === "idle"
+            ? ""
+            : ` · claude: ${c.agent === "needs-you" ? "needs you" : c.agent}` +
+              // What keeps it working after its turn ended: a background shell, a queue place (SW-681).
+              (act && act.id !== "idle" && act.id !== "thinking" ? ` · ${act.label}` : "");
         const wsText = statuses
           .map((s) => {
             const counts = s.total ? ` (${s.running}/${s.total})` : "";
             // A held session's last state (needs you, working) is not news while paused.
-            return `${s.name}: ${s.state}${counts}${s.paused ? "" : claudeNote(s.claude)}`;
+            return `${s.name}: ${s.state}${counts}${s.paused ? "" : claudeNote(s.claude, s.workspaceState?.activity)}`;
           })
           .join("\n");
         const text = `infra: ${infra.state}${infra.total ? ` (${infra.running}/${infra.total})` : ""}\n${wsText || "No workspaces."}`;
