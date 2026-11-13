@@ -121,6 +121,32 @@ it("--fragment-change outside the current folder is refused, and either option n
   }
 });
 
+it("--config takes only a YAML mapping under the current folder, holding only budget (SW-670)", async () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmp);
+  fs.writeFileSync(path.join(tmp, "cfg.yml"), "budget:\n  host_load: 0.01\n");
+  fs.writeFileSync(path.join(tmp, "paths.yml"), "paths:\n  repos_root: /\n");
+  try {
+    expect(parse(["--config", "cfg.yml", "budget", "status"]).opts?.config).toEqual({
+      budget: { host_load: 0.01 },
+    });
+    for (const [args, msg] of [
+      [["--config", "/etc/hosts"], /--config: a file under the current folder/],
+      [["--config", "../secret"], /--config: a file under the current folder/],
+      [["--config", "paths.yml"], /--config may not set paths/],
+    ] as const) {
+      error.mockClear();
+      await run([...args, "--version"]);
+      expect(process.exitCode).toBe(2);
+      expect(error.mock.calls[0]?.[0]).toMatch(msg);
+    }
+  } finally {
+    cwd.mockRestore();
+    error.mockRestore();
+    process.exitCode = 0;
+  }
+});
+
 it("--workspace takes only a YAML mapping under the current folder (SW-464)", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmp);
