@@ -163,6 +163,61 @@ test("a gate fixture behind origin/main fails the base row after a fetch, before
   );
 });
 
+// SW-664: a diff touching only the registry fragment, so the gate's fragment row is exercised end to end.
+test("a gate fixture with fragmentChange gates a fragment-only diff and runs only the service it changes", async () => {
+  const branch = `services:\n  lib:\n    type: cli\n    path: packages/lib\n    test: echo changed\nrepo:\n  path_mappings:\n    packages/lib: lib\n`;
+  await withFixtureWorkspace(
+    async (fx) => {
+      assert.equal(
+        git(fx.repo, "diff", "--name-only", "origin/main...HEAD"),
+        ".werkmeister/services.yaml",
+      );
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const { ok, lines } = await gatePrs(fx.workspace);
+      assert.equal(ok, true, lines.join("\n"));
+      assert.match(lines.join("\n"), /fragment: \.werkmeister\/services\.yaml changes lib/);
+      const execs = fs
+        .readFileSync(fx.dockerLog, "utf8")
+        .split("\n")
+        .filter((c) => c.startsWith("exec "));
+      assert.deepEqual(execs, ["exec demo-lib echo changed"]);
+    },
+    { gate: true, fragmentChange: branch },
+  );
+});
+
+test("--change names the file the gate fixture changes, beside a fragment change too (SW-664)", async () => {
+  const { fixturePreset } = await import("./dist/fixture_workspace.js");
+  assert.deepEqual(fixturePreset({ gate: true }).repos, [
+    { name: "app", change: "packages/lib/index.js" },
+  ]);
+  assert.deepEqual(fixturePreset({ gate: true, change: "plugins/x/y.ts" }).repos, [
+    { name: "app", change: "plugins/x/y.ts" },
+  ]);
+  assert.deepEqual(fixturePreset({ gate: true, fragmentChange: "x" }).repos, [
+    { name: "app", change: undefined },
+  ]);
+  // Another path maps to no `lib`, so a --services registry without it is no longer refused.
+  assert.doesNotThrow(() =>
+    fixturePreset({
+      gate: true,
+      change: "docs/z.md",
+      services: "services:\n  web: { repo: app, path: . }\n",
+    }),
+  );
+  await withFixtureWorkspace(
+    async (fx) => {
+      assert.equal(
+        git(fx.repo, "diff", "--name-only", "origin/main...HEAD"),
+        ".werkmeister/services.yaml\nplugins/x/y.ts",
+      );
+    },
+    { gate: true, change: "plugins/x/y.ts", fragmentChange: "services: {}\n" },
+  );
+});
+
 test("with execRuns the gate's lint and test rows pass or fail on the registry's commands (SW-473)", async () => {
   const gate = (lint, libTest) =>
     withFixtureWorkspace(
