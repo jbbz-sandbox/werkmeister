@@ -41,7 +41,7 @@ export function codexConfigToml(): string {
     "[mcp_servers.werkmeister]",
     // Loopback only: the tools are pre-approved, so the generated file must not follow WERKMEISTER_HOST.
     `url = "http://127.0.0.1:${daemonPort()}/mcp"`,
-    "# A tokenless loopback call is machine-wide; the workspace token scopes the pre-approved tools to this workspace.",
+    "# The daemon refuses a call without a token; the workspace token scopes the pre-approved tools to this workspace.",
     'bearer_token_env_var = "WERKMEISTER_MCP_TOKEN"',
     "# codex exec refuses non-read-only MCP tools unless pre-approved; the 300 s default cut off a first `up` (SW-188).",
     'default_tools_approval_mode = "approve"',

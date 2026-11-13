@@ -29,9 +29,10 @@ has its own harness with hooks, `harness: codex` ([Codex](#codex)).
 
 1. **The daemon must be running.** `werkmeister daemon status` says whether it is;
    `werkmeister machine setup` installs it as a launchd agent (`werkmeister daemon install`
-   is the same step). On a loopback bind the daemon takes a request with no
-   `Authorization` header as the host itself, so a harness on the same machine
-   needs no token.
+   is the same step). The daemon refuses a request with no `Authorization` header on
+   every bind (a container's request reaches a loopback bind from 127.0.0.1 too),
+   so every harness sends a token: the workspace's `.werkmeister/token`, which scopes it to
+   that workspace.
 2. **Create the workspace for that harness:**
 
    ```bash
@@ -63,20 +64,25 @@ has its own harness with hooks, `harness: codex` ([Codex](#codex)).
      ```
 
      A global registration (`codex mcp add werkmeister --url http://127.0.0.1:3002/mcp`,
-     which writes `~/.codex/config.toml`) has no token, so every Codex session on the machine
-     acts as the host (step 1). Leave `default_tools_approval_mode` out there: pre-approved,
-     any session could run `close-out`, `down` or a Jira or GitHub write against any workspace
-     without a prompt.
+     which writes `~/.codex/config.toml`) sends no token, so the daemon refuses it (step 1).
 
    - Cursor: `.cursor/mcp.json` in the workspace:
 
      ```json
-     { "mcpServers": { "werkmeister": { "url": "http://127.0.0.1:3002/mcp" } } }
+     {
+       "mcpServers": {
+         "werkmeister": {
+           "url": "http://127.0.0.1:3002/mcp",
+           "headers": { "Authorization": "Bearer <contents of .werkmeister/token>" }
+         }
+       }
+     }
      ```
 
-   - GitHub Copilot CLI: `/mcp add`, type HTTP, the same URL.
+   - GitHub Copilot CLI: `/mcp add`, type HTTP, the same URL, with the header
+     `Authorization: Bearer <contents of .werkmeister/token>`.
 
-   A harness running **inside a container** sends the workspace's token instead:
+   A harness running **inside a container** sends the same token:
    `Authorization: Bearer $(cat .werkmeister/token)` (Codex: `bearer_token_env_var`),
    which scopes it to that one workspace. The devcontainer `workspace init` generates
    does this for Claude Code, and only on a `harness: claude` workspace: on `mcp`, `codex`
@@ -130,8 +136,8 @@ works from the older events, without subagent activity.
    Werkmeister never writes `~/.codex`.
 3. **Start Codex with the workspace's token:**
    `WERKMEISTER_MCP_TOKEN=$(cat .werkmeister/token) codex` (or `codex exec …`). The tools
-   are pre-approved, and a loopback call with no token acts as the whole machine (step 1
-   above); the workspace token scopes the session to this workspace's tools, and the
+   are pre-approved and the daemon refuses a call with no token; the workspace token
+   scopes the session to this workspace's tools, and the
    `werkmeister` CLI it runs reads the same variable. The daemon issues
    `.werkmeister/token` only for a workspace under the workspaces root.
    Without the variable, Codex 0.166 skips the server silently: no werkmeister tools,

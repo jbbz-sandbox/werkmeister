@@ -87,7 +87,7 @@ test("two concurrent `up` calls through the HTTP MCP server both complete", asyn
   const socket = path.join(tmp, "docker.sock");
   const docker = await fakeDocker(socket);
   const port = await freePort();
-  // A workspace container exports HOST=0.0.0.0, on which bind the server demands a token this client lacks.
+  // A workspace container exports HOST=0.0.0.0; this test means the default loopback bind.
   const { HOST: _, ...parentEnv } = process.env;
   const server = spawn(process.execPath, ["dist/main.js"], {
     cwd: import.meta.dirname,
@@ -112,11 +112,13 @@ test("two concurrent `up` calls through the HTTP MCP server both complete", asyn
     await sleep(100);
   }
 
+  const token = fs.readFileSync(path.join(home, ".werkmeister", "mcp-token"), "utf8").trim();
   const callUp = async (ws) => {
     const client = new Client({ name: "up-concurrency.test", version: "0" });
     await client.connect(
       new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${port}/mcp`), {
         fetch: fetchFresh,
+        requestInit: { headers: { Authorization: `Bearer ${token}` } },
       }),
     );
     try {

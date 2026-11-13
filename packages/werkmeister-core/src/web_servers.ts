@@ -93,10 +93,9 @@ export const MCP: WebApp = {
   // Must be reachable from a container with no Docker socket (that's the
   // whole point of this app), and a container's requests arrive over the
   // bridge network, not loopback — so this is the one managed app that
-  // needs a wide bind. On a 0.0.0.0 bind, apps/werkmeister-mcp/src/lib/token.ts's
-  // authorized() makes the bearer token mandatory (it only accepts a
-  // missing header on loopback), so this does not open the surface up —
-  // it just makes auth non-optional. DASHBOARD deliberately doesn't set
+  // needs a wide bind. apps/werkmeister-mcp/src/lib/token.ts's authorized()
+  // requires the bearer token on every bind, so this does not open the
+  // surface up. DASHBOARD deliberately doesn't set
   // this: it's unauthenticated and must stay loopback-only.
   env: { HOST: "0.0.0.0" },
 };
