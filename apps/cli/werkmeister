@@ -73,9 +73,9 @@ fi
 # server `connect` starts on 3001).
 #
 # Only apps/cli is published to npm (see its package.json `files`), so on a
-# global install these siblings are absent. apps/werkmeister-mcp is bundled into this
-# package as dist/mcp.js and dist/mcp-proxy.js (esbuild.mjs), so `mcp` always has a target. The
-# dashboard is checkout-only.
+# global install these siblings are absent. Both are bundled into this package
+# (esbuild.mjs) as dist/mcp.js, dist/mcp-proxy.js and dist/dashboard.js, so each
+# verb always has a target.
 # SW-186 moved these five under `internal`; the old spellings warn until REMOVE_IN
 # (keep in step with src/main.ts). stderr only: stdout is JSON-RPC or hook output.
 deprecated() {
@@ -106,8 +106,9 @@ case "$verb" in
         ;;
     dashboard)
         app_entry="$(cd "$WERKMEISTER_ROOT/.." && pwd)/werkmeister-dashboard/dist/main.js"
+        [ -f "$app_entry" ] || app_entry="$WERKMEISTER_ROOT/dist/dashboard.js"
         if [ ! -f "$app_entry" ]; then
-            echo "Error: the workspaces dashboard ships with a werkmeister checkout only -- missing $app_entry." >&2
+            echo "Error: 'dashboard' is not available -- missing $app_entry (run 'pnpm run build')." >&2
             exit 1
         fi
         exec "$node_bin" "$app_entry" "$@"

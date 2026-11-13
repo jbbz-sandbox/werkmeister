@@ -193,7 +193,7 @@ Desktop) renders them inline; any other client gets the browser form
 (`form-cli.js`) or a markdown table. The HTML is this app's vite build
 (`mcp-app.html`, `mcp-list.html` and `ui/`, from `werkmeister-ui`), read from
 `apps/werkmeister-mcp/dist`; the form is the dashboard's, from `apps/werkmeister-dashboard/dist`.
-Both exist in a checkout only; a package install takes the text fallback.
+A package install reads the copies the CLI ships in its own `dist/`.
 
 ## What is not here
 

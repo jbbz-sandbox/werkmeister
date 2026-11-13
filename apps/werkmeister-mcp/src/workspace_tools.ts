@@ -6,8 +6,8 @@
  * Every client gets the same tools. The App tools adapt to the client
  * (`rendersUi`): Desktop gets the bundled HTML, everything else a text or
  * browser fallback. The HTML is this app's build (vite, from werkmeister-ui) and
- * the browser form the dashboard's; both ship with a checkout only — a package
- * install takes the fallback.
+ * the browser form the dashboard's; the CLI package ships a copy of both in
+ * its dist/ (apps/cli/esbuild.mjs).
  */
 
 import { spawn } from "node:child_process";
@@ -71,12 +71,13 @@ const RESOURCE_URI_LIST = "ui://workspace/mcp-list.html";
 /** UI-only tools: the App's own plumbing, hidden from the model (ui-spec § One MCP server). */
 const APP_ONLY = { ui: { visibility: ["app"] } };
 
-/** A file from an app's build, or null where there is none (a package install, an unbuilt checkout). */
+/** A file from an app's build, else the copy the CLI package ships in its dist/, or null (unbuilt). */
 function appFile(app: "werkmeister-mcp" | "werkmeister-dashboard", name: string): string | null {
   try {
     // Relative to apps/cli, not this file: the CLI bundles this server into its own dist/.
-    const file = path.join(sandboxRoot(), "..", app, "dist", name);
-    return fs.existsSync(file) ? file : null;
+    const root = sandboxRoot();
+    const files = [path.join(root, "..", app, "dist", name), path.join(root, "dist", name)];
+    return files.find((f) => fs.existsSync(f)) ?? null;
   } catch {
     return null;
   }
@@ -281,8 +282,8 @@ export function registerWorkspaceTools(server: McpServer): void {
               {
                 type: "text",
                 text:
-                  "The browser form ships with a werkmeister checkout (apps/werkmeister-dashboard), " +
-                  "not this install. Call `create-workspace` with the fields as `formData`.",
+                  "The browser form is not built here (apps/werkmeister-dashboard). " +
+                  "Call `create-workspace` with the fields as `formData`.",
               },
             ],
           };

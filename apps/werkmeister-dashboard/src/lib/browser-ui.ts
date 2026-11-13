@@ -13,7 +13,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import express, { type Router } from "express";
-import { connectInMemoryClient, createServer } from "werkmeister-mcp";
+import { connectInMemoryClient, createServer } from "werkmeister-mcp/server";
 import { localOnly } from "./localhost-form.js";
 import { subscribeSession } from "./session-stream.js";
 
@@ -21,7 +21,9 @@ import { subscribeSession } from "./session-stream.js";
 // (dist/lib/browser-ui.js) — the built UI always lives at dist/browser.html.
 const DIST_DIR = import.meta.filename.endsWith(".ts")
   ? path.join(import.meta.dirname, "..", "..", "dist")
-  : path.join(import.meta.dirname, "..");
+  : path.basename(import.meta.dirname) === "lib"
+    ? path.join(import.meta.dirname, "..")
+    : import.meta.dirname; // bundled into apps/cli/dist, the page copied in beside it
 
 function textOf(result: CallToolResult): string {
   const part = result.content?.find((c) => c.type === "text") as { text?: string } | undefined;

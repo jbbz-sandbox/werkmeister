@@ -60,6 +60,9 @@ importers:
       werkmeister-core:
         specifier: workspace:*
         version: link:../../packages/werkmeister-core
+      werkmeister-dashboard:
+        specifier: workspace:*
+        version: link:../werkmeister-dashboard
       werkmeister-mcp:
         specifier: workspace:*
         version: link:../werkmeister-mcp

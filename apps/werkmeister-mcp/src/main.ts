@@ -4,8 +4,8 @@
  *   node dist/main.js            # Streamable HTTP on PORT (default 3002): the host daemon
  *   node dist/proxy.js           # stdio, per session: a thin proxy to the daemon (SW-344)
  *
- * The dashboard imports {@link createServer} for its browser page's `/api/tool`,
- * so importing this module must not start a server.
+ * The dashboard imports {@link createServer} for its browser page's `/api/tool`
+ * from server.ts, never from here: bundled, this module starts the daemon.
  *
  * Over HTTP this is also the host daemon (SW-184): `/api/tool` and
  * `/api/logs/stream` serve the thin clients (the VS Code extension, the CLI's
@@ -20,7 +20,6 @@
 import * as fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import express, { type NextFunction, type Request, type Response } from "express";
@@ -32,39 +31,13 @@ import { watchPrs } from "werkmeister-core/pr_lifecycle";
 import { ownScheduler } from "werkmeister-core/scheduler_client";
 import { readQueue } from "werkmeister-core/scheduler_state";
 import { DAEMON_LABEL } from "werkmeister-core/web_servers";
-import { registerDaemonTools, registerSchedulerTool } from "./daemon_tools.js";
 import { sqsDeps, startGithubIngest } from "./github_ingest.js";
 import { resolveFeature, SCOPE_HEADER } from "./lib/feature.js";
-import { connectInMemoryClient } from "./lib/in_memory.js";
 import { restartGuard } from "./lib/self_restart.js";
 import { readOrCreateToken, type Scope, scopeOf } from "./lib/token.js";
-import { WORKSPACE_SCOPED_TOOLS } from "./scope.js";
-import { registerTools } from "./tools.js";
-import { registerWorkspaceTools } from "./workspace_tools.js";
+import { connectInMemoryClient, createServer } from "./server.js";
 
-export { connectInMemoryClient };
-
-/**
- * With `scoped`, only the tools a per-workspace token may call are registered;
- * with `scheduler`, also the scheduler's internal ops (the daemon's `/api/tool`).
- */
-export function createServer(opts: { scoped?: boolean; scheduler?: boolean } = {}): McpServer {
-  const server = new McpServer({ name: "werkmeister", version: "0.1.0" });
-  registerTools(server);
-  registerWorkspaceTools(server);
-  registerDaemonTools(server);
-  if (opts.scheduler) registerSchedulerTool(server);
-  if (opts.scoped) {
-    // The SDK's private registry is the only list of what was registered.
-    const registered = (
-      server as unknown as { _registeredTools: Record<string, { remove(): void }> }
-    )._registeredTools;
-    for (const [name, tool] of Object.entries(registered)) {
-      if (!WORKSPACE_SCOPED_TOOLS.has(name)) tool.remove();
-    }
-  }
-  return server;
-}
+export { connectInMemoryClient, createServer };
 
 const scopeOfReq = (res: Response): Scope => res.locals["scope"] as Scope;
 

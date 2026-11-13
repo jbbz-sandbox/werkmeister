@@ -34,7 +34,9 @@ import { fetchIssueFormData, refinePrompt, WorkspaceError } from "werkmeister-co
 // (dist/lib/localhost-form.js) — the built page always lives at dist/form.html.
 const DIST_DIR = import.meta.filename.endsWith(".ts")
   ? path.join(import.meta.dirname, "..", "..", "dist")
-  : path.join(import.meta.dirname, "..");
+  : path.basename(import.meta.dirname) === "lib"
+    ? path.join(import.meta.dirname, "..")
+    : import.meta.dirname; // bundled into apps/cli/dist, the page copied in beside it
 
 export type LocalhostFormStatus = "submitted" | "cancelled" | "timeout";
 

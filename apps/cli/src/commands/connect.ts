@@ -148,8 +148,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     console.log(`    ${Colors.CYAN}Jaeger:${Colors.RESET}        ${tools}/jaeger`);
   } else off.push("Jaeger");
   console.log(`    ${Colors.CYAN}GraphQL:${Colors.RESET}       ${tools}/graphql`);
-  // The dashboard is checkout-only (web_servers.start skips it on a package
-  // install), so only advertise a URL that is actually being served.
+  // Only advertise a URL that is actually being served.
   const dashboard = await webStatus(DASHBOARD);
   if (dashboard.running) {
     console.log(

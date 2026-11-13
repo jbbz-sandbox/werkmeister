@@ -125,6 +125,7 @@
     "typescript": "^5.7.0",
     "vitest": "^3.0.0",
     "werkmeister-core": "workspace:*",
+    "werkmeister-dashboard": "workspace:*",
     "werkmeister-mcp": "workspace:*",
     "yaml": "^2.7.0"
   }

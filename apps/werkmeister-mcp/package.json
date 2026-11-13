@@ -6,6 +6,10 @@
   "private": true,
   "description": "The werkmeister MCP server: every tool over authenticated HTTP (the host daemon), including the MCP App UI tools and the App pages they serve, plus dist/proxy.js, the stdio proxy each session runs. Bundled into the CLI.",
   "main": "dist/main.js",
+  "exports": {
+    ".": "./dist/main.js",
+    "./server": "./dist/server.js"
+  },
   "types": "dist/main.d.ts",
   "scripts": {
     "build": "tsc && tsc -p tsconfig.ui.json && pnpm run build:ui",
