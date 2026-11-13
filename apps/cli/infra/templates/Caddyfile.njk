@@ -9,8 +9,9 @@
 # Host routers. Caddy terminates each service's public hostname directly and
 # reverse-proxies to its upstream.
 #
-# Local hosts are multi-tenant: one `handle` per running feature, selected by the
-# X-Feature cookie's VALUE, so several workspaces share a hostname at once. The
+# Local hosts are multi-tenant: `handle`s per running feature, selected by the
+# X-Feature request header, else the X-Feature cookie's VALUE, so several
+# workspaces share a hostname at once. The
 # final `/*` handle is the no-cookie default (the k8s tunnel where one exists).
 # Remote (K8s) hosts have a single fixed upstream and only forward the cookie as
 # a header for the cluster to read.
@@ -37,6 +38,14 @@
         file_server
     }
 {% if r.features %}
+    # X-Feature request header first, so a per-request header (curl, an agent's
+    # browser check) beats the browser-wide cookie (SW-616).
+{% for f in r.features %}
+    @{{ f.matcher }}_header header X-Feature {{ f.name }}
+    handle @{{ f.matcher }}_header {
+        reverse_proxy {{ f.upstream }}
+    }
+{% endfor %}
 {% for f in r.features %}
     # X-Feature={{ f.name }} -> that workspace's containers.
     @{{ f.matcher }} header_regexp Cookie {{ f.cookie_regexp }}
