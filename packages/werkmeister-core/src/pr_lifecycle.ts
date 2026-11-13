@@ -78,7 +78,13 @@ import {
   worktreeSources,
   // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 } from "./sandbox.js";
-import { portHolders, readHostLoad, waitForHostLoadNow } from "./scheduler_state.js";
+import {
+  lowMemory,
+  portHolders,
+  readHostLoad,
+  readHostMemory,
+  waitForHostLoadNow,
+} from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
 import { repoDirs } from "./standards.js";
 import { TEMP_HOME_SCRIPT } from "./temp_home.js";
@@ -166,6 +172,8 @@ export interface Deps {
   prWatch: () => PrWatchScheduleState;
   /** `os.loadavg()` and the core count, read before and after each gate check (SW-209). */
   hostLoad: () => { load: number[]; cores: number };
+  /** Bytes available and total, read once before the gate starts anything (SW-620). */
+  hostMemory: () => { free: number; total: number };
   sleep: (ms: number) => Promise<void>;
   /** One idle-reaper pass over every workspace (SW-39). */
   reapIdle: () => Promise<{ lines: string[] }>;
@@ -251,6 +259,7 @@ export function defaultDeps(): Deps {
     stop: stopWorkspace,
     prWatch: () => prWatchScheduleState(),
     hostLoad: readHostLoad,
+    hostMemory: readHostMemory,
     sleep: (ms) => delay(ms),
     reapIdle: async () => {
       const minutes = idleStopMinutes();
@@ -806,7 +815,8 @@ async function gateChecks(
       ...(!ok && capacityShort && NO_CONTAINER.test(detail) && { retry: true as const }),
     });
   const startFailed = (name: string, e: unknown, prefix = "") => {
-    const capacity = (e as { code?: string }).code === "NO_CAPACITY";
+    // HOST_LOAD: a setup start that waited out load or low memory is the host, not the change (SW-620).
+    const capacity = ["NO_CAPACITY", "HOST_LOAD"].includes((e as { code?: string }).code ?? "");
     if (capacity) capacityShort = true;
     checks.push({
       name,
@@ -1165,6 +1175,19 @@ async function gateChecks(
     return true;
   };
 
+  // Admission prices reservations, not the host's live memory: Claude Code stops an idle background
+  // gate when the Mac runs low, before any row runs, so exit 75 before starting anything (SW-620).
+  const memory = lowMemory(deps.hostMemory);
+  if (memory) {
+    checks.push({
+      name: "memory",
+      ok: false,
+      detail: `low memory: ${memory}; no container started and no row run. Retry later.`,
+      retry: true,
+    });
+    return done();
+  }
+
   // Running containers come from compose.yml, rendered from the machine registry; a
   // touched service whose branch settings render differently runs from compose.gate.yml (SW-118).
   let changed: string[] = [];
@@ -1414,7 +1437,7 @@ export function failedRowExcerpt(output: string, tail: number): string {
 
 export function formatGate(dir: string, g: GateResult): string[] {
   return [
-    `${dir}: gate ${g.ok ? "passed" : g.retry ? "retry later (no capacity)" : "FAILED"}`,
+    `${dir}: gate ${g.ok ? "passed" : g.retry ? `retry later (${g.checks.some((c) => c.name === "memory" && !c.ok) ? "low memory" : "no capacity"})` : "FAILED"}`,
     ...g.checks.map(
       (c) => `  ${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail.replace(/\n/g, "\n      ")}`,
     ),

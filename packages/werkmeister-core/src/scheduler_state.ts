@@ -12,6 +12,7 @@
  * from Docker on every decision, because `up` exits once containers start.
  */
 
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
@@ -162,6 +163,44 @@ export function hostLoadLimit(cores: number): number {
   return Number.isFinite(v) && v >= 0 ? v : 2 * cores;
 }
 
+/** % of memory available under which the gate and with-temp-home hold off (SW-620): `budget.free_memory`, else 15; 0 is off. */
+export function freeMemoryLimit(): number {
+  const cfg = loadGlobalConfig()["budget"];
+  const v = isDict(cfg) ? Number(cfg["free_memory"] ?? Number.NaN) : Number.NaN;
+  return Number.isFinite(v) && v >= 0 ? v : 15;
+}
+
+/**
+ * Bytes available and total. On macOS os.freemem() counts only untouched pages (0.08 of 16 GiB on a
+ * healthy host), so it reads kern.memorystatus_level, the % the kernel calls available (SW-620).
+ */
+export function readHostMemory(platform: NodeJS.Platform = process.platform) {
+  const total = os.totalmem();
+  if (platform !== "darwin") return { free: os.freemem(), total };
+  const level = Number(
+    execFileSync("sysctl", ["-n", "kern.memorystatus_level"], { encoding: "utf8" }),
+  );
+  return { free: (total * level) / 100, total };
+}
+
+/** "N% free, under budget.free_memory M%" when memory is low, else ""; unreadable memory is not low. */
+export function lowMemory(
+  hostMemory: () => { free: number; total: number } = readHostMemory,
+): string {
+  const limit = freeMemoryLimit();
+  if (limit === 0) return "";
+  let pct: number;
+  try {
+    const { free, total } = hostMemory();
+    pct = (100 * free) / total;
+  } catch {
+    return "";
+  }
+  return Number.isFinite(pct) && pct < limit
+    ? `${pct.toFixed(0)}% free, under budget.free_memory ${limit}%`
+    : "";
+}
+
 const LOAD_POLL_MS = 15_000;
 // with-temp-home's own wait: under an agent's default 2 min Bash timeout, so the call can't time out before its command starts (SW-469).
 const WRAPPER_LOAD_WAIT_MS = 90_000;
@@ -169,20 +208,27 @@ const LOAD_PROGRESS_MS = 60_000;
 
 export interface HostLoadDeps {
   hostLoad: () => { load: number[]; cores: number };
+  hostMemory: () => { free: number; total: number };
   sleep: (ms: number) => Promise<unknown>;
 }
 
 export const readHostLoad = () => ({ load: os.loadavg(), cores: os.availableParallelism() });
-const realHostLoad: HostLoadDeps = { hostLoad: readHostLoad, sleep: (ms) => delay(ms) };
+const realHostLoad: HostLoadDeps = {
+  hostLoad: readHostLoad,
+  hostMemory: readHostMemory,
+  sleep: (ms) => delay(ms),
+};
 
 const minutes = (ms: number) => Number((ms / 60_000).toFixed(1));
 
 /**
  * The wait of `werkmeister internal wait-load`, which the generated with-temp-home runs first (SW-224):
- * up to 90 s for the 1-minute load to fall under the limit, saying so up front and printing progress
- * each minute (SW-262); the note for the wrapper's stderr, or "". The gate stopped waiting in SW-542.
- * Not on macOS: its loadavg counts idle daemons in R state (450-550 on a quiet host) and never the
- * Linux VM that runs the tests, so it is no signal to wait on and the wait was pure delay (SW-556).
+ * up to 90 s for the 1-minute load to fall under the limit and free memory to rise over its own (SW-620),
+ * saying so up front and printing progress each minute (SW-262); the note for the wrapper's stderr, or "".
+ * A spent wait's note starts "ran with". The gate stopped waiting in SW-542.
+ * Load not on macOS: its loadavg counts idle daemons in R state (450-550 on a quiet host) and never the
+ * Linux VM that runs the tests, so it is no signal to wait on (SW-556). Its memory is: Claude Code
+ * stops an idle background shell when the Mac runs low (SW-620).
  */
 export async function waitForHostLoadNow(
   deps: HostLoadDeps = realHostLoad,
@@ -190,29 +236,53 @@ export async function waitForHostLoadNow(
   before = "with-temp-home; --no-wait skips",
 ): Promise<string> {
   // WERKMEISTER_NO_WAIT skips it inside the command too, not only in with-temp-home's shell (SW-425).
-  if (platform === "darwin" || envVar("NO_WAIT")) return "";
-  let { load, cores } = deps.hostLoad();
-  const limit = hostLoadLimit(cores);
-  if (limit === 0 || load[0] <= limit) return "";
+  if (envVar("NO_WAIT")) return "";
+  const read = () => {
+    const { load, cores } = deps.hostLoad();
+    const limit = platform === "darwin" ? 0 : hostLoadLimit(cores);
+    return {
+      load: load[0],
+      limit,
+      loadOver: limit !== 0 && load[0] > limit,
+      memory: lowMemory(deps.hostMemory),
+    };
+  };
+  let now = read();
+  if (!now.loadOver && !now.memory) return "";
+  const waitedFor = [now.loadOver && "host load", now.memory && "free memory"]
+    .filter(Boolean)
+    .join(" and ");
   info(
-    `waiting up to ${minutes(WRAPPER_LOAD_WAIT_MS)} min for host load ${load[0].toFixed(1)} to fall to ${limit} (budget.host_load) before ${before}`,
+    `waiting up to ${minutes(WRAPPER_LOAD_WAIT_MS)} min for ${[
+      now.loadOver && `host load ${now.load.toFixed(1)} to fall to ${now.limit} (budget.host_load)`,
+      now.memory && `free memory to rise (${now.memory})`,
+    ]
+      .filter(Boolean)
+      .join(" and ")} before ${before}`,
   );
+  const state = () =>
+    [
+      now.loadOver && `host load ${now.load.toFixed(1)} over ${now.limit}`,
+      now.memory && `low memory (${now.memory})`,
+    ]
+      .filter(Boolean)
+      .join(", ");
   for (let waited = LOAD_POLL_MS; waited <= WRAPPER_LOAD_WAIT_MS; waited += LOAD_POLL_MS) {
     await deps.sleep(LOAD_POLL_MS);
-    ({ load } = deps.hostLoad());
-    if (load[0] <= limit) return `waited ${waited / 1000} s for host load`;
+    now = read();
+    if (!now.loadOver && !now.memory) return `waited ${waited / 1000} s for ${waitedFor}`;
     if (waited % LOAD_PROGRESS_MS === 0 && waited < WRAPPER_LOAD_WAIT_MS)
       info(
-        `still waiting for host load: ${load[0].toFixed(1)} over ${limit}, ${waited / 1000} s so far, up to ${minutes(WRAPPER_LOAD_WAIT_MS - waited)} min left`,
+        `still waiting: ${state()}, ${waited / 1000} s so far, up to ${minutes(WRAPPER_LOAD_WAIT_MS - waited)} min left`,
       );
   }
-  return `ran with host load ${load[0].toFixed(1)} over ${limit}; the ${minutes(WRAPPER_LOAD_WAIT_MS)} min host-load wait is spent`;
+  return `ran with ${state()}; the ${minutes(WRAPPER_LOAD_WAIT_MS)} min host-load wait is spent`;
 }
 
 /**
  * Before compose starts a setup one-shot among *services* (undefined: what a whole `up` starts),
- * wait on host load as with-temp-home does, and fail with the load once the wait is spent (SW-630):
- * a setup install started at load ~413 ran 78 min, past compose's 20 min `--wait`, and ended 137.
+ * wait on host load and free memory as with-temp-home does, and fail once the wait is spent (SW-630,
+ * SW-620): a setup install started at load ~413 ran 78 min, past compose's 20 min `--wait`, and ended 137.
  *
  * Throws `HOST_LOAD`.
  */
@@ -235,10 +305,20 @@ export async function waitForSetupLoad(
   );
   if (!note.startsWith("ran with")) return;
   const { load, cores } = deps.hostLoad();
+  const limit = hostLoadLimit(cores);
+  const memory = lowMemory(deps.hostMemory);
+  const over = [
+    platform !== "darwin" &&
+      limit !== 0 &&
+      load[0] > limit &&
+      `host load ${load[0].toFixed(1)} is over ${limit} (budget.host_load)`,
+    memory && `memory is low (${memory})`,
+  ]
+    .filter(Boolean)
+    .join(" and ");
   throw new SandboxError(
-    `host load ${load[0].toFixed(1)} is over ${hostLoadLimit(cores)} (budget.host_load) after the ` +
-      `${minutes(WRAPPER_LOAD_WAIT_MS)} min wait; ${what} not started. Retry when load falls, ` +
-      "or set WERKMEISTER_NO_WAIT=1 to start anyway.",
+    `${over || note} after the ${minutes(WRAPPER_LOAD_WAIT_MS)} min wait; ${what} not started. ` +
+      "Retry when load falls or memory frees, or set WERKMEISTER_NO_WAIT=1 to start anyway.",
     "HOST_LOAD",
   );
 }

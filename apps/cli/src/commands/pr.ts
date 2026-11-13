@@ -66,7 +66,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // SW-527: a bare redirected `pr open > pr-open.log` has no echo, so the log ends with its own exit line.
   if (args.action === "open" && !args.json)
     result.lines.push(
-      `pr open: ${"retry" in result && result.retry ? "retry later (no capacity), " : ""}exit ${exitOf(result)}`,
+      `pr open: ${"retry" in result && result.retry ? "retry later, " : ""}exit ${exitOf(result)}`,
     );
   print(result, args);
 }
