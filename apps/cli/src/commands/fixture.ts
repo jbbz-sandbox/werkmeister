@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--services <file>] [--fragment <file>] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--services <file>] [--fragment <file>] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -17,7 +17,7 @@ import { fixturePreset, seedFixture } from "werkmeister-core/fixture_workspace";
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--services <file>] [--fragment <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--services <file>] [--fragment <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -39,6 +39,7 @@ export function parse(argv: string[]) {
     execRuns: false,
     merged: false,
     behind: false,
+    slotsFull: false,
     issue: undefined as string | undefined,
     prFields: undefined as Record<string, string> | undefined,
     services: undefined as string | undefined,
@@ -56,6 +57,7 @@ export function parse(argv: string[]) {
     else if (a === "--exec-runs" && i === 0) opts.execRuns = true;
     else if (a === "--merged") opts.merged = true;
     else if (a === "--behind") opts.behind = true;
+    else if (a === "--slots-full") opts.slotsFull = true;
     else if (a === "--issue") {
       // Input hygiene: no leading dash or whitespace in what becomes gh's `-R <repo>` (gh is the fake here; `--workspace` refs are unchecked).
       const ref = argv[++i] ?? "";
