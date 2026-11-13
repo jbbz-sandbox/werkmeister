@@ -1,4 +1,4 @@
-import { existsSync, globSync } from "node:fs";
+import { existsSync, globSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -60,8 +60,12 @@ const GROUPS = [
     ],
   ],
 ];
+// The SDK reference: TypeDoc writes it into sdk/ (gitignored) at the start of the build.
+const SDK_DIR = "apps/docs-site/sdk";
+const SDK_SIDEBAR = resolve(ROOT, SDK_DIR, "typedoc-sidebar.json");
 const PAGES = [
   "apps/docs-site/index.md",
+  ...globSync(`${SDK_DIR}/**/*.md`, { cwd: ROOT }),
   ...GROUPS.flatMap(([, items]) => items.map(([, f]) => f)),
 ];
 const toGroups = () =>
@@ -81,7 +85,10 @@ export default defineConfig({
   srcExclude: globSync("**/*.md", { cwd: ROOT, exclude: ["**/node_modules/**", ".git/**"] }).filter(
     (f) => !PAGES.includes(f),
   ),
-  rewrites: { "apps/docs-site/index.md": "index.md" },
+  rewrites: {
+    "apps/docs-site/index.md": "index.md",
+    [`${SDK_DIR}/:page*`]: "sdk/:page*",
+  },
   outDir: "dist",
   base: "/",
   cleanUrls: true,
@@ -104,8 +111,14 @@ export default defineConfig({
   },
   themeConfig: {
     search: { provider: "local" },
-    nav: toGroups(),
+    nav: [...toGroups(), { text: "SDK", link: "/sdk/" }],
     socialLinks: [{ icon: "github", link: REPO }],
-    sidebar: toGroups(),
+    sidebar: {
+      "/sdk/": [
+        { text: "SDK", link: "/sdk/" },
+        ...(existsSync(SDK_SIDEBAR) ? JSON.parse(readFileSync(SDK_SIDEBAR, "utf8")) : []),
+      ],
+      "/": toGroups(),
+    },
   },
 });

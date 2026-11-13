@@ -3,6 +3,7 @@ dist/
 .next/
 .turbo/
 **/.vitepress/cache/
+apps/docs-site/sdk/
 *.timestamp-*.mjs
 *.log
 .DS_Store
