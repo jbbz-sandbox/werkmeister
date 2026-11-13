@@ -743,6 +743,53 @@ describe("generateCaddyfile", () => {
     expect(content).toMatch(/@feat0_web\b/);
     expect(content).toMatch(/@feat1_web_v2\b/);
   });
+
+  // SW-616: werkmeister-context.md promises "cookie or header"; a header-only
+  // request fell through to the default upstream (another workspace's container).
+  it("routes a feature by the X-Feature request header as well as the cookie", async () => {
+    const content = fs.readFileSync(
+      await generateCaddyfile({
+        alpha: { slot: 1, services: ["frontend"] },
+        beta: { slot: 2, services: ["frontend"] },
+      }),
+      "utf8",
+    );
+    const port = (slot: number) =>
+      getPortRange(slot)[0] + (loadServices()["frontend"]?.port_offset ?? 0);
+    expect(content).toMatch(
+      new RegExp(
+        `@feat0_alpha_header header X-Feature alpha\\n\\s+handle @feat0_alpha_header \\{\\n\\s+reverse_proxy host\\.docker\\.internal:${port(1)}\\n`,
+      ),
+    );
+    expect(content).toMatch(
+      new RegExp(
+        `@feat1_beta_header header X-Feature beta\\n\\s+handle @feat1_beta_header \\{\\n\\s+reverse_proxy host\\.docker\\.internal:${port(2)}\\n`,
+      ),
+    );
+    // Caddy tries sibling handles in file order: every header handle precedes
+    // every cookie handle, so `X-Feature: alpha` + cookie `X-Feature=beta` -> alpha.
+    const hostname = loadFeatureRouters()["frontend"]?.hostname;
+    const start = content.indexOf(`${hostname} {`);
+    const block = content.slice(start, content.indexOf("\n}\n", start));
+    expect(block.lastIndexOf("_header header X-Feature")).toBeLessThan(
+      block.indexOf("header_regexp Cookie"),
+    );
+    // A header naming no running feature matches nothing and falls to the default.
+    expect(block.lastIndexOf("header_regexp Cookie")).toBeLessThan(block.indexOf("handle /* {"));
+  });
+
+  it("matches the X-Feature header exactly so one feature can't take another's prefix", async () => {
+    const content = fs.readFileSync(
+      await generateCaddyfile({
+        web: { slot: 1, services: ["frontend"] },
+        "web-v2": { slot: 2, services: ["frontend"] },
+      }),
+      "utf8",
+    );
+    // Caddy's `header` matcher compares the whole value (no `*`), unlike a substring regexp.
+    expect(content).toMatch(/@feat0_web_header header X-Feature web\n/);
+    expect(content).toMatch(/@feat1_web_v2_header header X-Feature web-v2\n/);
+  });
 });
 
 // ---- compose staleness -----------------------------------------------------

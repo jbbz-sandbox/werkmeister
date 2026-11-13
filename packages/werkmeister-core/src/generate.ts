@@ -1462,9 +1462,10 @@ interface HostRouter {
  *    is only copied to a header here; the upstream is fixed.
  *  - Local (docker feature): `hostname` -> one candidate upstream per feature
  *    that declares this service, at `host.docker.internal:<base_port(slot) +
- *    port_offset>`. The `X-Feature` cookie VALUE selects which one serves the
- *    request, so any number of workspaces share the hostname concurrently.
- *    A request with no cookie — or one naming a feature that doesn't run this
+ *    port_offset>`. The `X-Feature` request header, else the `X-Feature` cookie
+ *    VALUE, selects which one serves the request, so any number of workspaces
+ *    share the hostname concurrently.
+ *    A request with neither — or one naming a feature that doesn't run this
  *    service — falls through to `upstream` (the remote tunnel when there is one,
  *    else the first feature by name, so local-only services still resolve).
  *
@@ -1558,6 +1559,13 @@ function hostRouterLines(routers: HostRouter[]): string[] {
     lines.push("");
     const features = r["features"] ?? [];
     if (features.length) {
+      // Header handles first: a per-request header beats the browser-wide cookie (SW-616).
+      for (const f of features) {
+        lines.push(`    @${f["matcher"]}_header header X-Feature ${f["name"]}`);
+        lines.push(`    handle @${f["matcher"]}_header {`);
+        lines.push(`        reverse_proxy ${f["upstream"]}`);
+        lines.push("    }");
+      }
       // One handle per feature, chosen by cookie value -> concurrent workspaces.
       for (const f of features) {
         lines.push(`    # X-Feature=${f["name"]} -> that workspace's containers.`);
