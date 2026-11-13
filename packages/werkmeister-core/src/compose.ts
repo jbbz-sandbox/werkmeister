@@ -705,7 +705,9 @@ export async function composeLogs(
 
 /** A running tail: `stop()` closes every container stream; `done` settles once they are closed. */
 export interface LogTail {
+  /** Closes every container stream. */
   stop(): void;
+  /** Settles once every stream is closed. */
   done: Promise<void>;
 }
 

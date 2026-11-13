@@ -512,7 +512,7 @@ export function parseServiceNames(yaml: string): string[] {
 }
 
 /**
- * The first half of {@link fetchIssueFormData}: look the issue up in the
+ * The first half of `fetchIssueFormData`: look the issue up in the
  * configured tracker and build the tools-free extraction prompt over it.
  *
  * `base` is what the form gets even if the distillation fails: the
@@ -525,9 +525,12 @@ export function parseServiceNames(yaml: string): string[] {
  * embedded as background context, so the model can map the issue onto the
  * werkmeister's actual services and suggest which `services` to spin up.
  */
-export async function buildIssueFormRequest(
-  text: string,
-): Promise<{ base: Record<string, unknown>; prompt: string | null }> {
+export async function buildIssueFormRequest(text: string): Promise<{
+  /** Form fields known without the model: `issue_id`, and `task` from the issue title. */
+  base: Record<string, unknown>;
+  /** The extraction prompt to run, or null when `text` names no issue or the fetch failed. */
+  prompt: string | null;
+}> {
   const tracker = issueTracker({ text });
   const ref = tracker.parseRef(text);
   if (!ref) return { base: {}, prompt: null };
@@ -552,7 +555,7 @@ async function issueExtractPrompt(label: string, ref: string, briefing: string):
 }
 
 /**
- * The second half of {@link fetchIssueFormData}: layer the model's answer to
+ * The second half of `fetchIssueFormData`: layer the model's answer to
  * the extraction prompt onto `base`. An answer with no usable JSON leaves
  * `base` as it is.
  */
@@ -765,8 +768,11 @@ function pickValidServices(raw: unknown, known: string[]): string[] {
   return out;
 }
 
+/** One workspace folder under the workspaces root, as {@link listWorkspaces} returns it. */
 export interface WorkspaceEntry {
+  /** The folder name, which other functions take as the workspace's name. */
   name: string;
+  /** Absolute path of the folder. */
   path: string;
   /** `vscode://file/<path>` — a clickable link that opens the folder in VS Code. */
   vscodeUri: string;
@@ -855,7 +861,12 @@ export async function startArgs(dir: string): Promise<StartArgs> {
  * issue ref + web URL (from `.werkmeister/workspace.yml`). Sorted by name;
  * dotfiles skipped.
  */
-export async function listWorkspaces(): Promise<{ root: string; workspaces: WorkspaceEntry[] }> {
+export async function listWorkspaces(): Promise<{
+  /** The workspaces root folder that was listed. */
+  root: string;
+  /** Its workspaces, sorted by name. */
+  workspaces: WorkspaceEntry[];
+}> {
   const root = workspacesRoot();
   let entries: import("node:fs").Dirent[];
   try {
@@ -1153,7 +1164,7 @@ export async function prepareCreate(
 /**
  * Create a workspace, then (optionally) open it in VS Code.
  *
- * When the form names an issue, {@link prepareCreate} fetches it first (a failed
+ * When the form names an issue, `prepareCreate` fetches it first (a failed
  * fetch fails the create before anything is made) and fills empty fields from it.
  *
  * The creation itself is `workspace_init`'s, called in this process — it used
@@ -1346,8 +1357,11 @@ export interface WorkspaceStatus {
 
 /** An ICM workspace's current stage: 1-based `index` of `total`, `name` without its `NN_` prefix. */
 export interface IcmStage {
+  /** 1-based position of the current stage. */
   index: number;
+  /** Number of `stages/NN_*` folders. */
   total: number;
+  /** The folder name without its `NN_` prefix, e.g. `research`. */
   name: string;
 }
 
@@ -1501,7 +1515,9 @@ function slotPortLabel(slot: number, ports: Record<string, any> | null): string 
  * {@link listWorkspaces}.
  */
 export async function getWorkspaceStatuses(): Promise<{
+  /** One row per workspace folder, sorted by name. */
   statuses: WorkspaceStatus[];
+  /** The shared infra stack's containers (`werkmeister infra connect`). */
   infra: InfraStatus;
 }> {
   const root = workspacesRoot();
@@ -2788,7 +2804,10 @@ export async function switchKubeContext(
  * reads them from its cwd. Routing only *resolves* if the feature is `up`;
  * otherwise the cookie is set and traffic falls through to k8s.
  */
-export async function openFeatureBrowser(name: string): Promise<{ path: string }> {
+export async function openFeatureBrowser(name: string): Promise<{
+  /** The start path opened on the feature's host (`test_path`, else `/`). */
+  path: string;
+}> {
   const target = await resolveWorkspaceDir(name);
 
   const feature = await readEnvValue(target, "FEATURE");
@@ -2958,7 +2977,14 @@ export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
 export async function runWorkspaceAction(
   name: string,
   action: WorkspaceAction,
-): Promise<{ command: string; output: string; path: string }> {
+): Promise<{
+  /** A label for what ran, e.g. `werkmeister up (in <name>)`; it ran in-process, not as a CLI. */
+  command: string;
+  /** Its progress output, ANSI colours stripped. */
+  output: string;
+  /** The workspace folder it ran in. */
+  path: string;
+}> {
   if (!WORKSPACE_ACTIONS.includes(action)) {
     throw new WorkspaceError(`Invalid action: ${JSON.stringify(action)}`);
   }
@@ -3028,9 +3054,18 @@ export async function runWorkspaceAction(
 // reconcile-session name to the folder they read and dispatch on its `harness:`.
 
 /** A workspace's sessions (newest first) with a display title, for the chat panel's picker. */
-export async function listSessions(
-  name: string,
-): Promise<Array<{ sessionId: string; title: string; updatedAt: string; isNewest: boolean }>> {
+export async function listSessions(name: string): Promise<
+  Array<{
+    /** The harness's session id (Claude Code's transcript file name). */
+    sessionId: string;
+    /** Claude's session title, else the first user message (at most 80 characters). */
+    title: string;
+    /** ISO timestamp of the session's last write. */
+    updatedAt: string;
+    /** True for the first entry only. */
+    isNewest: boolean;
+  }>
+> {
   const dir = await resolveWorkspaceDir(name);
   return harnessFor(dir).listSessions(dir);
 }
@@ -3220,13 +3255,24 @@ async function openClaudeSession(
   return launcher;
 }
 
+/**
+ * Opens the workspace's latest Claude session (or *sessionId*, or a new one when *fresh*) in a
+ * Terminal or VS Code, with *prompt* as the first message when given.
+ */
 export async function resumeClaudeInTerminal(
   name: string,
   sessionId?: string,
   fresh = false,
   prompt?: string,
   launcher?: Launcher,
-): Promise<{ path: string; sessionId: string | null; launcher: Launcher }> {
+): Promise<{
+  /** The folder the session runs in. */
+  path: string;
+  /** The resumed session, or null for a fresh one. */
+  sessionId: string | null;
+  /** Where it opened. */
+  launcher: Launcher;
+}> {
   const target = await resolveSessionDir(name);
   const resumeId = fresh ? null : (await getClaudeTranscript(name, 1, sessionId)).sessionId;
   const { model } = await readWorkspaceConfig(target);
@@ -3240,7 +3286,10 @@ export async function resumeClaudeInTerminal(
 }
 
 /** Opens a Terminal window following the workspace's container logs, for the pane's Logs (SW-105). */
-export async function followLogsInTerminal(name: string): Promise<{ feature: string }> {
+export async function followLogsInTerminal(name: string): Promise<{
+  /** The feature (from the workspace's `.env`) whose logs the Terminal follows. */
+  feature: string;
+}> {
   const target = await resolveWorkspaceDir(name);
   const feature = await readEnvValue(target, "FEATURE");
   if (!feature) {

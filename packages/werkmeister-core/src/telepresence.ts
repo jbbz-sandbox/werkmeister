@@ -664,7 +664,7 @@ export interface InterceptResult {
  * container, and return the facts a caller needs to render or use it.
  *
  * Callable in-process: every failure is a coded {@link SandboxError} and every
- * subprocess goes through {@link runAsyncRunner}, so neither a bad request nor a
+ * subprocess goes through `runAsyncRunner`, so neither a bad request nor a
  * slow `telepresence connect` can take down a host that is serving other work.
  *
  * Argument validation runs BEFORE the version probe, unlike the command this
@@ -755,7 +755,7 @@ export interface LeaveInterceptArgs {
  *
  * With *service* set this is strict — an unknown service or a failed detach
  * throws, because the caller named one thing and it did not happen. Without it
- * the sweep is best-effort, matching {@link leaveFeatureIntercepts}, which
+ * the sweep is best-effort, matching `leaveFeatureIntercepts`, which
  * `werkmeister feature down` calls where a failure must never block teardown.
  */
 export async function leaveIntercept(a: LeaveInterceptArgs): Promise<string[]> {

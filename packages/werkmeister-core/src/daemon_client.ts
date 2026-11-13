@@ -124,13 +124,21 @@ function checkBuild(onDisk: string | null, res: Response): void {
   );
 }
 
+/** What the daemon's `GET /api/status` reports about itself. */
 export interface DaemonStatus {
+  /** The daemon's process id. */
   pid: number;
+  /** Build id of the code the daemon loaded, or null when unknown. */
   loaded: string | null;
+  /** Build id of the code on disk now, or null when unknown. */
   onDisk: string | null;
+  /** True when `loaded` and `onDisk` differ: the daemon runs older code. */
   stale: boolean;
+  /** Tool calls running now. */
   inFlight: number;
+  /** Features waiting in the scheduler queue. */
   queued: number;
+  /** True when the daemon is stale and will restart itself once idle. */
   restartPending: boolean;
 }
 
@@ -147,11 +155,18 @@ export async function daemonStatus(): Promise<DaemonStatus | null> {
   }
 }
 
+/** A daemon tool's answer. */
 export interface ToolResult<T> {
+  /** The tool's structured result; `T` is the caller's assertion, not checked. */
   data: T;
+  /** The tool's text result, as an MCP client would show it. */
   text: string;
 }
 
+/**
+ * Run daemon tool *name* with *args* over `POST /api/tool` (default timeout 120 s).
+ * Throws `DaemonUnavailable` when the daemon is down and `SandboxError` when the tool fails.
+ */
 export async function callTool<T = unknown>(
   name: string,
   args: Record<string, unknown> = {},

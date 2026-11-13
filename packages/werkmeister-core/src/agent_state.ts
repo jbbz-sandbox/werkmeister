@@ -555,6 +555,7 @@ export function raiseNotice(
   writeAtomic(noticesPath(root), { ...all, [id]: { ...n, at: now.toISOString() } });
 }
 
+/** Removes notice *id* from workspace *root*'s notices; a missing id is a no-op. */
 export function clearNotice(root: string, id: string): void {
   const all = readNotices(root);
   if (!(id in all)) return;

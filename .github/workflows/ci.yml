@@ -64,6 +64,8 @@ jobs:
       - run: pnpm exec biome ci --diagnostic-level=error .
       # SW-82: a broken `{@link}` in core's comments fails here; it needs no build.
       - run: pnpm --filter werkmeister-core run docs:links
+      # SW-655: every symbol on werkmeister-core/sdk (the public entry) carries TSDoc.
+      - run: pnpm --filter werkmeister-core run docs:sdk
       # One invocation so typecheck runs alongside build instead of before it.
       # werkmeister-core's tests run sharded in `core-test` below; its build
       # still runs here as every other package depends on it, and `tsc` there

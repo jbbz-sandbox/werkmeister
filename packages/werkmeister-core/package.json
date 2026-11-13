@@ -69,6 +69,7 @@
     "./scheduler": "./dist/scheduler.js",
     "./scheduler_client": "./dist/scheduler_client.js",
     "./scheduler_state": "./dist/scheduler_state.js",
+    "./sdk": "./dist/sdk.js",
     "./secrets": "./dist/secrets.js",
     "./skill_gen": "./dist/skill_gen.js",
     "./slots": "./dist/slots.js",
@@ -88,6 +89,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "docs:links": "typedoc",
+    "docs:sdk": "typedoc --options typedoc.sdk.json",
     "test": "sh ./run-tests.sh"
   },
   "dependencies": {

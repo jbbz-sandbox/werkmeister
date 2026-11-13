@@ -22,7 +22,7 @@ repo:
   # SW-226: --diagnostic-level=error keeps the exit code but prints only errors, so a format error is not buried under warnings.
   # SW-646: the implement contract runs this on the files it touched before tests (was hard-coded there).
   format: pnpm exec biome check --write {files}
-  lint: pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
+  lint: pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm --filter werkmeister-core run docs:sdk && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
   # Changes here touch no service, so the gate runs no service tests for them.
   # scripts/: its tests and checks all run in the lint row above (licenses, docs:check, name:check); SW-563.
   # Anything else outside a service's `path` still touches every service, and the gate's tests row names it.
@@ -63,7 +63,7 @@ services:
     # apps/cli and apps/werkmeister-mcp have no service of their own (path_mappings above): this row tests them, since core is
     # bundled into both, and a second container ran the same suites twice whenever a change touched core and the CLI.
     # SW-557: the lint row's cheap checks run first, so a format or licence error fails before turbo's ~6 minutes (sw-541), about a minute in the container.
-    test: "{ command -v lsof >/dev/null || { apt-get update -qq && apt-get install -y -qq lsof; }; } && pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm run name:check && pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core --filter=werkmeister-plugin"
+    test: "{ command -v lsof >/dev/null || { apt-get update -qq && apt-get install -y -qq lsof; }; } && pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm --filter werkmeister-core run docs:sdk && pnpm run name:check && pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core --filter=werkmeister-plugin"
     # SW-143: the ICM exercise step defers to this text for a CLI, so the whole recipe lives here.
     validate: >-
       In this repo the host checkout has no node_modules (`tsc: command not found`, `ERR_MODULE_NOT_FOUND: dockerode`), so run every command below, the install, the build, the tests and `with-fixture-workspace`, through `docker exec -w /app/<path> <container> <command>` (container names are in `werkmeister-context.md`),

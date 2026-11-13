@@ -22,7 +22,8 @@ export const PANE = "workspaces";
 // Workspace reads and actions run werkmeister-core in a node child, the way the former /workspace-form mod did:
 // the plugin's own MCP server is not answerable from a hook in the desktop host, a host process is.
 // stdin carries one JSON request { op, ...args }; stdout ends with one JSON line { ok, result | error }.
-// The core package is found from $WERKMEISTER_CORE_PATH, else from where the `werkmeister` binary resolves `werkmeister-core`.
+// The core package is found from $WERKMEISTER_CORE_PATH (any file in it), else from where the `werkmeister` binary resolves `werkmeister-core`.
+// Only its public entry, `werkmeister-core/sdk`, is loaded (SW-655).
 const SCRIPT = `
 import { createRequire } from 'node:module'
 import { execFileSync } from 'node:child_process'
@@ -35,7 +36,15 @@ try {
   let s = ''
   for await (const c of process.stdin) s += c
   const { op, ...args } = JSON.parse(s)
-  let file = process.env.WERKMEISTER_CORE_PATH
+  // A core older than SW-655 has no ./sdk export: name the fix rather than fall back to its internals.
+  const sdkFrom = from => {
+    try { return createRequire(from).resolve('werkmeister-core/sdk') } catch (e) {
+      if (e.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED') throw new Error('werkmeister-core at ' + dirname(from) + ' has no ./sdk export; upgrade werkmeister')
+      return null
+    }
+  }
+  let file = process.env.WERKMEISTER_CORE_PATH && sdkFrom(process.env.WERKMEISTER_CORE_PATH)
+  if (process.env.WERKMEISTER_CORE_PATH && !file) throw new Error('WERKMEISTER_CORE_PATH ' + process.env.WERKMEISTER_CORE_PATH + ' is not in werkmeister-core')
   if (!file) {
     const which = execFileSync('sh', ['-c', 'command -v werkmeister']).toString().trim()
     const bin = realpathSync(which)
@@ -45,7 +54,7 @@ try {
     const dirs = [dirname(bin)]
     try { for (const v of readdirSync(pnpmGlobal)) dirs.push(join(pnpmGlobal, v, 'node_modules', 'werkmeister')) } catch {}
     for (const dir of dirs) {
-      if (!file) try { file = createRequire(dir + '/x').resolve('werkmeister-core') } catch {}
+      if (!file) file = sdkFrom(dir + '/x')
     }
     if (!file) throw new Error('Cannot find werkmeister-core next to ' + which + '; set WERKMEISTER_CORE_PATH')
   }
@@ -67,22 +76,19 @@ try {
       return head.match(/"entrypoint":"([^"]+)"/)?.[1] ?? null
     } catch { return null } finally { if (fd !== null) closeSync(fd) }
   }
-  const tracker = (await import(pathToFileURL(join(dirname(file), 'issue_tracker.js')).href)).issueTracker()
-  // core.icmStage is absent from a core older than SW-47: show no stage rather than fail the list.
+  const tracker = core.issueTracker()
   const details = async w => {
     let cfg = {}
     try { cfg = yaml.parse(readFileSync(join(w.path, '.werkmeister', 'workspace.yml'), 'utf8')) ?? {} } catch { /* not initialised */ }
     let newest = null
     try { newest = (await core.listSessions(w.name))[0] ?? null } catch { /* no sessions */ }
     const sessionOrigin = newest ? originOf(w.path, newest.sessionId) : null
-    return { ...w, issueUrl: w.issueId ? tracker.url(w.issueId) : null, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), feature: str(cfg.feature), stage: core.icmStage ? await core.icmStage(w.path) : null, lifecycle: lifecycleOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
+    return { ...w, issueUrl: w.issueId ? tracker.url(w.issueId) : null, task: str(cfg.task), description: str(cfg.description), workType: str(cfg.work_type), feature: str(cfg.feature), stage: await core.icmStage(w.path), lifecycle: lifecycleOf(w.path), sessionTitle: newest?.title ?? null, sessionOrigin }
   }
-  // Siblings of the resolved entry: the main entry exports none of the intercept functions.
-  const sibling = name => import(pathToFileURL(join(dirname(file), name)).href)
   const interceptArgs = async () => ({
     feature: args.feature,
     service: args.service,
-    localServices: (await sibling('lifecycle.js')).readServicesFromWorkspace(await core.resolveWorkspaceDir(args.name)),
+    localServices: core.readServicesFromWorkspace(await core.resolveWorkspaceDir(args.name)),
   })
   const ops = {
     'list-workspaces': async () => { const r = await core.listWorkspaces(); return { ...r, workspaces: await Promise.all(r.workspaces.map(details)) } },
@@ -90,13 +96,13 @@ try {
     'claim-resume-nudge': async () => ({ message: await core.claimResumeNudge(args.name) }),
     'workspace-resources': () => core.getWorkspaceResources(),
     // The same snapshot \`werkmeister feature status --intercepts --json\` prints: the CLI stays the one source of intercept state.
-    intercepts: async () => (await sibling('status.js')).interceptsSnapshot(),
+    intercepts: () => core.interceptsSnapshot(),
     // docker mode from the pane: it has no TTY for host mode's root-daemon sudo prompt (SW-12).
-    'intercept-start': async () => (await sibling('telepresence.js')).startIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }),
-    'intercept-leave': async () => ({ left: await (await sibling('telepresence.js')).leaveIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }) }),
+    'intercept-start': async () => core.startIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }),
+    'intercept-leave': async () => ({ left: await core.leaveIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }) }),
     'workspace-prs': () => core.getWorkspacePRs(),
-    'dismiss-notice': async () => (await sibling('agent_state.js')).clearNotice(await core.resolveWorkspaceDir(args.name), args.id),
-    connect: async () => ({ ok: await (await import(pathToFileURL(join(dirname(file), 'infra.js')).href)).up() }),
+    'dismiss-notice': async () => core.clearNotice(await core.resolveWorkspaceDir(args.name), args.id),
+    connect: async () => ({ ok: await core.up() }),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
     'workspace-path': async () => ({ path: await core.resolveWorkspaceDir(args.name) }),
     'start-args': () => core.startArgs(args.path),
