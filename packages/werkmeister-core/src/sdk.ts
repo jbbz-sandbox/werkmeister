@@ -1,6 +1,11 @@
 /**
  * The public werkmeister SDK: the one entry point (`werkmeister-core/sdk`) tools and UIs build on.
- * Every other `werkmeister-core` export is internal and can change in any release (SW-654).
+ *
+ * Only `werkmeister-core/sdk` is public API and follows semver. Every other entry point, including
+ * the package root (`werkmeister-core`) and subpaths like `werkmeister-core/config`, is internal to
+ * werkmeister and can change in any release. `werkmeister-core` is versioned in lockstep with the
+ * werkmeister CLI: install the same version as the CLI you run. While the version is 0.x, a breaking
+ * change to `werkmeister-core/sdk` comes in a minor release, and its changelog entry says so.
  * @module
  */
 

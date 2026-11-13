@@ -7,7 +7,7 @@ Every external library, program, container image and service Werkmeister depends
 | Category | Meaning |
 |---|---|
 | bundled | inlined into a file Werkmeister publishes (`dist/*.js`, the .vsix). Werkmeister redistributes it, so its licence terms apply to us |
-| installed | a runtime dependency of the `werkmeister` npm package. The user's npm downloads it from the registry; Werkmeister doesn't redistribute it |
+| installed | a runtime dependency of the `werkmeister` or `werkmeister-core` npm package. The user's npm downloads it from the registry; Werkmeister doesn't redistribute it |
 | required | host software the person installs before Werkmeister works |
 | dev-only | needed to build, test or release from a checkout. Never shipped |
 | optional | an integration Werkmeister works without. The person opts in ([Optional integrations](#optional-integrations)) |
@@ -28,6 +28,10 @@ Versions: `range` is what package.json declares, `→ x.y.z` is what pnpm-lock.y
 | `bin/generate-certs.sh`, `werkmeister`, `w9r`, `README.md`, `CONVENTIONS.md`, `package.json` | the wrappers and docs |
 
 The minified bundles also keep the `/*! … */` licence banners some packages carry, because the build leaves `legalComments` at its `eof` default. Most packages (commander, yaml, zod…) carry no such banner, so `THIRD-PARTY-LICENSES.txt` is where their required notice actually ships.
+
+### werkmeister-core
+
+`npm pack --dry-run` in `packages/werkmeister-core`: `dist/` (the `tsc` output, `.js` and `.d.ts`), `README.md`, `CHANGELOG.md`, `LICENSE`, `NOTICE` and `package.json`. It bundles no third-party code. Its `dependencies` install from npm: ajv, dockerode, jsonc-parser, nunjucks, tar-fs, yaml, @anthropic-ai/claude-agent-sdk, @types/dockerode and @types/tar-fs, all in the tables below.
 
 ## npm dependencies
 
