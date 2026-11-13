@@ -71,18 +71,20 @@ A feature that uses services from a monorepo gets that monorepo's setup services
 
 The four workspaces of this repo (`apps/cli`, `apps/werkmeister-dashboard`,
 `packages/werkmeister-core`, `packages/werkmeister-vscode`) can be registered as services so a
-feature workspace develops Werkmeister itself, each package in its own container. The
+feature workspace develops Werkmeister itself. `apps/cli` and `apps/werkmeister-mcp` have no
+service of their own: `werkmeister-core` is bundled into both, so its container and its
+gate row cover them, and a change to core and the CLI runs the suites once. The
 registry shape is the one in [Services Reference](#services-reference);
 the pieces that are not obvious from the demo services:
 
 - **One `node:22` image everywhere.** `better-sqlite3`, `keytar`, `sharp` and the
   esbuild/rollup/swc binaries ship glibc prebuilds only; alpine will not load them.
-- **cli, library and extension services idle.** Their containers run `sleep infinity`
+- **Library and extension services idle.** Their containers run `sleep infinity`
   under `init: true` with no healthcheck, so they cost almost nothing at rest and stop
   fast; the gate `docker exec`s their tests. `werkmeister feature up --dev` (or
   `WERKMEISTER_DEV=1 docker compose up -d`) runs their `command:` watchers instead. The
   template still publishes a port, so a placeholder `internal_port` keeps their slot.
-- **Host access for `cli` and `werkmeister-dashboard`.** Those two drive the host:
+- **Host access for `werkmeister-core` and `werkmeister-dashboard`.** Those two drive the host:
   they get `/var/run/docker.sock` plus `~/.werkmeister`, `~/repos`, `~/features` and `~/.kube`
   bind-mounted at their *host* paths, `HOME` set to match, and the docker, compose and
   kubectl binaries from the per-feature `tools` volume that

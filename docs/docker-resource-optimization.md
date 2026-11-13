@@ -54,15 +54,19 @@ this run's peak: a later run re-measured the gate row at 948 MiB on 2026-11-05 a
 
 Idle `anon` was about 0 MiB and nothing was OOM-killed.
 
+Since 2026-11-13 `cli` is no longer a service: `werkmeister-core`'s row runs the CLI's
+suites too, so core takes `cli`'s 1088M reservation and a 3G limit, and the table below
+counts one container.
+
 | | Memory | CPUs |
 |---|---|---|
-| Admission cost (compose: setup 512M/2.0, `werkmeister-core` 768M/3.0, `cli` 1088M/1.0) | 2368 MiB | 6.0 |
-| Features that fit the 7.8 GiB engine (budget 6.8 GiB, 12 CPUs) | 2 | 2 |
+| Admission cost (compose: setup 512M/2.0, `werkmeister-core` 1088M/3.0) | 1600 MiB | 5.0 |
+| Features that fit the 7.8 GiB engine (budget 6.8 GiB, 12 CPUs) | 4 | 2 |
 | Features that fit a 4 GiB engine (budget 3 GiB, 4 CPUs) | 1 | 0 |
 
-On this laptop two features of this shape fit, and a third waits: memory and CPU
-both run out at two. On a 4-CPU engine a feature of this shape does not fit at
-all, because it asks for 6 CPUs; lower `cpus` on `werkmeister-core` in
+On this laptop two features of this shape fit, and a third waits: CPU runs out
+at two, memory at four. On a 4-CPU engine a feature of this shape does not fit at
+all, because it asks for 5 CPUs; lower `cpus` on `werkmeister-core` in
 `services.yaml`, or give the engine more CPUs.
 Agent sessions run outside Docker ([Sizing a machine](#sizing-a-machine) has the numbers), so the laptop's own
 memory, not the engine's, limits how many sessions run beside them.
