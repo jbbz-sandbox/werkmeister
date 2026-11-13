@@ -12,7 +12,7 @@ import { startIssue } from "./dist/issue_status.js";
 import { jiraCreds } from "./dist/jira-rest.js";
 import { closeOut, gatePrs, openPrs, refreshPrStatus } from "./dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "./dist/reporter.js";
-import { readLeases } from "./dist/scheduler_state.js";
+import { hostLoadLimit, readLeases } from "./dist/scheduler_state.js";
 import { initWorkspace } from "./dist/workspace_init.js";
 import { tokensDir } from "./dist/workspace_token.js";
 import { pinWerkmeisterRoot, withFakeDaemon, withFixtureWorkspace } from "./fixtures.mjs";
@@ -407,6 +407,18 @@ test("caller-exported Jira credentials don't reach a fixture run", async () => {
     for (const k of ["JIRA_BASE_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"]) delete process.env[k];
     if (prev !== undefined) process.env.JIRA_API_TOKEN = prev;
   }
+});
+
+test("config adds keys to the fixture's config.yaml, and any key but budget is refused (SW-670)", async () => {
+  const { fixturePreset } = await import("./dist/fixture_workspace.js");
+  await withFixtureWorkspace(
+    async () => {
+      assert.equal(hostLoadLimit(8), 0.01);
+    },
+    { config: { budget: { host_load: 0.01 } } },
+  );
+  for (const key of ["version", "paths", "overrides", "projects", "jira", "github_ingest"])
+    assert.throws(() => fixturePreset({ config: { [key]: {} } }), /--config may not set/);
 });
 
 test("in-process, HOME is the fixture's, so anything written under ~ stays in it", async () => {

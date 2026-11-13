@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--services <file>] [--fragment <file>] [--change <path>] [--fragment-change <file>] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--fragment-change <file>] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -17,7 +17,7 @@ import { fixturePreset, seedFixture } from "werkmeister-core/fixture_workspace";
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--services <file>] [--fragment <file>] [--change <path>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -47,6 +47,7 @@ export function parse(argv: string[]) {
     fragmentChange: undefined as string | undefined,
     change: undefined as string | undefined,
     workspace: undefined as Record<string, unknown> | undefined,
+    config: undefined as Record<string, unknown> | undefined,
   };
   const print: string[] = [];
   let i = 0;
@@ -97,14 +98,14 @@ export function parse(argv: string[]) {
       )
         return { bad: a };
       opts.change = p;
-    } else if (a === "--workspace" && argv[i + 1] !== undefined) {
+    } else if ((a === "--workspace" || a === "--config") && argv[i + 1] !== undefined) {
       const file = inside(process.cwd(), argv[++i] as string);
       let yml: unknown = null;
       try {
         if (file && fs.existsSync(file)) yml = YAML.parse(fs.readFileSync(file, "utf8"));
       } catch {}
       if (!yml || typeof yml !== "object" || Array.isArray(yml)) return { bad: a };
-      opts.workspace = yml as Record<string, unknown>;
+      opts[a === "--workspace" ? "workspace" : "config"] = yml as Record<string, unknown>;
     } else break;
   }
   const steps: string[][] = [[]];
@@ -143,7 +144,7 @@ export async function run(argv: string[]): Promise<void> {
             ? "--issue: a GitHub issue as owner/repo#number, e.g. o/app#1"
             : parsed.bad === "--change"
               ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
-              : `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" ? ", holding a YAML mapping" : ""}`,
+              : `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
       );
     console.error(USAGE);
     process.exitCode = 2;
