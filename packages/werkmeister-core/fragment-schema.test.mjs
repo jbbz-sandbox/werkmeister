@@ -38,7 +38,7 @@ test("repo: lint runs core's docs:links like CI's test job (SW-312)", () => {
 
 test("the fast route names its install-and-build prerequisite (SW-227)", () => {
   assert.match(
-    fragment.services.cli.validate,
+    fragment.services["werkmeister-core"].validate,
     /Fast route for a core-only change, once the install and build above have run/,
   );
 });
@@ -147,15 +147,15 @@ test("plugins/ maps to a service whose test runs the plugin package (SW-580)", (
 });
 
 // SW-604: tests that need lsof skip without it, and node:22 lacks it.
-test("cli and werkmeister-core test rows install lsof when missing (SW-604)", () => {
-  for (const svc of ["cli", "werkmeister-core"])
+test("the werkmeister-core test row installs lsof when missing (SW-604)", () => {
+  for (const svc of ["werkmeister-core"])
     assert.match(fragment.services[svc].test, /^\{ command -v lsof .*apt-get install -y -qq lsof/);
 });
 
 // SW-645: the host has no node_modules, so the exercise-rebuild step must be the container form.
-test("cli validate runs exercise-rebuild in the container (SW-645)", () => {
+test("core validate runs exercise-rebuild in the container (SW-645)", () => {
   assert.match(
-    fragment.services.cli.validate,
+    fragment.services["werkmeister-core"].validate,
     /docker exec -w \/app <container> \S+with-temp-home --no-wait node apps\/werkmeister-mcp\/scripts\/exercise-rebuild\.mjs \/app/,
   );
 });

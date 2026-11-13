@@ -28,24 +28,25 @@ repo:
   # Anything else outside a service's `path` still touches every service, and the gate's tests row names it.
   # packages/werkmeister-ui stays unmapped on purpose: the dashboard, the MCP app and the vscode extension all import it.
   no_service_paths: [.changeset, .gitignore, README.md, .github, .vscode, .claude, scripts, bin, LICENSE, NOTICE, .git-blame-ignore-revs]
-  # SW-450: paths no service owns by path, so a change there doesn't test all five.
+  # SW-450: paths no service owns by path, so a change there doesn't test every service.
   path_mappings:
-    apps/werkmeister-mcp: cli # cli's row runs --filter=werkmeister-mcp
+    apps/cli: werkmeister-core # core is bundled into the CLI, so one row tests both; core's `test:` has the filters
+    apps/werkmeister-mcp: werkmeister-core # ships inside the CLI (dist/mcp.js)
     docs: docs-site # SW-644: the site builds from docs/, so a docs change runs its build and dead-link check
-    plugins: werkmeister-core # plugin tests live in core; core's row also runs cli's filters and the plugin's typecheck + test (SW-580)
+    plugins: werkmeister-core # plugin tests live in core; core's row also runs the plugin's typecheck + test (SW-580)
 
 services:
   # --- The werkmeister repo's own workspaces (self-hosting) -----------------------
-  # All five share one repo bind mount at /app and one per-feature node_modules
+  # All of them share one repo bind mount at /app and one per-feature node_modules
   # volume; werkmeister-install populates it and builds werkmeister-core/dist first.
-  # 2G each: the pre-PR gate runs cli's cold typecheck + test (~900M anon) in any of
+  # 2G each (3G for werkmeister-core): the pre-PR gate runs cli's cold typecheck + test (~900M anon) in any of
   # them, beside the dashboard's dev server (~180M); 1G left no headroom (SW-130,
   # SW-128), and the dashboard's build runs out of heap at 512M.
-  # cli, werkmeister-core and werkmeister-vscode (types cli/library/extension) idle under
+  # werkmeister-core and werkmeister-vscode (types library/extension) idle under
   # `sleep infinity` with no healthcheck; their `command:` watchers run only under
   # `werkmeister feature up --dev`. The port is still published, so they keep their slot.
   # See docs/configuration.md "Self-hosting the Werkmeister repo" in the werkmeister repo.
-  # Fully functional CLI: the host's docker socket plus ~/.werkmeister, ~/repos,
+  # werkmeister-core runs a fully functional CLI: the host's docker socket plus ~/.werkmeister, ~/repos,
   # ~/features and ~/.kube mounted at their host paths, because the compose
   # files it generates carry host bind-mount paths and the daemon is the
   # host's. HOME matches so `~` expands the same way; PATH puts the worktree's
@@ -53,17 +54,18 @@ services:
   # GIT_CONFIG_* marks every directory safe: the worktrees belong to the host
   # uid, and git refuses "dubious ownership" otherwise. The anchors below are
   # reused by every other service here, so this entry must stay above them.
-  cli:
+  werkmeister-core:
     # SW-604: node:22 has ps but no lsof, so pause-resume's resumeAndNudge tests skipped ("no ps/lsof") in the gate; a service's `test:` is
-    # the one place that reaches the container, so cli's and werkmeister-core's start by installing it when missing (a host run already has it).
-    path: apps/cli
-    type: cli
+    # the one place that reaches the container, so this row starts by installing it when missing (a host run already has it).
+    path: packages/werkmeister-core
+    type: library
     archetype: node-tool
-    # apps/werkmeister-mcp ships inside the CLI (dist/mcp.js), so its tests run here.
+    # apps/cli and apps/werkmeister-mcp have no service of their own (path_mappings above): this row tests them, since core is
+    # bundled into both, and a second container ran the same suites twice whenever a change touched core and the CLI.
     # SW-557: the lint row's cheap checks run first, so a format or licence error fails before turbo's ~6 minutes (sw-541), about a minute in the container.
-    test: "{ command -v lsof >/dev/null || { apt-get update -qq && apt-get install -y -qq lsof; }; } && pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm run name:check && pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp"
+    test: "{ command -v lsof >/dev/null || { apt-get update -qq && apt-get install -y -qq lsof; }; } && pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm run name:check && pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core --filter=werkmeister-plugin"
     # SW-143: the ICM exercise step defers to this text for a CLI, so the whole recipe lives here.
-    validate: &cli_validate >-
+    validate: >-
       In this repo the host checkout has no node_modules (`tsc: command not found`, `ERR_MODULE_NOT_FOUND: dockerode`), so run every command below, the install, the build, the tests and `with-fixture-workspace`, through `docker exec -w /app/<path> <container> <command>` (container names are in `werkmeister-context.md`),
       after `werkmeister feature up --service <name>`: starting this workspace's own container is expected for implement and exercise and allowed. Inside the container HOME is still the host's, with the real `~/.werkmeister` mounted read-write, so a test you run there goes through `<ws>/.werkmeister/bin/with-temp-home` too (<ws> is this workspace's folder, mounted at the same path). None of these `docker exec` forms is pre-approved: approve each run, never a `docker exec` prefix (the container holds the Docker socket and every workspace).
       Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION),
@@ -114,13 +116,16 @@ services:
       Format only the files you touched (`pnpm exec biome check --write <files>`), never a folder: a folder-wide write rewrites files the change does not own. Judge `biome ci` by its exit code, not its diagnostic count.
       On a rebase conflict in `strategy-jit.snapshot.json` (it embeds all of `pr-rules.md` on one line, so any two PRs touching `pr_rules.ts` conflict), take main's copy (`git checkout --ours` during a rebase), rebuild, regenerate with `UPDATE_SNAPSHOT=1`; never hand-merge the JSON line.
       `pnpm changeset status --since=origin/main` sees only committed files: a new `.changeset/*.md` reads as `no changesets were found` until it is committed. Check it after committing the changeset, or run `git add -N <file>` first (then `git reset <file>`).
-    internal_port: 3998
-    port_offset: 3
+    internal_port: 3999
+    port_offset: 2
     health_endpoint: /
     setup_service: werkmeister-install
     image: node:22
-    command: "cd apps/cli && exec pnpm run watch"
-    memory_limit: 2G
+    command: "cd packages/werkmeister-core && exec pnpm exec tsc --watch --preserveWatchOutput"
+    # SW-406: the gate row's typecheck, core, cli and mcp suites share this container.
+    cpus: "3"
+    # Measured 2026-11-12: a gate row peaked at 1.8 GiB (docker stats, page cache included) against the old 2G limit.
+    memory_limit: 3G
     # SW-283: cold gate row peaks at 948 MiB anon (2026-11-05); +15%, 64M steps.
     memory_reservation: 1088M
     node_modules_volume: node-modules
@@ -145,30 +150,6 @@ services:
       COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
       # Read by werkmeister-dashboard; harmless for the others.
       HOST: 0.0.0.0
-
-  werkmeister-core:
-    path: packages/werkmeister-core
-    type: library
-    archetype: node-tool
-    # SW-557: same cheap checks first as cli's row.
-    test: "{ command -v lsof >/dev/null || { apt-get update -qq && apt-get install -y -qq lsof; }; } && pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm run name:check && pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core --filter=werkmeister-plugin"
-    # Bundled into the CLI, so a core change is exercised through the built binary, not node-tool's "run the tests".
-    validate: *cli_validate
-    internal_port: 3999
-    port_offset: 2
-    health_endpoint: /
-    setup_service: werkmeister-install
-    image: node:22
-    command: "cd packages/werkmeister-core && exec pnpm exec tsc --watch --preserveWatchOutput"
-    # SW-406: the gate row's typecheck, core and mcp suites share this container.
-    cpus: "3"
-    memory_limit: 2G
-    memory_reservation: 768M
-    node_modules_volume: node-modules
-    # Same host access as cli: the repos mount makes the worktree's .git
-    # resolve, and the socket + tools let its docker tests run (#134).
-    extra_volumes: *host_mounts
-    environment: *host_env
 
   # SW-583: the GitHub push-ingest infra (CDK + Lambda). Its tests synthesize the stack offline;
   # a real deploy needs AWS credentials and is a person's step (docs/github-ingest.md).
@@ -200,7 +181,7 @@ services:
   # Also the MCP client bed: WERKMEISTER_MCP_TOKEN arrives via the feature .env
   # (a missing one makes `werkmeister feature up` refuse the workspace). Its archetype
   # no longer wires the werkmeister server into the shared .mcp.json (SW-115).
-  # It has cli's host access too, so its tests can use docker directly (#134).
+  # It has werkmeister-core's host access too, so its tests can use docker directly (#134).
   werkmeister-vscode:
     path: packages/werkmeister-vscode
     type: extension
@@ -224,7 +205,7 @@ services:
     secrets: [WERKMEISTER_MCP_TOKEN]
 
   # Serves the workspace dashboard + MCP endpoint; its tools shell out to the
-  # CLI, docker and kubectl, so it gets the same host access as `cli`.
+  # CLI, docker and kubectl, so it gets the same host access as `werkmeister-core`.
   werkmeister-dashboard:
     path: apps/werkmeister-dashboard
     type: web
@@ -248,7 +229,7 @@ services:
   # The public docs site (SW-80): VitePress dev server over the repo's docs, in
   # place, with hot reload. It shells out to nothing, so it gets only the tools
   # volume (pnpm for the gate's test) and the repos mount (git for turbo), not
-  # cli's host access.
+  # werkmeister-core's host access.
   docs-site:
     path: apps/docs-site
     type: web
