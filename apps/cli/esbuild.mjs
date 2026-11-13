@@ -29,12 +29,23 @@
  * resolution npm-shaped. `*.node` stays listed so anything else reaching a
  * binding fails at build, not at a user's first `werkmeister feature up`.
  *
+ * `splitting` moves code two or more entries share into `dist/chunk-<hash>.js`
+ * files they import, rather than a copy in each, and gives each command main.ts
+ * imports lazily its own `dist/<command>-<hash>.js`: 8.7 MB of entries
+ * otherwise, 3 MB split. Both stay in dist/ itself, not a subfolder, because
+ * bundled code resolves paths from `import.meta.dirname` and that must stay
+ * `dist`. The hash renames a file whenever it changes, so `pruneChunks` deletes
+ * every dist/*.js a build no longer emits. Only main.ts imports lazily (one
+ * command, at start), so a process that is already running never asks for a
+ * pruned file.
+ *
  * Output stays ESM (the extension's bundle is CJS and has to `define`
  * import.meta away): werkmeister-core resolves paths through `import.meta.dirname`,
  * which is native here.
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, mkdirSync, readdirSync, rmSync } from "node:fs";
+import { basename } from "node:path";
 import * as esbuild from "esbuild";
 import { writeLicenses } from "../../scripts/write-licenses.mjs";
 
@@ -54,6 +65,19 @@ function git(...args) {
 }
 const buildStamp = { sha: git("rev-parse", "HEAD"), dirty: git("status", "--porcelain") !== "" };
 
+const pruneChunks = {
+  name: "prune-chunks",
+  setup(build) {
+    build.onEnd(({ metafile }) => {
+      if (!metafile) return; // a failed build: keep what the last good one emitted
+      const emitted = new Set(Object.keys(metafile.outputs).map((f) => basename(f)));
+      for (const f of readdirSync("dist")) {
+        if (/\.js(\.map)?$/.test(f) && !emitted.has(f)) rmSync(`dist/${f}`);
+      }
+    });
+  },
+};
+
 const options = {
   entryPoints: [
     { in: "src/main.ts", out: "main" },
@@ -66,6 +90,8 @@ const options = {
     { in: "../werkmeister-dashboard/src/form-cli.ts", out: "form-cli" },
   ],
   bundle: true,
+  splitting: true,
+  plugins: [pruneChunks],
   outdir: "dist",
   // The Agent SDK runs a bundled Claude Code binary it locates relative to its
   // own package, so it stays an installed dependency rather than bundled code.
