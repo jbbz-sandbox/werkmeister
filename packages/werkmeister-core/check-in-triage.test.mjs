@@ -152,3 +152,16 @@ test("a PR file at status: draft is a gate; once approved it is not (SW-478)", a
   );
   assert.deepEqual(await gates(), []);
 });
+
+test("an autonomous workspace's draft gate is listed but needs no courier (SW-570)", async () => {
+  workspace("i-auto", { labels: ["focus"], gate: "proposed" });
+  fs.appendFileSync(
+    path.join(root, "i-auto", ".werkmeister", "workspace.yml"),
+    "autonomous: true\n",
+  );
+  const r = await checkInTriage();
+  const row = r.workspaces.find((w) => w.name === "i-auto");
+  assert.deepEqual(row.gates, [path.join("stages", "02_plan", "output", "plan.md")]);
+  assert.deepEqual(row.workspaceState.needs, []);
+  assert.ok(!r.candidates.includes("i-auto"));
+});

@@ -110,9 +110,20 @@ export interface StateFacts {
   notices: Record<string, Notice>;
   /** The transcript-tail guess, used only when no session has a record (pre-SW-46, or a session outside the workspace). */
   transcriptAsk: { what: string; at: string } | null;
+  /** `autonomous` in workspace.yml: the agent approves its own gates. */
+  autonomous: boolean;
 }
 
 const BEFORE_RELEASE = new Set<PhaseId>(["building", "pr-open", "merged"]);
+// While the agent is still on something, a proposed gate is its draft, not handed over (SW-570).
+const HOLDS_GATE = new Set<ActivityId>([
+  "queued",
+  "starting",
+  "testing",
+  "tool",
+  "subagent",
+  "thinking",
+]);
 // shortcut: a command-text match, not the registry's `test:` commands (reading the registry costs every poll); add those if a runner is missed.
 const TEST_COMMAND =
   /\bwerkmeister\s+(pr\s+gate|test)\b|\b(turbo|pnpm|npm|yarn|bun)\b.*\btest\b|\bnode\s+--test\b|\b(vitest|jest|pytest|playwright\s+test|go\s+test|cargo\s+test)\b/;
@@ -172,6 +183,14 @@ function activityOf(f: StateFacts): Activity {
   if (sub) return a("subagent", "Background agent running", sub[1].last ?? sub[1].at, sub[0]);
   if (live.length) return a("thinking", "Thinking", live[0][1].at, live[0][0]);
   if (f.turnRunning) return a("thinking", "Thinking");
+  // A background shell outlives its turn too (SW-570).
+  for (const [id, s] of Object.entries(f.sessions))
+    if (s.shell && now - Date.parse(s.shell.at) < SESSION_GONE_MS)
+      return TEST_COMMAND.test(s.shell.command)
+        ? a("testing", "Running tests", s.shell.at, id)
+        : a("tool", "Running a background shell", s.shell.at, id);
+  // Only a service-start wait gets here: a live session's activity wins over it (SW-569).
+  if (f.waiting) return a("queued", `Waiting for capacity · position ${f.waiting.position}`);
   const gone = Object.entries(f.sessions).find(([, s]) => sessionGone(s, now));
   if (gone) return a("gone", "Session gone", gone[1].last ?? gone[1].at, gone[0]);
   return a("idle", "Idle");
@@ -212,7 +231,8 @@ export function workspaceState(f: StateFacts): WorkspaceState {
         source: "text",
       });
   }
-  for (const g of f.gates)
+  const handedOver = !f.autonomous && !HOLDS_GATE.has(activity.id);
+  for (const g of handedOver ? f.gates : [])
     need({
       id: `gate:${g.file}`,
       kind: "gate",
