@@ -172,7 +172,7 @@ export function writeOpencodeHooks(workspaceRoot: string): string {
       type: "remote",
       // Loopback only, as for Codex: a file written inside a container must still work on the host.
       url: `http://127.0.0.1:${daemonPort()}/mcp`,
-      // A tokenless loopback call acts as the whole machine; the token scopes it to this workspace.
+      // The daemon refuses a call without a token; this one scopes it to this workspace.
       // OpenCode reads {file:} relative to this file, and a missing token file does not fail its config.
       headers: { Authorization: "Bearer {file:.werkmeister/token}" },
     },

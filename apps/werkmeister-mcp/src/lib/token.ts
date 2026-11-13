@@ -47,25 +47,18 @@ export function readOrCreateToken(): string {
   return token;
 }
 
-export function isLoopback(host: string): boolean {
-  return host === "127.0.0.1" || host === "localhost" || host === "::1";
-}
-
 /**
- * May this request proceed?
+ * May this request proceed? A token is required on every bind, and checked.
  *
- * One predicate rather than a per-route flag: a token is REQUIRED whenever the
- * bind is not loopback, and a token that is present is always checked — so a
- * host stdio/loopback client needs no configuration, and a container-reachable
- * bind cannot be left open by forgetting a flag somewhere.
+ * No header is never the host (SW-631): on OrbStack and Docker Desktop a container's
+ * request to host.docker.internal reaches a loopback bind from 127.0.0.1, so neither
+ * the bind nor the source address can tell a container from a host process.
  *
  * The length check precedes `timingSafeEqual`, which throws on unequal-length
  * buffers.
  */
-export function authorized(header: string | undefined, token: string, host: string): boolean {
-  if (header === undefined) {
-    return isLoopback(host);
-  }
+export function authorized(header: string | undefined, token: string): boolean {
+  if (header === undefined) return false;
   const match = /^Bearer\s+(\S+)$/.exec(header.trim());
   if (!match) {
     return false;
@@ -78,15 +71,14 @@ export function authorized(header: string | undefined, token: string, host: stri
 export type Scope = { scope: "machine" } | { scope: "workspace"; name: string };
 
 /**
- * Who a request is (SW-184): the machine token (or no header on a loopback bind,
- * exactly as {@link authorized}) is the host; a per-workspace token from
+ * Who a request is (SW-184): the machine token is the host; a per-workspace token from
  * `~/.werkmeister/tokens/` is that one workspace; anything else is nobody.
  *
  * ponytail: reads every token file per request (one per open workspace, ~10);
  * cache by directory mtime if workspace counts grow.
  */
-export function scopeOf(header: string | undefined, token: string, host: string): Scope | null {
-  if (authorized(header, token, host)) return { scope: "machine" };
+export function scopeOf(header: string | undefined, token: string): Scope | null {
+  if (authorized(header, token)) return { scope: "machine" };
   if (header === undefined) return null;
   let names: string[];
   try {
@@ -101,7 +93,7 @@ export function scopeOf(header: string | undefined, token: string, host: string)
     } catch {
       continue;
     }
-    if (workspaceToken && authorized(header, workspaceToken, host)) {
+    if (workspaceToken && authorized(header, workspaceToken)) {
       return { scope: "workspace", name };
     }
   }

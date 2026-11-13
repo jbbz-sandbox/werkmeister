@@ -63,9 +63,9 @@ Two kinds of bearer token, both 32 random bytes of hex at mode 0600:
   `/api/tool` refuses it. It is an identity, not a security boundary, while
   `~/repos` and `~/features` mount read-write into the container.
 
-A bearer token is required whenever the bind is not loopback — which,
-under the daemon, is always. A host-local client should use `werkmeister internal mcp`,
-which needs no token. Any request carrying an `Origin` header is refused: this
+A bearer token is required on every bind (a container's request reaches a
+loopback bind from 127.0.0.1 too). A host-local client should use `werkmeister internal mcp`,
+which sends the machine token for it. Any request carrying an `Origin` header is refused: this
 server has no browser UI, so an `Origin` means a browser found something that
 was not meant for it.
 

@@ -105,7 +105,7 @@ async function startHttp(): Promise<void> {
   );
   // Loopback by default. HOST=0.0.0.0 is the container case: the container
   // network is the isolation boundary and Docker's published port is the only
-  // way in — and on that bind the token below stops being optional.
+  // way in. The token below is required on either bind (SW-631).
   const host = process.env.HOST ?? "127.0.0.1";
   const token = readOrCreateToken();
   const app = createMcpExpressApp({ host });
@@ -158,7 +158,7 @@ async function startHttp(): Promise<void> {
   // without it, and after the Origin check so a browser gets no 401 oracle.
   // The scope header is the daemon's to set: a client's own value never survives.
   app.use((req: Request, res: Response, next: NextFunction) => {
-    const scope = scopeOf(req.headers.authorization, token, host);
+    const scope = scopeOf(req.headers.authorization, token);
     if (scope === null) {
       res.status(401).end();
       return;
