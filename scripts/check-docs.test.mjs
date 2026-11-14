@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { checkDoc, checkMan, isIgnored, listFiles, slug } from "./check-docs.mjs";
+import { checkDoc, checkMan, isIgnored, jiraKeyLines, listFiles, slug } from "./check-docs.mjs";
 import { BUILD_FIRST } from "./gen-docs.mjs";
 
 const ctx = {
@@ -160,4 +160,19 @@ test("listFiles includes untracked files and skips gitignored ones", () => {
   for (const f of ["tracked.md", "new.md", "ign.md"]) writeFileSync(join(root, f), "# T\n");
   execFileSync("git", ["add", "tracked.md"], { cwd: root });
   assert.deepEqual(listFiles(root).sort(), [".gitignore", "new.md", "tracked.md"]);
+});
+
+// SW-715: the key check ran only in docs-site's test row, so a key in a page or a *.help.md passed every local check.
+test("flags a Jira key in prose, not in code, a link or a fence (SW-715)", () => {
+  const text = [
+    "Fixed in SW-12.",
+    "See `SW-12` and [the ticket](https://x/browse/SW-12).",
+    "```",
+    "SW-12",
+    "```",
+    "SWX-1 and SW-x are not keys.",
+  ].join("\n");
+  assert.deepEqual(jiraKeyLines("apps/cli/src/commands/pr.help.md", text), [
+    "apps/cli/src/commands/pr.help.md:1: Jira key in prose, readers can't open it: Fixed in SW-12.",
+  ]);
 });

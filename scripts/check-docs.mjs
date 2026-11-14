@@ -134,6 +134,24 @@ export function codeSpans(text) {
 }
 
 /**
+ * SW-715: a Jira key in a published (sidebar) page's prose, caught by lint before the gate's docs-site row.
+ * Readers can't open the tracker; git history keeps the keys. A key may stay as a link, or in code.
+ */
+export function jiraKeyLines(rel, text) {
+  let fenced = false;
+  return text.split("\n").flatMap((line, i) => {
+    if (/^\s*(```|~~~)/.test(line)) {
+      fenced = !fenced;
+      return [];
+    }
+    const prose = line.replace(/`[^`]*`/g, "").replace(/\[[^\]]*\]\([^)]*\)/g, "");
+    return !fenced && /\bSW-\d+\b/.test(prose)
+      ? [`${rel}:${i + 1}: Jira key in prose, readers can't open it: ${line.trim().slice(0, 80)}`]
+      : [];
+  });
+}
+
+/**
  * Every problem in one doc. `cli` is { commands: Map<name, Set<flag>> }, `tools`
  * a Set of MCP tool names, `regions` docs:gen's Markdown by region name,
  * `exists`/`read` take repo-relative paths.
@@ -359,8 +377,16 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     read: (p) => readFileSync(join(ROOT, p), "utf8"),
   };
   const pages = manPages(cliReference().filter((c) => !c.hidden));
+  // Imported here, not at the top: the config pulls in vitepress, which only this run needs.
+  // A *.help.md key lands in docs/cli-reference.md (a sidebar page) via docs:gen, which checkDoc keeps current.
+  const { default: site } = await import("../apps/docs-site/.vitepress/config.mjs");
+  // A link ending in `/` is the generated SDK index, not a source page; docs-site's test checks the SDK pages.
+  const published = site.themeConfig.sidebar["/"].flatMap((g) =>
+    g.items.filter((i) => !i.link.endsWith("/")).map((i) => `${i.link.slice(1)}.md`),
+  );
   const problems = [
     ...docs.flatMap((rel) => checkDoc(rel, readFileSync(join(ROOT, rel), "utf8"), ctx)),
+    ...published.flatMap((rel) => jiraKeyLines(rel, readFileSync(join(ROOT, rel), "utf8"))),
     ...checkMan(pages, MAN_DIR),
     ...(withMan(readFileSync(CLI_PACKAGE, "utf8"), pages) === readFileSync(CLI_PACKAGE, "utf8")
       ? []
