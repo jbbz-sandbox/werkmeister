@@ -5,7 +5,7 @@
 # A list of .mjs files (from `pnpm run test:changed`) runs only those tests and smokes.
 set -e
 cd "$(dirname "$0")"
-export WERKMEISTER_GH_BIN="$PWD/no-gh.sh"
+export WERKMEISTER_GH_BIN="$PWD/test/no-gh.sh"
 # Started by a calling git (rebase --exec, a hook), these point every fixture `git init` at the real repo (SW-520).
 unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR
 case "${1:-}" in
@@ -19,8 +19,8 @@ case "${1:-}" in
     ;;
   *)
     shard=${1:-}
-    tests=$(echo *.test.mjs)
-    smokes=$(echo *.smoke.mjs)
+    tests=$(echo test/*.test.mjs)
+    smokes=$(echo test/*.smoke.mjs)
     ;;
 esac
 # The container's CPU limit (cgroup-aware), at most 4 so a dev host isn't flooded; SW-101's fixed 2 fit a 1-CPU container (SW-406).

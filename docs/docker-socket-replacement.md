@@ -76,7 +76,7 @@ the host's `apps/werkmeister-mcp` over HTTP, which needs no mount at all.
 
 ### 2. Tests
 
-- Add `packages/werkmeister-core/no-docker-socket.test.mjs`. It fails while any service in the <!-- docs-check: ignore -->
+- Add `packages/werkmeister-core/test/no-docker-socket.test.mjs`. It fails while any service in the <!-- docs-check: ignore -->
   repo's own `.werkmeister/services.yaml` mounts `docker.sock`, so the exception can't come back
   unnoticed. It was written and run in this run's reproduce stage, and it fails today with all
   four names.

@@ -23,7 +23,7 @@ import {
   fetchFresh,
   pinWerkmeisterRoot,
   useDockerEngine,
-} from "../../packages/werkmeister-core/fixtures.mjs";
+} from "../../packages/werkmeister-core/test/fixtures.mjs";
 
 pinWerkmeisterRoot();
 useDockerEngine();

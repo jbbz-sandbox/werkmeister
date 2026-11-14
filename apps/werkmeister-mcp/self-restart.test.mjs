@@ -12,7 +12,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 
 import { queuePath } from "werkmeister-core/scheduler_state";
 
-import { fetchFresh } from "../../packages/werkmeister-core/fixtures.mjs";
+import { fetchFresh } from "../../packages/werkmeister-core/test/fixtures.mjs";
 import { restartGuard } from "./dist/lib/self_restart.js";
 
 function setup({ queued = 0, exit = true } = {}) {
