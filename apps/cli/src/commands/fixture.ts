@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--fragment-change <file>] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -17,7 +17,7 @@ import { fixturePreset, seedFixture } from "werkmeister-core/fixture_workspace";
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -45,6 +45,8 @@ export function parse(argv: string[]) {
     services: undefined as string | undefined,
     fragment: undefined as string | undefined,
     fragmentChange: undefined as string | undefined,
+    changeBase: undefined as string | undefined,
+    changeBranch: undefined as string | undefined,
     change: undefined as string | undefined,
     workspace: undefined as Record<string, unknown> | undefined,
     config: undefined as Record<string, unknown> | undefined,
@@ -77,14 +79,23 @@ export function parse(argv: string[]) {
       opts.prFields = { ...opts.prFields, [m[1] as string]: m[2] as string };
     } else if (a === "--print" && argv[i + 1] !== undefined) print.push(argv[++i] as string);
     else if (
-      (a === "--services" || a === "--fragment" || a === "--fragment-change") &&
+      (a === "--services" ||
+        a === "--fragment" ||
+        a === "--fragment-change" ||
+        a === "--change-base" ||
+        a === "--change-branch") &&
       argv[i + 1] !== undefined
     ) {
       const file = inside(process.cwd(), argv[++i] as string);
       if (!file || !fs.existsSync(file)) return { bad: a };
-      const key =
-        a === "--services" ? "services" : a === "--fragment" ? "fragment" : "fragmentChange";
-      opts[key] = fs.readFileSync(file, "utf8");
+      const keys = {
+        "--services": "services",
+        "--fragment": "fragment",
+        "--fragment-change": "fragmentChange",
+        "--change-base": "changeBase",
+        "--change-branch": "changeBranch",
+      } as const;
+      opts[keys[a]] = fs.readFileSync(file, "utf8");
     } else if (a === "--change") {
       // Written under the fixture's code repo: no absolute path, `..` or `.git` can reach outside it or its hooks.
       const p = argv[++i] ?? "";
@@ -159,6 +170,8 @@ export async function run(argv: string[]): Promise<void> {
     // Both shape the change --gate's PR file gates; without one they would go unexercised.
     if ((opts.change || opts.fragmentChange !== undefined) && !opts.gate)
       throw new Error("--change and --fragment-change need --gate");
+    if ((opts.changeBase !== undefined || opts.changeBranch !== undefined) && !opts.change)
+      throw new Error("--change-base and --change-branch need --change");
   } catch (e) {
     console.error((e as Error).message);
     console.error(USAGE);

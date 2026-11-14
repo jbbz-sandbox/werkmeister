@@ -8,6 +8,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
+import YAML from "yaml";
 
 import { heldWakes, readNotices } from "./dist/agent_state.js";
 import { dotDir } from "./dist/config.js";
@@ -28,6 +29,7 @@ import {
   gatePrs,
   gateTests,
   lifecycleOf,
+  lockfileTouched,
   mapTouched,
   newPr,
   openPrs,
@@ -5129,4 +5131,145 @@ test("a grouped workspace's In Review and Done moves cover each member (SW-500)"
   } finally {
     clean(closing);
   }
+});
+
+const LOCK = "pnpm-lock.yaml";
+const lockfile = ({ lib = {}, pkgs = {}, snaps = {} } = {}) =>
+  YAML.stringify({
+    lockfileVersion: "9.0",
+    importers: {
+      ".": { devDependencies: { turbo: { specifier: "^2", version: "2.5.0" } } },
+      "apps/api": { dependencies: { a: { specifier: "^1", version: "1.0.0" } } },
+      "packages/lib": { dependencies: { b: { specifier: "^1", version: "1.0.0" }, ...lib } },
+    },
+    packages: {
+      "a@1.0.0": { resolution: { integrity: "sha-a" } },
+      "b@1.0.0": { resolution: { integrity: "sha-b" } },
+      ...pkgs,
+    },
+    snapshots: { "a@1.0.0": {}, "b@1.0.0": {}, ...snaps },
+  });
+
+test("gate: a pnpm-lock.yaml change that adds one importer's dependency tests only that importer's service (SW-696)", async () => {
+  const ws = icmWorkspace();
+  try {
+    fs.mkdirSync(path.join(ws, "app"), { recursive: true });
+    fs.writeFileSync(
+      path.join(ws, "app", LOCK),
+      lockfile({
+        lib: { c: { specifier: "^2", version: "2.0.0" } },
+        pkgs: { "c@2.0.0": { resolution: { integrity: "sha-c" } } },
+        snaps: { "c@2.0.0": {} },
+      }),
+    );
+    const d = deps([
+      [/diff --name-only/, { stdout: `${LOCK}\n` }],
+      [/ show \S*:pnpm-lock\.yaml$/, { stdout: lockfile() }],
+    ]);
+    const g = await gate(ws, d);
+    assert.deepEqual(
+      g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name),
+      ["test lib"],
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("lockfileTouched: changed importers; a changed shared entry or setting reaches every importer (SW-696)", () => {
+  const c = { "c@2.0.0": { resolution: { integrity: "sha-c" } } };
+  assert.deepEqual(
+    lockfileTouched(
+      lockfile(),
+      lockfile({ lib: { c: { specifier: "^2", version: "2.0.0" } }, pkgs: c }),
+    ),
+    { all: null, importers: ["packages/lib"] },
+    "a new dependency and its new package entry touch only its importer",
+  );
+  assert.deepEqual(lockfileTouched(lockfile(), lockfile()), { all: null, importers: [] });
+  assert.deepEqual(
+    lockfileTouched(
+      lockfile(),
+      lockfile({ pkgs: { "a@1.0.0": { resolution: { integrity: "sha-a2" } } } }),
+    ),
+    { all: "packages: a@1.0.0", importers: [] },
+  );
+  assert.equal(
+    lockfileTouched(
+      lockfile(),
+      lockfile({ snaps: { "b@1.0.0": { dependencies: { c: "2.0.0" } } } }),
+    ).all,
+    "snapshots: b@1.0.0",
+  );
+  const withSettings = YAML.stringify({ ...YAML.parse(lockfile()), overrides: { a: "1.0.1" } });
+  assert.equal(lockfileTouched(lockfile(), withSettings).all, "overrides");
+  assert.equal(lockfileTouched(lockfile(), ": not: yaml: ["), null);
+  assert.equal(lockfileTouched("", lockfile()), null);
+});
+
+test("gate: a lockfile change maps per importer; root, shared and unreadable changes test every service (SW-696)", async () => {
+  const run = async (branch, base = { stdout: lockfile() }) => {
+    const ws = icmWorkspace();
+    try {
+      fs.mkdirSync(path.join(ws, "app"), { recursive: true });
+      fs.writeFileSync(path.join(ws, "app", LOCK), branch);
+      const g = await gate(
+        ws,
+        deps([
+          [/diff --name-only/, { stdout: `${LOCK}\n` }],
+          [/ show \S*:pnpm-lock\.yaml$/, base],
+        ]),
+      );
+      const tests = g.checks.filter((c) => c.name.startsWith("test ")).map((c) => c.name);
+      const rows = g.checks.filter((c) => c.name === "tests").map((c) => c.detail);
+      return { tests, rows };
+    } finally {
+      clean(ws);
+    }
+  };
+  const both = ["test api", "test lib"];
+  const parsed = YAML.parse(lockfile());
+  const set = (f) => {
+    const l = structuredClone(parsed);
+    f(l);
+    return YAML.stringify(l);
+  };
+
+  // A new importer plus its new packages (PR #830's shape): that importer's service only.
+  const added = await run(set((l) => (l.importers["apps/api/web"] = { dependencies: {} })));
+  assert.deepEqual(added.tests, ["test api"]);
+  assert.ok(
+    added.rows.some((r) => r === "lockfile: pnpm-lock.yaml changes importers apps/api/web → api"),
+  );
+
+  // The root importer, or one under no mapping, has no service of its own: every service, the row names it.
+  const root = await run(set((l) => (l.importers["."].devDependencies.x = {})));
+  assert.deepEqual(root.tests, both);
+  assert.ok(
+    root.rows.includes(
+      "every service: pnpm-lock.yaml changes importer ., which no path_mappings or no_service_paths entry covers",
+    ),
+  );
+  const tools = await run(set((l) => (l.importers["tools/x"] = {})));
+  assert.deepEqual(tools.tests, both);
+  assert.ok(tools.rows.some((r) => r.includes("changes importer tools/x, which no")));
+
+  // An importer under no_service_paths touches nothing.
+  const docs = await run(set((l) => (l.importers["docs/site"] = {})));
+  assert.deepEqual(docs.tests, []);
+  assert.ok(docs.rows.some((r) => r.endsWith("→ no service")));
+
+  // A shared entry an existing importer resolves to changed: every service, the row names it.
+  const shared = await run(set((l) => (l.packages["b@1.0.0"].resolution.integrity = "sha-b2")));
+  assert.deepEqual(shared.tests, both);
+  assert.ok(shared.rows.includes("every service: pnpm-lock.yaml changes packages: b@1.0.0"));
+
+  // No lockfile on the base: unmapped as before.
+  const fresh = await run(lockfile(), { code: 128, stderr: "does not exist" });
+  assert.deepEqual(fresh.tests, both);
+  assert.ok(
+    fresh.rows.some((r) =>
+      r.includes("no path_mappings or no_service_paths entry for pnpm-lock.yaml"),
+    ),
+  );
 });

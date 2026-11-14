@@ -121,6 +121,21 @@ it("--fragment-change outside the current folder is refused, and either option n
   }
 });
 
+it("--change-base and --change-branch read a file under the current folder and need --change (SW-696)", async () => {
+  expect(parse(["--gate", "--change-base", "/etc/hosts", "pr", "gate"])).toEqual({
+    bad: "--change-base",
+  });
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await run(["--gate", "--change-branch", "package.json", "--version"]);
+    expect(process.exitCode).toBe(2);
+    expect(error.mock.calls[0]?.[0]).toMatch(/--change-base and --change-branch need --change/);
+  } finally {
+    error.mockRestore();
+    process.exitCode = 0;
+  }
+});
+
 it("--config takes only a YAML mapping under the current folder, holding only budget (SW-670)", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmp);
