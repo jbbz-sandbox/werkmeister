@@ -2568,7 +2568,7 @@ async function fixLeftBehind(dir: string, deps: Deps): Promise<boolean> {
 /**
  * `werkmeister pr watch` (desktop: false) and the werkmeister mod's timer (desktop: true): one
  * pass over every workspace. Headless claims are delivered here; desktop claims are returned
- * for the mod to send through the app, then one idle-reaper pass (SW-39). Never merges and
+ * for the mod to send through the app, then one idle-reaper pass. Never merges and
  * never closes out.
  */
 export async function watchPrs(
@@ -3022,7 +3022,7 @@ export async function openTerminalSessions(
 /**
  * The one end-of-workspace verb (#160). Shipped: close the issue, write closeout.md, remove, delete
  * the merged branches. With *abandon*: record the reason, leave the issue, remove (which pushes every
- * branch) and keep the branches. With *noPr* (SW-270): the work changed no repo, so close as done
+ * branch) and keep the branches. With *noPr*: the work changed no repo, so close as done
  * with the reason instead of a PR.
  */
 export async function closeOut(
