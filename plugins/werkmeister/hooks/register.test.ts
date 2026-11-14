@@ -2951,6 +2951,7 @@ test("a headless session never runs the check: nobody there can restart it", asy
 const BAND_PROPS = {
   hasSurvey: false,
   isWorking: false,
+  isCollapsed: false,
   maxRows: 20,
   bodyColumns: 100,
   scroll: { offset: 0, bodyRows: 20 },
