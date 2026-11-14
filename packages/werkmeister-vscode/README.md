@@ -1,6 +1,6 @@
 # Werkmeister Workspaces (VS Code extension)
 
-A tree view over werkmeister: every workspace under
+A side view of wrapping cards over werkmeister: every workspace under
 `paths.workspaces_root`, its container state, its Telepresence intercepts, and
 the `werkmeister` CLI lifecycle — without leaving the editor.
 

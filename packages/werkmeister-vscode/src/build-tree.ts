@@ -51,6 +51,20 @@ export interface TreeExtras {
   host?: HostInput | null;
 }
 
+export interface WsCard {
+  /** `◌ Working`; coloured like the node's icon. */
+  state: string;
+  /** `Thinking · 25 min ago`, with its theme colour id. */
+  activity: { text: string; color: string } | null;
+  question: string | null;
+  crash: string | null;
+  /** Model, autonomy, `stage 2/4 implement`, CPU and memory. */
+  meta: string;
+  issueId: string | null;
+  /** The one session button the card shows, if any (`sessionAction`). */
+  action: "start" | "pause" | "resume" | null;
+}
+
 export interface InterceptRowLike {
   interceptable: boolean;
   blocker: string | null;
@@ -75,6 +89,10 @@ export interface WsNode {
   /** Markdown on a workspace node, plain text elsewhere. */
   tooltip: string;
   icon: { id: string; color?: string };
+  /** A service's `●`/`○`/`◐`/`▲`: the cards have no codicon font. */
+  glyph?: string;
+  /** The wrapping lines of a workspace's card (cards.ts); absent on every other kind. */
+  card?: WsCard;
   contextValue: string;
   expanded: boolean;
   workspace?: {
@@ -85,7 +103,8 @@ export interface WsNode {
     prs: { ref: string; url: string }[];
   };
   service?: { name: string; workspacePath: string; feature: string | null; leave: boolean };
-  pr?: { url: string };
+  /** `status`: the state word and the CI word, each with its theme colour id, for the card. */
+  pr?: { url: string; status?: { text: string; color: string }[] };
   /** Command id to run when the node is clicked, if any. */
   command?: string;
   children: WsNode[];
@@ -262,7 +281,7 @@ function serviceNode(
   ws: WorkspaceEntryLike,
   feature: string | null,
   intercepts: InterceptsLike | null,
-  look: { codicon: string; tone: Tone },
+  look: { codicon: string; tone: Tone; glyph: string },
 ): WsNode {
   const row = feature ? intercepts?.byFeature.get(feature)?.get(svc.name) : undefined;
   // A failed lookup can't tell remote from local, so it keeps "unavailable" on every row.
@@ -289,11 +308,19 @@ function serviceNode(
       id: look.codicon === "loading" ? "loading~spin" : look.codicon,
       color: TONE_COLORS[look.tone],
     },
+    glyph: look.glyph,
     contextValue: view?.contextValue ?? "service",
     expanded: false,
     service: { name: svc.name, workspacePath: ws.path, feature, leave: view?.leave ?? false },
     children: [],
   };
+}
+
+/** The display model gives Merged and Released one tone; the card tells a release apart in blue. */
+export const RELEASED_COLOR = "charts.blue";
+
+function prStateColor(state: { text: string; tone: Tone }): string {
+  return state.text.startsWith("Released") ? RELEASED_COLOR : TONE_COLORS[state.tone];
 }
 
 function prNode(ws: WorkspaceEntryLike, pr: WorkspaceDisplay["prs"][number]): WsNode {
@@ -309,10 +336,31 @@ function prNode(ws: WorkspaceEntryLike, pr: WorkspaceDisplay["prs"][number]): Ws
     },
     contextValue: "pr",
     expanded: false,
-    pr: { url: pr.url },
+    pr: {
+      url: pr.url,
+      status: [
+        { text: pr.state.text, color: prStateColor(pr.state) },
+        ...(pr.ci ? [{ text: pr.ci.text, color: TONE_COLORS[pr.ci.tone] }] : []),
+      ],
+    },
     command: "sandbox.openPr",
     children: [],
   };
+}
+
+/**
+ * The card's one button acts on the run, not on containers: start it, hold it, or pick it back up.
+ * Start is the pane's ▶ Start work rule (SW-153) without its session list: no turn ever signalled
+ * and the first stage at most. Pause is offered while there is something to hold.
+ */
+export function sessionAction(s: WorkspaceStatusLike): "start" | "pause" | "resume" | null {
+  if (s.state === "paused") return "resume";
+  const agent = s.claude.agent;
+  if (agent === "idle" && !s.claude.at && !s.lastActivity && (s.stage?.index ?? 1) === 1)
+    return "start";
+  if (agent === "working" || agent === "needs-you" || s.state === "up" || s.state === "partial")
+    return "pause";
+  return null;
 }
 
 /** The card's rows as a hover: Containers / PRs / Workflow / Agent, the question, then actions. */
@@ -413,6 +461,31 @@ function workspaceNode(
           color: TONE_COLORS[d.agent.dot],
         }
       : { id: "question", color: TONE_COLORS.off },
+    card: {
+      state: d?.agent.label ?? "unknown",
+      activity: d?.activity
+        ? {
+            text: [d.activity.text, d.activity.time].filter(Boolean).join(" · "),
+            color: TONE_COLORS[d.activity.tone],
+          }
+        : null,
+      question: d?.question ?? null,
+      crash: d?.crash?.text ?? null,
+      // The card has the room the row lacked, so the stage keeps its name here.
+      meta: [
+        isCurrent ? "current" : "",
+        d?.model ?? "",
+        d?.autonomous?.compact ?? "",
+        d?.workflow.compact ?? "",
+        d?.usage?.text ?? "",
+        // The service line already says what is up; without one, the count does.
+        status?.services.length ? "" : (d?.containers.text ?? ""),
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      issueId: ws.issueId,
+      action: status ? sessionAction(status) : null,
+    },
     // The `:current` suffix is how the menus hide "switch to workspace" on the
     // window's own workspace; every workspace `when` regex tolerates it.
     contextValue: `workspace:${state}${isCurrent ? ":current" : ""}`,

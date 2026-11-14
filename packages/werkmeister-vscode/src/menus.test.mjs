@@ -80,30 +80,25 @@ const interceptRow = (over = {}) => ({
 });
 
 /**
- * Evaluate a `view/item/context` clause the way VS Code does, for our one view.
- * Only the `viewItem =~ /…/` half varies between entries; the `view ==` half is
+ * Evaluate a `webview/context` clause the way VS Code does, for our one view.
+ * cards.ts puts a node's contextValue in `webviewSection`, so only the
+ * `webviewSection =~ /…/` half varies between entries; the `webviewId ==` half is
  * asserted separately so a clause that forgot it can't quietly pass here.
- *
- * A lifecycle command has both an inline entry and a right-click one; the
- * inline entry is the state-gated one and so the one worth testing.
  */
 function shows(command, contextValue) {
-  const entries = manifest.contributes.menus["view/item/context"].filter(
+  const entries = manifest.contributes.menus["webview/context"].filter(
     (m) => m.command === command,
   );
-  const entry = entries.find((m) => m.group.startsWith("inline")) ?? entries[0];
-  assert.ok(entry, `no view/item/context entry for ${command}`);
-  assert.match(entry.when, /view == sandboxWorkspaces/, `${command} is not scoped to the view`);
-  const [, source, flags] = entry.when.match(/viewItem =~ \/(.+?)\/([a-z]*)(?: |$)/);
+  assert.equal(entries.length, 1, `one webview/context entry for ${command}`);
+  const [entry] = entries;
+  assert.match(
+    entry.when,
+    /webviewId == 'sandboxWorkspaces'/,
+    `${command} is not scoped to the view`,
+  );
+  const [, source, flags] = entry.when.match(/webviewSection =~ \/(.+?)\/([a-z]*)(?: |$)/);
   return new RegExp(source, flags).test(contextValue);
 }
-
-test("switch is offered on every workspace except the one this window is in", () => {
-  for (const state of ["up", "partial", "stopped", "paused", "down", "unknown"]) {
-    assert.equal(shows("sandbox.switch", workspaceContext(state)), true, state);
-    assert.equal(shows("sandbox.switch", workspaceContext(state, true)), false, `${state} current`);
-  }
-});
 
 test("open is offered on every workspace, current or not", () => {
   for (const state of ["up", "down"]) {
@@ -112,7 +107,7 @@ test("open is offered on every workspace, current or not", () => {
   }
 });
 
-// The inline ▶ / ⏸ pair is state-gated, and the `:current` suffix must not
+// The ▶ / ⏸ pair is state-gated, and the `:current` suffix must not
 // silently un-gate or un-show it — the regression this file exists for.
 test("start shows only where there is something to start, current or not", () => {
   for (const isCurrent of [false, true]) {
@@ -121,31 +116,6 @@ test("start shows only where there is something to start, current or not", () =>
     }
     assert.equal(shows("sandbox.up", workspaceContext("up", isCurrent)), false);
     assert.equal(shows("sandbox.up", workspaceContext("paused", isCurrent)), false, "paused");
-  }
-});
-
-/** A paused workspace: its record is what sets the state, not a container tally (SW-70). */
-const pausedContext = (isCurrent) => {
-  const paused = { at: "2026-10-22T10:00:00Z", containers: [] };
-  const [node] = buildTree(
-    [ws("a")],
-    [st("a", { state: "paused", paused })],
-    null,
-    isCurrent ? ["/ws/a"] : [],
-  );
-  return node.contextValue;
-};
-
-test("pause shows where containers run, resume only where paused, current or not", () => {
-  for (const isCurrent of [false, true]) {
-    for (const state of ["up", "partial"]) {
-      assert.equal(shows("sandbox.pause", workspaceContext(state, isCurrent)), true, state);
-      assert.equal(shows("sandbox.resume", workspaceContext(state, isCurrent)), false, state);
-    }
-    for (const state of ["down", "stopped"])
-      assert.equal(shows("sandbox.pause", workspaceContext(state, isCurrent)), false, state);
-    assert.equal(shows("sandbox.resume", pausedContext(isCurrent)), true);
-    assert.equal(shows("sandbox.pause", pausedContext(isCurrent)), false);
   }
 });
 
@@ -193,14 +163,10 @@ test("no workspace action is offered on a service node, or on the CLI-not-found 
   const error = cliNotFoundNode("boom").contextValue;
   for (const command of [
     "sandbox.open",
-    "sandbox.switch",
     "sandbox.up",
     "sandbox.stop",
     "sandbox.closeOut",
     "sandbox.abandon",
-    "sandbox.continue",
-    "sandbox.newSession",
-    "sandbox.openPr",
   ]) {
     assert.equal(shows(command, service), false, `${command} on a service`);
     assert.equal(shows(command, error), false, `${command} on the error node`);
@@ -219,20 +185,30 @@ function prContext() {
   return node.children[0].contextValue;
 }
 
-// SW-55: the card's per-workspace verbs are on every workspace, current or not.
-test("continue, new session, PRs and both end verbs show on every workspace", () => {
-  for (const command of [
-    "sandbox.continue",
-    "sandbox.newSession",
-    "sandbox.refreshPrs",
-    "sandbox.openPr",
-    "sandbox.closeOut",
-    "sandbox.abandon",
-  ]) {
+// SW-55: both end verbs are on every workspace, current or not.
+test("both end verbs show on every workspace", () => {
+  for (const command of ["sandbox.closeOut", "sandbox.abandon"]) {
     for (const state of ["up", "partial", "stopped", "paused", "down", "unknown"]) {
       assert.equal(shows(command, workspaceContext(state)), true, `${command} ${state}`);
       assert.equal(shows(command, workspaceContext(state, true)), true, `${command} ${state}`);
     }
+  }
+});
+
+// The card's own button and links do these, and ↻ Refresh PRs is in the view's title bar.
+test("the card's own actions are not repeated on its right-click menu", () => {
+  const menu = manifest.contributes.menus["webview/context"].map((m) => m.command);
+  for (const command of [
+    "sandbox.continue",
+    "sandbox.switch",
+    "sandbox.newSession",
+    "sandbox.openIssue",
+    "sandbox.openPr",
+    "sandbox.refreshPrs",
+    "sandbox.pause",
+    "sandbox.resume",
+  ]) {
+    assert.equal(menu.includes(command), false, command);
   }
 });
 
