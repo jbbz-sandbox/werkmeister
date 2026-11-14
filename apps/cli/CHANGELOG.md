@@ -1,5 +1,16 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.89.0
+
+### Minor Changes
+
+- 93442fd: Publish `werkmeister-core` to npm. Its `werkmeister-core/sdk` entry point is the public SDK and follows semver; every other entry point is internal. Versions stay in lockstep with the CLI.
+
+### Patch Changes
+
+- cd975f1: The CLI now waits out the daemon's own restart instead of falling back to in-process scheduling (SW-614). The daemon restarts itself whenever its build changes, and during that gap a call was refused or reset. The CLI now retries for up to 15 s; after one wait gives up, later calls in that process try once. When it does fall back, the warning names the cause: `nothing is listening, the daemon is not running`, `the daemon reset the connection while exiting or restarting`, or `the port is held by something that is not the werkmeister daemon`. A call the daemon accepted but answered late now fails with `DAEMON_TIMEOUT` and is no longer run a second time in the CLI. `werkmeister machine setup --check` now reports a daemon that doesn't answer: on macOS `installed, but nothing answers at <url>: the daemon is not running`, and elsewhere `not on macOS and nothing answers at <url>`.
+- 2b4c92b: Caddy now routes a local host by the `X-Feature` request header as well as the `X-Feature` cookie, as `werkmeister-context.md` says. Before, a request with only the header (`curl -H "X-Feature: <feature>"`) reached another workspace's container. When the header and the cookie name different features, the header wins. Run `werkmeister infra proxy-reload` after upgrading to apply it.
+
 ## 0.88.2
 
 ### Patch Changes
