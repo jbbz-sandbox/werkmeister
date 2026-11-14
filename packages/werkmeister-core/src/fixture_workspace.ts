@@ -395,9 +395,22 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
       GH_TOKEN: "",
       GITHUB_TOKEN: "",
       // Dead even when the caller's shell exports the real daemon's address (SW-264, SW-426).
-      WERKMEISTER_HOST: opts.daemon ?? "http://127.0.0.1:1",
+      WERKMEISTER_HOST: opts.daemon ?? closedPortUrl(),
+      // A refused daemon is retried for a restart gap (15 s default): each fixture step would wait it out (SW-708).
+      WERKMEISTER_DAEMON_RETRY_MS: process.env["WERKMEISTER_DAEMON_RETRY_MS"] || "500",
     },
   };
+}
+
+// A port just bound and closed, so a call is refused (ECONNREFUSED) like a stopped daemon: fetch
+// rejects port 1 as a "bad port" before connecting (SW-708). Sync, since seedFixture is.
+// shortcut: another process can take the port between close and use; hold a socket if that flakes.
+function closedPortUrl(): string {
+  const port = execFileSync(process.execPath, [
+    "-e",
+    "const s=require('net').createServer().listen(0,'127.0.0.1',()=>{process.stdout.write(String(s.address().port));s.close()})",
+  ]).toString();
+  return `http://127.0.0.1:${port}`;
 }
 
 const SCRIPT = `#!/bin/sh
