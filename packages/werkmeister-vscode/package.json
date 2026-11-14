@@ -1,8 +1,8 @@
 {
   "name": "werkmeister-vscode",
   "displayName": "Werkmeister Workspaces",
-  "description": "Manage werkmeister feature workspaces — container state, Telepresence intercepts, and the werkmeister CLI lifecycle — from a VS Code side view.",
-  "version": "0.89.2",
+  "description": "Manage werkmeister feature workspaces — container state, Telepresence intercepts, and the werkmeister CLI lifecycle — from a VS Code tree view.",
+  "version": "0.89.3",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

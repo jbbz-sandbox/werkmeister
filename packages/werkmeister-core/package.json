@@ -1,6 +1,6 @@
 {
   "name": "werkmeister-core",
-  "version": "0.89.2",
+  "version": "0.89.3",
   "license": "Apache-2.0",
   "type": "module",
   "description": "werkmeister's shared library. Its public API is werkmeister-core/sdk; every other entry point is internal.",
