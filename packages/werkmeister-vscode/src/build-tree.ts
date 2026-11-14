@@ -103,7 +103,8 @@ export interface WsNode {
     prs: { ref: string; url: string }[];
   };
   service?: { name: string; workspacePath: string; feature: string | null; leave: boolean };
-  pr?: { url: string };
+  /** `status`: the state word and the CI word, each with its theme colour id, for the card. */
+  pr?: { url: string; status?: { text: string; color: string }[] };
   /** Command id to run when the node is clicked, if any. */
   command?: string;
   children: WsNode[];
@@ -315,6 +316,13 @@ function serviceNode(
   };
 }
 
+/** The display model gives Merged and Released one tone; the card tells a release apart in blue. */
+export const RELEASED_COLOR = "charts.blue";
+
+function prStateColor(state: { text: string; tone: Tone }): string {
+  return state.text.startsWith("Released") ? RELEASED_COLOR : TONE_COLORS[state.tone];
+}
+
 function prNode(ws: WorkspaceEntryLike, pr: WorkspaceDisplay["prs"][number]): WsNode {
   return {
     kind: "pr",
@@ -328,7 +336,13 @@ function prNode(ws: WorkspaceEntryLike, pr: WorkspaceDisplay["prs"][number]): Ws
     },
     contextValue: "pr",
     expanded: false,
-    pr: { url: pr.url },
+    pr: {
+      url: pr.url,
+      status: [
+        { text: pr.state.text, color: prStateColor(pr.state) },
+        ...(pr.ci ? [{ text: pr.ci.text, color: TONE_COLORS[pr.ci.tone] }] : []),
+      ],
+    },
     command: "sandbox.openPr",
     children: [],
   };
