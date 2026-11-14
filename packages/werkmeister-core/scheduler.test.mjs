@@ -358,3 +358,41 @@ test("six workspaces on 6 CPUs all reach pr open with no person, only reruns", (
   );
   assert.equal(STARVE_MS, 5 * MIN);
 });
+
+// SW-699: the starved head waits on a busy lease whose own gate waits behind it. A (publish-core-npm)
+// runs core with a gate and wants docs-site (1); B (daemon-conn-reset) runs docs-site (1) and wants
+// core + install (5), head for 9 min. Neither may take the other's lease, so nothing ever starts.
+test("a starved head does not hold the line against the busy feature it waits on (SW-699)", () => {
+  const eight = { memory: 8 * G, cpus: 8, preempt: true };
+  const a = lease("a", 1.1, 3, "person", true);
+  const b = lease("b", 0.8, 1, "person");
+  const queue = [w("b", 9, true), w("a", 4, true)];
+  const aDocs = { ...req("a", 0.8, 1), services: ["docs-site"] };
+  const bCore = { ...req("b", 1.6, 5), services: ["werkmeister-core", "werkmeister-install"] };
+  const decisions = [admit(eight, [a, b], queue, aDocs), admit(eight, [a, b], queue, bCore)];
+  assert.ok(
+    decisions.some((d) => d.kind !== "wait"),
+    `deadlock: ${JSON.stringify(decisions)}`,
+  );
+  // A's docs-site starts; B keeps its place, and gets the room once A's gate ends and A stops.
+  assert.deepEqual(decisions, [{ kind: "admit" }, { kind: "wait", position: 1 }]);
+  assert.deepEqual(admit(eight, [b], [w("b", 12, true)], bCore), { kind: "admit" });
+});
+
+test("only a busy feature's service start that fits passes a holding head (SW-699)", () => {
+  const eight = { memory: 8 * G, cpus: 8, preempt: true };
+  const other = lease("x", 1, 4, "person");
+  const docs = (f, cpus = 1) => ({ ...req(f, 0.5, cpus), services: ["docs-site"] });
+  // A gate head: a start beside running containers always queues ahead of a plain up anyway.
+  const head = [w("h", 9, true)];
+  // Busy, fits: passes the starved gate head.
+  const busy = [other, lease("a", 1, 3, "person", true)];
+  assert.deepEqual(admit(eight, busy, head, docs("a")), { kind: "admit" });
+  // Running but not busy: still held (SW-675).
+  const notBusy = [other, lease("a", 1, 3, "person")];
+  assert.deepEqual(admit(eight, notBusy, head, docs("a")), { kind: "wait", position: 2 });
+  // Not running: a starved head still gets the next free room (SW-675).
+  assert.deepEqual(admit(eight, [other], [w("h", 9)], docs("a")), { kind: "wait", position: 2 });
+  // Busy but does not fit: waits, and takes nothing (only the head preempts).
+  assert.deepEqual(admit(eight, busy, head, docs("a", 2)), { kind: "wait", position: 2 });
+});
