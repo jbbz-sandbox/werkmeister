@@ -48,3 +48,19 @@ for (const subtype of [
     });
   });
 }
+
+// SW-694: the agent SDK is an optional peer, so its absence names the package to install.
+const { sdkLoadError } = await import("./dist/harness/claude/cli.js");
+
+test("a missing agent SDK becomes a WorkspaceError with the install command", () => {
+  const err = sdkLoadError(
+    Object.assign(new Error("Cannot find package"), { code: "ERR_MODULE_NOT_FOUND" }),
+  );
+  assert.equal(err.name, "WorkspaceError");
+  assert.match(err.message, /npm install @anthropic-ai\/claude-agent-sdk/);
+});
+
+test("any other SDK load failure keeps its own error", () => {
+  const broken = new SyntaxError("Unexpected token");
+  assert.equal(sdkLoadError(broken), broken);
+});
