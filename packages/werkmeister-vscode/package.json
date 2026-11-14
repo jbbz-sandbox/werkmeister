@@ -1,9 +1,14 @@
 {
   "name": "werkmeister-vscode",
   "displayName": "Werkmeister Workspaces",
-  "description": "Manage werkmeister feature workspaces — container state, Telepresence intercepts, and the werkmeister CLI lifecycle — from a VS Code tree view.",
+  "description": "Manage werkmeister feature workspaces — container state, Telepresence intercepts, and the werkmeister CLI lifecycle — from a VS Code side view.",
   "version": "0.89.1",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jbbz-sandbox/werkmeister.git",
+    "directory": "packages/werkmeister-vscode"
+  },
   "publisher": "JBBZ",
   "private": true,
   "type": "module",
@@ -34,7 +39,8 @@
         {
           "id": "sandboxWorkspaces",
           "name": "Workspaces",
-          "icon": "$(zap)"
+          "icon": "$(zap)",
+          "type": "webview"
         }
       ]
     },
@@ -160,6 +166,30 @@
         "icon": "$(add)"
       },
       {
+        "command": "sandbox.startWork",
+        "title": "▶ Start work",
+        "category": "Werkmeister",
+        "icon": "$(play)"
+      },
+      {
+        "command": "sandbox.openTerminal",
+        "title": "Open terminal",
+        "category": "Werkmeister",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "sandbox.masterControl",
+        "title": "Master control",
+        "category": "Werkmeister",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "sandbox.dashboard",
+        "title": "Dashboard ↗",
+        "category": "Werkmeister",
+        "icon": "$(dashboard)"
+      },
+      {
         "command": "sandbox.refreshPrs",
         "title": "↻ Refresh PRs",
         "category": "Werkmeister",
@@ -223,125 +253,55 @@
           "group": "1_registry@2"
         }
       ],
-      "view/item/context": [
-        {
-          "command": "sandbox.continue",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "inline@1"
-        },
-        {
-          "command": "sandbox.switch",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:[^:]+$/",
-          "group": "inline@2"
-        },
+      "webview/context": [
         {
           "command": "sandbox.up",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(down|stopped|partial)(:|$)/",
-          "group": "inline@3"
-        },
-        {
-          "command": "sandbox.stop",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(up|partial)(:|$)/",
-          "group": "inline@3"
-        },
-        {
-          "command": "sandbox.pause",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:(up|partial)(:|$)/",
-          "group": "inline@4"
-        },
-        {
-          "command": "sandbox.resume",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:paused(:|$)/",
-          "group": "inline@3"
-        },
-        {
-          "command": "sandbox.toggleIntercept",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^service:(interceptable|intercepted-mine)$/",
-          "group": "inline@1"
-        },
-        {
-          "command": "sandbox.continue",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "0_primary@1"
-        },
-        {
-          "command": "sandbox.switch",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:[^:]+$/",
-          "group": "0_primary@2"
-        },
-        {
-          "command": "sandbox.open",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "0_primary@3"
-        },
-        {
-          "command": "sandbox.up",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "when": "webviewId == 'sandboxWorkspaces' && webviewSection =~ /^workspace:(down|stopped|partial)(:|$)/",
           "group": "1_lifecycle@1"
         },
         {
           "command": "sandbox.stop",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "when": "webviewId == 'sandboxWorkspaces' && webviewSection =~ /^workspace:(up|partial)(:|$)/",
           "group": "1_lifecycle@2"
         },
         {
+          "command": "sandbox.toggleIntercept",
+          "when": "webviewId == 'sandboxWorkspaces' && webviewSection =~ /^service:(interceptable|intercepted-mine)$/",
+          "group": "1_lifecycle@0"
+        },
+        {
+          "command": "sandbox.open",
+          "when": "webviewId == 'sandboxWorkspaces' && webviewSection =~ /^workspace:/",
+          "group": "0_primary@3"
+        },
+        {
           "command": "sandbox.restart",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "when": "webviewId == 'sandboxWorkspaces' && webviewSection =~ /^workspace:/",
           "group": "1_lifecycle@3"
         },
         {
           "command": "sandbox.down",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "when": "webviewId == 'sandboxWorkspaces' && webviewSection =~ /^workspace:/",
           "group": "1_lifecycle@4"
         },
         {
-          "command": "sandbox.pause",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "1_lifecycle@5"
-        },
-        {
-          "command": "sandbox.resume",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "1_lifecycle@6"
-        },
-        {
-          "command": "sandbox.newSession",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "2_session@1"
-        },
-        {
-          "command": "sandbox.refreshPrs",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "3_inspect@1"
-        },
-        {
-          "command": "sandbox.openPr",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "3_inspect@2"
-        },
-        {
           "command": "sandbox.openFeature",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "when": "webviewId == 'sandboxWorkspaces' && webviewSection =~ /^workspace:/",
           "group": "3_inspect@3"
         },
         {
-          "command": "sandbox.openIssue",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
-          "group": "3_inspect@4"
-        },
-        {
           "command": "sandbox.logs",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^(workspace|service)/",
+          "when": "webviewId == 'sandboxWorkspaces' && webviewSection =~ /^(workspace|service)/",
           "group": "3_inspect@5"
         },
         {
           "command": "sandbox.closeOut",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "when": "webviewId == 'sandboxWorkspaces' && webviewSection =~ /^workspace:/",
           "group": "9_danger@1"
         },
         {
           "command": "sandbox.abandon",
-          "when": "view == sandboxWorkspaces && viewItem =~ /^workspace:/",
+          "when": "webviewId == 'sandboxWorkspaces' && webviewSection =~ /^workspace:/",
           "group": "9_danger@2"
         }
       ],
