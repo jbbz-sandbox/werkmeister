@@ -127,6 +127,14 @@ test("each template renders with no undefined and a route per stage", async () =
             /^3\. .*external API, permission or platform behaviour.*checked live, read-only.*never a write\).*`unverified` in the option text itself/m,
             `${wt}/${d}`,
           );
+        // SW-687: the stages that settle a design default a pre-approved command's input to an allowlist.
+        if (/_(research|reproduce)$/.test(d))
+          assert.match(
+            c,
+            /input to a pre-approved command .*defaults to an allowlist of accepted values and lists what each accepted value can reach: files, env vars, network addresses, processes\. A blocklist needs a stated reason\./,
+            `${wt}/${d}`,
+          );
+        else assert.doesNotMatch(c, /defaults to an allowlist/, `${wt}/${d}`);
         // SW-612: the exercise step stops for `machine setup` on the unresolved-hostname warning, and names no service.
         if (/Reload the running code|reload and exercise the service/.test(c)) {
           assert.match(
@@ -152,6 +160,21 @@ test("each template renders with no undefined and a route per stage", async () =
         // SW-534: an exercise that changes code gets the review rerun on its delta.
         if (d.endsWith("_implement"))
           assert.match(c, /rerun the review on that delta/, `${wt}/${d}`);
+        // SW-678: an edit made after the gate reruns the gate's tests, not one service's test command.
+        if (d.endsWith("_implement"))
+          assert.match(
+            c,
+            /Fix its \*\*Must fix\*\* findings, rerun `werkmeister pr gate --tests` \(not one service's test command/,
+            `${wt}/${d}`,
+          );
+        if (d.endsWith("_exercise")) {
+          assert.match(
+            c,
+            /then rerun `werkmeister pr gate --tests` \(from the workspace/,
+            `${wt}/${d}`,
+          );
+          assert.doesNotMatch(c, /rerun the test command exactly/, `${wt}/${d}`);
+        }
         // SW-535: follow-ups promised in decisions.md are filed before the PR file.
         if (d.endsWith("_propose"))
           assert.match(
@@ -185,6 +208,13 @@ test("each template renders with no undefined and a route per stage", async () =
           );
           assert.doesNotMatch(c, /runCapture|execRun|childEnv|execFileSync|runAsync/, `${wt}/${d}`);
         }
+        // SW-691: a workaround the exercise needs is a FAIL row, not a silent filter.
+        if (c.includes("Write `output/exercise.md`"))
+          assert.match(
+            c,
+            /A filter, workaround or special case the exercise needs before the change passes is a finding: write it into `exercise\.md` as a `FAIL` row/,
+            `${wt}/${d}`,
+          );
         // SW-562: stages that write exercise.md collect each MANUAL row's result before approval.
         if (c.includes("Write `output/exercise.md`"))
           assert.match(
@@ -225,6 +255,13 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(
             c,
             /^4\. List every other caller .* and what each does with the result \(an early return, a printed value, a stored state\), so the fix's return shape is checked against every caller before the fix stage/m,
+            `${wt}/${d}`,
+          );
+        // SW-709: each criterion's verification is checked against the decided design before it is written.
+        if (/_(research|reproduce)$/.test(d))
+          assert.match(
+            c,
+            /name for each acceptance criterion in `BRIEF\.md` how its stated verification runs on that design \(which command, which platform or container\)\. A criterion whose verification cannot reach the design is an open question/,
             `${wt}/${d}`,
           );
         // SW-392: a repro is judged by exit code, not an output grep.

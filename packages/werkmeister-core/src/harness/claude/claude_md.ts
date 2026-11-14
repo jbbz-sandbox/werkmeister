@@ -324,12 +324,13 @@ function testCommandLine(
   svc: string,
   servicesConfig: ServicesConfig,
   archetypes: ArchetypeRegistry,
+  lint?: string,
 ): string {
   const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
   const noTests = serviceNoTests(servicesConfig[svc]);
   if (noTests) return `- \`${svc}\`: no tests (registry: ${noTests})`;
   return cmd
-    ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, cmd)}\``
+    ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, lint ? `${cmd} && ${lint}` : cmd)}\``
     : `- \`${svc}\`: no test command registered (add \`test:\` to its registry entry)`;
 }
 
@@ -515,6 +516,8 @@ export function buildSandboxContextMd(
   let containerCommandsBlock: string;
   if (localServices.length > 0) {
     const svcs = [...localServices].sort();
+    // SW-688: the in-container line carries the repo's lint too, as the host line does (SW-219).
+    const svcLint = svcs.map((s) => lintOf(String(servicesConfig[s]?.["repo"] ?? "")));
     const containerList = svcs.map((s) => `\`${feature}-${s}\``).join(", ");
     const sampleSvc = svcs[0];
     containerCommandsBlock = `### Container Commands
@@ -534,9 +537,13 @@ docker compose restart ${sampleSvc}
 
 ### Test commands
 
-The registry's \`test:\` for each service (or its archetype's), run in its container — the worktree is mounted at \`/app\` with its \`node_modules\`; the host checkout has none. The pre-PR gate runs these (\`werkmeister pr gate\`).
+The registry's \`test:\` for each service (or its archetype's), run in its container — the worktree is mounted at \`/app\` with its \`node_modules\`; the host checkout has none. The pre-PR gate runs these (\`werkmeister pr gate\`).${
+      svcLint.some(Boolean)
+        ? " A line ending in `&& <lint>` also runs the repo's lint, the PR gate's lint row, so a `docs:check` or format failure shows here and not first at the gate."
+        : ""
+    }
 
-${svcs.map((s) => testCommandLine(feature, s, servicesConfig, archetypes ?? loadArchetypes())).join("\n")}
+${svcs.map((s, i) => testCommandLine(feature, s, servicesConfig, archetypes ?? loadArchetypes(), svcLint[i])).join("\n")}
 
 `;
   } else {

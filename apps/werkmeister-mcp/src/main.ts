@@ -24,7 +24,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import express, { type NextFunction, type Request, type Response } from "express";
 import { composeLogsStream } from "werkmeister-core/compose";
-import { BUILD_HEADER, buildOf, DEFAULT_DAEMON_PORT } from "werkmeister-core/daemon_client";
+import {
+  BUILD_HEADER,
+  buildOf,
+  DEFAULT_DAEMON_PORT,
+  STREAM_HEADER,
+} from "werkmeister-core/daemon_client";
 import { SandboxError } from "werkmeister-core/errors";
 import { githubIngestConfig } from "werkmeister-core/github_ingest";
 import { watchPrs } from "werkmeister-core/pr_lifecycle";
@@ -40,6 +45,8 @@ import { connectInMemoryClient, createServer } from "./server.js";
 export { connectInMemoryClient, createServer };
 
 const scopeOfReq = (res: Response): Scope => res.locals["scope"] as Scope;
+// Test knob; the default stays well under undici's 300 s bodyTimeout.
+const HEARTBEAT_MS = Number(process.env.WERKMEISTER_DAEMON_HEARTBEAT_MS) || 60_000;
 
 /**
  * Replace whatever scope header the client sent with the daemon's own. Both
@@ -185,6 +192,22 @@ async function startHttp(): Promise<void> {
       res.status(400).json({ error: "missing tool name", code: "ARGS" });
       return;
     }
+    // SW-700: undici (behind the client's fetch) drops a response with no headers, or a body
+    // silent, for 300 s, and a grant can run 15 min. A client that asks gets headers now,
+    // a space a minute, and the status in the body; any other client gets status codes.
+    const streamed = req.headers[STREAM_HEADER] === "1";
+    let beat: NodeJS.Timeout | undefined;
+    if (streamed) {
+      res.status(200).set({ "Content-Type": "application/json", [STREAM_HEADER]: "1" });
+      res.flushHeaders();
+      beat = setInterval(() => res.write(" "), HEARTBEAT_MS);
+      res.on("close", () => clearInterval(beat));
+    }
+    const reply = (status: number, body: Record<string, unknown>) => {
+      clearInterval(beat);
+      if (streamed) res.end(JSON.stringify({ status, ...body }));
+      else res.status(status).json(body);
+    };
     try {
       const result = (await (
         await toolClient
@@ -196,12 +219,12 @@ async function startHttp(): Promise<void> {
       )) as CallToolResult;
       const code = (result.structuredContent as { code?: string } | undefined)?.code;
       if (result.isError) {
-        res.status(400).json({ error: textOf(result), code: code ?? "TOOL" });
+        reply(400, { error: textOf(result), code: code ?? "TOOL" });
         return;
       }
-      res.json({ structuredContent: result.structuredContent ?? null, text: textOf(result) });
+      reply(200, { structuredContent: result.structuredContent ?? null, text: textOf(result) });
     } catch (e) {
-      res.status(500).json({ error: (e as Error).message, code: "INTERNAL" });
+      reply(500, { error: (e as Error).message, code: "INTERNAL" });
     }
   });
 

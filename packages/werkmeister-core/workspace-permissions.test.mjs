@@ -625,6 +625,16 @@ function allowed(rules, cmd) {
 const W660 = "/ws/w/.werkmeister/bin/with-temp-home";
 const BRACE = "{ command -v lsof >/dev/null || apt-get install -y lsof; } && pnpm test";
 
+// SW-688: the container may hold the Docker socket and the real ~/.werkmeister, so the lint-tailed line asks.
+test("SW-688: the lint-tailed container test line is not pre-approved; the bare test rule is unchanged", () => {
+  const services = { svc: { repo: "r", test: "pnpm test" } };
+  const rules = buildAllowRules("feat", ["svc"], services, {}, "", [], [], {
+    r: { lint: "pnpm lint" },
+  });
+  assert.ok(rules.includes("Bash(docker exec feat-svc sh -c 'pnpm test')"), rules.join("\n"));
+  assert.ok(!rules.some((r) => r.includes("pnpm lint")), rules.join("\n"));
+});
+
 test("SW-660: the repo's lint the context file appends is allowed with the test, all under the temp HOME", async () => {
   const { wrappedTestCommand } = await import("./dist/archetypes.js");
   const services = { svc: { repo: "r", test: "pnpm test" } };

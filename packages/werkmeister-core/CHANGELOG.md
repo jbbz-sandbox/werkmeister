@@ -1,5 +1,15 @@
 # sandbox-core
 
+## 0.89.2
+
+### Patch Changes
+
+- fedb19b: The ICM bug-fix exercise stage (after the review's fixes) and the feature and refactor implement stages (after a fix to the post-exercise review) rerun `werkmeister pr gate --tests` instead of one service's test command. These edits come after the gate's run, and the gate retests every service the diff touches, so a docs fix no longer skips docs-site's tests and fails the first `pr open`.
+- 5e724a6: The ICM research and reproduce stages say that when a change adds or widens an input to a pre-approved command (an allow rule, or a wrapper one covers), the decision defaults to an allowlist of accepted values and lists what each can reach (files, env vars, network addresses, processes); a blocklist needs a stated reason.
+- b811b93: `werkmeister-context.md` § Test commands prints each running service's `docker exec` test line with the repo's `lint:` appended (`… sh -c '<test> && <lint>'`), as the host test line already does. An implement stage that runs its tests in the container now catches a `docs:check` or format failure there, not first at `werkmeister pr gate`. The lint-tailed line is not pre-approved, since a service container can hold the Docker socket and the real `~/.werkmeister`: Claude Code asks before each run.
+- 69877d8: Every ICM stage that exercises a change says that a filter, workaround or special case the exercise needs before the change passes is a finding: a `FAIL` row in `exercise.md` until the code is fixed, or until the row says why it reflects real use rather than a defect.
+- 62dca50: The ICM research and reproduce stages name, before a recommended answer or proposed fix is written, how each acceptance criterion's stated verification runs on that design (which command, which platform or container), and turn a criterion whose verification cannot reach the design into an open question.
+
 ## 0.89.1
 
 ## 0.89.0

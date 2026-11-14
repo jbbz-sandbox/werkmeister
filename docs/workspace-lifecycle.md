@@ -125,7 +125,7 @@ A failed lint, test or release row shows the lines naming failing tests (`not ok
 
 The repo's own `.werkmeister/services.yaml` (when no mapping covers it) is the exception. The gate renders the branch's fragment, as it does for the test commands, and compares it with the fragment at the diff's base (`git merge-base origin/<base> HEAD`), rendered the same way; not with the machine registry, which `werkmeister registry --from` may have synced from this branch. Only the repo's services whose rendered entries differ are touched, so a changed `test:` runs that one service. Every service is touched by a change to a `repo:` key (`lint`, `release_check`, …), or to one of the repo's own `setup_services` entries, since its install serves every container. A `path_mappings` or `no_service_paths` change touches every service only when it maps a file of this diff differently. A change to comments or anchors that renders the same touches nothing. With no fragment on the branch or its base, the file stays unmapped and every service runs.
 
-The test commands also appear in `.werkmeister/werkmeister-context.md` under "Test commands".
+The test commands also appear in `.werkmeister/werkmeister-context.md` under "Test commands", each followed by the repo's `lint:` when it has one, so a run there also covers the gate's lint row.
 
 ## Ship detection (registry `repo:`)
 

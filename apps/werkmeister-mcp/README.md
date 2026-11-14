@@ -74,7 +74,7 @@ was not meant for it.
 | Route | Token | What |
 | --- | --- | --- |
 | `/mcp` | machine or workspace | Streamable HTTP MCP, stateless |
-| `POST /api/tool` | machine | `{ name, arguments }` → `{ structuredContent, text }`, or 400 `{ error, code }` |
+| `POST /api/tool` | machine | `{ name, arguments }` → `{ structuredContent, text }`, or 400 `{ error, code }`. With request header `x-werkmeister-stream: 1` (SW-700): 200 at once with the header echoed, a space every 60 s, then the same JSON plus `status` |
 | `GET /api/logs/stream?feature=<ws>&service=<svc>` | machine, or the workspace's own | SSE: each `data:` is a JSON string chunk; `event: end` when the containers stop |
 
 `WERKMEISTER_FIXTURE=1` keeps the daemon (and any core caller) off Caddy, k8s

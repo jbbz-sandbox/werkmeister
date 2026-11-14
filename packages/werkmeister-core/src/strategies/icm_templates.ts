@@ -71,6 +71,10 @@ const HOSTNAME_RULE =
 const NO_SERVICE_RULE =
   "A library or CLI has no service to restart: build it, then exercise the built artifact exactly as its Validation text in `werkmeister-context.md` § How to validate says.";
 
+// SW-691: sw-681's replay filtered out the very lines that showed its bug, and recorded nothing.
+const EXERCISE_WORKAROUND =
+  "A filter, workaround or special case the exercise needs before the change passes is a finding: write it into `exercise.md` as a `FAIL` row until the code is fixed, or until the row says why it reflects real use rather than a defect.";
+
 const IMPLEMENT_STEPS = [
   "Confirm ponytail is active (see `_shared/standards.md`; invoke the skill only if it is not), then read the standards rows above. Restate the rule you are applying beside each edit.",
 ];
@@ -107,8 +111,9 @@ const GATE_STEP =
   "Once the review's fixes are in, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record its exit code. A fix here reruns the host test step first.";
 
 // SW-534: sw-385's exercise on the real harness fixed ~40 lines after the review; they shipped unreviewed.
+// SW-678: a docs fix rerun with one service's tests skipped docs-site's, and the first `pr open` failed on it.
 const REVIEW_DELTA =
-  "If the exercise below changes code, rerun the review on that delta: a fresh subagent with the same brief, over the commits and changes made since the first review. Fix its **Must fix** findings, rerun the host test step, and append the result as new rows to `output/review.md`; the gate's review row covers them.";
+  "If the exercise below changes code, rerun the review on that delta: a fresh subagent with the same brief, over the commits and changes made since the first review. Fix its **Must fix** findings, rerun `werkmeister pr gate --tests` (not one service's test command: these edits come after the gate above, and the gate retests every service the diff touches), and append the result as new rows to `output/review.md`; the gate's review row covers them.";
 
 // SW-351: one of five parallel Edits reported success but never reached the file; tests did not cover it.
 const diffCheck = (doc: string) =>
@@ -168,6 +173,10 @@ const reviewStep = (rerun: string, group: string[]) =>
   "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`; a file of prose alone fails with `has no PASS row`.";
 const implementReview = (v: IcmVars) => reviewStep("rerun the host test step above", v.group);
 
+// SW-687: sw-634 decided a blocklist for a pre-approved wrapper's input; one key it let through sent auth to any host.
+const PREAPPROVED_INPUT =
+  "When the change adds or widens an input to a pre-approved command (an allow rule, or a wrapper an allow rule covers), the decision defaults to an allowlist of accepted values and lists what each accepted value can reach: files, env vars, network addresses, processes. A blocklist needs a stated reason.";
+
 // SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
 const NAME_HISTORY_STEP =
   "For each decision that renames, keeps or removes a name, a fallback or an alias, record its definition site (file and line) and the commit that introduced it (`git log -S <name>`, in the repo that defines it). " +
@@ -177,6 +186,10 @@ const NAME_HISTORY_STEP =
 const statusGate = (file: string, read: string) =>
   `${read} Then change \`status: proposed\` at the top of \`output/${file}\` to \`status: decided\`: that flip is the approval, and the next session starts without asking again. ${CHAT_APPROVAL}`;
 const FIRST_LINE = ", its first line `status: proposed`";
+
+// SW-709: sw-614's criterion was checked in the Linux container, where the decided macOS-only row never runs.
+const CRITERION_REACH =
+  "Before writing a recommended answer or proposed fix, name for each acceptance criterion in `BRIEF.md` how its stated verification runs on that design (which command, which platform or container). A criterion whose verification cannot reach the design is an open question, not a decided one.";
 
 // SW-517: a check left as a sentence at the end of a long reply is easy to miss; the question tool makes it a prompt.
 export const askLine = (tool?: string) =>
@@ -279,10 +292,11 @@ const feature: Stage[] = [
           // Moved from docs/harnesses.md: adapter runs kept deciding from a harness's docs, not its binary.
           "When a decision rests on how an external tool behaves (a CLI command or flag, a plugin API, an event name), check it against the installed tool, not only its docs: record `<bin> --version`, and confirm each fact with `<bin> <cmd> --help` or a real run or plugin load. `decisions.md` names the version and, beside each fact, the command that confirmed it; a fact only the docs support is marked `unverified: docs only`, and no decision rests on it. If the tool cannot be installed, say so and mark every such fact `unverified`. " +
           // SW-605: sw-583 recommended a GitHub API call as `unverified` only in the file; the person approved it and a read-only call later returned 403.
-          "A recommended answer that rests on an external API, permission or platform behaviour (a token scope, a hosted API's response, a cloud permission) is checked live, read-only (a list, get, `--help` or dry run, never a write), before it goes into `decisions.md`, with the command and its result beside it. When it cannot be checked read-only, write `unverified` in the option text itself, so the question the person is asked carries the word, not only the file.",
+          "A recommended answer that rests on an external API, permission or platform behaviour (a token scope, a hosted API's response, a cloud permission) is checked live, read-only (a list, get, `--help` or dry run, never a write), before it goes into `decisions.md`, with the command and its result beside it. When it cannot be checked read-only, write `unverified` in the option text itself, so the question the person is asked carries the word, not only the file. " +
+          PREAPPROVED_INPUT,
         "Write `output/inventory.md`: steps 1–3.",
         NAME_HISTORY_STEP,
-        "Write `output/decisions.md`: every open question in `BRIEF.md`, each as a heading with `status: proposed`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference).",
+        `Write \`output/decisions.md\`: every open question in \`BRIEF.md\`, each as a heading with \`status: proposed\`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference). ${CRITERION_REACH}`,
       ],
       outputs: ["`output/inventory.md`", "`output/decisions.md`"],
       humanCheck: `Open \`output/decisions.md\`. Edit each answer as needed and change its \`status: proposed\` to \`status: decided\`. The next stage must not start while any question is still \`proposed\`. When every question reads \`decided\`, that is the approval — the next session starts the next stage without asking for confirmation. ${CHAT_APPROVAL}`,
@@ -351,7 +365,7 @@ const feature: Stage[] = [
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE} ${EXERCISE_WORKAROUND}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
@@ -399,11 +413,11 @@ const bugfix: Stage[] = [
         // SW-566: sw-545's fix changed a return shape its one caller treated as "stop"; only the exercise caught it.
         "List every other caller of the function at the root cause and what each does with the result (an early return, a printed value, a stored state), so the fix's return shape is checked against every caller before the fix stage — a fix there reaches them too. When the fix belongs in shared code, list its call sites through every helper or entry point that reaches that code, not one argument shape, and record the search commands (greps) you used in `repro.md`.",
         // SW-442: sessionBusy had two true cases; stage 01 listed callers, so only review caught the second (sw-418).
-        "When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test.",
+        `When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test. ${PREAPPROVED_INPUT}`,
         NAME_HISTORY_STEP,
         // SW-564: sw-521's root cause was a permission rule; step 4 listed the callers of one builder and missed two other sources of a matching rule.
         "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source.",
-        `Write \`output/repro.md\`: steps 1–7, and a proposed fix in one paragraph under a \`status: proposed\` line.${noCommitPlan(v.group)}`,
+        `Write \`output/repro.md\`: steps 1–7, and a proposed fix in one paragraph under a \`status: proposed\` line.${noCommitPlan(v.group)} ${CRITERION_REACH}`,
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
       humanCheck: `Read \`output/repro.md\`. Correct the root cause or the proposed fix if needed, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts the fix without asking again. ${CHAT_APPROVAL}`,
@@ -468,12 +482,13 @@ const bugfix: Stage[] = [
       process: [
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
-        "Exercise one neighbouring path through each caller `repro.md` listed. Capture the output.",
+        `Exercise one neighbouring path through each caller \`repro.md\` listed. Capture the output. ${EXERCISE_WORKAROUND}`,
         `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
         // SW-579: the review step rewrites exercise.md, so recorded MANUAL results come first.
         MANUAL_STEP,
+        // SW-678: these edits come after the fix stage's gate; one service's test command missed docs-site's (sw-631, sw-669).
         reviewStep(
-          "rerun the test command exactly as `../../.werkmeister/werkmeister-context.md` states it (through `.werkmeister/bin/with-temp-home`), rerun steps 2–3 and update `exercise.md`",
+          "rerun `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes), not one service's test command: it retests every service the diff touches, and these edits come after the fix stage's gate. Then rerun steps 2–3 and update `exercise.md`",
           v.group,
         ),
       ],
@@ -549,7 +564,7 @@ const refactor: Stage[] = [
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
-        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE}`,
+        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE} ${EXERCISE_WORKAROUND}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
