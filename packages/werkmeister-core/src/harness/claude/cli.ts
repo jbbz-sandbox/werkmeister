@@ -64,6 +64,19 @@ export function extractJson(out: string): string | null {
 
 type AskOpts = { tools?: boolean };
 
+/**
+ * SW-694: the SDK is an optional peer of core, so "not installed" becomes an install
+ * hint; any other load failure (a broken install) keeps its own error.
+ */
+export function sdkLoadError(e: unknown): unknown {
+  return (e as { code?: string } | null)?.code === "ERR_MODULE_NOT_FOUND"
+    ? new WorkspaceError(
+        "Asking Claude needs the Claude Agent SDK, which is not installed. " +
+          "Install it beside werkmeister-core with: npm install @anthropic-ai/claude-agent-sdk",
+      )
+    : e;
+}
+
 /** `ask`'s answer as one string field: no tag scraping. */
 const TEXT_SCHEMA = {
   type: "object",
@@ -84,7 +97,9 @@ async function runQuery(
   opts: AskOpts,
 ): Promise<SDKResultMessage> {
   // Loaded on use: the MCP server imports this module at start, and the SDK is heavy.
-  const { query } = await import("@anthropic-ai/claude-agent-sdk");
+  const { query } = await import("@anthropic-ai/claude-agent-sdk").catch((e) => {
+    throw sdkLoadError(e);
+  });
   const abortController = new AbortController();
   const timer = setTimeout(() => abortController.abort(), 120_000);
   try {

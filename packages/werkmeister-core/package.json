@@ -112,7 +112,6 @@
     "test:changed": "node test-changed.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.3.288",
     "@types/dockerode": "^4.0.1",
     "@types/tar-fs": "^2.0.4",
     "ajv": "^8.20.0",
@@ -122,7 +121,17 @@
     "tar-fs": "^2.1.5",
     "yaml": "^2.9.0"
   },
+  "//peerDependencies": "SW-694: only the lazy ask helpers load the agent SDK, and it pulls a ~240 MB platform binary, so a library install leaves it out.",
+  "peerDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.288"
+  },
+  "peerDependenciesMeta": {
+    "@anthropic-ai/claude-agent-sdk": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.3.288",
     "@types/node": "^22.10.0",
     "@types/nunjucks": "^3.2.6",
     "typedoc": "0.28.20",
