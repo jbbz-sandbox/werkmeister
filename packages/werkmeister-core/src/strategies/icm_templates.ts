@@ -187,6 +187,10 @@ const statusGate = (file: string, read: string) =>
   `${read} Then change \`status: proposed\` at the top of \`output/${file}\` to \`status: decided\`: that flip is the approval, and the next session starts without asking again. ${CHAT_APPROVAL}`;
 const FIRST_LINE = ", its first line `status: proposed`";
 
+// SW-709: sw-614's criterion was checked in the Linux container, where the decided macOS-only row never runs.
+const CRITERION_REACH =
+  "Before writing a recommended answer or proposed fix, name for each acceptance criterion in `BRIEF.md` how its stated verification runs on that design (which command, which platform or container). A criterion whose verification cannot reach the design is an open question, not a decided one.";
+
 // SW-517: a check left as a sentence at the end of a long reply is easy to miss; the question tool makes it a prompt.
 export const askLine = (tool?: string) =>
   tool
@@ -292,7 +296,7 @@ const feature: Stage[] = [
           PREAPPROVED_INPUT,
         "Write `output/inventory.md`: steps 1–3.",
         NAME_HISTORY_STEP,
-        "Write `output/decisions.md`: every open question in `BRIEF.md`, each as a heading with `status: proposed`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference).",
+        `Write \`output/decisions.md\`: every open question in \`BRIEF.md\`, each as a heading with \`status: proposed\`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference). ${CRITERION_REACH}`,
       ],
       outputs: ["`output/inventory.md`", "`output/decisions.md`"],
       humanCheck: `Open \`output/decisions.md\`. Edit each answer as needed and change its \`status: proposed\` to \`status: decided\`. The next stage must not start while any question is still \`proposed\`. When every question reads \`decided\`, that is the approval — the next session starts the next stage without asking for confirmation. ${CHAT_APPROVAL}`,
@@ -413,7 +417,7 @@ const bugfix: Stage[] = [
         NAME_HISTORY_STEP,
         // SW-564: sw-521's root cause was a permission rule; step 4 listed the callers of one builder and missed two other sources of a matching rule.
         "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source.",
-        `Write \`output/repro.md\`: steps 1–7, and a proposed fix in one paragraph under a \`status: proposed\` line.${noCommitPlan(v.group)}`,
+        `Write \`output/repro.md\`: steps 1–7, and a proposed fix in one paragraph under a \`status: proposed\` line.${noCommitPlan(v.group)} ${CRITERION_REACH}`,
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
       humanCheck: `Read \`output/repro.md\`. Correct the root cause or the proposed fix if needed, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts the fix without asking again. ${CHAT_APPROVAL}`,
