@@ -26,7 +26,7 @@ Those are the ones that rot — they are listed first.
 
 | Location | Simplification | Ceiling |
 |---|---|---|
-| [tree.ts:98](../packages/werkmeister-vscode/src/tree.ts#L98) | skip an overlapping poll rather than queueing | one fewer refresh when `docker ps` is slow |
+| [view.ts:182](../packages/werkmeister-vscode/src/view.ts#L182) | skip an overlapping poll rather than queueing | one fewer refresh when `docker ps` is slow |
 | [locks.ts:73](../packages/werkmeister-core/src/locks.ts#L73) | read-then-unlink when stealing a stale lock | narrow race against another stealer; only one wins, "good enough for a dev CLI" |
 | [gate.ts:32](../packages/werkmeister-core/src/gate.ts#L32) | precedence sentence duplicated from `notes.ts`, not imported | must stay import-light for the <200ms fast path; the two wordings drift by hand |
 | [gate.ts:362](../packages/werkmeister-core/src/gate.ts#L362) | unwritable state dir → allow, not deny | a persistence failure silently stops gating instead of failing loudly |
