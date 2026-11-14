@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { SandboxError } from "werkmeister-core/errors";
-import { withSandboxHome } from "../../packages/werkmeister-core/fixtures.mjs";
+import { withSandboxHome } from "../../packages/werkmeister-core/test/fixtures.mjs";
 import {
   clientUiOf,
   FEATURE_HEADER,

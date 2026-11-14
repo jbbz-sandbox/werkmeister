@@ -24,7 +24,7 @@ import {
   fetchFresh,
   pinWerkmeisterRoot,
   useDockerEngine,
-} from "../../packages/werkmeister-core/fixtures.mjs";
+} from "../../packages/werkmeister-core/test/fixtures.mjs";
 
 useDockerEngine();
 // The spawned server finds the built ui:// pages through this worktree's apps/cli.

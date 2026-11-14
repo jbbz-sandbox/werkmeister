@@ -50,11 +50,17 @@ export function selectTests({ changed, pkg, pkgDir, base = "the base" }) {
   for (const f of inPkg) {
     if (f.startsWith("dist/") || f.startsWith("node_modules/")) continue;
     const mapped =
-      (f.startsWith("src/") && f.endsWith(".ts")) || (!f.includes("/") && f.endsWith(".mjs"));
+      (f.startsWith("src/") && f.endsWith(".ts")) || (/^(test\/)?[^/]+\.mjs$/.test(f));
     if (!mapped) return { mode: "full", reason: `${f} is not mapped to tests` };
   }
 
-  const roots = fs.readdirSync(pkgDir).filter((f) => f.endsWith(".mjs"));
+  const roots = [
+    ...fs.readdirSync(pkgDir).filter((f) => f.endsWith(".mjs")),
+    ...fs
+      .readdirSync(path.join(pkgDir, "test"))
+      .filter((f) => f.endsWith(".mjs"))
+      .map((f) => `test/${f}`),
+  ];
   const srcFiles = fs
     .readdirSync(path.join(pkgDir, "src"), { recursive: true })
     .map(String)

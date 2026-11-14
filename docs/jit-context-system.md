@@ -463,11 +463,11 @@ imported, to keep the import graph light. It carries a `ponytail:` comment sayin
   projection before the session reads it.
 
 **Automated test coverage is thin.** `apps/cli/src/lib/__tests__/gate.test.ts` (22 tests) and
-`packages/werkmeister-core/gate.test.mjs` (phase gate) cover the gate;
-`packages/werkmeister-core/agent-gen.test.mjs`, `harness-claude-md.test.mjs`, and
+`packages/werkmeister-core/test/gate.test.mjs` (phase gate) cover the gate;
+`packages/werkmeister-core/test/agent-gen.test.mjs`, `harness-claude-md.test.mjs`, and
 `workspace-skills-scope.test.mjs` cover agent generation, CLAUDE.md generation, and skill
 scoping; `apps/cli/src/lib/__tests__/universal_standards.test.ts` covers standards resolution
-and the manifest, `hooks_gen.test.ts` the hooks, `packages/werkmeister-core/notes-context.test.mjs`
+and the manifest, `hooks_gen.test.ts` the hooks, `packages/werkmeister-core/test/notes-context.test.mjs`
 notes re-injection, and `mcp-gen-vars.test.mjs` MCP variable handling. Everything else is
 exercised only by running `werkmeister workspace init` and the two check commands above. Treat
 `standards check` and `skills check` as the regression gates, and run them after any change to

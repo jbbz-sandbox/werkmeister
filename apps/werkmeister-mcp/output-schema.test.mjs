@@ -15,7 +15,7 @@ import {
   useDockerEngine,
   withFakeGh,
   withSandboxHome,
-} from "../../packages/werkmeister-core/fixtures.mjs";
+} from "../../packages/werkmeister-core/test/fixtures.mjs";
 
 useDockerEngine();
 

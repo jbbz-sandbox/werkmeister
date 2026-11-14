@@ -1,0 +1,187 @@
+// The precedence rules in config.ts are what stopped the CLI and werkmeister-core
+// resolving different files for the same machine, so they are pinned here: the
+// YAML override wins over the SANDBOX_* export (env.sh is generated FROM the
+// YAML, so a disagreeing export is the stale one), and the export still beats
+// the built-in default.
+
+import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, test } from "node:test";
+import {
+  configPath,
+  forwardSpecs,
+  infraRoot,
+  installedCliPackage,
+  monorepoRoot,
+  sandboxHome,
+  sandboxRoot,
+  servicesYamlPath,
+  slotPortRange,
+  stateInfraRoot,
+  workspacesRoot,
+} from "../dist/config.js";
+
+const VARS = [
+  "WERKMEISTER_CONFIG_FILE",
+  "WERKMEISTER_SERVICES_YAML",
+  "WERKMEISTER_WORKSPACES_ROOT",
+  "WERKMEISTER_ROOT",
+  "WERKMEISTER_ROOT_PINNED",
+];
+const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
+
+/** Point WERKMEISTER_CONFIG_FILE at a temp config.yaml holding *body*. */
+async function withConfig(body) {
+  const dir = await mkdtemp(path.join(tmpdir(), "sandbox-cfg-"));
+  const file = path.join(dir, "config.yaml");
+  await writeFile(file, body);
+  process.env.WERKMEISTER_CONFIG_FILE = file;
+  return dir;
+}
+
+beforeEach(() => {
+  for (const v of VARS) delete process.env[v];
+});
+afterEach(() => {
+  for (const [k, v] of Object.entries(SAVED)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+});
+
+test("registry path: overrides.<key> beats the env export beats the default", async () => {
+  await withConfig("overrides:\n  services_yaml: /from/yaml/services.yaml\n");
+  process.env.WERKMEISTER_SERVICES_YAML = "/from/env/services.yaml";
+  assert.equal(servicesYamlPath(), "/from/yaml/services.yaml");
+
+  await withConfig("version: 1\n");
+  process.env.WERKMEISTER_SERVICES_YAML = "/from/env/services.yaml";
+  assert.equal(servicesYamlPath(), "/from/env/services.yaml");
+
+  const bare = await withConfig("version: 1\n");
+  delete process.env.WERKMEISTER_SERVICES_YAML;
+  assert.equal(servicesYamlPath(), path.join(bare, "services.yaml"));
+  assert.equal(sandboxHome(), bare);
+  assert.equal(configPath(), path.join(bare, "config.yaml"));
+});
+
+test("workspaces root: config beats env, `~` expands, `~/workspace` is the floor", async () => {
+  await withConfig("paths:\n  workspaces_root: ~/from-yaml\n");
+  process.env.WERKMEISTER_WORKSPACES_ROOT = "/from/env";
+  assert.equal(workspacesRoot(), path.join(homedir(), "from-yaml"));
+
+  await withConfig("version: 1\n");
+  assert.equal(workspacesRoot(), "/from/env");
+
+  await withConfig("version: 1\n");
+  delete process.env.WERKMEISTER_WORKSPACES_ROOT;
+  assert.equal(workspacesRoot(), path.join(homedir(), "workspace"));
+});
+
+test("a missing config is empty, not fatal", () => {
+  process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
+  assert.equal(workspacesRoot(), path.join(homedir(), "workspace"));
+});
+
+test("forwardSpecs: only k8s_forward_port entries, alias name for services only", () => {
+  const specs = forwardSpecs(
+    {
+      backend: { k8s_forward_port: 9001, internal_port: 3000, health_endpoint: "/health" },
+      aliased: { k8s_forward_port: 9002, internal_port: 80, k8s_forward_name: "real-name" },
+      "not-forwarded": { internal_port: 3000 },
+      bogus: "not-a-dict",
+    },
+    { postgres: { k8s_forward_port: 9051, internal_port: 5432, k8s_forward_name: "ignored" } },
+  );
+  assert.deepEqual(
+    specs.map((s) => [s.name, s.listen, s.remote, s.health]),
+    [
+      ["backend", 9001, 3000, "/health"],
+      ["real-name", 9002, 80, ""],
+      // Infrastructure keys are the forward name; k8s_forward_name is a service-only alias.
+      ["postgres", 9051, 5432, ""],
+    ],
+  );
+});
+
+test("slotPortRange: 100-port stride, span from ports.yaml", () => {
+  const ports = { feature_slots: { base_port: 11100, ports_per_slot: 20 } };
+  assert.deepEqual(slotPortRange(1, ports), [11100, 11119]);
+  assert.deepEqual(slotPortRange(3, ports), [11300, 11319]);
+  assert.deepEqual(slotPortRange(2, null), [11200, 11219]); // seeded defaults
+});
+
+// The two answers must agree, because `infra/` is reached one way from the CLI
+// (which always has WERKMEISTER_ROOT, exported by the wrapper) and the other way
+// from a bare import (the dashboard, a script), and they read the same files.
+test("sandboxRoot: WERKMEISTER_ROOT wins, else a walk-up finds the checkout's apps/cli", () => {
+  process.env.WERKMEISTER_ROOT_PINNED = "1";
+  const walked = sandboxRoot();
+  assert.equal(path.basename(walked), "cli");
+  assert.equal(path.basename(path.dirname(walked)), "apps");
+  assert.equal(infraRoot(), path.join(walked, "infra"));
+
+  process.env.WERKMEISTER_ROOT = "~/elsewhere/apps/cli";
+  assert.equal(sandboxRoot(), path.join(homedir(), "elsewhere", "apps", "cli"));
+});
+
+test("SW-239: sandboxRoot() and monorepoRoot() throw in a test that has not pinned the root", () => {
+  assert.throws(() => sandboxRoot(), /pinWerkmeisterRoot/);
+  assert.throws(() => monorepoRoot(), /pinWerkmeisterRoot/);
+  process.env.WERKMEISTER_ROOT_PINNED = "1";
+  assert.equal(path.basename(sandboxRoot()), "cli");
+  assert.equal(path.join(monorepoRoot(), "apps", "cli"), sandboxRoot());
+});
+
+test("SW-239: outside a test context the guard is inert", () => {
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  delete env.WERKMEISTER_ROOT;
+  delete env.WERKMEISTER_ROOT_PINNED;
+  const out = execFileSync(
+    process.execPath,
+    ["-e", 'import("./dist/config.js").then((c) => console.log(c.sandboxRoot()))'],
+    { env, cwd: path.join(import.meta.dirname, ".."), encoding: "utf8" },
+  );
+  assert.equal(path.basename(out.trim()), "cli");
+});
+
+test("stateInfraRoot is <sandboxHome>/infra and follows WERKMEISTER_CONFIG_FILE", async () => {
+  const dir = await withConfig("version: 1\n");
+  assert.equal(stateInfraRoot(), path.join(dir, "infra"));
+  assert.equal(stateInfraRoot(), path.join(sandboxHome(), "infra"));
+});
+
+test("stateInfraRoot is absolute even when WERKMEISTER_CONFIG_FILE is relative", () => {
+  process.env.WERKMEISTER_CONFIG_FILE = "rel/config.yaml";
+  assert.ok(path.isAbsolute(stateInfraRoot()), stateInfraRoot());
+  assert.equal(stateInfraRoot(), path.resolve("rel", "infra"));
+});
+
+/** A global npm install: <prefix>/lib/node_modules/werkmeister holding the wrapper, linked from <prefix>/bin. */
+async function fakeGlobalCli(name = "werkmeister") {
+  const prefix = await mkdtemp(path.join(tmpdir(), "w9r-global-"));
+  const pkg = path.join(prefix, "lib", "node_modules", "werkmeister");
+  await mkdir(path.join(prefix, "bin"), { recursive: true });
+  await mkdir(pkg, { recursive: true });
+  await writeFile(path.join(pkg, "package.json"), JSON.stringify({ name }));
+  await writeFile(path.join(pkg, "werkmeister"), "#!/bin/bash\nexit 0\n");
+  await symlink(path.join(pkg, "werkmeister"), path.join(prefix, "bin", "werkmeister"));
+  return { bin: path.join(prefix, "bin"), pkg: realpathSync(pkg) };
+}
+
+test("SW-695: installedCliPackage follows the werkmeister on PATH to its package", async () => {
+  const { bin, pkg } = await fakeGlobalCli();
+  const empty = await mkdtemp(path.join(tmpdir(), "w9r-nobin-"));
+  assert.equal(installedCliPackage([empty, bin].join(path.delimiter)), pkg);
+});
+
+test("SW-695: a werkmeister on PATH from another package, or none, is no CLI", async () => {
+  const { bin } = await fakeGlobalCli("not-werkmeister");
+  assert.equal(installedCliPackage(bin), null);
+  assert.equal(installedCliPackage(""), null);
+});

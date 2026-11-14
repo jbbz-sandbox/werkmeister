@@ -1,0 +1,128 @@
+// icm.refresh is the repair path for a workspace a pre-strategy `up` polluted
+// with JIT hooks. It removes exactly the JIT-managed entries and installs the
+// PR guard, the one hook both strategies share.
+
+import assert from "node:assert/strict";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { test } from "node:test";
+import {
+  buildPrGuardEntry,
+  PRE_TOOL_USE_GATE_COMMAND,
+  READ_ONLY_GIT_RULES,
+  SESSION_START_COMMAND,
+  workspaceAskRules,
+} from "../dist/harness/claude/hooks_gen.js";
+import { collectingReporter, withReporter } from "../dist/reporter.js";
+import { strategyById } from "../dist/strategies/index.js";
+import { withAgentState } from "./fixtures.mjs";
+
+const icm = strategyById("icm");
+const HAND = { hooks: [{ type: "command", command: "echo mine" }] };
+
+function workspace(settings) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-refresh-"));
+  fs.mkdirSync(path.join(root, ".claude"));
+  fs.mkdirSync(path.join(root, ".werkmeister", ".gate"), { recursive: true });
+  fs.writeFileSync(path.join(root, ".werkmeister", ".gate", "s.json"), "{}");
+  fs.writeFileSync(
+    path.join(root, ".claude", "settings.json"),
+    typeof settings === "string" ? settings : JSON.stringify(settings),
+  );
+  return root;
+}
+
+async function refresh(root) {
+  const c = collectingReporter();
+  await withReporter(c, async () => icm.refresh(root));
+  return c.text();
+}
+
+test("keeps the hand-added hook, drops the managed ones and .gate", async () => {
+  const root = workspace({
+    hooks: {
+      SessionStart: [HAND, { hooks: [{ type: "command", command: SESSION_START_COMMAND }] }],
+      PreToolUse: [
+        { matcher: "Edit|Write", hooks: [{ type: "command", command: PRE_TOOL_USE_GATE_COMMAND }] },
+      ],
+    },
+  });
+  try {
+    const log = await refresh(root);
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+    );
+    assert.deepEqual(settings, {
+      hooks: await withAgentState({ SessionStart: [HAND], PreToolUse: [buildPrGuardEntry()] }),
+      permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
+    });
+    assert.ok(!fs.existsSync(path.join(root, ".werkmeister", ".gate")));
+    assert.match(log, /werkmeister notes context/);
+    assert.match(log, /werkmeister internal gate/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("only JIT hooks: settings.json keeps just the PR guard", async () => {
+  const root = workspace({
+    hooks: { SessionStart: [{ hooks: [{ type: "command", command: SESSION_START_COMMAND }] }] },
+  });
+  try {
+    await refresh(root);
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+    );
+    assert.deepEqual(settings, {
+      hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
+      permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("unparseable settings.json is left untouched", async () => {
+  const root = workspace("{ not json");
+  try {
+    await refresh(root);
+    assert.equal(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+      "{ not json",
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a workspace with no .claude/ gets the PR guard and the allow rules, once, and no JIT hook", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-refresh-"));
+  try {
+    await refresh(root);
+    await refresh(root);
+    const settings = JSON.parse(
+      fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8"),
+    );
+    assert.deepEqual(settings, {
+      hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
+      permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
+    });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// icm.init now calls refresh() itself at the end (a jit->icm switch without
+// --prune-context otherwise leaves jit's hooks live until the next `up`,
+// which would then run icm's sync over hand-edited stage contracts). That
+// must stay silent on a clean workspace, or every icm init would print noise.
+test("refresh on a clean workspace (no .claude, no .gate) logs nothing", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-refresh-clean-"));
+  try {
+    const log = await refresh(root);
+    assert.equal(log, "");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
