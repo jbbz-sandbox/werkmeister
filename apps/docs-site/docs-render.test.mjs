@@ -56,13 +56,11 @@ test("no table row outside its table", () => {
 });
 
 // Readers can't open the tracker; git history keeps the keys. A key may stay as a link, or as an example in code.
-test("no Jira key in a sidebar or SDK page's prose", () => {
-  const pages = config.themeConfig.sidebar["/"].flatMap((g) =>
-    g.items.filter((i) => !i.link.endsWith("/")).map((i) => `${i.link.slice(1)}.md`),
-  );
-  // `build` generates the SDK pages (typedoc), so the folder may not exist yet.
-  if (existsSync(join(ROOT, "apps/docs-site/sdk")))
-    pages.push(...globSync("apps/docs-site/sdk/**/*.md", { cwd: ROOT }));
+// Sidebar pages are checked by docs:check in lint (SW-715); the SDK pages exist only after `build` (typedoc), so here.
+test("no Jira key in an SDK page's prose", () => {
+  const pages = existsSync(join(ROOT, "apps/docs-site/sdk"))
+    ? globSync("apps/docs-site/sdk/**/*.md", { cwd: ROOT })
+    : [];
   const hits = pages
     .flatMap(proseLines)
     .filter(([, , l]) =>
