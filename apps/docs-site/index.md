@@ -19,6 +19,9 @@ hero:
     - theme: alt
       text: GitHub
       link: https://github.com/jbbz-sandbox/werkmeister
+    - theme: alt
+      text: SDK reference
+      link: /sdk/
 features:
   - title: A workflow for each kind of work
     details: A spike, a feature, a refactor each get their own stages.<br>A bug gets reproduce → fix → exercise → propose.

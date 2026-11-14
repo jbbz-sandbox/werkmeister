@@ -118,7 +118,8 @@ export default defineConfig({
         { text: "SDK", link: "/sdk/" },
         ...(existsSync(SDK_SIDEBAR) ? JSON.parse(readFileSync(SDK_SIDEBAR, "utf8")) : []),
       ],
-      "/": toGroups(),
+      // The top bar has its own SDK item; this group is for readers on a docs page (SW-726).
+      "/": [...toGroups(), { text: "SDK", items: [{ text: "SDK reference", link: "/sdk/" }] }],
     },
   },
 });

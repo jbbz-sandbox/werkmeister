@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import config from "./.vitepress/config.mjs";
 
 const { nav: allNav, sidebar: sidebars } = config.themeConfig;
 const nav = allNav.slice(0, -1);
-const sidebar = sidebars["/"];
+const sidebar = sidebars["/"].slice(0, -1); // the last group is the SDK link
 const links = (groups) => groups.flatMap((g) => g.items.map((i) => i.link));
 
 test("nav has one dropdown per sidebar group, reaching every sidebar page once", () => {
@@ -19,4 +20,12 @@ test("nav has one dropdown per sidebar group, reaching every sidebar page once",
 test("the nav ends with the SDK reference, which has its own sidebar", () => {
   assert.deepEqual(allNav.at(-1), { text: "SDK", link: "/sdk/" });
   assert.equal(sidebars["/sdk/"][0].link, "/sdk/");
+});
+
+test("the SDK reference is linked outside the top bar: docs sidebar and landing page (SW-726)", () => {
+  assert.deepEqual(sidebars["/"].at(-1).items, [{ text: "SDK reference", link: "/sdk/" }]);
+  assert.match(
+    readFileSync(new URL("./index.md", import.meta.url), "utf8"),
+    /^ {6}link: \/sdk\/$/m,
+  );
 });

@@ -6,7 +6,7 @@ import config from "./.vitepress/config.mjs";
 
 const ROOT = join(import.meta.dirname, "../..");
 const pages = config.themeConfig.sidebar["/"].flatMap((g) =>
-  g.items.map((i) => `${i.link.slice(1)}.md`),
+  g.items.filter((i) => !i.link.endsWith("/")).map((i) => `${i.link.slice(1)}.md`),
 );
 // The pre-SW-591 framing: the original company app, the old subtitle, the stale Node floor, one tracker.
 const OLD = /~15 services|Multi-Feature Concurrent Development|must be 20\+|tickets from Jira/;
