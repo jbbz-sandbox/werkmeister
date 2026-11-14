@@ -146,10 +146,15 @@ test("plugins/ maps to a service whose test runs the plugin package (SW-580)", (
   assert.match(fragment.services[owner].test, /--filter=werkmeister-plugin\b/);
 });
 
-// SW-604: tests that need lsof skip without it, and node:22 lacks it.
-test("the werkmeister-core test row installs lsof when missing (SW-604)", () => {
-  for (const svc of ["werkmeister-core"])
-    assert.match(fragment.services[svc].test, /^\{ command -v lsof .*apt-get install -y -qq lsof/);
+// SW-604, SW-683: tests that need lsof skip without it and node:22 lacks it, but a test row is pre-approved on the host too.
+test("lsof comes from the install script, never a test row (SW-683)", () => {
+  for (const [svc, def] of Object.entries(fragment.services))
+    assert.doesNotMatch(def.test ?? "", /apt-get/, `${svc} test runs apt-get`);
+  const startup = fs.readFileSync(
+    new URL("../../apps/cli/infra/compose/scripts/werkmeister-install-startup.sh", import.meta.url),
+    "utf8",
+  );
+  assert.match(startup, /ln -sf "\$TOOLS\/lsof\/usr\/bin\/lsof" "\$TOOLS\/bin\/lsof"/);
 });
 
 // SW-723: the context appends repo.lint to each test line, so a lint step in a row ran twice.

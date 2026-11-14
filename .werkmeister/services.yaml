@@ -55,15 +55,15 @@ services:
   # uid, and git refuses "dubious ownership" otherwise. The anchors below are
   # reused by every other service here, so this entry must stay above them.
   werkmeister-core:
-    # SW-604: node:22 has ps but no lsof, so pause-resume's resumeAndNudge tests skipped ("no ps/lsof") in the gate; a service's `test:` is
-    # the one place that reaches the container, so this row starts by installing it when missing (a host run already has it).
+    # SW-604, SW-683: lsof (pause-resume's resumeAndNudge tests) comes from the tools volume, filled by werkmeister-install's
+    # startup.sh; this row also runs on the host as a pre-approved command, so it installs nothing.
     path: packages/werkmeister-core
     type: library
     archetype: node-tool
     # apps/cli and apps/werkmeister-mcp have no service of their own (path_mappings above): this row tests them, since core is
     # bundled into both, and a second container ran the same suites twice whenever a change touched core and the CLI.
     # SW-723: no lint steps here; werkmeister-context.md appends repo.lint to this line and the gate runs it as its own row.
-    test: "{ command -v lsof >/dev/null || { apt-get update -qq && apt-get install -y -qq lsof; }; } && pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core --filter=werkmeister-plugin"
+    test: "pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core --filter=werkmeister-plugin"
     # SW-143: the ICM exercise step defers to this text for a CLI, so the whole recipe lives here.
     validate: >-
       In this repo the host checkout has no node_modules (`tsc: command not found`, `ERR_MODULE_NOT_FOUND: dockerode`), so run every command below, the install, the build, the tests and `with-fixture-workspace`, through `docker exec -w /app/<path> <container> <command>` (container names are in `werkmeister-context.md`),
