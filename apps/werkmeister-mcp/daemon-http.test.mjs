@@ -53,9 +53,11 @@ const CONTAINER = {
 };
 
 let openFollows = 0;
+// SW-700: the next container listing answers this late, so a tool call outlasts undici's timeouts.
+let slowListMs = 0;
 
 function fakeDocker(socket) {
-  const server = http.createServer((req, res) => {
+  const server = http.createServer(async (req, res) => {
     const url = new URL(req.url.replace(/^\/v[\d.]+/, ""), "http://x");
     const json = (body) => {
       res.writeHead(200, { "content-type": "application/json" });
@@ -63,6 +65,9 @@ function fakeDocker(socket) {
     };
     if (url.pathname === "/_ping") return res.end("OK");
     if (url.pathname === "/containers/json") {
+      const late = slowListMs;
+      slowListMs = 0;
+      if (late) await sleep(late);
       // dockerode sends a label filter as a list or as an object keyed by label.
       const filter = JSON.parse(url.searchParams.get("filters") ?? "{}").label ?? [];
       const labels = Array.isArray(filter) ? filter : Object.keys(filter);
@@ -143,6 +148,7 @@ before(async () => {
       DOCKER_HOST: `unix://${socket}`,
       WERKMEISTER_CONFIG_FILE: path.join(reg, "config.yaml"),
       WERKMEISTER_FIXTURE: "1",
+      WERKMEISTER_DAEMON_HEARTBEAT_MS: "200",
     },
   });
   let stderr = "";
@@ -272,6 +278,59 @@ test("/api/tool reports a tool error as 400 with its code", async () => {
   const res = await apiTool(machineToken, "stop", { workspace: "b" });
   assert.equal(res.status, 400);
   assert.equal((await res.json()).code, "NOT_RUNNING");
+});
+
+// SW-700: undici, behind Node's fetch, fails a response with no headers after 300 s
+// (headersTimeout) and a body that goes 300 s without a byte (bodyTimeout); AbortSignal
+// can't extend either. Shrink both to 1 s on Node's own global Agent to reach them quickly.
+const DISPATCHER = Symbol.for("undici.globalDispatcher.1");
+async function withUndiciTimeouts(ms, fn) {
+  await fetchFresh(`${base}/api/status`); // makes undici create its global Agent
+  const prev = globalThis[DISPATCHER];
+  assert.equal(prev?.constructor.name, "Agent");
+  globalThis[DISPATCHER] = new prev.constructor({ headersTimeout: ms, bodyTimeout: ms });
+  try {
+    return await fn();
+  } finally {
+    await globalThis[DISPATCHER].close();
+    globalThis[DISPATCHER] = prev;
+  }
+}
+
+async function daemonClient() {
+  process.env.WERKMEISTER_HOST = base;
+  return import("werkmeister-core/daemon_client");
+}
+
+test("a daemon call slower than undici's header and body timeouts still answers (SW-700)", async () => {
+  const { callTool } = await daemonClient();
+  slowListMs = 3500;
+  const r = await withUndiciTimeouts(1000, () => callTool("status", {}, { token: machineToken }));
+  assert.deepEqual(r.data.statuses.map((s) => s.name).sort(), ["a", "b"]);
+});
+
+test("a daemon call that outlasts timeoutMs is still DaemonTimeout (SW-700)", async () => {
+  const { callTool, DaemonTimeout } = await daemonClient();
+  // undici's timers tick coarsely (~1 s), so timeoutMs sits well past its 1 s timeouts.
+  slowListMs = 6000;
+  const t0 = Date.now();
+  await withUndiciTimeouts(1000, () =>
+    assert.rejects(callTool("status", {}, { token: machineToken, timeoutMs: 4000 }), (e) => {
+      assert.ok(e instanceof DaemonTimeout, e.message);
+      assert.match(e.message, /TimeoutError/);
+      return true;
+    }),
+  );
+  assert.ok(Date.now() - t0 >= 4000, "gave up before timeoutMs");
+  await sleep(2500); // let the daemon finish the call the client left
+});
+
+test("a tool error through the daemon client keeps its code (SW-700)", async () => {
+  const { callTool } = await daemonClient();
+  await assert.rejects(callTool("stop", { workspace: "b" }, { token: machineToken }), {
+    name: "SandboxError",
+    code: "NOT_RUNNING",
+  });
 });
 
 test("/api/logs/stream sends SSE chunks and closes the follow when the client leaves", async () => {
