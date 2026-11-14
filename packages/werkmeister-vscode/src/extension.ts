@@ -3,7 +3,7 @@ import { disposeOutputChannel, registerCommands } from "./commands.js";
 import { registerClaudeUriHandler } from "./harness/claude/terminals.js";
 import { disposeLogTerminals } from "./logs.js";
 import { disposeTerminals } from "./terminal.js";
-import { SandboxTreeProvider } from "./tree.js";
+import { WorkspacesView } from "./view.js";
 
 /**
  * The WERKMEISTER_* values this process inherited, captured before any setting is
@@ -49,12 +49,10 @@ export function applySettingsToEnv(): void {
 export function activate(context: vscode.ExtensionContext): void {
   applySettingsToEnv();
 
-  const provider = new SandboxTreeProvider();
-  const view = vscode.window.createTreeView("sandboxWorkspaces", { treeDataProvider: provider });
+  const provider = new WorkspacesView();
 
   context.subscriptions.push(
-    view,
-    provider.bind(view),
+    vscode.window.registerWebviewViewProvider("sandboxWorkspaces", provider),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration("sandbox")) return;
       applySettingsToEnv();

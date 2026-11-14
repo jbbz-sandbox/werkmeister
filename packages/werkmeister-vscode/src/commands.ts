@@ -6,12 +6,18 @@ import * as vscode from "vscode";
 import { childEnv, lifecycleOf, listWorkspaces, resolveSandboxBin } from "werkmeister-core";
 import { DOT_DIR, getReposRoot, workspacesRoot } from "werkmeister-core/config";
 import { callTool } from "werkmeister-core/daemon_client";
+import { DASHBOARD, status as webStatus } from "werkmeister-core/web_servers";
 import { ARGV, LIFECYCLE } from "./argv.js";
 import type { WsNode } from "./build-tree.js";
-import { openSessionTerminal } from "./harness/claude/terminals.js";
+import {
+  focusMasterControl,
+  focusSessionTerminal,
+  openSessionTerminal,
+  startWorkTerminal,
+} from "./harness/claude/terminals.js";
 import { showLogs } from "./logs.js";
 import { runInTerminal } from "./terminal.js";
-import type { SandboxTreeProvider } from "./tree.js";
+import type { WorkspacesView } from "./view.js";
 
 export { ALL_ARGV, ARGV } from "./argv.js";
 
@@ -129,7 +135,7 @@ async function sessionIn(node: WsNode | undefined, mode: "new" | "continue"): Pr
 
 /** Close out (no reason) or abandon (with one) through the daemon's `close-out` tool. */
 async function endWorkspace(
-  provider: SandboxTreeProvider,
+  provider: WorkspacesView,
   ws: { name: string; path: string },
   abandon?: string,
 ): Promise<void> {
@@ -171,7 +177,7 @@ async function endWorkspace(
   }
 }
 
-export function registerCommands(provider: SandboxTreeProvider): vscode.Disposable[] {
+export function registerCommands(provider: WorkspacesView): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand("sandbox.refresh", () => provider.refresh()),
 
@@ -360,6 +366,37 @@ export function registerCommands(provider: SandboxTreeProvider): vscode.Disposab
     vscode.commands.registerCommand("sandbox.newSession", (node?: WsNode) =>
       sessionIn(node, "new"),
     ),
+
+    vscode.commands.registerCommand("sandbox.openTerminal", async (node?: WsNode) => {
+      const ws = await pickWorkspace(node);
+      if (ws) focusSessionTerminal(ws);
+    }),
+    vscode.commands.registerCommand("sandbox.startWork", async (node?: WsNode) => {
+      const ws = await pickWorkspace(node);
+      if (!ws) return;
+      try {
+        await startWorkTerminal(ws);
+      } catch (e) {
+        void vscode.window.showErrorMessage(`werkmeister: ${(e as Error).message}`);
+      }
+    }),
+    vscode.commands.registerCommand("sandbox.dashboard", async () => {
+      const dashboard = await webStatus(DASHBOARD);
+      if (dashboard.healthy) {
+        await vscode.env.openExternal(vscode.Uri.parse(dashboard.url));
+        return;
+      }
+      const pick = await vscode.window.showInformationMessage(
+        "The werkmeister dashboard is not running.",
+        "⚡ Connect infra",
+      );
+      if (pick) await vscode.commands.executeCommand("sandbox.connect");
+    }),
+    vscode.commands.registerCommand("sandbox.masterControl", () => {
+      const root = workspacesRoot();
+      fs.mkdirSync(root, { recursive: true });
+      focusMasterControl(root);
+    }),
 
     vscode.commands.registerCommand("sandbox.refreshPrs", () => provider.refreshPrs()),
 

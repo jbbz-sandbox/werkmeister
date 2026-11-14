@@ -206,3 +206,26 @@ render, or a live editor.
 
 **Total: 25 checks** (23 in Phase A, 2 in Phase B) — the rest are automated;
 see the table at the top.
+
+## Cards (webview)
+
+The view is a webview of wrapping cards since the tree was replaced, so the steps above that say
+"hover a workspace" or "inline icon" now mean the card's right-click menu, and "expand" means nothing:
+a card always shows its services and PRs.
+
+- **Wrapping.** Drag the side bar to its narrowest: every line wraps, nothing ends in `…`.
+- **Theme.** Switch between a dark, a light and a high-contrast theme: the cards follow at once.
+- **Links.** Click the issue key and a PR ref: each opens in the browser.
+- **Right-click.** On a card: Open in New Window, the container commands, Open feature, Logs, Close out
+  and Abandon, with ▶ Up / ■ Stop only
+  where they apply. On a service: Logs, and Toggle Intercept where it is interceptable or yours.
+- **Open terminal.** Click it on a workspace with no `claude <workspace>` terminal: one opens running
+  `claude --continue`. Click it again: the same terminal takes focus, no second one opens.
+- **Start work / Pause / Resume.** These act on the run, not on containers. A workspace nobody has
+  started has ▶ Start work beside Open terminal: click it and a `claude <workspace>` terminal opens
+  with the starting prompt already sent. A live run has ⏸ Pause, which holds the session and freezes
+  its containers, and becomes ▶ Resume once the workspace reads Paused.
+- **Master control.** With a chat already running in a terminal at the workspaces root, click it: that
+  terminal takes focus. Close it and click again: a `Master control` terminal opens there.
+- **Dashboard ↗.** With the dashboard running, click it: the dashboard opens in the browser. With it
+  stopped: a notice offers ⚡ Connect infra.
