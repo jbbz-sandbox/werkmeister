@@ -31,6 +31,8 @@ export interface FakeWorld {
   rules?: unknown[];
   /** Containers the fake docker shows as running, to the gate's `ps --format {{.Names}}…` only. */
   running?: string[];
+  /** `docker inspect` lines (`feature\tworkdir\tstartedAt\tmemory\tnanoCpus`) the scheduler reads as running features (SW-685). */
+  containers?: string[];
   /** Set: `docker exec` runs its last argument (the gate row's command) with `sh -c` here and exits with its code. Absent: exit 0. */
   execCwd?: string;
 }
@@ -46,7 +48,8 @@ export interface Fakes {
 // Unknown verbs exit 1, so a code path a fake doesn't cover fails loudly (SW-148).
 // `pr list` prints nothing: pr open's --jq leaves no URL when no PR is open.
 // Only the gate's `ps --format {{.Names}}\t{{.State}}` sees running containers; every other `ps`
-// (-q/-aq by label) finds none, so no teardown of a pre-rename project runs on a fake hit.
+// (-q/-aq by label) finds none, so no teardown of a pre-rename project runs on a fake hit. Only the
+// scheduler's exact feature-label `ps -q` and its NanoCpus `inspect` see `containers` (SW-685).
 const FAKE_JS = `import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 const [, , tool, dir, ...args] = process.argv;
@@ -102,8 +105,11 @@ if (tool === "gh") {
   switch (args[0]) {
     case "ps":
       if (args.some((a) => a.includes("{{.Names}}"))) out((world.running ?? []).map((c) => c + "\\trunning\\n").join(""));
+      else if (args.join(" ") === "ps -q --filter label=com.werkmeister.feature") out((world.containers ?? []).map((_, i) => "c" + i + "\\n").join(""));
       break;
-    case "inspect": out("false\\n"); break;
+    case "inspect":
+      out(args[1] === "--format" && args[2].includes("NanoCpus") ? (world.containers ?? []).map((l) => l + "\\n").join("") : "false\\n");
+      break;
     case "exec":
       if (world.execCwd) process.exit(spawnSync("sh", ["-c", args.at(-1)], { cwd: world.execCwd, stdio: "inherit" }).status ?? 1);
       break;

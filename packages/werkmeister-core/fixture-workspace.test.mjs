@@ -257,6 +257,53 @@ test("config adds keys to the fixture's config.yaml, and any key but budget is r
     assert.throws(() => fixturePreset({ config: { [key]: {} } }), /--config may not set/);
 });
 
+test("containers and queue seed what the scheduler reads from Docker and queue.json (SW-685)", async () => {
+  const { runningLeases } = await import("./dist/lifecycle.js");
+  const { readQueue } = await import("./dist/scheduler_state.js");
+  const holder = {
+    feature: "holder",
+    workspace: "holder-ws",
+    startedAt: "2026-11-13T00:00:00Z",
+    memory: 2 ** 30,
+    nanoCpus: 6e9,
+  };
+  await withFixtureWorkspace(
+    async (fx) => {
+      assert.deepEqual(runningLeases(), [
+        { feature: "holder", cost: { memory: 2 ** 30, cpus: 6 }, rank: "person", busy: false },
+      ]);
+      assert.ok(fs.statSync(path.join(fx.root, "ws", "holder-ws")).isDirectory());
+      assert.deepEqual(readQueue(), ["a", "b"]);
+    },
+    { containers: [holder], queue: ["a", "b"] },
+  );
+  await withFixtureWorkspace(async () => {
+    assert.deepEqual(runningLeases(), []);
+    assert.deepEqual(readQueue(), []);
+  });
+});
+
+test("a seed value that could leave the fixture or isn't a number is refused (SW-685)", async () => {
+  const { fixturePreset } = await import("./dist/fixture_workspace.js");
+  const ok = {
+    feature: "h",
+    workspace: "h",
+    startedAt: "2026-11-13T00:00:00Z",
+    memory: 0,
+    nanoCpus: 1,
+  };
+  for (const bad of [
+    { feature: "../x" },
+    { workspace: "/etc" },
+    { startedAt: "soon" },
+    { memory: Number.NaN },
+    { nanoCpus: -1 },
+  ])
+    assert.throws(() => fixturePreset({ containers: [{ ...ok, ...bad }] }), /--running: bad value/);
+  assert.throws(() => fixturePreset({ queue: ["ok", "-x"] }), /--queue: bad feature "-x"/);
+  assert.doesNotThrow(() => fixturePreset({ containers: [ok], queue: ["ok"] }));
+});
+
 test("in-process, HOME is the fixture's, so anything written under ~ stays in it", async () => {
   const real = os.homedir();
   await withFixtureWorkspace(async (fx) => {
