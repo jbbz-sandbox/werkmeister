@@ -152,6 +152,13 @@ test("the werkmeister-core test row installs lsof when missing (SW-604)", () => 
     assert.match(fragment.services[svc].test, /^\{ command -v lsof .*apt-get install -y -qq lsof/);
 });
 
+// SW-723: the context appends repo.lint to each test line, so a lint step in a row ran twice.
+test("no service's test row repeats a repo.lint step (SW-723)", () => {
+  const steps = fragment.repo.lint.split(" && ");
+  for (const [svc, def] of Object.entries(fragment.services))
+    for (const step of steps) assert.ok(!def.test?.includes(step), `${svc} test repeats ${step}`);
+});
+
 // SW-679: a container → host daemon check needs the branch daemon on the host, whose worktree has no node_modules.
 test("core validate names the host-daemon script and its never-3002 port (SW-679)", () => {
   const v = fragment.services["werkmeister-core"].validate;
