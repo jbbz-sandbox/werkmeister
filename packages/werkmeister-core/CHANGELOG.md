@@ -1,5 +1,12 @@
 # sandbox-core
 
+## 0.90.3
+
+### Patch Changes
+
+- 4941f67: `with-fixture-workspace` takes `--running <file>` and `--queue <feature>[,<feature>]...`, so a capacity wait runs through the built CLI. Each `--running` line (`feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus`) is a container the fixture's fake `docker ps -q` / `docker inspect` show the scheduler as running; the workspace is a folder name created empty in the fixture, so the holder is a person's and never preempted. `--queue` seeds `scheduler/queue.json`. With `--config` `budget: { cpus: 6 }` and a 6-CPU holder, `feature up` exits 75 naming the holder, and `budget status` lists it under Running. `withFixtureWorkspace` takes the same as `containers` and `queue`.
+- b61338b: `with-fixture-workspace` and `withFixtureWorkspace` point the dead daemon address (`WERKMEISTER_HOST`) at a port just bound and closed, instead of `127.0.0.1:1`, which fetch rejects as a "bad port" (a TypeError with no `cause.code`) before connecting. A fixture run now sees a refused connection (`ECONNREFUSED`), as with a real stopped daemon, so the refused, restart and fallback paths can be exercised through the fixture.
+
 ## 0.90.2
 
 ### Patch Changes
