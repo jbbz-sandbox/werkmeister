@@ -71,6 +71,10 @@ const HOSTNAME_RULE =
 const NO_SERVICE_RULE =
   "A library or CLI has no service to restart: build it, then exercise the built artifact exactly as its Validation text in `werkmeister-context.md` § How to validate says.";
 
+// SW-691: sw-681's replay filtered out the very lines that showed its bug, and recorded nothing.
+const EXERCISE_WORKAROUND =
+  "A filter, workaround or special case the exercise needs before the change passes is a finding: write it into `exercise.md` as a `FAIL` row until the code is fixed, or until the row says why it reflects real use rather than a defect.";
+
 const IMPLEMENT_STEPS = [
   "Confirm ponytail is active (see `_shared/standards.md`; invoke the skill only if it is not), then read the standards rows above. Restate the rule you are applying beside each edit.",
 ];
@@ -352,7 +356,7 @@ const feature: Stage[] = [
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE}`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE} ${EXERCISE_WORKAROUND}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
@@ -469,7 +473,7 @@ const bugfix: Stage[] = [
       process: [
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
-        "Exercise one neighbouring path through each caller `repro.md` listed. Capture the output.",
+        `Exercise one neighbouring path through each caller \`repro.md\` listed. Capture the output. ${EXERCISE_WORKAROUND}`,
         `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
         // SW-579: the review step rewrites exercise.md, so recorded MANUAL results come first.
         MANUAL_STEP,
@@ -551,7 +555,7 @@ const refactor: Stage[] = [
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
-        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE}`,
+        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE} ${EXERCISE_WORKAROUND}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
