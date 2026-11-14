@@ -106,8 +106,12 @@ export function admit(budget: Budget, running: Lease[], queue: Waiter[], req: Re
   const position = order.indexOf(self) + 1;
   const isHead = position === 1;
   // Backfill: what fits starts past a head that doesn't, unless the head is a gate (it frees its whole
-  // feature soonest) or has waited STARVE_MS (SW-675).
-  const headHolds = !isHead && (order[0].gate || order[0].waitedMs >= STARVE_MS);
+  // feature soonest) or has waited STARVE_MS (SW-675). Never against a service start of a busy
+  // feature: it is how its gate ends and frees the lease the head may be waiting on (SW-699).
+  // shortcut: busy also covers a gate exec in the last idle_stop_minutes, so a recent gate's later
+  // --service start passes too; tighten to a live-gate signal if heads starve again.
+  const endsGate = !!req.services && running.some((l) => l.feature === req.feature && l.busy);
+  const headHolds = !isHead && !endsGate && (order[0].gate || order[0].waitedMs >= STARVE_MS);
   if (fits({ memory: 0, cpus: 0 }) && (req.byPerson || !headHolds)) return { kind: "admit" };
 
   // An idle or human-check lease (a session parked on a question) has nobody in it, so the queue head
