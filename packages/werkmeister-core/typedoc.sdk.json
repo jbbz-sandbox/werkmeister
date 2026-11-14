@@ -3,7 +3,6 @@
   "tsconfig": "tsconfig.json",
   "emit": "none",
   "excludePrivate": true,
-  "excludeInternal": true,
   "validation": { "invalidLink": true, "notExported": false, "notDocumented": true },
   "treatValidationWarningsAsErrors": true
 }
