@@ -157,6 +157,16 @@ test("lsof comes from the install script, never a test row (SW-683)", () => {
   assert.match(startup, /ln -sf "\$TOOLS\/lsof\/usr\/bin\/lsof" "\$TOOLS\/bin\/lsof"/);
 });
 
+// SW-697: docs-site's node_modules live in the container volume, so its validate text gives the in-container form.
+test("docs-site validate runs in the container and installs nothing on the host (SW-697)", () => {
+  const v = fragment.services["docs-site"].validate;
+  assert.match(
+    v,
+    /`docker exec -w \/app <feature>-docs-site pnpm turbo run test --continue --filter=docs-site`/,
+  );
+  assert.doesNotMatch(v, /pnpm install/);
+});
+
 // SW-684: the validate text's usage line is the script's own, so a new fixture flag shows up in both.
 test("core validate lists with-fixture-workspace's usage as the script prints it (SW-684)", () => {
   const src = fs.readFileSync(new URL("./src/fixture_workspace.ts", import.meta.url), "utf8");
