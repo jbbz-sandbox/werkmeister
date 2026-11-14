@@ -47,6 +47,34 @@ it("--slots-full is a fixture option, before the werkmeister args (SW-634)", () 
   expect(parse(["workspace", "init"]).opts?.slotsFull).toBe(false);
 });
 
+it("--running reads five tab-separated columns a line, --queue a comma list (SW-685)", () => {
+  const cwd = process.cwd();
+  process.chdir(tmp);
+  try {
+    fs.writeFileSync("running.tsv", "holder\tws\t2026-11-13T00:00:00Z\t0\t6000000000\n\n");
+    fs.writeFileSync("short.tsv", "holder\tws\t2026-11-13T00:00:00Z\t0\n");
+    const r = parse(["--running", "running.tsv", "--queue", "a,b", "budget", "status"]);
+    expect(r.opts?.containers).toEqual([
+      {
+        feature: "holder",
+        workspace: "ws",
+        startedAt: "2026-11-13T00:00:00Z",
+        memory: 0,
+        nanoCpus: 6e9,
+      },
+    ]);
+    expect(r.opts?.queue).toEqual(["a", "b"]);
+    expect(r.steps).toEqual([["budget", "status"]]);
+    expect(parse(["--running", "short.tsv", "budget", "status"])).toEqual({ bad: "--running" });
+    expect(parse(["--running", "secret-missing", "budget", "status"])).toEqual({
+      bad: "--running",
+    });
+    expect(parse(["--running", "../secret", "budget", "status"])).toEqual({ bad: "--running" });
+  } finally {
+    process.chdir(cwd);
+  }
+});
+
 it("--pr-field sets only fields that reach no git or Claude call, keeping any = in the value (SW-514)", () => {
   const r = parse(["--pr-field", "skip_release=a=b", "--pr-field", "release=none", "pr", "status"]);
   expect(r.opts?.prFields).toEqual({ skip_release: "a=b", release: "none" });

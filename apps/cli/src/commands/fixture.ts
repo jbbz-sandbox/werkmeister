@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]...] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -13,11 +13,15 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { startFakeDaemon } from "werkmeister-core/fixture_fakes";
-import { fixturePreset, seedFixture } from "werkmeister-core/fixture_workspace";
+import {
+  type FixtureContainer,
+  fixturePreset,
+  seedFixture,
+} from "werkmeister-core/fixture_workspace";
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]...] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -50,6 +54,8 @@ export function parse(argv: string[]) {
     change: undefined as string | undefined,
     workspace: undefined as Record<string, unknown> | undefined,
     config: undefined as Record<string, unknown> | undefined,
+    containers: undefined as FixtureContainer[] | undefined,
+    queue: undefined as string[] | undefined,
   };
   const print: string[] = [];
   let i = 0;
@@ -63,7 +69,26 @@ export function parse(argv: string[]) {
     else if (a === "--merged") opts.merged = true;
     else if (a === "--behind") opts.behind = true;
     else if (a === "--slots-full") opts.slotsFull = true;
-    else if (a === "--issue") {
+    else if (a === "--queue" && argv[i + 1] !== undefined)
+      opts.queue = (argv[++i] as string).split(",");
+    else if (a === "--running" && argv[i + 1] !== undefined) {
+      // fixturePreset checks each value; here only the shape: five tab-separated columns a line.
+      const file = inside(process.cwd(), argv[++i] as string);
+      if (!file || !fs.existsSync(file)) return { bad: a };
+      const rows = fs
+        .readFileSync(file, "utf8")
+        .split("\n")
+        .filter((l) => l.trim())
+        .map((l) => l.split("\t"));
+      if (rows.some((r) => r.length !== 5)) return { bad: a };
+      opts.containers = rows.map(([feature, workspace, startedAt, memory, nanoCpus]) => ({
+        feature: feature as string,
+        workspace: workspace as string,
+        startedAt: startedAt as string,
+        memory: Number(memory),
+        nanoCpus: Number(nanoCpus),
+      }));
+    } else if (a === "--issue") {
       // Input hygiene: no leading dash or whitespace in what becomes gh's `-R <repo>` (gh is the fake here; `--workspace` refs are unchecked).
       const ref = argv[++i] ?? "";
       if (!/^[A-Za-z0-9][\w.-]*\/[A-Za-z0-9][\w.-]*#\d+$/.test(ref)) return { bad: a };
@@ -155,7 +180,9 @@ export async function run(argv: string[]): Promise<void> {
             ? "--issue: a GitHub issue as owner/repo#number, e.g. o/app#1"
             : parsed.bad === "--change"
               ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
-              : `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
+              : parsed.bad === "--running"
+                ? "--running: a file under the current folder, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus line per container"
+                : `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
       );
     console.error(USAGE);
     process.exitCode = 2;
