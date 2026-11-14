@@ -658,6 +658,46 @@ export function fragmentTouched(
   return { all: reasons.length ? reasons.join(", ") : null, services };
 }
 
+const LOCKFILE = "pnpm-lock.yaml";
+
+/**
+ * What a pnpm-lock.yaml change reaches (SW-696): the importers whose entries differ from the
+ * base's, or `all` naming a change that reaches every importer — a top-level setting, or a
+ * `packages:`/`snapshots:` key on both sides whose value changed (pnpm gives a new version or
+ * peer set a new key, so only an existing entry can change an unchanged importer's tree).
+ * `null` when either side is not a lockfile.
+ */
+export function lockfileTouched(
+  base: string,
+  branch: string,
+): { all: string | null; importers: string[] } | null {
+  let m: Record<string, Record<string, unknown>>;
+  let b: typeof m;
+  try {
+    m = YAML.parse(base);
+    b = YAML.parse(branch);
+  } catch {
+    return null;
+  }
+  if (!m || !b || typeof m !== "object" || typeof b !== "object") return null;
+  const changed = (x: Record<string, unknown> = {}, y: Record<string, unknown> = {}) =>
+    [...new Set([...Object.keys(x), ...Object.keys(y)])].filter(
+      (k) => !isDeepStrictEqual(x[k], y[k]),
+    );
+  const reasons = [
+    ...changed(m, b).filter((k) => !["importers", "packages", "snapshots"].includes(k)),
+    ...["packages", "snapshots"].flatMap((s) =>
+      changed(m[s], b[s])
+        .filter((k) => m[s]?.[k] !== undefined && b[s]?.[k] !== undefined)
+        .map((k) => `${s}: ${k}`),
+    ),
+  ];
+  const all = reasons.length
+    ? `${reasons.slice(0, 3).join(", ")}${reasons.length > 3 ? ", …" : ""}`
+    : null;
+  return { all, importers: changed(m["importers"], b["importers"]).sort() };
+}
+
 function readEnv(ws: string, key: string): string {
   try {
     for (const line of fs.readFileSync(path.join(ws, ".env"), "utf8").split(/\r?\n/)) {
@@ -1080,10 +1120,40 @@ async function gateChecks(
       : null;
   // No base fragment (new, or unreadable): the file stays unmapped and every service runs.
   const fragment = own && before ? fragmentTouched(file.dir, diffed, own, before) : null;
-  const files = fragment ? diffed.filter((f) => f !== FRAGMENT_REL) : diffed;
-  const touched = fragment?.all
-    ? [...((repo["services"] ?? []) as string[])].sort()
-    : [...new Set([...mapTouched(files, repo), ...(fragment?.services ?? [])])].sort();
+  // The lockfile maps to the importers its diff changes, not to every service (SW-696).
+  // Against the worktree's copy: the gate's containers bind-mount the worktree, not HEAD.
+  const lockChange = async () => {
+    const mb = await deps.run("git", ["-C", dir, "merge-base", `origin/${base}`, "HEAD"]);
+    const show = mb.code
+      ? mb
+      : await deps.run("git", ["-C", dir, "show", `${mb.stdout.trim()}:${LOCKFILE}`]);
+    if (show.code) return null;
+    try {
+      return lockfileTouched(show.stdout, fs.readFileSync(path.join(dir, LOCKFILE), "utf8"));
+    } catch {
+      return null;
+    }
+  };
+  // No base lockfile, or either side unreadable: the file stays unmapped and every service runs.
+  const lock =
+    diffed.includes(LOCKFILE) && mappingFor(LOCKFILE, repo) === undefined
+      ? await lockChange()
+      : null;
+  const files = diffed.filter(
+    (f) => !(fragment && f === FRAGMENT_REL) && !(lock && f === LOCKFILE),
+  );
+  // An importer maps like a file under it, so the root importer `.` touches every service.
+  const importerFile = (i: string) => path.posix.join(i, "package.json");
+  const lockImporters = lock && !lock.all ? lock.importers : [];
+  const lockServices = mapTouched(lockImporters.map(importerFile), repo);
+  // Named like an unmapped file (SW-563), so the importer gets mapped rather than every service started again.
+  const lockUnmapped = lockImporters.filter((i) => mappingFor(importerFile(i), repo) === undefined);
+  const touched =
+    fragment?.all || lock?.all
+      ? [...((repo["services"] ?? []) as string[])].sort()
+      : [
+          ...new Set([...mapTouched(files, repo), ...(fragment?.services ?? []), ...lockServices]),
+        ].sort();
   const skips = (file.fm["skip_tests"] ?? {}) as Record<string, unknown>;
   if (fragment)
     add(
@@ -1092,6 +1162,16 @@ async function gateChecks(
       fragment.all
         ? `every service: ${FRAGMENT_REL} changes ${fragment.all}`
         : `fragment: ${FRAGMENT_REL} changes ${fragment.services.join(", ") || "no service entry"}`,
+    );
+  if (lock)
+    add(
+      "tests",
+      true,
+      lock.all
+        ? `every service: ${LOCKFILE} changes ${lock.all}`
+        : lockUnmapped.length
+          ? `every service: ${LOCKFILE} changes importer ${lockUnmapped.join(", ")}, which no path_mappings or no_service_paths entry covers`
+          : `lockfile: ${LOCKFILE} changes importers ${lock.importers.join(", ") || "none"} → ${lockServices.join(", ") || "no service"}`,
     );
   const unmapped = unmappedFiles(files, repo);
   const unmappedList = `${unmapped.slice(0, 5).join(", ")}${unmapped.length > 5 ? ", …" : ""}`;
