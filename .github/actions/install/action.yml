@@ -18,7 +18,10 @@ runs:
     # node_modules itself, not just the pnpm store: a hit skips the install
     # entirely. The lockfile changes on every version PR, so those runs still
     # pay for the install, from the cached store.
-    - uses: actions/cache@v4
+    # Skipped when the store missed (evicted): a restored node_modules makes the
+    # install a no-op, and `pnpm licenses` reads the store, not node_modules.
+    - if: steps.setup-node.outputs.cache-hit == 'true'
+      uses: actions/cache@v4
       id: node-modules
       with:
         path: |
@@ -27,7 +30,6 @@ runs:
           packages/*/node_modules
           plugins/*/node_modules
         key: node-modules-${{ runner.os }}-node${{ inputs.node-version }}-${{ hashFiles('pnpm-lock.yaml') }}
-    # Also when the store missed (evicted): `pnpm licenses` reads the store, not node_modules.
-    - if: steps.node-modules.outputs.cache-hit != 'true' || steps.setup-node.outputs.cache-hit != 'true'
+    - if: steps.node-modules.outputs.cache-hit != 'true'
       run: pnpm install --frozen-lockfile
       shell: bash
