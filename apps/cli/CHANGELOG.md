@@ -1,5 +1,17 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.90.4
+
+### Patch Changes
+
+- 3edd522: The werkmeister repo's own workspaces get `apps/werkmeister-mcp/scripts/host-daemon.mjs`, named in the `werkmeister-core` validate text: it runs the branch's bundled daemon and CLI on the host, on a temp HOME and a free port (never 3002), with `node_modules` linked to the installed werkmeister's, so a daemon-auth or networking change can be called from a container via `host.docker.internal`.
+
+  The daemon on its loopback bind (`HOST` unset, `127.0.0.1`, `localhost` or `::1`) now accepts a container's `Host: host.docker.internal` header, so a call from a container reaches the token check (401 or 200) instead of the MCP SDK's 403. Browsers are still refused by the Origin check.
+
+- b863c44: The werkmeister repo's install container puts `lsof` in the per-feature tools volume, and the `werkmeister-core` test row no longer installs it with `apt-get`, so the pre-approved test command a workspace's allow rules carry runs no package install on the host.
+- 6876b27: `werkmeister-context.md` § How to validate lists a row for every service in the workspace's repos, not only the workspace's own services, since the PR gate tests each service a change reaches. A workspace that runs only `docs-site` now sees `werkmeister-core`'s test command and validate text too.
+- d845e3b: `werkmeister-context.md` § How to validate and the ICM reproduce and exercise contracts name the one-off probe form: a `node --test` file run as `.werkmeister/bin/with-temp-home --no-wait node --test <file>`, in the service's container when the host has no node_modules. The workspace's ask rules cover that form (with and without `--no-wait`), so Claude Code asks once instead of the auto-mode classifier denying it; it is still never pre-approved.
+
 ## 0.90.3
 
 ### Patch Changes
