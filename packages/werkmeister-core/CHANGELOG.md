@@ -1,5 +1,14 @@
 # sandbox-core
 
+## 0.90.2
+
+### Patch Changes
+
+- 592f35a: `@anthropic-ai/claude-agent-sdk` is now an optional peer dependency of werkmeister-core, so `npm i werkmeister-core` no longer installs it or its ~240 MB `claude-agent-sdk-<platform>` binary. Only the `ask` helpers (refine, issue distillation, the Jira MCP fallback) load it; without it, `askOrThrow` fails with "Asking Claude needs the Claude Agent SDK, which is not installed" and the install command, and `ask`/`askJson` return null as for any other failure. Install it beside core to use them. The `werkmeister` CLI still depends on it.
+- 9eef5be: An npm-installed werkmeister-core finds the CLI package without `WERKMEISTER_ROOT`. When no werkmeister checkout sits above core, `sandboxRoot()` (and with it `infraRoot()` and every function that starts or creates things, such as `up` and `createWorkspace`) and the CLI-wrapper lookup follow the `werkmeister` on PATH to its package, e.g. `$(npm root -g)/werkmeister`. A `werkmeister` on PATH whose nearest `package.json` is not named `werkmeister` is skipped. `WERKMEISTER_ROOT` still overrides, and a checkout still wins over the global install.
+
+  The lookup follows symlinked bins (npm global installs, `npm link`), not pnpm's shell-script shims; set `WERKMEISTER_ROOT` there. Anything that resolves the CLI wrapper through core without `WERKMEISTER_ROOT`, such as the VS Code extension and the dashboard, now also falls back to the `werkmeister` on PATH before `~/.local/bin/werkmeister`, where it used to stop with an error.
+
 ## 0.90.1
 
 ### Patch Changes
