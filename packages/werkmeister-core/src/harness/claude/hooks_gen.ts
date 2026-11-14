@@ -629,6 +629,12 @@ export function workspaceAskRules(workspaceRoot: string): string[] {
   const nodeTest = [
     `Bash(${tempHome} env WERKMEISTER_ROOT=* node --test:*)`,
     `Bash(${tempHome} --no-wait env WERKMEISTER_ROOT=* node --test:*)`,
+    // SW-720: the probe form werkmeister-context.md names; an ask, so auto mode prompts instead of denying it.
+    `Bash(${tempHome} node --test*)`,
+    `Bash(${tempHome} --no-wait node --test*)`,
+    // The same form in the service's container, where a host without node_modules runs it.
+    `Bash(docker exec * ${tempHome} node --test*)`,
+    `Bash(docker exec * ${tempHome} --no-wait node --test*)`,
   ];
   const builtClis = builtCliWrappers(workspaceRoot);
   if (!builtClis.length) return nodeTest;
