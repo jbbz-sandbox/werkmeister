@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { chmod, mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -62,4 +63,23 @@ test("walks up to the checkout root that owns the CLI package", async () => {
   await writeFile(bin, "#!/bin/bash\nexit 0\n");
   await chmod(bin, 0o755);
   assert.equal(await resolveSandboxBin({ from: path.join(root, "apps", "cli") }), bin);
+});
+
+test("SW-695: with no checkout above, the werkmeister on PATH names the installed CLI's wrapper", async () => {
+  const prefix = await mkdtemp(path.join(tmpdir(), "w9r-global-"));
+  const pkg = path.join(prefix, "lib", "node_modules", "werkmeister");
+  await mkdir(path.join(prefix, "bin"), { recursive: true });
+  await mkdir(pkg, { recursive: true });
+  await writeFile(path.join(pkg, "package.json"), JSON.stringify({ name: "werkmeister" }));
+  await writeFile(path.join(pkg, "werkmeister"), "#!/bin/bash\nexit 0\n");
+  await chmod(path.join(pkg, "werkmeister"), 0o755);
+  await symlink(path.join(pkg, "werkmeister"), path.join(prefix, "bin", "werkmeister"));
+  const savedPath = process.env.PATH;
+  process.env.PATH = path.join(prefix, "bin");
+  try {
+    const found = await resolveSandboxBin({ from: await mkdtemp(path.join(tmpdir(), "w9r-npm-")) });
+    assert.equal(found, path.join(realpathSync(pkg), "werkmeister"));
+  } finally {
+    process.env.PATH = savedPath;
+  }
 });
