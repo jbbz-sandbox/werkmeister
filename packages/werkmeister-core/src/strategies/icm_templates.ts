@@ -107,8 +107,9 @@ const GATE_STEP =
   "Once the review's fixes are in, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record its exit code. A fix here reruns the host test step first.";
 
 // SW-534: sw-385's exercise on the real harness fixed ~40 lines after the review; they shipped unreviewed.
+// SW-678: a docs fix rerun with one service's tests skipped docs-site's, and the first `pr open` failed on it.
 const REVIEW_DELTA =
-  "If the exercise below changes code, rerun the review on that delta: a fresh subagent with the same brief, over the commits and changes made since the first review. Fix its **Must fix** findings, rerun the host test step, and append the result as new rows to `output/review.md`; the gate's review row covers them.";
+  "If the exercise below changes code, rerun the review on that delta: a fresh subagent with the same brief, over the commits and changes made since the first review. Fix its **Must fix** findings, rerun `werkmeister pr gate --tests` (not one service's test command: these edits come after the gate above, and the gate retests every service the diff touches), and append the result as new rows to `output/review.md`; the gate's review row covers them.";
 
 // SW-351: one of five parallel Edits reported success but never reached the file; tests did not cover it.
 const diffCheck = (doc: string) =>
@@ -472,8 +473,9 @@ const bugfix: Stage[] = [
         `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
         // SW-579: the review step rewrites exercise.md, so recorded MANUAL results come first.
         MANUAL_STEP,
+        // SW-678: these edits come after the fix stage's gate; one service's test command missed docs-site's (sw-631, sw-669).
         reviewStep(
-          "rerun the test command exactly as `../../.werkmeister/werkmeister-context.md` states it (through `.werkmeister/bin/with-temp-home`), rerun steps 2–3 and update `exercise.md`",
+          "rerun `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes), not one service's test command: it retests every service the diff touches, and these edits come after the fix stage's gate. Then rerun steps 2–3 and update `exercise.md`",
           v.group,
         ),
       ],
