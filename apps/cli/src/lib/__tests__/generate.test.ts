@@ -29,6 +29,13 @@ vi.mock("werkmeister-core/config", async (importOriginal) => {
   return { ...actual, stateInfraRoot: () => h.stateInfraRoot ?? actual.stateInfraRoot() };
 });
 
+// sandboxLock writes under the real os.homedir(), not the redirected config:
+// run the body directly so these tests never touch ~/.werkmeister/locks.
+vi.mock("werkmeister-core/locks", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("werkmeister-core/locks")>()),
+  sandboxLock: async (_name: string, fn: () => unknown) => fn(),
+}));
+
 import { dotDir, loadServices, stateInfraRoot } from "werkmeister-core/config";
 import { loadFeatureRouters } from "werkmeister-core/feature_routing";
 import {
@@ -758,12 +765,12 @@ describe("generateCaddyfile", () => {
       getPortRange(slot)[0] + (loadServices()["frontend"]?.port_offset ?? 0);
     expect(content).toMatch(
       new RegExp(
-        `@feat0_alpha_header header X-Feature alpha\\n\\s+handle @feat0_alpha_header \\{\\n\\s+reverse_proxy host\\.docker\\.internal:${port(1)}\\n`,
+        `@feat0_alpha_header header X-Feature alpha\\n\\s+handle @feat0_alpha_header \\{\\n\\s+header X-Werkmeister-Served-By alpha\\n\\s+reverse_proxy host\\.docker\\.internal:${port(1)}\\n`,
       ),
     );
     expect(content).toMatch(
       new RegExp(
-        `@feat1_beta_header header X-Feature beta\\n\\s+handle @feat1_beta_header \\{\\n\\s+reverse_proxy host\\.docker\\.internal:${port(2)}\\n`,
+        `@feat1_beta_header header X-Feature beta\\n\\s+handle @feat1_beta_header \\{\\n\\s+header X-Werkmeister-Served-By beta\\n\\s+reverse_proxy host\\.docker\\.internal:${port(2)}\\n`,
       ),
     );
     // Caddy tries sibling handles in file order: every header handle precedes
@@ -776,6 +783,84 @@ describe("generateCaddyfile", () => {
     );
     // A header naming no running feature matches nothing and falls to the default.
     expect(block.lastIndexOf("header_regexp Cookie")).toBeLessThan(block.indexOf("handle /* {"));
+  });
+
+  // SW-704: a local-only host (no remote_upstream) defaulted to the first feature
+  // by name, so a typo'd header, a foreign cookie or no selection got that
+  // workspace's page with HTTP 200 and no sign it was a fallback.
+  describe("local-only host no-match default (SW-704)", () => {
+    const siteBlock = async (localOnly: boolean) => {
+      if (localOnly) {
+        home.write(
+          "services.yaml",
+          fixtureServicesYaml()
+            .replace(/^\s+remote_hostname:.*\n/m, "")
+            .replace(/^\s+remote_upstream:.*\n/m, ""),
+        );
+      }
+      const content = fs.readFileSync(
+        await generateCaddyfile({
+          alpha: { slot: 1, services: ["frontend"] },
+          beta: { slot: 2, services: ["frontend"] },
+        }),
+        "utf8",
+      );
+      const start = content.indexOf(`${loadFeatureRouters()["frontend"]?.hostname} {`);
+      return content.slice(start, content.indexOf("\n}\n", start));
+    };
+    const port = (slot: number) =>
+      getPortRange(slot)[0] + (loadServices()["frontend"]?.port_offset ?? 0);
+
+    it("serves the first feature only when nothing is selected, and names it", async () => {
+      const block = await siteBlock(true);
+      expect(loadFeatureRouters()["frontend"]?.remoteUpstream).toBeUndefined();
+      // Neither the header nor the cookie is present (Caddy ANDs the two `not`s).
+      expect(block).toContain(
+        "@no_selection {\n        not header X-Feature *\n        not header_regexp Cookie (?:^|;\\s*)X-Feature=\n    }",
+      );
+      expect(block).toContain(
+        `handle @no_selection {\n        header X-Werkmeister-Served-By "alpha (fallback: no feature selected)"\n        reverse_proxy host.docker.internal:${port(1)}\n    }`,
+      );
+    });
+
+    it("answers a selection that matches no feature with a 404, not another feature's page", async () => {
+      const block = await siteBlock(true);
+      const fallback = block.slice(block.indexOf("handle /* {"));
+      expect(fallback).toContain(
+        'respond "No running feature named in X-Feature serves {host}; pick one at /__werkmeister" 404',
+      );
+      expect(fallback).not.toContain("reverse_proxy");
+      // Every per-feature handle precedes both defaults, so a valid selection still wins.
+      expect(block.lastIndexOf("header_regexp Cookie (?:^|;\\s*)X-Feature=beta")).toBeLessThan(
+        block.indexOf("@no_selection"),
+      );
+    });
+
+    it("names the serving feature on header- and cookie-routed responses", async () => {
+      const block = await siteBlock(true);
+      for (const [name, slot] of [
+        ["alpha", 1],
+        ["beta", 2],
+      ] as [string, number][]) {
+        expect(block).toMatch(
+          new RegExp(
+            `handle @feat\\d_${name}_header \\{\\n\\s+header X-Werkmeister-Served-By ${name}\\n\\s+reverse_proxy host\\.docker\\.internal:${port(slot)}\\n`,
+          ),
+        );
+        expect(block).toMatch(
+          new RegExp(
+            `handle @feat\\d_${name} \\{\\n\\s+header X-Werkmeister-Served-By ${name}\\n\\s+reverse_proxy host\\.docker\\.internal:${port(slot)} \\{`,
+          ),
+        );
+      }
+    });
+
+    it("leaves a host with a remote_upstream defaulting to the tunnel", async () => {
+      const block = await siteBlock(false);
+      const rc = loadFeatureRouters()["frontend"];
+      expect(block).not.toContain("@no_selection");
+      expect(block).toContain(`handle /* {\n        reverse_proxy ${rc?.remoteUpstream}\n    }`);
+    });
   });
 
   it("matches the X-Feature header exactly so one feature can't take another's prefix", async () => {
