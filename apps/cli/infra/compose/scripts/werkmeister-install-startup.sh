@@ -127,7 +127,18 @@ if [ ! -x "$TOOLS/bin/claude" ]; then
   ln -sf "$TOOLS/claude-code/node_modules/.bin/claude" "$TOOLS/bin/claude"
 fi
 
+# SW-604, SW-683: node:22 has no lsof, so pause-resume's resumeAndNudge tests skipped in the gate. It goes here, not in
+# a service's `test:` row: that row also runs on the host as a pre-approved command, and must not run apt-get there.
+if [ ! -x "$TOOLS/bin/lsof" ]; then
+  deb_dir="$(mktemp -d)"
+  (cd "$deb_dir" && apt-get update -qq && apt-get download -qq lsof)
+  dpkg -x "$deb_dir"/lsof_*.deb "$TOOLS/lsof"
+  rm -rf "$deb_dir"
+  ln -sf "$TOOLS/lsof/usr/bin/lsof" "$TOOLS/bin/lsof"
+fi
+
 "$TOOLS/bin/docker" --version
 "$TOOLS/bin/claude" --version
+"$TOOLS/bin/lsof" -v 2>&1 | head -n 3
 DOCKER_CONFIG="$TOOLS/docker" "$TOOLS/bin/docker" compose version
 "$TOOLS/bin/kubectl" version --client

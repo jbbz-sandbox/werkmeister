@@ -105,6 +105,7 @@ beforeEach(() => {
     "bin/docker",
     "bin/kubectl",
     "bin/claude", // SW-580
+    "bin/lsof", // SW-683
     "docker/cli-plugins/docker-compose",
   ]) {
     writeExec(path.join(tmp, "tools", tool), "exit 0");
