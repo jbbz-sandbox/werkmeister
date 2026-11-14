@@ -1,5 +1,11 @@
 # sandbox-core
 
+## 0.89.0
+
+### Minor Changes
+
+- 93442fd: Publish `werkmeister-core` to npm. Its `werkmeister-core/sdk` entry point is the public SDK and follows semver; every other entry point is internal. Versions stay in lockstep with the CLI.
+
 ## 0.88.2
 
 ## 0.88.1
