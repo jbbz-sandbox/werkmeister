@@ -157,6 +157,13 @@ test("lsof comes from the install script, never a test row (SW-683)", () => {
   assert.match(startup, /ln -sf "\$TOOLS\/lsof\/usr\/bin\/lsof" "\$TOOLS\/bin\/lsof"/);
 });
 
+// SW-684: the validate text's usage line is the script's own, so a new fixture flag shows up in both.
+test("core validate lists with-fixture-workspace's usage as the script prints it (SW-684)", () => {
+  const src = fs.readFileSync(new URL("./src/fixture_workspace.ts", import.meta.url), "utf8");
+  const usage = src.match(/# usage: (with-fixture-workspace .*)$/m)[1];
+  assert.ok(fragment.services["werkmeister-core"].validate.includes(`Usage: \`${usage}\``));
+});
+
 // SW-723: the context appends repo.lint to each test line, so a lint step in a row ran twice.
 test("no service's test row repeats a repo.lint step (SW-723)", () => {
   const steps = fragment.repo.lint.split(" && ");
