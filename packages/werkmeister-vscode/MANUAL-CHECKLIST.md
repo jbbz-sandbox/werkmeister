@@ -215,7 +215,8 @@ a card always shows its services and PRs.
 
 - **Wrapping.** Drag the side bar to its narrowest: every line wraps, nothing ends in `…`.
 - **Theme.** Switch between a dark, a light and a high-contrast theme: the cards follow at once.
-- **Links.** Click the issue key and a PR ref: each opens in the browser.
+- **Links.** The issue key and each PR sit on their own line; click one: it opens in the browser. A PR's
+  state is green when open, purple when merged, blue when released, and failing checks read red.
 - **Right-click.** On a card: Open in New Window, the container commands, Open feature, Logs, Close out
   and Abandon, with ▶ Up / ■ Stop only
   where they apply. On a service: Logs, and Toggle Intercept where it is interceptable or yours.

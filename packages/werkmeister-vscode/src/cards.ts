@@ -6,7 +6,7 @@
  * No inline styles, since the view's CSP allows only the nonce'd stylesheet;
  * a colour is the class `colorClass` names.
  */
-import { TONE_COLORS, type WsNode } from "./build-tree.js";
+import { RELEASED_COLOR, TONE_COLORS, type WsNode } from "./build-tree.js";
 
 /** The only commands a click in the view may run; view.ts trusts exactly these. */
 export const CARD_COMMANDS = [
@@ -31,7 +31,7 @@ function colorClass(id?: string): string {
 }
 
 /** One rule per tone colour, in the theme's own variables so the cards follow it. */
-export const CARD_CSS = [...new Set(Object.values(TONE_COLORS))]
+export const CARD_CSS = [...new Set([...Object.values(TONE_COLORS), RELEASED_COLOR])]
   .map((id) => `.${colorClass(id)}{color:var(--vscode-${id.replace(/\./g, "-")})}`)
   .join("\n");
 
@@ -79,12 +79,15 @@ function workspaceCard(n: WsNode): string {
       ? action("a", "sandbox.openIssue", n.id, `${card.issueId} ↗`)
       : `<span>${esc(card.issueId)}</span>`
     : "";
+  // One line each: the issue, then every PR with its state and CI in their own colours.
   const links = [
     issue,
-    ...prs.map(
-      (p) =>
-        `<span>${action("a", "sandbox.openPr", p.id, `${p.label} ↗`)} <span class="dim">${esc(p.description)}</span></span>`,
-    ),
+    ...prs.map((p) => {
+      const status = (p.pr?.status ?? [])
+        .map((s) => `<span class="${colorClass(s.color)}">${esc(s.text)}</span>`)
+        .join(" · ");
+      return `${action("a", "sandbox.openPr", p.id, `${p.label} ↗`)} ${status}`;
+    }),
   ].filter(Boolean);
   return [
     `<article class="card"${context(n)}>`,
@@ -93,7 +96,7 @@ function workspaceCard(n: WsNode): string {
     card.question ? `<blockquote>“${esc(card.question)}”</blockquote>` : "",
     line(colorClass(TONE_COLORS.err), card.crash),
     line("dim", card.meta),
-    links.length ? `<div class="row">${links.join("")}</div>` : "",
+    links.map((l) => `<div>${l}</div>`).join(""),
     services.length
       ? `<div class="row">${services
           .map(

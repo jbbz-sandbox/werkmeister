@@ -81,6 +81,29 @@ test("the card's one button acts on the run: start it, hold it, or pick it back 
   assert.doesNotMatch(card({ state: "up", running: 1, total: 1 }), /sandbox\.up"/);
 });
 
+test("the issue and each PR get a line of their own, the PR's status in its own colour", () => {
+  const pr = (over) => ({ url: PR, state: "OPEN", ci: null, failingChecks: 0, ...over });
+  const card = (prs) =>
+    renderCards(
+      buildTree([ws("a", { issueId: "SW-1" })], [st("a")], null, [], {
+        prs: new Map([["a", prs]]),
+      }),
+    );
+  const open = card([pr(), pr({ url: "https://github.com/o/r/pull/2" })]);
+  assert.match(open, /<div><span>SW-1<\/span><\/div><div><a [^>]+>r#1 ↗<\/a> /);
+  assert.equal(open.match(/<div><a [^>]+>r#\d ↗/g).length, 2);
+  assert.match(open, /<span class="c-charts-green">Open<\/span>/);
+  assert.match(
+    card([pr({ ci: "fail", failingChecks: 2 })]),
+    /<span class="c-errorForeground">CI ✗ 2 failing<\/span>/,
+  );
+  assert.match(card([pr({ state: "MERGED" })]), /<span class="c-charts-purple">Merged<\/span>/);
+  assert.match(
+    card([pr({ state: "MERGED", release: "v1.2.0" })]),
+    /<span class="c-charts-blue">Released v1.2.0<\/span>/,
+  );
+});
+
 test("nothing a workspace supplies reaches the page as markup", () => {
   const html = renderCards(tree());
   assert.doesNotMatch(html, /<img/);
