@@ -152,6 +152,17 @@ test("the werkmeister-core test row installs lsof when missing (SW-604)", () => 
     assert.match(fragment.services[svc].test, /^\{ command -v lsof .*apt-get install -y -qq lsof/);
 });
 
+// SW-679: a container → host daemon check needs the branch daemon on the host, whose worktree has no node_modules.
+test("core validate names the host-daemon script and its never-3002 port (SW-679)", () => {
+  const v = fragment.services["werkmeister-core"].validate;
+  assert.match(v, /`node apps\/werkmeister-mcp\/scripts\/host-daemon\.mjs -- <command> \[args\]`/);
+  assert.match(v, /free port \(never 3002\) with a temp HOME/);
+  assert.ok(
+    fs.existsSync(new URL("../../apps/werkmeister-mcp/scripts/host-daemon.mjs", import.meta.url)),
+    "the script the text names exists",
+  );
+});
+
 // SW-645: the host has no node_modules, so the exercise-rebuild step must be the container form.
 test("core validate runs exercise-rebuild in the container (SW-645)", () => {
   assert.match(

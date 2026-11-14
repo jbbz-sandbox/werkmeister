@@ -88,7 +88,13 @@ async function startHttp(): Promise<void> {
   // way in. The token below is required on either bind (SW-631).
   const host = process.env.HOST ?? "127.0.0.1";
   const token = readOrCreateToken();
-  const app = createMcpExpressApp({ host });
+  // On a loopback bind the SDK accepts only localhost Host headers, but a container's call to
+  // host.docker.internal reaches it too (SW-631) and must get the token check, not a 403 (SW-679).
+  const app = createMcpExpressApp(
+    ["127.0.0.1", "localhost", "::1"].includes(host)
+      ? { host, allowedHosts: ["127.0.0.1", "localhost", "[::1]", "host.docker.internal"] }
+      : { host },
+  );
   const guard = restartGuard({
     entry: fs.realpathSync(process.argv[1]),
     build: buildOf,
