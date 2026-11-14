@@ -30,8 +30,12 @@ runs:
           packages/*/node_modules
           plugins/*/node_modules
         key: node-modules-${{ runner.os }}-node${{ inputs.node-version }}-${{ hashFiles('pnpm-lock.yaml') }}
-    # Also when the pnpm store missed (evicted while node_modules survived):
-    # an empty store breaks `pnpm licenses` and setup-node's post-job save.
-    - if: steps.node-modules.outputs.cache-hit != 'true' || steps.setup-node.outputs.cache-hit != 'true'
+    - if: steps.node-modules.outputs.cache-hit != 'true'
       run: pnpm install --frozen-lockfile
+      shell: bash
+    # node_modules hit but the store was evicted: install would say "up to date"
+    # and leave the store empty, which breaks `pnpm licenses` and setup-node's
+    # post-job save. fetch fills the store from the lockfile alone.
+    - if: steps.node-modules.outputs.cache-hit == 'true' && steps.setup-node.outputs.cache-hit != 'true'
+      run: pnpm fetch
       shell: bash
