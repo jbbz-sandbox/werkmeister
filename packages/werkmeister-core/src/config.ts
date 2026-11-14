@@ -806,10 +806,43 @@ export function sandboxRoot(): string {
     if (parent === dir) break;
     dir = parent;
   }
+  const installed = installedCliPackage();
+  if (installed) return installed;
   throw new Error(
-    "Could not locate the werkmeister CLI package. Set WERKMEISTER_ROOT to your " +
-      "werkmeister checkout's apps/cli directory.",
+    "Could not locate the werkmeister CLI package. Install it (npm install -g werkmeister) " +
+      "or set WERKMEISTER_ROOT to its package directory (a checkout's apps/cli).",
   );
+}
+
+/**
+ * SW-695: the package directory of the `werkmeister` on *pathEnv*, for an
+ * npm-installed core with no checkout around it. The bin's realpath lands in the
+ * package (an npm global, or a checkout's apps/cli linked onto PATH); the nearest
+ * package.json must name it `werkmeister`, so another tool's `werkmeister` is skipped.
+ * shortcut: symlinked bins on PATH only, so pnpm's shell-script shims and a GUI process with a
+ * stripped PATH miss it; WERKMEISTER_ROOT covers both.
+ */
+export function installedCliPackage(pathEnv = process.env.PATH ?? ""): string | null {
+  for (const binDir of pathEnv.split(path.delimiter)) {
+    if (!binDir) continue;
+    let dir: string;
+    try {
+      dir = path.dirname(fs.realpathSync(path.join(binDir, "werkmeister")));
+    } catch {
+      continue;
+    }
+    for (; dir !== path.dirname(dir); dir = path.dirname(dir)) {
+      const pkg = path.join(dir, "package.json");
+      if (!fs.existsSync(pkg)) continue;
+      try {
+        if (JSON.parse(fs.readFileSync(pkg, "utf8")).name === "werkmeister") return dir;
+      } catch {
+        // an unreadable package.json is no CLI package
+      }
+      break;
+    }
+  }
+  return null;
 }
 
 /**

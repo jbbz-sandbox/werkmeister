@@ -31,10 +31,6 @@ for (const ws of workspaces) {
 
 The daemon's operations are reached with `callTool`. The full API is at [werkmeister.io/sdk](https://werkmeister.io/sdk/).
 
-## Limits
-
-Functions that start or create things (`up`, `createWorkspace` …) need `WERKMEISTER_ROOT` set to the CLI package directory, for example `$(npm root -g)/werkmeister`, until [SW-695](https://jory-group.atlassian.net/browse/SW-695).
-
 ## Licence
 
 Apache-2.0. See `LICENSE` and `NOTICE`.

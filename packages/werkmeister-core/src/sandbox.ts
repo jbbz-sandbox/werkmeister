@@ -84,6 +84,7 @@ import {
   dotDir,
   envVar,
   forwardSpecs,
+  installedCliPackage,
   loadServices,
   portsYamlPath,
   sandboxHome,
@@ -229,7 +230,8 @@ async function isDir(p: string): Promise<boolean> {
  * that shells out to the CLI (dashboard, MCP servers) must come through here rather than hand-rolling its own order.
  *
  * Order: $WERKMEISTER_BIN → $WERKMEISTER_ROOT/werkmeister → walk up from this module to the
- * checkout root that owns the CLI package → the `~/.local/bin/werkmeister` symlink.
+ * checkout root that owns the CLI package → the installed CLI package of the `werkmeister`
+ * on PATH (SW-695, for an npm-installed core) → the `~/.local/bin/werkmeister` symlink.
  *
  * WERKMEISTER_ROOT is the machine-global pointer at the *running* checkout: `werkmeister
  * config` generates it into `~/.werkmeister/env.sh`, which `~/.zshenv` and the
@@ -237,8 +239,8 @@ async function isDir(p: string): Promise<boolean> {
  * two resolve to whichever checkout happens to be nearest or globally linked,
  * which is the wrong one as soon as you work out of a feature worktree.
  *
- * All four steps are path lookups, never PATH lookups — robust to the stripped
- * environment a GUI-launched process inherits.
+ * Every step but the installed-CLI one is a path lookup, not a PATH lookup — robust to
+ * the stripped environment a GUI-launched process inherits.
  */
 export async function resolveSandboxBin(opts: { from?: string } = {}): Promise<string> {
   const explicit = envVar("BIN");
@@ -258,6 +260,12 @@ export async function resolveSandboxBin(opts: { from?: string } = {}): Promise<s
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
+  }
+
+  const installed = installedCliPackage();
+  if (installed) {
+    const cand = path.join(installed, "werkmeister");
+    if (await isExecutable(cand)) return cand;
   }
 
   const local = path.join(os.homedir(), ".local", "bin", "werkmeister");

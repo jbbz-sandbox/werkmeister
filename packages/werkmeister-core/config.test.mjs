@@ -6,7 +6,8 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
@@ -14,6 +15,7 @@ import {
   configPath,
   forwardSpecs,
   infraRoot,
+  installedCliPackage,
   monorepoRoot,
   sandboxHome,
   sandboxRoot,
@@ -158,4 +160,28 @@ test("stateInfraRoot is absolute even when WERKMEISTER_CONFIG_FILE is relative",
   process.env.WERKMEISTER_CONFIG_FILE = "rel/config.yaml";
   assert.ok(path.isAbsolute(stateInfraRoot()), stateInfraRoot());
   assert.equal(stateInfraRoot(), path.resolve("rel", "infra"));
+});
+
+/** A global npm install: <prefix>/lib/node_modules/werkmeister holding the wrapper, linked from <prefix>/bin. */
+async function fakeGlobalCli(name = "werkmeister") {
+  const prefix = await mkdtemp(path.join(tmpdir(), "w9r-global-"));
+  const pkg = path.join(prefix, "lib", "node_modules", "werkmeister");
+  await mkdir(path.join(prefix, "bin"), { recursive: true });
+  await mkdir(pkg, { recursive: true });
+  await writeFile(path.join(pkg, "package.json"), JSON.stringify({ name }));
+  await writeFile(path.join(pkg, "werkmeister"), "#!/bin/bash\nexit 0\n");
+  await symlink(path.join(pkg, "werkmeister"), path.join(prefix, "bin", "werkmeister"));
+  return { bin: path.join(prefix, "bin"), pkg: realpathSync(pkg) };
+}
+
+test("SW-695: installedCliPackage follows the werkmeister on PATH to its package", async () => {
+  const { bin, pkg } = await fakeGlobalCli();
+  const empty = await mkdtemp(path.join(tmpdir(), "w9r-nobin-"));
+  assert.equal(installedCliPackage([empty, bin].join(path.delimiter)), pkg);
+});
+
+test("SW-695: a werkmeister on PATH from another package, or none, is no CLI", async () => {
+  const { bin } = await fakeGlobalCli("not-werkmeister");
+  assert.equal(installedCliPackage(bin), null);
+  assert.equal(installedCliPackage(""), null);
 });
