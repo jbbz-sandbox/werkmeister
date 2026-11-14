@@ -13,7 +13,9 @@
         "$TURBO_ROOT$/plugins/werkmeister/README.md",
         // The build generates the SDK reference from core first (typedoc.json).
         "$TURBO_ROOT$/packages/werkmeister-core/src/**",
-        "$TURBO_ROOT$/packages/werkmeister-core/typedoc.sdk.json"
+        "$TURBO_ROOT$/packages/werkmeister-core/typedoc.sdk.json",
+        // TypeDoc reads core's tsconfig too, so a change to it alone must rebuild.
+        "$TURBO_ROOT$/packages/werkmeister-core/tsconfig.json"
       ],
       "outputs": ["dist/**"]
     }

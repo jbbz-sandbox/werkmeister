@@ -850,7 +850,7 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<WorkspaceConfi
   }
 }
 
-/** start_session's arguments for the workspace at `dir` (SW-153): the pane's ▶ Start work and `werkmeister workspace prompt --args`. */
+/** start_session's arguments for the workspace at `dir`: the pane's ▶ Start work and `werkmeister workspace prompt --args`. */
 export async function startArgs(dir: string): Promise<StartArgs> {
   return buildStartArgs({ name: path.basename(dir), ...(await readWorkspaceConfig(dir)) });
 }
@@ -3285,7 +3285,7 @@ export async function resumeClaudeInTerminal(
   return { path: target, sessionId: resumeId, launcher: opened };
 }
 
-/** Opens a Terminal window following the workspace's container logs, for the pane's Logs (SW-105). */
+/** Opens a Terminal window following the workspace's container logs, for the pane's Logs. */
 export async function followLogsInTerminal(name: string): Promise<{
   /** The feature (from the workspace's `.env`) whose logs the Terminal follows. */
   feature: string;
