@@ -30,7 +30,7 @@ New here? Start with the [Quick Start](docs/quick-start.md).
 | --- | --- | --- |
 | `werkmeister-core` | [packages/werkmeister-core](packages/werkmeister-core) | werkmeister's shared library. Its public API is werkmeister-core/sdk; every other entry point is internal. |
 | `werkmeister-ui` | [packages/werkmeister-ui](packages/werkmeister-ui) | The UI modules apps/werkmeister-dashboard and apps/werkmeister-mcp share, and the non-DOM workspace display model every surface reads. |
-| `werkmeister-vscode` | [packages/werkmeister-vscode](packages/werkmeister-vscode) | Manage werkmeister feature workspaces — container state, Telepresence intercepts, and the werkmeister CLI lifecycle — from a VS Code tree view. |
+| `werkmeister-vscode` | [packages/werkmeister-vscode](packages/werkmeister-vscode) | Manage werkmeister feature workspaces — container state, Telepresence intercepts, and the werkmeister CLI lifecycle — from a VS Code side view. |
 
 <!-- /generated -->
 
