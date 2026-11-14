@@ -412,7 +412,18 @@ export function buildSandboxContextMd(
     if (!r.test) return "—";
     return `\`${wrappedTestCommand(tempHome, r.test, lintOf(r.repo))}\``;
   };
-  const rows = validationRows(candidates, servicesConfig, archetypes, urlServices);
+  // SW-705: the gate tests every service a change reaches, so the table lists the candidates' whole repos.
+  // Each service's own `repo:`, not repos.<repo>.services: only registry sync fills that list.
+  const repoOf = (s: string) => (isDict(servicesConfig[s]) ? servicesConfig[s]["repo"] : undefined);
+  const repos = new Set(candidates.map(repoOf).filter(Boolean));
+  const repoServices = Object.keys(servicesConfig).filter((s) => repos.has(repoOf(s)));
+  const rows = validationRows(
+    [...candidates, ...repoServices],
+    servicesConfig,
+    archetypes,
+    urlServices,
+  );
+  const extraRows = rows.some((r) => !candidates.includes(r.service));
   // SW-646: contracts name no repo's toolchain; they send the agent here for the repo's own commands.
   const repoCommands = [...new Set(rows.map((r) => r.repo))]
     .map((repo) => {
@@ -615,6 +626,10 @@ or visit https://${proxy.host}/__werkmeister and select \`${feature}\` — the s
   const validateBlock = `## How to validate
 
 How to exercise a change to each service in this workspace.${
+    extraRows
+      ? " The table also lists the other services in this workspace's repos: the PR gate tests each service a change reaches, the workspace's own or not."
+      : ""
+  }${
     onDemand.length
       ? ` A plain \`werkmeister feature up\` skips the on-demand ones, ${onDemand.map((s) => `\`${s}\``).join(", ")}: start one with \`werkmeister feature up --service <name>\`.`
       : ""
