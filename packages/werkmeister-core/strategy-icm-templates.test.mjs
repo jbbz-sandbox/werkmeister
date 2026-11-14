@@ -200,6 +200,13 @@ test("each template renders with no undefined and a route per stage", async () =
           );
           assert.doesNotMatch(c, /runCapture|execRun|childEnv|execFileSync|runAsync/, `${wt}/${d}`);
         }
+        // SW-691: a workaround the exercise needs is a FAIL row, not a silent filter.
+        if (c.includes("Write `output/exercise.md`"))
+          assert.match(
+            c,
+            /A filter, workaround or special case the exercise needs before the change passes is a finding: write it into `exercise\.md` as a `FAIL` row/,
+            `${wt}/${d}`,
+          );
         // SW-562: stages that write exercise.md collect each MANUAL row's result before approval.
         if (c.includes("Write `output/exercise.md`"))
           assert.match(
