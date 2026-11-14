@@ -257,6 +257,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^4\. List every other caller .* and what each does with the result \(an early return, a printed value, a stored state\), so the fix's return shape is checked against every caller before the fix stage/m,
             `${wt}/${d}`,
           );
+        // SW-709: each criterion's verification is checked against the decided design before it is written.
+        if (/_(research|reproduce)$/.test(d))
+          assert.match(
+            c,
+            /name for each acceptance criterion in `BRIEF\.md` how its stated verification runs on that design \(which command, which platform or container\)\. A criterion whose verification cannot reach the design is an open question/,
+            `${wt}/${d}`,
+          );
         // SW-392: a repro is judged by exit code, not an output grep.
         if (d.endsWith("_reproduce"))
           assert.match(c, /^1\. Reproduce .*Judge each run by its exit code/m, `${wt}/${d}`);
