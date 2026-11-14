@@ -152,6 +152,21 @@ test("each template renders with no undefined and a route per stage", async () =
         // SW-534: an exercise that changes code gets the review rerun on its delta.
         if (d.endsWith("_implement"))
           assert.match(c, /rerun the review on that delta/, `${wt}/${d}`);
+        // SW-678: an edit made after the gate reruns the gate's tests, not one service's test command.
+        if (d.endsWith("_implement"))
+          assert.match(
+            c,
+            /Fix its \*\*Must fix\*\* findings, rerun `werkmeister pr gate --tests` \(not one service's test command/,
+            `${wt}/${d}`,
+          );
+        if (d.endsWith("_exercise")) {
+          assert.match(
+            c,
+            /then rerun `werkmeister pr gate --tests` \(from the workspace/,
+            `${wt}/${d}`,
+          );
+          assert.doesNotMatch(c, /rerun the test command exactly/, `${wt}/${d}`);
+        }
         // SW-535: follow-ups promised in decisions.md are filed before the PR file.
         if (d.endsWith("_propose"))
           assert.match(
