@@ -127,6 +127,14 @@ test("each template renders with no undefined and a route per stage", async () =
             /^3\. .*external API, permission or platform behaviour.*checked live, read-only.*never a write\).*`unverified` in the option text itself/m,
             `${wt}/${d}`,
           );
+        // SW-687: the stages that settle a design default a pre-approved command's input to an allowlist.
+        if (/_(research|reproduce)$/.test(d))
+          assert.match(
+            c,
+            /input to a pre-approved command .*defaults to an allowlist of accepted values and lists what each accepted value can reach: files, env vars, network addresses, processes\. A blocklist needs a stated reason\./,
+            `${wt}/${d}`,
+          );
+        else assert.doesNotMatch(c, /defaults to an allowlist/, `${wt}/${d}`);
         // SW-612: the exercise step stops for `machine setup` on the unresolved-hostname warning, and names no service.
         if (/Reload the running code|reload and exercise the service/.test(c)) {
           assert.match(
