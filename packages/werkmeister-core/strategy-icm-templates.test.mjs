@@ -316,7 +316,15 @@ test("each template renders with no undefined and a route per stage", async () =
         if (c.includes("Reload")) {
           assert.match(c, /A library or CLI has no service to restart/, `${wt}/${d}`);
           assert.match(c, /as its Validation text in `werkmeister-context\.md`/, `${wt}/${d}`);
+          // SW-720: and names the one probe form that is not denied.
+          assert.match(
+            c,
+            /A one-off probe is a `node --test` file run through `\.werkmeister\/bin\/with-temp-home --no-wait node --test <file>`/,
+            `${wt}/${d}`,
+          );
         }
+        if (d.endsWith("_reproduce"))
+          assert.match(c, /A one-off probe is a `node --test` file/, `${wt}/${d}`);
         // SW-506: the host-test step yields to a container recipe in the service's validate text.
         if (c.includes("through `.werkmeister/bin/with-temp-home`, which gives"))
           assert.match(

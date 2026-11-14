@@ -556,12 +556,16 @@ test("ask rules land beside allow, are recorded, and removal drops them (SW-473)
   assert.deepEqual(readSettings(root).permissions, { ask: ["mine"] });
 });
 
-test("node --test through the temp-HOME wrapper asks, both forms, never allowed (SW-510)", () => {
+test("node --test through the temp-HOME wrapper asks, every form, never allowed (SW-510, SW-720)", () => {
   const w = "/ws/w/.werkmeister/bin/with-temp-home";
   const cli = "/ws/w/werkmeister/apps/cli/werkmeister";
   const forms = [
     `Bash(${w} env WERKMEISTER_ROOT=* node --test:*)`,
     `Bash(${w} --no-wait env WERKMEISTER_ROOT=* node --test:*)`,
+    `Bash(${w} node --test*)`,
+    `Bash(${w} --no-wait node --test*)`,
+    `Bash(docker exec * ${w} node --test*)`,
+    `Bash(docker exec * ${w} --no-wait node --test*)`,
   ];
   const allow = buildAllowRules("feat", ["svc"], { svc: { test: "npm test" } }, {}, w, [cli]);
   assert.ok(!allow.some((r) => r.includes("node --test")), allow.join("\n"));
@@ -578,6 +582,10 @@ test("--exec-runs forms of the fixture wrapper and built CLI ask; only node --te
   const nodeTest = (bin) => [
     `Bash(${bin}/with-temp-home env WERKMEISTER_ROOT=* node --test:*)`,
     `Bash(${bin}/with-temp-home --no-wait env WERKMEISTER_ROOT=* node --test:*)`,
+    `Bash(${bin}/with-temp-home node --test*)`,
+    `Bash(${bin}/with-temp-home --no-wait node --test*)`,
+    `Bash(docker exec * ${bin}/with-temp-home node --test*)`,
+    `Bash(docker exec * ${bin}/with-temp-home --no-wait node --test*)`,
   ];
   assert.deepEqual(workspaceAskRules(root), nodeTest(path.join(dotDir(root), "bin")));
   const cli = path.join(root, "werkmeister", "apps", "cli");

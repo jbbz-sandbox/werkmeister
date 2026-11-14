@@ -71,6 +71,10 @@ const HOSTNAME_RULE =
 const NO_SERVICE_RULE =
   "A library or CLI has no service to restart: build it, then exercise the built artifact exactly as its Validation text in `werkmeister-context.md` § How to validate says.";
 
+// SW-720: sw-700 had host `node`, a compound line and `docker exec … node <script>` each denied before a probe ran.
+const PROBE_RULE =
+  "A one-off probe is a `node --test` file run through `.werkmeister/bin/with-temp-home --no-wait node --test <file>`, in the service's container when the host has no node_modules, as `werkmeister-context.md` § How to validate says; never host `node <script>`, a compound shell line or `docker exec … node <script>`.";
+
 // SW-691: sw-681's replay filtered out the very lines that showed its bug, and recorded nothing.
 const EXERCISE_WORKAROUND =
   "A filter, workaround or special case the exercise needs before the change passes is a finding: write it into `exercise.md` as a `FAIL` row until the code is fixed, or until the row says why it reflects real use rather than a defect.";
@@ -365,7 +369,7 @@ const feature: Stage[] = [
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE} ${EXERCISE_WORKAROUND}`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE} ${PROBE_RULE} ${EXERCISE_WORKAROUND}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
@@ -406,7 +410,7 @@ const bugfix: Stage[] = [
         "`_shared/standards.md` (nothing is written here), other stages' contracts, `.werkmeister/*.yml`.",
       process: [
         // SW-392: a grep for a line the reporter never prints read "0/25 failures" for a flake nobody reproduced.
-        "Reproduce the failure against the running service or with a test. Record the exact command and its output. Judge each run by its exit code, or by a check you have shown fails on a known-bad run — never by grepping the output for a line that may not be printed.",
+        `Reproduce the failure against the running service or with a test. Record the exact command and its output. Judge each run by its exit code, or by a check you have shown fails on a known-bad run — never by grepping the output for a line that may not be printed. ${PROBE_RULE}`,
         "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet.",
         "Trace to the root cause: the first place the code does something other than intended. A symptom site is not a root cause.",
         // SW-543: sw-520 grepped one call shape and missed the calls through other helpers; review caught them a round later.
@@ -480,7 +484,7 @@ const bugfix: Stage[] = [
       ],
       doNotLoad: "`BRIEF.md` (`repro.md` carries the settled scope), `.werkmeister/*.yml`.",
       process: [
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE}`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE} ${PROBE_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
         `Exercise one neighbouring path through each caller \`repro.md\` listed. Capture the output. ${EXERCISE_WORKAROUND}`,
         `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
@@ -564,7 +568,7 @@ const refactor: Stage[] = [
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
-        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE} ${EXERCISE_WORKAROUND}`,
+        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE} ${PROBE_RULE} ${EXERCISE_WORKAROUND}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
