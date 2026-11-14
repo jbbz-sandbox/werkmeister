@@ -88,6 +88,12 @@ let gaveUp = false;
 export const tookTheCall = (code: string) =>
   code === "TimeoutError" || (code.startsWith("UND_ERR_") && code !== "UND_ERR_CONNECT_TIMEOUT");
 
+// fetch wraps ECONNREFUSED and timeouts as a TypeError/AbortError with a cause.
+const codeOf = (e: unknown) => {
+  const err = e as Error & { cause?: { code?: string } };
+  return err.cause?.code ?? err.name;
+};
+
 /**
  * *retry*: wait out the daemon's own restart (SW-306) on a refused or reset connect,
  * which the daemon never saw, so resending is safe.
@@ -100,9 +106,7 @@ async function send(url: string, init: RequestInit, retry = true): Promise<Respo
       if (retry) gaveUp = false;
       return res;
     } catch (e) {
-      // fetch wraps ECONNREFUSED and timeouts as a TypeError/AbortError with a cause.
-      const err = e as Error & { cause?: { code?: string } };
-      const code = err.cause?.code ?? err.name;
+      const code = codeOf(e);
       if (tookTheCall(code)) throw new DaemonTimeout(code);
       if (!(code in NOT_LISTENING)) throw new DaemonUnavailable(code);
       if (!retry || Date.now() >= deadline) {
@@ -116,6 +120,12 @@ async function send(url: string, init: RequestInit, retry = true): Promise<Respo
 
 /** Request: the build the CLI would start. Response: the build the daemon loaded (SW-306). */
 export const BUILD_HEADER = "x-werkmeister-build";
+
+/**
+ * `/api/tool`, request `1`: answer with headers at once and the status in the body (SW-700).
+ * Response `1`: the daemon did; a daemon that leaves it out answers with status codes.
+ */
+export const STREAM_HEADER = "x-werkmeister-stream";
 
 // Set by the session's stdio proxy (SW-344): facts only the session's own process can see.
 /** `claudeLauncher()` evaluated in the session's env, not the daemon's launchd env. */
@@ -223,6 +233,7 @@ export async function callTool<T = unknown>(
       "Content-Type": "application/json",
       ...headers(opts.token),
       ...(build ? { [BUILD_HEADER]: build } : {}),
+      [STREAM_HEADER]: "1",
     },
     body: JSON.stringify({ name, arguments: args }),
     signal: opts.signal ? AbortSignal.any([opts.signal, timeout]) : timeout,
@@ -238,13 +249,20 @@ export async function callTool<T = unknown>(
       `HTTP ${res.status}: the port is held by something that is not the werkmeister daemon`,
     );
   }
-  const body = (await res.json().catch(() => ({}))) as {
+  const streamed = res.headers.get(STREAM_HEADER) === "1";
+  const body = (await res.json().catch((e) => {
+    // Streamed headers mean the daemon is running the call: never let a caller run it again.
+    if (streamed) throw new DaemonTimeout(codeOf(e));
+    return {};
+  })) as {
+    status?: number;
     structuredContent?: T;
     text?: string;
     error?: string;
     code?: string;
   };
-  if (!res.ok) {
+  const status = streamed ? (body.status ?? 500) : res.status;
+  if (status < 200 || status > 299) {
     // SW-254: the daemon has no tool this CLI knows, so it runs older code; the MCP SDK's own words.
     if (body.error?.replace(/^MCP error -?\d+: /, "") === `Tool ${name} not found`) {
       throw new SandboxError(
@@ -254,8 +272,8 @@ export async function callTool<T = unknown>(
       );
     }
     throw new SandboxError(
-      body.error ?? `daemon answered HTTP ${res.status} to ${name}`,
-      body.code ?? `HTTP_${res.status}`,
+      body.error ?? `daemon answered HTTP ${status} to ${name}`,
+      body.code ?? `HTTP_${status}`,
     );
   }
   return { data: body.structuredContent as T, text: body.text ?? "" };
