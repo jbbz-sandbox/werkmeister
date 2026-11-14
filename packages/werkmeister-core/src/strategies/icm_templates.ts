@@ -173,6 +173,10 @@ const reviewStep = (rerun: string, group: string[]) =>
   "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`; a file of prose alone fails with `has no PASS row`.";
 const implementReview = (v: IcmVars) => reviewStep("rerun the host test step above", v.group);
 
+// SW-687: sw-634 decided a blocklist for a pre-approved wrapper's input; one key it let through sent auth to any host.
+const PREAPPROVED_INPUT =
+  "When the change adds or widens an input to a pre-approved command (an allow rule, or a wrapper an allow rule covers), the decision defaults to an allowlist of accepted values and lists what each accepted value can reach: files, env vars, network addresses, processes. A blocklist needs a stated reason.";
+
 // SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
 const NAME_HISTORY_STEP =
   "For each decision that renames, keeps or removes a name, a fallback or an alias, record its definition site (file and line) and the commit that introduced it (`git log -S <name>`, in the repo that defines it). " +
@@ -284,7 +288,8 @@ const feature: Stage[] = [
           // Moved from docs/harnesses.md: adapter runs kept deciding from a harness's docs, not its binary.
           "When a decision rests on how an external tool behaves (a CLI command or flag, a plugin API, an event name), check it against the installed tool, not only its docs: record `<bin> --version`, and confirm each fact with `<bin> <cmd> --help` or a real run or plugin load. `decisions.md` names the version and, beside each fact, the command that confirmed it; a fact only the docs support is marked `unverified: docs only`, and no decision rests on it. If the tool cannot be installed, say so and mark every such fact `unverified`. " +
           // SW-605: sw-583 recommended a GitHub API call as `unverified` only in the file; the person approved it and a read-only call later returned 403.
-          "A recommended answer that rests on an external API, permission or platform behaviour (a token scope, a hosted API's response, a cloud permission) is checked live, read-only (a list, get, `--help` or dry run, never a write), before it goes into `decisions.md`, with the command and its result beside it. When it cannot be checked read-only, write `unverified` in the option text itself, so the question the person is asked carries the word, not only the file.",
+          "A recommended answer that rests on an external API, permission or platform behaviour (a token scope, a hosted API's response, a cloud permission) is checked live, read-only (a list, get, `--help` or dry run, never a write), before it goes into `decisions.md`, with the command and its result beside it. When it cannot be checked read-only, write `unverified` in the option text itself, so the question the person is asked carries the word, not only the file. " +
+          PREAPPROVED_INPUT,
         "Write `output/inventory.md`: steps 1–3.",
         NAME_HISTORY_STEP,
         "Write `output/decisions.md`: every open question in `BRIEF.md`, each as a heading with `status: proposed`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference).",
@@ -404,7 +409,7 @@ const bugfix: Stage[] = [
         // SW-566: sw-545's fix changed a return shape its one caller treated as "stop"; only the exercise caught it.
         "List every other caller of the function at the root cause and what each does with the result (an early return, a printed value, a stored state), so the fix's return shape is checked against every caller before the fix stage — a fix there reaches them too. When the fix belongs in shared code, list its call sites through every helper or entry point that reaches that code, not one argument shape, and record the search commands (greps) you used in `repro.md`.",
         // SW-442: sessionBusy had two true cases; stage 01 listed callers, so only review caught the second (sw-418).
-        "When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test.",
+        `When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test. ${PREAPPROVED_INPUT}`,
         NAME_HISTORY_STEP,
         // SW-564: sw-521's root cause was a permission rule; step 4 listed the callers of one builder and missed two other sources of a matching rule.
         "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source.",
