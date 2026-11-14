@@ -381,8 +381,13 @@ test("WERKMEISTER_HOST is dead under the fixture unless it is given a fake daemo
   const { callTool } = await import("./dist/daemon_client.js");
   await withFakeDaemon(
     async (daemon) => {
+      // SW-708: refused like a stopped daemon, not fetch's "bad port" TypeError (no cause.code) on port 1.
       await withFixtureWorkspace(async () => {
-        assert.equal(process.env.WERKMEISTER_HOST, "http://127.0.0.1:1");
+        assert.notEqual(process.env.WERKMEISTER_HOST, daemon.url);
+        await assert.rejects(fetch(process.env.WERKMEISTER_HOST), (e) => {
+          assert.equal(e.cause?.code, "ECONNREFUSED");
+          return true;
+        });
       });
       await withFixtureWorkspace(
         async () => {
