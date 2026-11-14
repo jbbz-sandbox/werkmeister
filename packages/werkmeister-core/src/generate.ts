@@ -1448,6 +1448,8 @@ interface HostRouter {
   service: string;
   upstream: string;
   features?: { name: string; upstream: string; matcher: string; cookie_regexp: string }[];
+  /** Local-only host: the feature `upstream` belongs to, served only when nothing is selected. */
+  fallback?: string;
 }
 
 /**
@@ -1466,8 +1468,10 @@ interface HostRouter {
  *    VALUE, selects which one serves the request, so any number of workspaces
  *    share the hostname concurrently.
  *    A request with neither — or one naming a feature that doesn't run this
- *    service — falls through to `upstream` (the remote tunnel when there is one,
- *    else the first feature by name, so local-only services still resolve).
+ *    service — falls through to `upstream`, the remote tunnel when there is one.
+ *    A local-only host has no tunnel (SW-704): a request selecting nothing gets
+ *    the first feature by name (`fallback`), marked by an X-Werkmeister-Served-By
+ *    response header, and one whose selection matches nothing gets a 404.
  *
  * Selecting on the cookie rather than picking a single winner is what makes
  * concurrent workstreams work. It also stops a torn-down-but-still-registered
@@ -1476,7 +1480,8 @@ interface HostRouter {
  *
  * Returns `[{hostname, service, upstream, features?}, ...]`, where `features` is
  * `[{name, upstream, matcher, cookie_regexp}, ...]`, omitted entirely when no
- * feature declares the service so the template renders the static form.
+ * feature declares the service so the template renders the static form, and
+ * `fallback` is set only on a local-only host.
  */
 function buildHostRouters(
   allFeatures: Record<string, SlotEntry>,
@@ -1519,8 +1524,9 @@ function buildHostRouters(
     // Prefer the remote tunnel as the no-cookie default: it is always live, and
     // picking a local feature here is what used to let a dead workspace own the
     // hostname. Local-only services have no remote face, so they still fall back
-    // to a feature rather than losing the site block entirely.
-    const defaultUpstream = rc.remoteUpstream ?? candidates[0]?.upstream;
+    // to a feature rather than losing the site block entirely, named in `fallback`.
+    const fallback = rc.remoteUpstream ? undefined : candidates[0];
+    const defaultUpstream = rc.remoteUpstream ?? fallback?.upstream;
     // No feature and no fallback -> nothing to proxy to, skip.
     if (!defaultUpstream) {
       continue;
@@ -1530,9 +1536,27 @@ function buildHostRouters(
       service: svcName,
       upstream: defaultUpstream,
       ...(candidates.length ? { features: candidates } : {}),
+      ...(fallback ? { fallback: fallback.name } : {}),
     });
   }
   return routers;
+}
+
+/** Local-only default (SW-704): nothing selected -> the marked fallback; a selection matching nothing -> 404. Mirrors Caddyfile.njk. */
+function fallbackLines(feature: string, upstream: string): string[] {
+  return [
+    "    @no_selection {",
+    "        not header X-Feature *",
+    "        not header_regexp Cookie (?:^|;\\s*)X-Feature=",
+    "    }",
+    "    handle @no_selection {",
+    `        header X-Werkmeister-Served-By "${feature} (fallback: no feature selected)"`,
+    `        reverse_proxy ${upstream}`,
+    "    }",
+    "    handle /* {",
+    '        respond "No running feature named in X-Feature serves {host}; pick one at /__werkmeister" 404',
+    "    }",
+  ];
 }
 
 /** Render host-router site blocks (built-in fallback path). */
@@ -1563,6 +1587,7 @@ function hostRouterLines(routers: HostRouter[]): string[] {
       for (const f of features) {
         lines.push(`    @${f["matcher"]}_header header X-Feature ${f["name"]}`);
         lines.push(`    handle @${f["matcher"]}_header {`);
+        lines.push(`        header X-Werkmeister-Served-By ${f["name"]}`);
         lines.push(`        reverse_proxy ${f["upstream"]}`);
         lines.push("    }");
       }
@@ -1571,6 +1596,7 @@ function hostRouterLines(routers: HostRouter[]): string[] {
         lines.push(`    # X-Feature=${f["name"]} -> that workspace's containers.`);
         lines.push(`    @${f["matcher"]} header_regexp Cookie ${f["cookie_regexp"]}`);
         lines.push(`    handle @${f["matcher"]} {`);
+        lines.push(`        header X-Werkmeister-Served-By ${f["name"]}`);
         lines.push(`        reverse_proxy ${f["upstream"]} {`);
         lines.push(`            header_up X-Feature ${f["name"]}`);
         lines.push("        }");
@@ -1589,9 +1615,13 @@ function hostRouterLines(routers: HostRouter[]): string[] {
     // `/*` rather than a bare `handle`: the more specific selector sibling
     // still wins, and the structural lint's bare-vs-scoped route-drop guard stays
     // meaningful instead of firing on every generated file.
-    lines.push("    handle /* {");
-    lines.push(`        reverse_proxy ${r["upstream"]}`);
-    lines.push("    }");
+    if (r["fallback"]) {
+      lines.push(...fallbackLines(r["fallback"], r["upstream"]));
+    } else {
+      lines.push("    handle /* {");
+      lines.push(`        reverse_proxy ${r["upstream"]}`);
+      lines.push("    }");
+    }
     lines.push("}");
     lines.push("");
   }

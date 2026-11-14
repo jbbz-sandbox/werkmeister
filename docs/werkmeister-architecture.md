@@ -88,6 +88,7 @@ docs-site.local.werkmeister.io {
     # X-Feature=docs-architecture -> that workspace's containers.
     @feat0_docs_architecture header_regexp Cookie (?:^|;\s*)X-Feature=docs-architecture(?:\s*;|\s*$)
     handle @feat0_docs_architecture {
+        header X-Werkmeister-Served-By docs-architecture
         reverse_proxy host.docker.internal:11606 {
             header_up X-Feature docs-architecture
         }
@@ -96,22 +97,36 @@ docs-site.local.werkmeister.io {
     # X-Feature=docs-top-nav -> that workspace's containers.
     @feat3_docs_top_nav header_regexp Cookie (?:^|;\s*)X-Feature=docs-top-nav(?:\s*;|\s*$)
     handle @feat3_docs_top_nav {
+        header X-Werkmeister-Served-By docs-top-nav
         reverse_proxy host.docker.internal:11306 {
             header_up X-Feature docs-top-nav
         }
     }
 
-    # No cookie, or one naming a feature that isn't serving this service.
-    handle /* {
+    # No X-Feature header or cookie: the first feature, marked as the fallback.
+    @no_selection {
+        not header X-Feature *
+        not header_regexp Cookie (?:^|;\s*)X-Feature=
+    }
+    handle @no_selection {
+        header X-Werkmeister-Served-By "docs-architecture (fallback: no feature selected)"
         reverse_proxy host.docker.internal:11606
+    }
+    # A selection naming no feature that serves this host.
+    handle /* {
+        respond "No running feature named in X-Feature serves {host}; pick one at /__werkmeister" 404
     }
 }
 ```
 
 A feature only gets a `handle` for a service it runs locally, so one service can
 come from a local container while its siblings still resolve to the k8s baseline.
-The final `/*` handle is the no-cookie default: the service's remote (cluster)
-upstream when it has one, else the first feature by name, as here. A service's
+When a service has a remote (cluster) upstream, the final `/*` handle sends
+every unmatched request there. A local-only service, as here, has none:
+a request with no `X-Feature` header or cookie gets the first feature by name,
+marked by `X-Werkmeister-Served-By`, and one whose selection matches no feature
+serving the host gets a 404 pointing at `/__werkmeister`. Every feature-routed
+response names its feature in `X-Werkmeister-Served-By`. A service's
 remote hostname gets its own site block with that one fixed upstream; a present
 cookie is still copied onto the request as the `X-Feature` header
 (`packages/werkmeister-core/src/generate.ts`).

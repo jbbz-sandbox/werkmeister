@@ -13,6 +13,8 @@
 # X-Feature request header, else the X-Feature cookie's VALUE, so several
 # workspaces share a hostname at once. The
 # final `/*` handle is the no-cookie default (the k8s tunnel where one exists).
+# A local-only host has no tunnel (SW-704): selecting nothing gets the first
+# feature, marked by X-Werkmeister-Served-By; a selection matching nothing is a 404.
 # Remote (K8s) hosts have a single fixed upstream and only forward the cookie as
 # a header for the cluster to read.
 # ---------------------------------------------------------------------------
@@ -43,6 +45,7 @@
 {% for f in r.features %}
     @{{ f.matcher }}_header header X-Feature {{ f.name }}
     handle @{{ f.matcher }}_header {
+        header X-Werkmeister-Served-By {{ f.name }}
         reverse_proxy {{ f.upstream }}
     }
 {% endfor %}
@@ -50,6 +53,7 @@
     # X-Feature={{ f.name }} -> that workspace's containers.
     @{{ f.matcher }} header_regexp Cookie {{ f.cookie_regexp }}
     handle @{{ f.matcher }} {
+        header X-Werkmeister-Served-By {{ f.name }}
         reverse_proxy {{ f.upstream }} {
             header_up X-Feature {{ f.name }}
         }
@@ -59,9 +63,23 @@
     # Matched on `/*` rather than left bare: the more specific selector
     # sibling still wins, and the structural lint's bare-vs-scoped route-drop
     # guard stays meaningful instead of firing on every reload.
+{% if r.fallback %}
+    @no_selection {
+        not header X-Feature *
+        not header_regexp Cookie (?:^|;\s*)X-Feature=
+    }
+    handle @no_selection {
+        header X-Werkmeister-Served-By "{{ r.fallback }} (fallback: no feature selected)"
+        reverse_proxy {{ r.upstream }}
+    }
+    handle /* {
+        respond "No running feature named in X-Feature serves {host}; pick one at /__werkmeister" 404
+    }
+{% else %}
     handle /* {
         reverse_proxy {{ r.upstream }}
     }
+{% endif %}
 {% else %}
     # Cookie present -> copy its value into an X-Feature header, then proxy.
     @xf header_regexp xf Cookie X-Feature=([^;]+)
