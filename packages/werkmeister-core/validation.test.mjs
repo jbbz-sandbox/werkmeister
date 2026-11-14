@@ -222,6 +222,43 @@ test("a repo with a gate lint: its test commands end with the lint; a repo witho
   );
 });
 
+// SW-705: a docs-only workspace whose fix lands in core still needs core's test row; the gate runs it.
+test("How to validate lists every service in the workspace's repos, not only its own", async () => {
+  await withSandboxHome(
+    async () => {
+      // No repos.<repo>.services list: the rows come from each service's own `repo:`.
+      const build = (svc) =>
+        buildSandboxContextMd(
+          "t",
+          1,
+          11100,
+          11119,
+          [svc],
+          loadServices(),
+          "",
+          null,
+          [svc],
+          false,
+          "",
+          {},
+        );
+      const out = build("web");
+      for (const svc of ["cli", "core", "web"])
+        assert.match(out, new RegExp(`^\\| \`${svc}\` \\| demo \\|`, "m"));
+      // The Services table lists k8s-forwarded `elsewhere` too; only the validation table has the repo column.
+      assert.doesNotMatch(out, /^\| `elsewhere` \| other \|/m, "another repo's service stays out");
+      assert.match(
+        out,
+        /also lists the other services in this workspace's repos: the PR gate tests/,
+      );
+      const alone = build("elsewhere");
+      assert.doesNotMatch(alone, /^\| `core` \|/m);
+      assert.doesNotMatch(alone, /also lists the other services/);
+    },
+    { services: SERVICES },
+  );
+});
+
 // SW-688: the in-container test line is what a library's validate text runs, so it carries the lint too.
 test("a running service's § Test commands line ends with its repo's lint; without one it is the bare test", async () => {
   await withSandboxHome(
