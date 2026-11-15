@@ -7,11 +7,11 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
-
 import { jiraCreds } from "../dist/jira-rest.js";
 import { gatePrs } from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { hostLoadLimit, readLeases } from "../dist/scheduler_state.js";
+import { installScript } from "../dist/shared_exec.js";
 import { initWorkspace } from "../dist/workspace_init.js";
 import { tokensDir } from "../dist/workspace_token.js";
 import { pinWerkmeisterRoot, withFakeDaemon, withFixtureWorkspace } from "./fixtures.mjs";
@@ -349,9 +349,7 @@ test("under the fixture, claude and kubectl are not the caller's, and its creden
   const bin = fs.mkdtempSync(path.join(os.tmpdir(), "caller-bin-"));
   const hits = path.join(bin, "hits");
   for (const name of ["claude", "kubectl"])
-    fs.writeFileSync(path.join(bin, name), `#!/bin/sh\necho ${name} >> "${hits}"\n`, {
-      mode: 0o755,
-    });
+    installScript(path.join(bin, name), `#!/bin/sh\necho ${name} >> "${hits}"\n`);
   const creds = ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "KUBECONFIG", "GH_TOKEN"];
   const prev = Object.fromEntries(["PATH", "CLAUDE_BIN", ...creds].map((k) => [k, process.env[k]]));
   delete process.env.CLAUDE_BIN;
@@ -438,10 +436,9 @@ test("with-fixture-workspace runs /app's CLI when /app is its worktree, and says
     );
     const script = writeFixtureWrapper(ws);
     // A stand-in for with-temp-home: drop --no-wait, run the rest.
-    fs.writeFileSync(
+    installScript(
       path.join(path.dirname(script), "with-temp-home"),
       '#!/bin/sh\n[ "$1" != --no-wait ] || shift\nexec "$@"\n',
-      { mode: 0o755 },
     );
     const text = fs.readFileSync(script, "utf8");
     assert.match(text, /^app=\/app$/m);

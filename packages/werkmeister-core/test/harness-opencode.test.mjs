@@ -15,6 +15,7 @@ import { opencodeAdapter } from "../dist/harness/opencode/index.js";
 import { opencodeResumeCommand, opencodeSendArgs } from "../dist/harness/opencode/session.js";
 import { turnStatus } from "../dist/harness/turn.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
+import { installScript } from "../dist/shared_exec.js";
 import { initWorkspace } from "../dist/workspace_init.js";
 import { pinWerkmeisterRoot, withSandboxHome, writeSessionState } from "./fixtures.mjs";
 
@@ -23,8 +24,7 @@ process.env.WERKMEISTER_ROOT = path.join(import.meta.dirname, "..", "..", "..", 
 
 const tmp = (p) => fs.mkdtempSync(path.join(os.tmpdir(), p));
 const script = (file, body) => {
-  fs.writeFileSync(file, `#!/bin/sh\n${body}\n`);
-  fs.chmodSync(file, 0o755);
+  installScript(file, `#!/bin/sh\n${body}\n`);
   return file;
 };
 const workspace = (harness) => {

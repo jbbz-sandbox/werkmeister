@@ -7,8 +7,8 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-
 import { ensureSharedVolumes } from "../dist/compose.js";
+import { installScript } from "../dist/shared_exec.js";
 
 const SAVED_PATH = process.env.PATH;
 let dir, log;
@@ -17,8 +17,7 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "ensure-volumes-"));
   log = path.join(dir, "docker.log");
   const docker = path.join(dir, "docker");
-  writeFileSync(docker, `#!/bin/sh\necho "$*" >> "${log}"\n`);
-  chmodSync(docker, 0o755);
+  installScript(docker, `#!/bin/sh\necho "$*" >> "${log}"\n`);
   process.env.PATH = `${dir}:${SAVED_PATH}`;
 });
 afterEach(() => {

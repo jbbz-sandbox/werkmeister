@@ -6,6 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { installScript } from "../dist/shared_exec.js";
 
 const { askCodex, askCodexJson, askCodexStrict, codexReconcileCommand } = await import(
   "../dist/harness/codex/cli.js"
@@ -20,7 +21,7 @@ function fakeCodex(answer, code = 0) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-codex-"));
   const bin = path.join(dir, "codex");
   const log = path.join(dir, "argv.json");
-  fs.writeFileSync(
+  installScript(
     bin,
     `#!${process.execPath}
 const fs = require("node:fs");
@@ -35,7 +36,6 @@ process.stdin.on("end", () => {
   if (${JSON.stringify(answer)} !== null) fs.writeFileSync(o, ${JSON.stringify(answer)});
 });
 `,
-    { mode: 0o755 },
   );
   return { bin, argv: () => JSON.parse(fs.readFileSync(log, "utf-8")) };
 }

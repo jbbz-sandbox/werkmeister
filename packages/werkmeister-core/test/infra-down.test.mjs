@@ -8,9 +8,9 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-
 import { down } from "../dist/infra.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
+import { installScript } from "../dist/shared_exec.js";
 import { pinWerkmeisterRoot } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
@@ -29,8 +29,7 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "infra-down-"));
   log = path.join(dir, "docker.log");
   const docker = path.join(dir, "docker");
-  writeFileSync(docker, `#!/bin/sh\necho "$*" >> "${log}"\n`);
-  chmodSync(docker, 0o755);
+  installScript(docker, `#!/bin/sh\necho "$*" >> "${log}"\n`);
   writeFileSync(path.join(dir, "services.yaml"), "services: {}\ninfrastructure: {}\n");
   process.env.PATH = `${dir}:${SAVED.PATH}`;
   process.env.HOME = dir;

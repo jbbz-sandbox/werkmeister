@@ -8,8 +8,8 @@ import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-
 import { retireLegacyProject } from "../dist/compose.js";
+import { installScript } from "../dist/shared_exec.js";
 
 const SAVED_PATH = process.env.PATH;
 let dir, log, compose;
@@ -19,7 +19,7 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "retire-legacy-"));
   log = path.join(dir, "docker.log");
   const docker = path.join(dir, "docker");
-  writeFileSync(
+  installScript(
     docker,
     `#!/bin/sh
 echo "$(pwd -P) | $*" >> "${log}"
@@ -29,7 +29,6 @@ case "$1 $2" in
 esac
 `,
   );
-  chmodSync(docker, 0o755);
   process.env.PATH = `${dir}:${SAVED_PATH}`;
   compose = path.join(dir, "compose.yml");
   writeFileSync(compose, "name: werkmeister-demo\nservices: {}\n");

@@ -7,16 +7,16 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
-
 import { defaultDeps } from "../dist/pr_lifecycle.js";
 import { run, runAsync } from "../dist/proc.js";
+import { installScript } from "../dist/shared_exec.js";
 import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
 
 function fake(name) {
   const bin = path.join(fs.mkdtempSync(path.join(os.tmpdir(), `fake-${name}-`)), name);
-  fs.writeFileSync(bin, `#!/bin/sh\necho "fake ${name}: $*"\n`, { mode: 0o755 });
+  installScript(bin, `#!/bin/sh\necho "fake ${name}: $*"\n`);
   return bin;
 }
 

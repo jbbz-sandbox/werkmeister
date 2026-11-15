@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
+import { installScript } from "../dist/shared_exec.js";
 import { useDockerEngine, writeSessionState } from "./fixtures.mjs";
 
 useDockerEngine();
@@ -36,15 +37,9 @@ fs.writeFileSync(
 // The compose-label lookup shells out to `docker ps`; this one names the workspace.
 const bin = path.join(dir, "bin");
 fs.mkdirSync(bin);
-fs.writeFileSync(
-  path.join(bin, "docker"),
-  `#!/bin/sh\nsleep "\${DOCKER_DELAY:-0}"\necho "${ws}"\n`,
-  { mode: 0o755 },
-);
+installScript(path.join(bin, "docker"), `#!/bin/sh\nsleep "\${DOCKER_DELAY:-0}"\necho "${ws}"\n`);
 const claudeLog = path.join(dir, "claude.log");
-fs.writeFileSync(path.join(bin, "claude"), `#!/bin/sh\necho "$@" >> "${claudeLog}"\n`, {
-  mode: 0o755,
-});
+installScript(path.join(bin, "claude"), `#!/bin/sh\necho "$@" >> "${claudeLog}"\n`);
 
 const LABELS = {
   "com.docker.compose.project": "sandbox-demo",

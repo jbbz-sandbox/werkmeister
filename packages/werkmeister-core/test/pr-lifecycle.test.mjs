@@ -9,7 +9,6 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import YAML from "yaml";
-
 import { heldWakes, readNotices } from "../dist/agent_state.js";
 import { dotDir } from "../dist/config.js";
 import { resolveIssueStatuses } from "../dist/issue_status.js";
@@ -49,6 +48,7 @@ import { syncRegistry } from "../dist/registry_sync.js";
 import { withReporter } from "../dist/reporter.js";
 import { removeWorkspace, WorkspaceError } from "../dist/sandbox.js";
 import { lowMemory as lowMemoryNote } from "../dist/scheduler_state.js";
+import { installScript } from "../dist/shared_exec.js";
 import { TEMP_HOME_SCRIPT } from "../dist/temp_home.js";
 import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
 
@@ -3577,7 +3577,7 @@ async function withClaudeHome(sessions, fn) {
   }
   const log = path.join(home, "claude.log");
   const bin = path.join(home, "claude");
-  fs.writeFileSync(bin, `#!/bin/sh\n{ pwd -P; echo "$@"; } >> "${log}"\n`, { mode: 0o755 });
+  installScript(bin, `#!/bin/sh\n{ pwd -P; echo "$@"; } >> "${log}"\n`);
   process.env.HOME = home;
   process.env.CLAUDE_BIN = bin;
   const read = () => (fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : []);
@@ -4618,9 +4618,7 @@ test("deliverHeadless: a codex session started in a code worktree is resumed fro
   );
   const log = path.join(root, "codex.log");
   process.env.CODEX_BIN = path.join(root, "codex-bin");
-  fs.writeFileSync(process.env.CODEX_BIN, `#!/bin/sh\n{ pwd -P; echo "$@"; } >> "${log}"\n`, {
-    mode: 0o755,
-  });
+  installScript(process.env.CODEX_BIN, `#!/bin/sh\n{ pwd -P; echo "$@"; } >> "${log}"\n`);
   try {
     await withSandboxHome(async () => {
       assert.deepEqual(await callbackFields(ws, {}), { session: "c-sub", session_cwd: sub });

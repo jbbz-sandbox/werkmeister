@@ -13,6 +13,7 @@ import http from "node:http";
 import * as os from "node:os";
 import * as path from "node:path";
 import { after, beforeEach, test } from "node:test";
+import { installScript } from "../dist/shared_exec.js";
 import { useDockerEngine } from "./fixtures.mjs";
 
 useDockerEngine();
@@ -69,7 +70,7 @@ function workspace({ stamp, image = "node:22", extraDep = false } = {}) {
   );
   const log = path.join(ws, "docker.log");
   const bin = path.join(ws, "docker");
-  fs.writeFileSync(bin, `#!/bin/sh\necho "$*" >> "${log}"\n`, { mode: 0o755 });
+  installScript(bin, `#!/bin/sh\necho "$*" >> "${log}"\n`);
   return { ws, wt, bin, log };
 }
 

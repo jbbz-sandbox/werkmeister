@@ -8,9 +8,9 @@ import { chmodSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-
 import { down, startSharedInfra } from "../dist/infra.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
+import { installScript } from "../dist/shared_exec.js";
 import { pinWerkmeisterRoot } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
@@ -29,7 +29,7 @@ beforeEach(() => {
   dir = mkdtempSync(path.join(tmpdir(), "infra-retire-"));
   log = path.join(dir, "docker.log");
   const docker = path.join(dir, "docker");
-  writeFileSync(
+  installScript(
     docker,
     `#!/bin/sh
 echo "$(pwd -P) | $*" >> "${log}"
@@ -39,7 +39,6 @@ case "$*" in
 esac
 `,
   );
-  chmodSync(docker, 0o755);
   writeFileSync(path.join(dir, "services.yaml"), "services: {}\ninfrastructure: {}\n");
   process.env.PATH = `${dir}:${SAVED.PATH}`;
   process.env.HOME = dir;

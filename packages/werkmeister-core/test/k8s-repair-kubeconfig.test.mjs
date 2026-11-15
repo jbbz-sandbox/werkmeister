@@ -8,9 +8,9 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
-
 import { ensurePortForwardsHealthy } from "../dist/k8s.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
+import { installScript } from "../dist/shared_exec.js";
 import { pinWerkmeisterRoot } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
@@ -28,8 +28,7 @@ let home, kubeconfig, upLog;
 
 function stub(bin, dir, script) {
   const p = path.join(dir, bin);
-  writeFileSync(p, `#!/bin/sh\n${script}\n`);
-  chmodSync(p, 0o755);
+  installScript(p, `#!/bin/sh\n${script}\n`);
 }
 
 beforeEach(async () => {

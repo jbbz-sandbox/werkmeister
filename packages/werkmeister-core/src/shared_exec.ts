@@ -42,3 +42,24 @@ export function installExecutable(file: string, body: string): void {
   if (shared) fs.symlinkSync(shared, file);
   else fs.writeFileSync(file, body, { mode: 0o755 });
 }
+
+/**
+ * Put a script whose body differs per caller at *file*, without a per-file macOS scan: *file* is
+ * a symlink to one shared trampoline that runs `<file>.body` through the script's own interpreter
+ * (its `#!` line), and a script read as data isn't scanned. The body sees `$0` (or argv[1]) as
+ * `<file>.body`. Falls back to a plain executable file when there is no shared folder.
+ */
+export function installScript(file: string, body: string): void {
+  const m = /^#!\s*(\S+)([^\n]*)\n/.exec(body);
+  const trampoline = m
+    ? sharedExecutable("run", `#!/bin/sh\nexec '${m[1]}'${m[2]} "$0.body" "$@"\n`)
+    : null;
+  if (!trampoline) {
+    fs.rmSync(file, { force: true });
+    fs.writeFileSync(file, body, { mode: 0o755 });
+    return;
+  }
+  fs.writeFileSync(`${file}.body`, body);
+  fs.rmSync(file, { force: true });
+  fs.symlinkSync(trampoline, file);
+}

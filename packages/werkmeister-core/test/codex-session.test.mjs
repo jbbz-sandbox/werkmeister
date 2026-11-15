@@ -6,6 +6,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { installScript } from "../dist/shared_exec.js";
 
 const { codexSendArgs, codexStartTurn, codexResumeCommand } = await import(
   "../dist/harness/codex/session.js"
@@ -40,13 +41,12 @@ test("sendTurn with wait resumes by id in cwd through runTurn", async () => {
   const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "codex-turn-")));
   const bin = path.join(dir, "codex");
   const log = path.join(dir, "log.json");
-  fs.writeFileSync(
+  installScript(
     bin,
     `#!${process.execPath}
 require("node:fs").writeFileSync(${JSON.stringify(log)}, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }));
 process.stdout.write('{"type":"turn.completed"}\\n');
 `,
-    { mode: 0o755 },
   );
   process.env.WERKMEISTER_FIXTURE = "1";
   process.env.CODEX_BIN = bin;
