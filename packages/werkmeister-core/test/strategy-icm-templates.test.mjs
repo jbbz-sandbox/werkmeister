@@ -421,6 +421,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^2\. .*add the release entry.*Before committing, run the repo's lint command/m,
             `${wt}/${d}`,
           );
+        // SW-736: `changeset status --since` cannot see an uncommitted entry.
+        if (d.endsWith("_propose"))
+          assert.match(
+            c,
+            /^2\. .*Before committing, run the repo's lint command.*Run the repo's release check .*after the commit, not before: a check that compares the branch with its base in git history does not see an uncommitted release entry/m,
+            `${wt}/${d}`,
+          );
         if (d.endsWith("_propose"))
           assert.match(
             c,
@@ -673,6 +680,12 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
       propose.indexOf("Run the repo's lint command") <
         propose.indexOf("Then fold everything uncommitted"),
       "lint before fold",
+    );
+    // SW-736: the release check reads git history, so it runs after the per-ticket commits.
+    assert.ok(
+      propose.indexOf("Then fold everything uncommitted") <
+        propose.indexOf("Run the repo's release check"),
+      "release check after fold",
     );
     assert.match(propose, /Rebase and merge, not squash/);
     assert.match(
