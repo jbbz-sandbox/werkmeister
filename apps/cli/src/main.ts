@@ -17,7 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Argument, Command, Option } from "commander";
+import { Argument, Command, CommanderError, Option } from "commander";
 import { COMPOSE_FILE } from "werkmeister-core/compose_file";
 import { envVar } from "werkmeister-core/config";
 import { buildOf, expectDaemonBuild } from "werkmeister-core/daemon_client";
@@ -1755,12 +1755,61 @@ async function completeLine(program: Command): Promise<void> {
   console.log(candidates.filter((c) => c.startsWith(current)).join("\n"));
 }
 
+/** Set while `__parse --batch` parses one set: commander's error output for that set lands here. */
+let batchErr: string[] | undefined;
+
+/**
+ * SW-754: `__parse --batch '<json argv sets>'` parses every set in one process and prints one
+ * JSON line per set, so spellings.test.ts starts the CLI once instead of once per spelling.
+ * Each set gets a fresh program from cli(), so no option state carries to the next set.
+ */
+async function parseBatch(json: string | undefined): Promise<void> {
+  const sets: unknown = JSON.parse(json ?? "null");
+  const isArgv = (s: unknown) =>
+    Array.isArray(s) && s.length > 0 && s.every((a) => typeof a === "string");
+  // An empty set would reach outputHelp() and process.exit(0), ending the batch.
+  if (!Array.isArray(sets) || !sets.length || !sets.every(isArgv))
+    throw new Error("__parse --batch takes a JSON array of non-empty argv arrays");
+  const { log, error } = console;
+  const [node, script] = process.argv;
+  for (const set of sets as string[][]) {
+    const out: string[] = [];
+    const err: string[] = [];
+    batchErr = err;
+    console.log = (...a: unknown[]) => out.push(a.join(" "));
+    console.error = (...a: unknown[]) => err.push(`${a.join(" ")}\n`);
+    // cli() reads process.argv throughout; swapping it keeps cli() the same code a single parse runs.
+    process.argv = [node, script, "__parse", ...set];
+    let result: object;
+    try {
+      await cli();
+      result = { ...JSON.parse(out.join("\n")), stderr: err.join("") };
+    } catch (e) {
+      if (!(e instanceof CommanderError)) throw e;
+      result = { stderr: err.join(""), exitCode: e.exitCode };
+    } finally {
+      Object.assign(console, { log, error });
+      batchErr = undefined;
+    }
+    console.log(JSON.stringify(result));
+  }
+}
+
 export async function main(): Promise<void> {
+  if (process.argv[2] === "__parse" && process.argv[3] === "--batch")
+    return parseBatch(process.argv[4]);
   // Stands aside for a command that claims SIGINT to run its own cleanup first
   // — see lib/interrupt.ts for why this handler being registered first was a bug.
+  // Once per process: a second listener would read as a command claiming Ctrl-C.
   installDefaultInterrupt(process, () => console.log(`\n${_RED}Interrupted${_RESET}`));
+  await cli();
+}
 
+async function cli(): Promise<void> {
   const program = new Command();
+  const err = batchErr;
+  // Subcommands added below inherit both, so a refused set throws instead of exiting the batch.
+  if (err) program.exitOverride().configureOutput({ writeErr: (s) => err.push(s) });
   // Kept for `__reference`: commander keeps after-help text only as an event listener.
   const helpText = new Map<string, string>();
   const withHelp = (cmd: Command, key: string, text: string) => {
