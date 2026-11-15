@@ -213,7 +213,10 @@ export const askLine = (tool?: string) =>
 export const SELF_CHECK =
   "Review `output/` once against `../../BRIEF.md` and the live issue (`werkmeister issue view`). " +
   "Flip every `status: proposed` to `status: decided` yourself, and record each decision — and anything you " +
-  "would have asked a person — under `## Recommendations for reviewer` in the PR body. Then start the next stage without asking.";
+  "would have asked a person — under `## Recommendations for reviewer` in the PR body. " +
+  // SW-801: the self-flip and the "question only a person can answer" stop point conflicted once a question was put to the person.
+  "A question no option settles (none meets the acceptance criteria, or the issue says to ask the person) stays `status: proposed`: ask the person (a stop point) and wait. Never flip a question you have put to the person. " +
+  "Then start the next stage without asking.";
 
 // Decision 11 (sandbox-133): "ship" means reaching a release, so the stage that // name-check: ignore
 // ends at an approved PR file is "propose".

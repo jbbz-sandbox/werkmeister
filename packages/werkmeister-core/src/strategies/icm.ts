@@ -352,7 +352,9 @@ export const PLACEHOLDER_BRIEF_RE =
 const ASK_A_PERSON_RE =
   /(?<=[.?!]) +(?:Ask|Confirm with|Check with) the (?:user|person)\b[^\n.?!]*[.?!]?/g;
 const DECIDE_OPEN_QUESTIONS =
-  "Nobody is asked during this run: decide each question yourself per the run limits, and record the choice and why under `## Recommendations for reviewer`.";
+  "Nobody is asked during this run: decide each question yourself per the run limits, and record the choice and why under `## Recommendations for reviewer`. " +
+  // SW-801: sw-789 asked about a question no option settled, then tried to flip it unanswered; the classifier blocked the flip.
+  "When no option meets the acceptance criteria, or the issue says to ask the person, leave that question `proposed` and ask: that is a stop point, and a question put to the person is flipped only by their answer.";
 
 function settleOpenQuestions(prompt: string): string {
   return prompt.replace(
