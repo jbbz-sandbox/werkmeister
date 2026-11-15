@@ -49,8 +49,7 @@ export function selectTests({ changed, pkg, pkgDir, base = "the base" }) {
   const inPkg = changed.filter((f) => f.startsWith(prefix)).map((f) => f.slice(prefix.length));
   for (const f of inPkg) {
     if (f.startsWith("dist/") || f.startsWith("node_modules/")) continue;
-    const mapped =
-      (f.startsWith("src/") && f.endsWith(".ts")) || (/^(test\/)?[^/]+\.mjs$/.test(f));
+    const mapped = (f.startsWith("src/") && f.endsWith(".ts")) || /^(test\/)?[^/]+\.mjs$/.test(f);
     if (!mapped) return { mode: "full", reason: `${f} is not mapped to tests` };
   }
 

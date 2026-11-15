@@ -55,7 +55,14 @@ export function pinWerkmeisterRoot() {
   before(() => {
     prev = process.env.WERKMEISTER_ROOT;
     prevPinned = process.env.WERKMEISTER_ROOT_PINNED;
-    process.env.WERKMEISTER_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "apps", "cli");
+    process.env.WERKMEISTER_ROOT = path.resolve(
+      import.meta.dirname,
+      "..",
+      "..",
+      "..",
+      "apps",
+      "cli",
+    );
     process.env.WERKMEISTER_ROOT_PINNED = "1";
   });
   after(() => {

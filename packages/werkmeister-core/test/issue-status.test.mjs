@@ -8,7 +8,12 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { dotDir } from "../dist/config.js";
-import { issuePosition, moveIssue, resolveIssueStatuses, startIssue } from "../dist/issue_status.js";
+import {
+  issuePosition,
+  moveIssue,
+  resolveIssueStatuses,
+  startIssue,
+} from "../dist/issue_status.js";
 
 const JIRA = resolveIssueStatuses({}, "jira");
 const GITHUB = resolveIssueStatuses({}, "github");

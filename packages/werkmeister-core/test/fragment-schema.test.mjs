@@ -151,7 +151,10 @@ test("lsof comes from the install script, never a test row (SW-683)", () => {
   for (const [svc, def] of Object.entries(fragment.services))
     assert.doesNotMatch(def.test ?? "", /apt-get/, `${svc} test runs apt-get`);
   const startup = fs.readFileSync(
-    new URL("../../../apps/cli/infra/compose/scripts/werkmeister-install-startup.sh", import.meta.url),
+    new URL(
+      "../../../apps/cli/infra/compose/scripts/werkmeister-install-startup.sh",
+      import.meta.url,
+    ),
     "utf8",
   );
   assert.match(startup, /ln -sf "\$TOOLS\/lsof\/usr\/bin\/lsof" "\$TOOLS\/bin\/lsof"/);
@@ -187,7 +190,9 @@ test("core validate names the host-daemon script and its never-3002 port (SW-679
   assert.match(v, /`node apps\/werkmeister-mcp\/scripts\/host-daemon\.mjs -- <command> \[args\]`/);
   assert.match(v, /free port \(never 3002\) with a temp HOME/);
   assert.ok(
-    fs.existsSync(new URL("../../../apps/werkmeister-mcp/scripts/host-daemon.mjs", import.meta.url)),
+    fs.existsSync(
+      new URL("../../../apps/werkmeister-mcp/scripts/host-daemon.mjs", import.meta.url),
+    ),
     "the script the text names exists",
   );
 });
