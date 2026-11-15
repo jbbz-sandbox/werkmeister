@@ -109,13 +109,13 @@ export function isPlainChain(cmd: string): boolean {
 }
 
 /**
- * The test command (plus the repo's lint) as werkmeister-context.md prints it and its allow rule
- * matches it. One simple command is prefixed with *tempHome*; anything more goes through `sh -c`,
+ * The test command (after the repo's lint) as werkmeister-context.md prints it and its allow rule
+ * matches it. Lint goes first so a format error fails in seconds, not after turbo's minutes (SW-636). One simple command is prefixed with *tempHome*; anything more goes through `sh -c`,
  * so every part runs under the temp HOME (`with-temp-home a && b` wraps only `a`) and a `{ …; }`
  * group is not a syntax error (SW-660).
  */
 export function wrappedTestCommand(tempHome: string, test: string, lint?: string): string {
-  const full = lint ? `${test} && ${lint}` : test;
+  const full = lint ? `${lint} && ${test}` : test;
   if (!tempHome) return full;
   if (isPlainChain(full) && !full.includes("&&")) return `${tempHome} ${full}`;
   return `${tempHome} sh -c '${full.split("'").join(`'\\''`)}'`;

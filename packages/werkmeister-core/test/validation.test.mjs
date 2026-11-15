@@ -184,7 +184,7 @@ test("a local non-URL service gets lifecycle but no direct curl", async () => {
 });
 
 // SW-219: the implement stage runs this test command, so the gate's lint rides on it.
-test("a repo with a gate lint: its test commands end with the lint; a repo without one never mentions lint", async () => {
+test("a repo with a gate lint: its test commands start with the lint; a repo without one never mentions lint", async () => {
   await withSandboxHome(
     async () => {
       const build = (repos) =>
@@ -205,9 +205,9 @@ test("a repo with a gate lint: its test commands end with the lint; a repo witho
       const out = build({ demo: { lint: "npx biome ci ." } });
       assert.match(
         out,
-        /\| `core` \| demo \| `packages\/core` \| `\/ws\/\.werkmeister\/bin\/with-temp-home sh -c 'npm test && npx biome ci \.'` \|/,
+        /\| `core` \| demo \| `packages\/core` \| `\/ws\/\.werkmeister\/bin\/with-temp-home sh -c 'npx biome ci \. && npm test'` \|/,
       );
-      assert.match(out, /also runs the repo's lint, the same command the PR gate's lint row runs/);
+      assert.match(out, /first runs the repo's lint, the same command the PR gate's lint row runs/);
       assert.doesNotMatch(
         out,
         /\| `elsewhere` \|[^\n]*biome/,
@@ -260,7 +260,7 @@ test("How to validate lists every service in the workspace's repos, not only its
 });
 
 // SW-688: the in-container test line is what a library's validate text runs, so it carries the lint too.
-test("a running service's § Test commands line ends with its repo's lint; without one it is the bare test", async () => {
+test("a running service's § Test commands line starts with its repo's lint; without one it is the bare test", async () => {
   await withSandboxHome(
     async () => {
       const build = (repos) =>
@@ -279,10 +279,10 @@ test("a running service's § Test commands line ends with its repo's lint; witho
           repos,
         );
       const out = build({ demo: { lint: "npx biome ci ." } });
-      assert.match(out, /^- `core`: `docker exec t-core sh -c 'npm test && npx biome ci \.'`$/m);
+      assert.match(out, /^- `core`: `docker exec t-core sh -c 'npx biome ci \. && npm test'`$/m);
       assert.match(
         out,
-        /A line ending in `&& <lint>` also runs the repo's lint, the PR gate's lint row/,
+        /A line starting with `<lint> &&` first runs the repo's lint, the PR gate's lint row/,
       );
       const bare = build({});
       assert.match(bare, /^- `core`: `docker exec t-core sh -c 'npm test'`$/m);

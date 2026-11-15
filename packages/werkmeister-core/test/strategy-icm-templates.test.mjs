@@ -182,11 +182,11 @@ test("each template renders with no undefined and a route per stage", async () =
             /^\d+\. Before the PR file: .*file it through `\.\.\/\.\.\/_shared\/issues-report\.md`/m,
             `${wt}/${d}`,
           );
-        // SW-415: a repo without repo.lint has no `&& <lint>` tail.
+        // SW-415: a repo without repo.lint has no `<lint> &&` head.
         if (d.endsWith("_propose"))
           assert.match(
             c,
-            /the `&& <lint>` tail of the test command in `werkmeister-context\.md`, when it has one,/,
+            /the `<lint> &&` head of the test command in `werkmeister-context\.md`, when it has one,/,
             `${wt}/${d}`,
           );
         // SW-288: spec loads the standards its files hit and lists ticket-vs-standard conflicts.
