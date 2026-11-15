@@ -47,6 +47,14 @@ test("runAsync rejects with ENOENT for a missing executable", async () => {
   assert.equal(err.code, "ENOENT");
 });
 
+test("runAsync leaves no timer behind when the executable is missing", async () => {
+  // A leftover timer keeps the process alive for the whole timeout: 15 s after a missing `gh`.
+  const timers = () => process.getActiveResourcesInfo().filter((r) => r === "Timeout").length;
+  const before = timers();
+  await assert.rejects(runAsync(["definitely-not-a-real-binary-xyz"], { timeout: 60 }));
+  assert.equal(timers(), before);
+});
+
 test("runAsync throws on non-zero status only when check is set", async () => {
   const res = await runAsync(["node", "-e", "process.exit(3)"], { capture: true });
   assert.equal(res.status, 3);

@@ -18,10 +18,12 @@ import * as path from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import { StringDecoder } from "node:string_decoder";
 
-import Dockerode, { type DockerOptions } from "dockerode";
+import type Dockerode from "dockerode";
+import type { DockerOptions } from "dockerode";
 import * as tar from "tar-fs";
 
 import { BLUE, CYAN, GREEN, MAGENTA, RESET, YELLOW } from "./colors.js";
+import { loadDockerode } from "./dockerode_load.js";
 import { ProcError, run } from "./proc.js";
 
 /**
@@ -134,7 +136,7 @@ let client: Dockerode | null = null;
 
 /** The shared client. The endpoint is resolved once, on first use. */
 export function docker(): Dockerode {
-  return (client ??= new Dockerode(resolveEndpoint()));
+  return (client ??= new (loadDockerode())(resolveEndpoint()));
 }
 
 /** One compose container, with the fields `docker compose ps --format json` reports. */

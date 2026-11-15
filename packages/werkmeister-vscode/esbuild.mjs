@@ -21,6 +21,7 @@
  *    That makes the walk-up search the extension's dist/ and find nothing —
  *    fine, because the config.yaml tier added in Task 1 sits above it.
  */
+import { dirname } from "node:path";
 import * as esbuild from "esbuild";
 import { writeLicenses } from "../../scripts/write-licenses.mjs";
 
@@ -40,12 +41,24 @@ const stubGrpc = {
   },
 };
 
+// werkmeister-core loads dockerode with a run-time require (dockerode_load.ts), which a
+// .vsix has no node_modules to answer: bundle it through a static import instead.
+const staticDockerode = {
+  name: "static-dockerode",
+  setup(build) {
+    build.onLoad({ filter: /[\\/]dockerode_load\.[jt]s$/ }, (args) => ({
+      contents: 'import D from "dockerode";\nexport const loadDockerode = () => D;\n',
+      resolveDir: dirname(args.path),
+    }));
+  },
+};
+
 const options = {
   entryPoints: ["src/extension.ts"],
   bundle: true,
   outfile: "dist/extension.cjs",
   external: ["vscode", "*.node"],
-  plugins: [stubGrpc],
+  plugins: [stubGrpc, staticDockerode],
   format: "cjs",
   platform: "node",
   target: "node22",

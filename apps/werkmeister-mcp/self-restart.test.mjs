@@ -175,7 +175,13 @@ test("the built daemon under launchd's label reports its build, holds for a queu
 
     fs.writeFileSync(queue, "[]");
     await status("9.9.9 @ 2026-11-01T21:54:00Z").catch(() => {});
-    const code = await Promise.race([exited, sleep(10_000).then(() => "timeout")]);
+    // Cleared once the race is over: left running, it held this file's process open for 10 s.
+    let timer;
+    const timedOut = new Promise((resolve) => {
+      timer = setTimeout(resolve, 10_000, "timeout");
+    });
+    const code = await Promise.race([exited, timedOut]);
+    clearTimeout(timer);
     assert.equal(code, 0, stderr);
     assert.match(stderr, /build changed .* exiting to restart/);
   } finally {

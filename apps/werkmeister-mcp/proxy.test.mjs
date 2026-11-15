@@ -126,6 +126,19 @@ async function until(cond, ms = 5000) {
   }
 }
 
+test("the proxy exits by itself when the client closes its stdin", async (t) => {
+  const daemon = fakeDaemon();
+  await daemon.listen();
+  t.after(() => daemon.close());
+  const { client } = await startProxy(t, daemon.port);
+  await client.listTools();
+  // The SDK keeps the child private; close() ends stdin, waits 2 s, then sends SIGTERM.
+  const child = client.transport._process;
+  await client.close();
+  assert.equal(child.signalCode, null, "the proxy had to be signalled");
+  assert.equal(child.exitCode, 0);
+});
+
 test("forwards list and call with the token, workspace and launcher", async (t) => {
   const daemon = fakeDaemon();
   await daemon.listen();
