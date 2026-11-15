@@ -575,6 +575,11 @@ test("an autonomous brief's open questions are decided, not asked; an interactiv
   assert.doesNotMatch(open(auto), /confirm with the user|ask the user/i);
   assert.match(open(auto), /- A or B\? The ticket says either works\.\n- Prompt or rewrite\?\n/);
   assert.match(open(auto), /## Recommendations for reviewer/);
+  // SW-801: one rule for a question no option settles.
+  assert.match(
+    open(auto),
+    /When no option meets the acceptance criteria, or the issue says to ask the person, leave that question `proposed` and ask: that is a stop point/,
+  );
   assert.match(auto, /## Notes\n\nAsk the user about nothing else\./); // only the open questions change
   const interactive = await brief({});
   assert.match(open(interactive), /Confirm with the user before choosing\./);

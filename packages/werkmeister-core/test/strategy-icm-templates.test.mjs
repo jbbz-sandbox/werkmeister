@@ -488,6 +488,11 @@ test("autonomous renders self-checks and stop points, and turning it off restore
       /set `status: approved` yourself and run `werkmeister pr open` detached, as `_shared\/pr-rules\.md` rule 3 shows\. Stop at the PR URL\./,
     );
     assert.match(on.contracts[0], /## Recommendations for reviewer/);
+    // SW-801: a question no option settles stops the run instead of being self-flipped.
+    assert.match(
+      on.contracts[0],
+      /stays `status: proposed`: ask the person \(a stop point\) and wait\. Never flip a question you have put to the person\./,
+    );
     assert.match(on.claude, /## Stop points/);
     assert.doesNotMatch(on.claude, /The one rule|a person has read/);
     assert.deepEqual(
