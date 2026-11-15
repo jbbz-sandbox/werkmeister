@@ -4,11 +4,10 @@
  *
  * A subprocess of the built CLI, like `up_flags.test.ts`: the exit status is
  * main()'s. The fixture's fake docker hangs on `compose up` until killed, and
- * WERKMEISTER_TIMEOUT_SCALE shrinks the 20-minute up timeout to 20 s, so this
+ * WERKMEISTER_UP_TIMEOUT_S shrinks the 20-minute up timeout to 2 s, so this
  * is the real timeout path (child killed → ETIMEDOUT), not a plain non-zero exit.
  *
- * The two cases wait out their 20 s side by side, each in its own fixture: one after the
- * other they made this file the suite's longest by 20 s.
+ * The two cases wait out their timeout side by side, each in its own fixture.
  */
 import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -55,8 +54,8 @@ exit 0
     timeout: 60_000,
   });
   expect(init.status, init.stderr).toBe(0);
-  // 1200 s → 20 s for `up`; a 30 s docker call gets 500 ms, since 125 ms (1/240) timed out under host load.
-  env.WERKMEISTER_TIMEOUT_SCALE = String(1 / 60);
+  // `up` alone times out in 2 s; WERKMEISTER_TIMEOUT_SCALE would shrink every docker call with it (SW-755).
+  env.WERKMEISTER_UP_TIMEOUT_S = "2";
   // Not spawnSync: it would block this worker, and the other case with it, for the whole wait.
   const child = spawn(process.execPath, [MAIN, ...argv], {
     cwd: fx.workspace,
