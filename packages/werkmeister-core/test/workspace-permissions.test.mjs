@@ -633,8 +633,8 @@ function allowed(rules, cmd) {
 const W660 = "/ws/w/.werkmeister/bin/with-temp-home";
 const BRACE = "{ command -v lsof >/dev/null || apt-get install -y lsof; } && pnpm test";
 
-// SW-688: the container may hold the Docker socket and the real ~/.werkmeister, so the lint-tailed line asks.
-test("SW-688: the lint-tailed container test line is not pre-approved; the bare test rule is unchanged", () => {
+// SW-688: the container may hold the Docker socket and the real ~/.werkmeister, so the lint-joined line asks.
+test("SW-688: the lint-joined container test line is not pre-approved; the bare test rule is unchanged", () => {
   const services = { svc: { repo: "r", test: "pnpm test" } };
   const rules = buildAllowRules("feat", ["svc"], services, {}, "", [], [], {
     r: { lint: "pnpm lint" },
@@ -643,16 +643,16 @@ test("SW-688: the lint-tailed container test line is not pre-approved; the bare 
   assert.ok(!rules.some((r) => r.includes("pnpm lint")), rules.join("\n"));
 });
 
-test("SW-660: the repo's lint the context file appends is allowed with the test, all under the temp HOME", async () => {
+test("SW-660: the repo's lint the context file joins is allowed with the test, all under the temp HOME", async () => {
   const { wrappedTestCommand } = await import("../dist/archetypes.js");
   const services = { svc: { repo: "r", test: "pnpm test" } };
   const repos = { r: { lint: "pnpm lint && pnpm run docs:check" } };
   const rules = buildAllowRules("", [], services, {}, W660, [], ["svc"], repos);
   const printed = wrappedTestCommand(W660, "pnpm test", repos.r.lint);
-  assert.equal(printed, `${W660} sh -c 'pnpm test && pnpm lint && pnpm run docs:check'`);
+  assert.equal(printed, `${W660} sh -c 'pnpm lint && pnpm run docs:check && pnpm test'`);
   assert.ok(allowed(rules, printed), rules.join("\n"));
   assert.ok(
-    allowed(rules, `${W660} --no-wait sh -c 'pnpm test && pnpm lint && pnpm run docs:check'`),
+    allowed(rules, `${W660} --no-wait sh -c 'pnpm lint && pnpm run docs:check && pnpm test'`),
   );
   assert.ok(!allowed(rules, `${printed} && rm -rf x`), "nothing rides after the quote");
   assert.ok(!rules.some((r) => r.startsWith("Bash(pnpm ")), "no unwrapped lint rule");
@@ -665,17 +665,17 @@ test("SW-660: a { …; } / || test command is printed and allowed as one exact s
   const repos = { r: { lint: "pnpm lint" } };
   const rules = buildAllowRules("feat", ["svc"], services, {}, W660, [], [], repos);
   const printed = wrappedTestCommand(W660, BRACE, "pnpm lint");
-  assert.equal(printed, `${W660} sh -c '${BRACE} && pnpm lint'`);
+  assert.equal(printed, `${W660} sh -c 'pnpm lint && ${BRACE}'`);
   assert.equal(spawnSync("sh", ["-n", "-c", printed]).status, 0, "printed command is valid shell");
   assert.ok(rules.includes(`Bash(${printed})`), rules.join("\n"));
-  assert.ok(rules.includes(`Bash(${W660} --no-wait sh -c '${BRACE} && pnpm lint')`));
+  assert.ok(rules.includes(`Bash(${W660} --no-wait sh -c 'pnpm lint && ${BRACE}')`));
   assert.ok(allowed(rules, printed));
   // Only the container form and the sh -c lines hold the group; no split-up segment rules.
   const withBrace = rules.filter((r) => r.includes("}"));
   assert.deepEqual(withBrace, [
     `Bash(docker exec feat-svc sh -c '${BRACE}')`,
     `Bash(${printed})`,
-    `Bash(${W660} --no-wait sh -c '${BRACE} && pnpm lint')`,
+    `Bash(${W660} --no-wait sh -c 'pnpm lint && ${BRACE}')`,
   ]);
 });
 
@@ -723,8 +723,8 @@ test("SW-660: the headless wake passes the workspace's rules, lint and sh -c for
       fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\nSERVICES=api,core\n");
       const rules = workspaceAllowRules(root, true);
       const w = path.join(dotDir(root), "bin", "with-temp-home");
-      assert.ok(rules.includes(`Bash(${w} sh -c 'pnpm test && pnpm lint')`), rules.join("\n"));
-      assert.ok(rules.includes(`Bash(${w} sh -c '${BRACE} && pnpm lint')`), rules.join("\n"));
+      assert.ok(rules.includes(`Bash(${w} sh -c 'pnpm lint && pnpm test')`), rules.join("\n"));
+      assert.ok(rules.includes(`Bash(${w} sh -c 'pnpm lint && ${BRACE}')`), rules.join("\n"));
       const args = claudeSendArgs("hi", null, null, { allow: rules });
       assert.deepEqual(args[args.indexOf("--allowedTools") + 1].split(","), rules);
     },

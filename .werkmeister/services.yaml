@@ -22,6 +22,8 @@ repo:
   # SW-226: --diagnostic-level=error keeps the exit code but prints only errors, so a format error is not buried under warnings.
   # SW-646: the implement contract runs this on the files it touched before tests (was hard-coded there).
   format: pnpm exec biome check --write {files}
+  # SW-636: werkmeister-context.md runs this ahead of each test command. Measured warm in the werkmeister-core container,
+  # a format error fails it in ~7 s (licenses 2.7 s + biome ci 4.4 s), before docs:links (10.9 s) or docs:sdk (9.2 s).
   lint: pnpm run licenses && pnpm exec biome ci --diagnostic-level=error . && pnpm --filter werkmeister-core run docs:links && pnpm --filter werkmeister-core run docs:sdk && pnpm turbo run build --filter=werkmeister && pnpm run docs:check && pnpm run name:check
   # Changes here touch no service, so the gate runs no service tests for them.
   # scripts/: its tests and checks all run in the lint row above (licenses, docs:check, name:check); SW-563.
@@ -62,7 +64,7 @@ services:
     archetype: node-tool
     # apps/cli and apps/werkmeister-mcp have no service of their own (path_mappings above): this row tests them, since core is
     # bundled into both, and a second container ran the same suites twice whenever a change touched core and the CLI.
-    # SW-723: no lint steps here; werkmeister-context.md appends repo.lint to this line and the gate runs it as its own row.
+    # SW-723: no lint steps here; werkmeister-context.md puts repo.lint ahead of this line (SW-636) and the gate runs it as its own row.
     test: "pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core --filter=werkmeister-plugin"
     # SW-143: the ICM exercise step defers to this text for a CLI, so the whole recipe lives here.
     validate: >-

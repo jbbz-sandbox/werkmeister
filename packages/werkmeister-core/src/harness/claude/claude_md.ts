@@ -330,7 +330,7 @@ function testCommandLine(
   const noTests = serviceNoTests(servicesConfig[svc]);
   if (noTests) return `- \`${svc}\`: no tests (registry: ${noTests})`;
   return cmd
-    ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, lint ? `${cmd} && ${lint}` : cmd)}\``
+    ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, lint ? `${lint} && ${cmd}` : cmd)}\``
     : `- \`${svc}\`: no test command registered (add \`test:\` to its registry entry)`;
 }
 
@@ -554,7 +554,7 @@ docker compose restart ${sampleSvc}
 
 The registry's \`test:\` for each service (or its archetype's), run in its container — the worktree is mounted at \`/app\` with its \`node_modules\`; the host checkout has none. The pre-PR gate runs these (\`werkmeister pr gate\`).${
       svcLint.some(Boolean)
-        ? " A line ending in `&& <lint>` also runs the repo's lint, the PR gate's lint row, so a `docs:check` or format failure shows here and not first at the gate."
+        ? " A line starting with `<lint> &&` first runs the repo's lint, the PR gate's lint row, so a `docs:check` or format failure shows here, before the tests, and not first at the gate."
         : ""
     }
 
@@ -643,7 +643,7 @@ How to exercise a change to each service in this workspace.${
       : ""
   }${
     linted
-      ? " A test command ending in `&& <lint>` also runs the repo's lint, the same command the PR gate's lint row runs, so a format error fails here and not first at `werkmeister pr open`."
+      ? " A test command starting with `<lint> &&` first runs the repo's lint, the same command the PR gate's lint row runs, so a format error fails here, before the tests, and not first at `werkmeister pr open`."
       : ""
   }
 
