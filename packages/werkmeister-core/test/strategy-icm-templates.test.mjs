@@ -135,6 +135,13 @@ test("each template renders with no undefined and a route per stage", async () =
             `${wt}/${d}`,
           );
         else assert.doesNotMatch(c, /defaults to an allowlist/, `${wt}/${d}`);
+        // SW-789: the feature research stage samples CPU over time before a speed ticket names a lever.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^3\. .*`usage_usec` every 5 s.*cores in use per phase.*only a CPU cut shortens it/m,
+            `${wt}/${d}`,
+          );
         // SW-612: the exercise step stops for `machine setup` on the unresolved-hostname warning, and names no service.
         if (/Reload the running code|reload and exercise the service/.test(c)) {
           assert.match(
