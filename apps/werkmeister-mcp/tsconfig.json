@@ -12,6 +12,9 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": false,
+    "incremental": true,
+    // Inside dist/: same reasoning as packages/werkmeister-core/tsconfig.json.
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
     "types": ["node"]
   },
   // A glob, not a list — same reasoning as packages/werkmeister-core/tsconfig.json.

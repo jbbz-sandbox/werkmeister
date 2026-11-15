@@ -2,6 +2,10 @@
   "$schema": "https://turbo.build/schema.json",
   "extends": ["//"],
   "tasks": {
+    // SW-753: reuses the build's tsbuildinfo; see werkmeister-core#typecheck in the root turbo.json.
+    "typecheck": {
+      "dependsOn": ["^build", "build"]
+    },
     "test": {
       // SW-679: host-daemon.test.mjs copies the CLI's dist/, which werkmeister#build rewrites; wait for it.
       "dependsOn": ["build", "werkmeister#build"]
