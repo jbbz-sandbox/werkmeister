@@ -1,0 +1,2 @@
+# SW-753: npm reads only this package's ignore files, not the repo root's .gitignore, and this package has no `files`.
+*.tsbuildinfo

@@ -12,6 +12,9 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": false,
+    "incremental": true,
+    // Inside dist/ so a hand-deleted dist/ takes it along; tsc would otherwise skip re-emitting files it thinks are current.
+    "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",
     "types": ["node"]
   },
   // A glob, not a list: an explicit one silently dropped `k8s.ts` and

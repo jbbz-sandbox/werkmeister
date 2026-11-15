@@ -15,6 +15,10 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
+    // SW-753: `tsc --noEmit` reuses the build's tsbuildinfo, so it runs after the build instead of checking the same program beside it.
+    "werkmeister-core#typecheck": {
+      "dependsOn": ["^build", "build"]
+    },
     "test": {
       "dependsOn": ["build"],
       "passThroughEnv": ["WERKMEISTER_FEATURE", "SANDBOX_FEATURE"]
