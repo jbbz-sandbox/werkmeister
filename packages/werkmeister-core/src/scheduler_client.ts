@@ -20,9 +20,26 @@ export function ownScheduler(): void {
 }
 
 /**
- * Run scheduler *op* in the daemon, or *local* here when this process is the
- * daemon, has no token to reach one (a fresh HOME, CI, tests), or finds it down.
- * The daemon's transcript is relayed so the caller prints what it did.
+ * Runs one operation of the workspace scheduler (the queue of workspaces waiting for capacity).
+ * Uses the daemon when it is running, otherwise runs in-process: it calls *local* when there is
+ * no daemon token (a fresh home folder, CI, tests) or the daemon is down, and warns once that it
+ * fell back. Whatever the daemon printed while it ran the op is printed here too.
+ *
+ * @param op - The scheduler operation's name, e.g. `"queue"`.
+ * @param args - The operation's arguments.
+ * @param local - Runs the same operation in this process; used when the daemon can't be reached.
+ * @param timeoutMs - How long to wait for the daemon, in milliseconds. Defaults to 120000.
+ * @returns The operation's result, from the daemon or from *local*.
+ * @throws `SandboxError` when the daemon took the op but failed it or did not answer in
+ * time. A daemon that is down is not an error: *local* runs instead.
+ *
+ * @example
+ * ```ts
+ * import { schedulerOp } from "werkmeister-core/sdk";
+ *
+ * const queue = await schedulerOp<string[]>("queue", {}, async () => []);
+ * console.log(`${queue.length} waiting`);
+ * ```
  */
 export async function schedulerOp<T>(
   op: string,
@@ -47,7 +64,22 @@ export async function schedulerOp<T>(
   }
 }
 
-/** The features waiting for capacity, first come first served. */
+/**
+ * Lists the workspaces waiting for capacity to start, in the order they will start (first come,
+ * first served). Uses the daemon when it is running, otherwise reads the queue in-process.
+ *
+ * @returns Each waiting workspace's feature name, first in line first; empty when nothing waits.
+ * @throws `SandboxError` when the daemon took the call but failed it or did not answer in
+ * time.
+ *
+ * @example
+ * ```ts
+ * import { waitingQueue } from "werkmeister-core/sdk";
+ *
+ * const queue = await waitingQueue();
+ * console.log(queue.length ? `next up: ${queue[0]}` : "nothing waiting");
+ * ```
+ */
 export function waitingQueue(): Promise<string[]> {
   return schedulerOp("queue", {}, async () => readQueue());
 }

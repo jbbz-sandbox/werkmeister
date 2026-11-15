@@ -243,14 +243,39 @@ async function checkInfraHealth(): Promise<Record<string, boolean>> {
   return services;
 }
 
+// Health is deliberately a second call (`infraHealth`), because the CLI prints
+// its section header between the two and a library that owned both would have
+// to print that header itself. The CLI turns a false return into the "check
+// docker and your kubeconfig" hint.
 /**
- * Bring shared infrastructure up: generated files, the corporate CA, the
- * compose stack, and the host web servers.
+ * Brings up werkmeister's shared infrastructure stack (the proxy, generated
+ * config, the corporate CA and the host web servers). It is the machine-wide
+ * stack every workspace routes through, not a workspace: to start a workspace's
+ * containers, use `runWorkspaceAction` with `"up"`.
  *
- * Returns whether the compose stack itself started — the caller reports it as
- * the "check docker and your kubeconfig" hint. Health is deliberately a second
- * call (`infraHealth`), because the CLI prints its section header between the
- * two and a library that owned both would have to print that header itself.
+ * Runs in-process. It writes the proxy files under `~/.werkmeister`, extracts
+ * the corporate CA, runs `docker compose up -d --build` for the shared stack
+ * (the Caddy proxy and the k8s port-forwards, plus any baseline services), then
+ * builds and starts the host web servers (the workspaces dashboard and the MCP
+ * server). Safe to re-run: the web servers restart only when they rebuilt.
+ *
+ * @param signal - Cancels the compose step. Already aborted: nothing is touched
+ *   and it returns false. Aborted during `docker compose up`: compose stops and it
+ *   returns false, but the host web servers are still built and started.
+ * @returns True when the compose stack started; false when it was cancelled,
+ *   the shared compose file is missing, docker is missing or `docker compose`
+ *   failed. It does not wait for the services to become healthy.
+ * @throws Error when the compose process fails to spawn for any other reason.
+ *
+ * @example
+ * ```ts
+ * import { infraUp } from "werkmeister-core/sdk";
+ *
+ * const started = await infraUp({ signal: AbortSignal.timeout(300_000) });
+ * if (!started) {
+ *   console.error("Shared infrastructure did not start: check docker.");
+ * }
+ * ```
  */
 export async function up({ signal }: { signal?: AbortSignal } = {}): Promise<boolean> {
   // Ahead of everything, not just of the compose spawn: the setup below writes

@@ -704,7 +704,19 @@ export async function composeLogs(
   );
 }
 
-/** A running tail: `stop()` closes every container stream; `done` settles once they are closed. */
+/**
+ * A running log tail, as `streamLogs` returns it. `stop()` closes every container stream;
+ * `done` settles once they are closed.
+ *
+ * @example
+ * ```ts
+ * import { streamLogs, type LogTail } from "werkmeister-core/sdk";
+ *
+ * const tail: LogTail = streamLogs("my-workspace", "api", (chunk) => process.stdout.write(chunk));
+ * setTimeout(() => tail.stop(), 5_000);
+ * await tail.done;
+ * ```
+ */
 export interface LogTail {
   /** Closes every container stream. */
   stop(): void;

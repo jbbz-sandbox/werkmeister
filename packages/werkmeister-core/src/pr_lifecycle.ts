@@ -1859,8 +1859,28 @@ export async function openPrs(
 }
 
 /**
- * `werkmeister pr status`: reads each of *ws*'s opened PRs from `gh`, writes merged/shipped/review
- * state back to its PR file, moves the issue, and commits the record when anything changed.
+ * Checks each pull request a workspace has opened and records what changed: the
+ * same pass `werkmeister pr status` makes. Runs in-process and calls `gh` for
+ * each open PR, and `git` to find the release tag of a merged one. It has side
+ * effects: it rewrites the workspace's PR files (merged, shipped, closed, changes
+ * requested), moves the issue in its tracker, stops the workspace's containers
+ * once a PR has merged, and commits and pushes the record when anything changed.
+ *
+ * @param ws - The workspace folder's absolute path, e.g. from {@link resolveWorkspaceDir}.
+ * @param deps - The services it uses; leave it at its default.
+ * @param opts - `gh: false` skips the `gh` lookups and only re-checks merged PRs for a release.
+ * @returns `lines`, one status line per PR then any issue move or commit;
+ * `changed`, true when a PR file was rewritten; and `views`, the `gh pr view`
+ * data of each PR still open, keyed by PR file path.
+ *
+ * @example
+ * ```ts
+ * import { refreshPrStatus, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const ws = await resolveWorkspaceDir("my-workspace");
+ * const { lines, changed } = await refreshPrStatus(ws);
+ * console.log(lines.join("\n"), changed ? "(recorded)" : "");
+ * ```
  */
 export async function refreshPrStatus(
   ws: string,
@@ -2681,10 +2701,30 @@ async function fixLeftBehind(dir: string, deps: Deps): Promise<boolean> {
 }
 
 /**
- * `werkmeister pr watch` (desktop: false) and the werkmeister mod's timer (desktop: true): one
- * pass over every workspace. Headless claims are delivered here; desktop claims are returned
- * for the mod to send through the app, then one idle-reaper pass. Never merges and
- * never closes out.
+ * Makes one pass over every workspace's open pull requests, the same pass
+ * `werkmeister pr watch` makes, and wakes the Claude sessions that opened them
+ * when a PR needs work (a failing check, a conflict, a review). Runs in-process
+ * and calls `gh`. It has side effects: it resumes those sessions headless with a
+ * message, and, unless `repo` is given, stops the containers of workspaces that
+ * have sat idle. It never merges a PR and never closes out a workspace.
+ *
+ * @param opts - `desktop: true` returns the messages meant for sessions open in
+ * the Claude desktop app instead of leaving them; `repo` (`owner/name`) limits
+ * the pass to workspaces with a PR in that repo.
+ * @param deps - The services it uses; leave it at its default.
+ * @param send - How a message reaches a session; leave it at its default.
+ * @param idleLock - The lock file that keeps two idle-stop passes apart; leave it at its default.
+ * @returns `ok` (always true), `lines` (what the pass did, one line per event),
+ * and `desktop` (with `desktop: true`, each message to send: its `ws`, `session`, `url` and `message`).
+ * @throws Error when `repo` is given and another pass is already running.
+ *
+ * @example
+ * ```ts
+ * import { watchPrs } from "werkmeister-core/sdk";
+ *
+ * const { lines } = await watchPrs({ desktop: false });
+ * for (const line of lines) console.log(line);
+ * ```
  */
 export async function watchPrs(
   opts: { desktop: boolean; repo?: string },
@@ -2930,7 +2970,25 @@ export async function newPr(
   };
 }
 
-/** The workspace's place in the lifecycle, from files only — cheap enough for the pane's poll. */
+/**
+ * Tells where a workspace is in its life, from its PR files and `closeout.md`
+ * alone. Runs in-process and synchronously; it reads only local files (no `gh`,
+ * no network), so it is cheap to call often. Run {@link refreshPrStatus} first
+ * for the latest state from GitHub.
+ *
+ * @param ws - The workspace folder's absolute path, e.g. from {@link resolveWorkspaceDir}.
+ * @returns `state`: `working`, `ready` (every PR approved), `pr-open`, `merged`,
+ * `shipped`, `closed-out` or `abandoned`; and `prs`, one entry per PR file.
+ * A workspace with no PR files, or a malformed one, reads as `working`.
+ *
+ * @example
+ * ```ts
+ * import { lifecycleOf, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const { state, prs } = lifecycleOf(await resolveWorkspaceDir("my-workspace"));
+ * console.log(state, prs.map((p) => `${p.stem}: ${p.status}`).join(", "));
+ * ```
+ */
 export function lifecycleOf(ws: string): {
   /** Where the workspace is, from its PR files and `closeout.md`. */
   state: Lifecycle;
@@ -2948,7 +3006,7 @@ export function lifecycleOf(ws: string): {
     release: string | null;
     /** True when the PR file opts out of waiting for a release. */
     skip_release: boolean;
-    /** The merged PR changed its registry fragment and the sync hasn't run (SW-340). */
+    /** The merged PR changed its service registry fragment and the machine registry hasn't been synced yet. */
     registry_sync: boolean;
     /** Absolute path of the PR file. */
     path: string;
@@ -3145,10 +3203,39 @@ export async function openTerminalSessions(
 }
 
 /**
- * The one end-of-workspace verb (#160). Shipped: close the issue, write closeout.md, remove, delete
- * the merged branches. With *abandon*: record the reason, leave the issue, remove (which pushes every
- * branch) and keep the branches. With *noPr*: the work changed no repo, so close as done
- * with the reason instead of a PR.
+ * Closes out a finished workspace and removes it. This is destructive: for a
+ * shipped workspace it moves the issue to done, writes `closeout.md`, removes
+ * the workspace (its containers, worktrees and folder) and deletes the merged
+ * branches, locally and on `origin`. Runs in-process and calls `git` and the
+ * issue tracker. Running it again after a removal that failed finishes the job.
+ *
+ * @param name - The workspace's folder name.
+ * @param opts - `abandon`: give up on unshipped work with this reason; the issue
+ * gets the reason as a comment, every branch is pushed and kept.
+ * `noPr`: the work changed no repo, so close it as done with this reason instead of a PR.
+ * `skipPostmortem`: close without a `postmortem.md`, with this reason.
+ * Each needs a non-empty reason; `noPr` can't be combined with the other two.
+ * @param deps - The services it uses; leave it at its default.
+ * @returns `command`, the matching CLI command; `output`, what it did, one step per line;
+ * `path`, the workspace folder (now removed); and `terminals`, `claude` sessions
+ * still running in that folder, for a person to exit.
+ * @throws `WorkspaceError` when `name` is not a workspace, a reason is
+ * empty, the options conflict, another close-out of it is running, the
+ * workspace has no `postmortem.md` (without `skipPostmortem`), or a PR is not
+ * yet shipped, closed or abandoned (without `abandon` or `noPr`).
+ *
+ * @example
+ * ```ts
+ * import { closeOut, WorkspaceError } from "werkmeister-core/sdk";
+ *
+ * try {
+ *   const { output, terminals } = await closeOut("my-workspace");
+ *   console.log(output, ...terminals);
+ * } catch (e) {
+ *   if (e instanceof WorkspaceError) console.error(e.message);
+ *   else throw e;
+ * }
+ * ```
  */
 export async function closeOut(
   name: string,

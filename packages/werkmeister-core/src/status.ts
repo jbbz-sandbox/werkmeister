@@ -184,7 +184,34 @@ export interface InterceptsSnapshot {
   remote_services: string[];
 }
 
-/** Every feature×service intercept row and the interceptable services: what `werkmeister feature status --intercepts --json` prints. */
+/**
+ * Reports telepresence intercepts across every running workspace: one row per
+ * workspace and service, saying whether it can be intercepted and who holds the
+ * intercept. It is the same data `werkmeister feature status --intercepts --json`
+ * prints. Runs in-process; it shells out to `telepresence` (each read capped at
+ * 15 seconds) and reads `~/.werkmeister/services.yaml`.
+ *
+ * @returns An object with:
+ *   - `available` and `installed`: whether telepresence is usable, and whether
+ *     it is on PATH at all (a disconnected install can still intercept).
+ *   - `connected_namespace`: the cluster namespace it is connected to, or null.
+ *   - `intercepts`: one row per workspace and service, with `feature`,
+ *     `service`, `deployment`, `interceptable`, `blocker` (why not),
+ *     `intercepted` and `intercepted_by` (the owning workspace, or null when
+ *     unknown). Empty when telepresence is not installed.
+ *   - `remote_services`: the services with k8s coordinates, sorted, even when
+ *     telepresence is missing.
+ *
+ * @example
+ * ```ts
+ * import { interceptsSnapshot } from "werkmeister-core/sdk";
+ *
+ * const snap = await interceptsSnapshot();
+ * for (const row of snap.intercepts.filter((r) => r.intercepted)) {
+ *   console.log(`${row.service} → ${row.intercepted_by ?? "unknown owner"}`);
+ * }
+ * ```
+ */
 export async function interceptsSnapshot(): Promise<InterceptsSnapshot> {
   const state = await listIntercepts(STATUS_READ);
   const registry = loadServices();

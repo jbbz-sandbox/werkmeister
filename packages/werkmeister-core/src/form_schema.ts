@@ -259,10 +259,29 @@ export function repoSelectionError(formData: Record<string, unknown>): string | 
 
 const blank = (v: unknown) => v == null || v === "" || (Array.isArray(v) && v.length === 0);
 
+// For renderers without a JSON Schema validator (the /workspaces pane); the
+// browser form's AJV covers the schema part and calls `repoSelectionError` itself.
 /**
- * Field key → why `formData` can't be submitted against a `buildFormSchema` bundle: required, pattern and choices,
- * plus `repoSelectionError` (under `services`). Empty when it can. For renderers without a JSON Schema validator
- * (the /workspaces pane); the browser form's AJV covers the schema part and calls `repoSelectionError` itself.
+ * Checks new-workspace form data against the form's schema, without a JSON
+ * Schema validator. It checks required fields, allowed choices and patterns,
+ * and that at least one service or repo is picked. Runs in-process.
+ *
+ * @param bundle - The form schema; only `schema.properties` and
+ *   `schema.required` are read.
+ * @param formData - The field values to check.
+ * @returns Field key → why that field can't be submitted (the repo check is
+ *   reported under `services`). Empty when the data can be submitted.
+ *
+ * @example
+ * ```ts
+ * import { validateFormData } from "werkmeister-core/sdk";
+ *
+ * const errors = validateFormData(
+ *   { schema: { properties: { feature: { type: "string", pattern: "^[a-z-]+$" } }, required: ["feature"] } },
+ *   { feature: "Login Page", services: ["api"] },
+ * );
+ * console.log(errors); // { feature: '"Login Page" doesn\'t match the expected format' }
+ * ```
  */
 export function validateFormData(
   bundle: { schema: Pick<FormBundle["schema"], "properties" | "required"> },
@@ -290,8 +309,26 @@ export function validateFormData(
 }
 
 /**
- * Fill-empty merge of an issue's fields into form data: a field already filled is never clobbered, so re-fetching
- * is safe. `issue_id` is the exception — the lookup normalizes it (`api#7` → `acme/api#7`), so the canonical ref wins.
+ * Merges fields fetched from an issue into new-workspace form data, filling only
+ * empty fields, so a field the person already filled is never overwritten and
+ * fetching again is safe. `issue_id` is the exception: the fetched one always
+ * wins, because the lookup returns the canonical ref (`api#7` becomes
+ * `acme/api#7`). Runs in-process and returns a new object.
+ *
+ * @param current - The form data as it is now.
+ * @param incoming - The fields fetched from the issue.
+ * @returns A copy of `current` with the empty fields filled from `incoming`.
+ *
+ * @example
+ * ```ts
+ * import { mergeFormData } from "werkmeister-core/sdk";
+ *
+ * const merged = mergeFormData(
+ *   { feature: "login", description: "" },
+ *   { feature: "sign-in", description: "Add SSO", issue_id: "PROJ-42" },
+ * );
+ * console.log(merged); // { feature: "login", description: "Add SSO", issue_id: "PROJ-42" }
+ * ```
  */
 export function mergeFormData(
   current: Record<string, unknown>,

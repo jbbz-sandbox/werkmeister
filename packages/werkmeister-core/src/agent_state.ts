@@ -555,7 +555,22 @@ export function raiseNotice(
   writeAtomic(noticesPath(root), { ...all, [id]: { ...n, at: now.toISOString() } });
 }
 
-/** Removes notice *id* from workspace *root*'s notices; a missing id is a no-op. */
+/**
+ * Removes one notice from a workspace's notices (the alerts werkmeister raises for a person,
+ * such as a PR auto-fix that needs attention). Runs in-process: it rewrites the workspace's
+ * notices file. A missing id does nothing.
+ *
+ * @param root - The workspace folder's absolute path.
+ * @param id - The notice's id.
+ *
+ * @example
+ * ```ts
+ * import { clearNotice, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const root = await resolveWorkspaceDir("my-workspace");
+ * clearNotice(root, "autofix-werkmeister");
+ * ```
+ */
 export function clearNotice(root: string, id: string): void {
   const all = readNotices(root);
   if (!(id in all)) return;

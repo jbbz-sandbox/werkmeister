@@ -25,7 +25,22 @@ export function daemonPort(): number {
   return Number.isInteger(port) && port > 0 ? port : DEFAULT_DAEMON_PORT;
 }
 
-/** `WERKMEISTER_HOST` (proposal §2.4; e.g. http://host.docker.internal:3002), else loopback. */
+/**
+ * The base URL of the werkmeister daemon, with no trailing slash. Runs in-process and makes no
+ * network call.
+ *
+ * @returns `WERKMEISTER_HOST` when it is set (e.g. `http://host.docker.internal:3002`), else the
+ * loopback address `http://127.0.0.1:<port>`, where the port is `WERKMEISTER_MCP_PORT`, the
+ * machine config's `mcp_port` override, or 3002.
+ *
+ * @example
+ * ```ts
+ * import { daemonUrl } from "werkmeister-core/sdk";
+ *
+ * const res = await fetch(`${daemonUrl()}/api/status`);
+ * console.log(res.status);
+ * ```
+ */
 export function daemonUrl(): string {
   return (envVar("HOST") || `http://127.0.0.1:${daemonPort()}`).replace(/\/+$/, "");
 }
@@ -47,8 +62,25 @@ export function daemonToken(workspaceRoot?: string): string | null {
   );
 }
 
-/** The daemon is not listening, or something else holds its port: the caller may fall back. */
+/**
+ * Thrown when the werkmeister daemon is not reachable: nothing is listening at {@link daemonUrl},
+ * or something other than the daemon holds its port. The daemon never saw the call, so it is safe
+ * to run the work another way. Its `code` is `DAEMON_DOWN`, and it extends `SandboxError`.
+ *
+ * @example
+ * ```ts
+ * import { callTool, DaemonUnavailable } from "werkmeister-core/sdk";
+ *
+ * try {
+ *   await callTool("status");
+ * } catch (e) {
+ *   if (e instanceof DaemonUnavailable) console.log(e.code, e.message); // "DAEMON_DOWN"
+ *   else throw e;
+ * }
+ * ```
+ */
 export class DaemonUnavailable extends SandboxError {
+  /** @param detail - Why the daemon could not be reached; it goes into the message. */
   constructor(detail: string) {
     super(
       `werkmeister daemon not reachable at ${daemonUrl()} (${detail}). ` +
@@ -175,7 +207,18 @@ function checkBuild(onDisk: string | null, res: Response): void {
   );
 }
 
-/** What the daemon's `GET /api/status` reports about itself. */
+/**
+ * What the werkmeister daemon reports about itself: its process, which build it runs and how
+ * busy it is. {@link daemonStatus} returns it.
+ *
+ * @example
+ * ```ts
+ * import { daemonStatus, type DaemonStatus } from "werkmeister-core/sdk";
+ *
+ * const status: DaemonStatus | null = await daemonStatus();
+ * if (status?.stale) console.log(`daemon ${status.pid} runs ${status.loaded}, disk has ${status.onDisk}`);
+ * ```
+ */
 export interface DaemonStatus {
   /** The daemon's process id. */
   pid: number;
@@ -193,7 +236,22 @@ export interface DaemonStatus {
   restartPending: boolean;
 }
 
-/** The daemon's own `GET /api/status`, or null when it is down or refuses. */
+/**
+ * Asks the werkmeister daemon for its status. Needs the daemon, but never throws: it waits at
+ * most 5 seconds and does not retry.
+ *
+ * @returns The daemon's {@link DaemonStatus}, or null when the daemon is down, does not answer
+ * within 5 seconds, or refuses the request (for example a bad token).
+ *
+ * @example
+ * ```ts
+ * import { daemonStatus } from "werkmeister-core/sdk";
+ *
+ * const status = await daemonStatus();
+ * if (!status) console.log("daemon is down: run the work in-process instead");
+ * else console.log(`${status.inFlight} calls running, ${status.queued} queued`);
+ * ```
+ */
 export async function daemonStatus(): Promise<DaemonStatus | null> {
   try {
     const res = await send(
@@ -207,7 +265,19 @@ export async function daemonStatus(): Promise<DaemonStatus | null> {
   }
 }
 
-/** A daemon tool's answer. */
+/**
+ * A daemon tool's answer, as {@link callTool} returns it: the structured result and the text an
+ * MCP client would show.
+ *
+ * @example
+ * ```ts
+ * import { callTool, type ToolResult } from "werkmeister-core/sdk";
+ *
+ * type Listing = { workspaces: unknown[] };
+ * const result: ToolResult<Listing> = await callTool<Listing>("list-workspaces");
+ * console.log(result.text);
+ * ```
+ */
 export interface ToolResult<T> {
   /** The tool's structured result; `T` is the caller's assertion, not checked. */
   data: T;
@@ -216,9 +286,37 @@ export interface ToolResult<T> {
 }
 
 /**
- * Run daemon tool *name* with *args* over `POST /api/tool` (default timeout 120 s).
- * Throws `DaemonUnavailable` when the daemon is down, `DaemonTimeout` when it took the call but
- * did not answer in time, and `SandboxError` when the tool fails.
+ * Runs one werkmeister tool (the same tools the MCP server offers) in the werkmeister daemon and
+ * returns its answer. Needs the daemon. If the daemon refuses or resets the connection, it waits
+ * up to 15 seconds for a restarting daemon before giving up. Once a wait has given up, later calls
+ * in the same process do not wait again until one gets through.
+ *
+ * @param name - The tool name, e.g. `"status"` or `"list-workspaces"`.
+ * @param args - The tool's arguments. Defaults to none.
+ * @param opts - `token`: the bearer token to send; by default `WERKMEISTER_MCP_TOKEN`, else the
+ * machine token; `null` sends none. `signal`: aborts the call. `timeoutMs`: how long to wait for
+ * the answer, in milliseconds; defaults to 120000.
+ * @returns The tool's {@link ToolResult}. `T` is your assertion about `data`; it is not checked.
+ * @throws {@link DaemonUnavailable} when the daemon is not running or something else holds its
+ * port: the daemon never ran the tool, so you may run the work another way. Also when *signal*
+ * aborts the call before any answer came back; the daemon may already be running the tool then.
+ * @throws `SandboxError` when the daemon took the call but did not answer in time
+ * (`code` `DAEMON_TIMEOUT`): it may still be running the tool, so do not run it again. Also when
+ * the tool fails (the tool's own `code`, or `HTTP_<status>`), and when the daemon runs older code
+ * that has no such tool (`DAEMON_STALE`).
+ *
+ * @example
+ * ```ts
+ * import { callTool, DaemonUnavailable } from "werkmeister-core/sdk";
+ *
+ * try {
+ *   const { text } = await callTool("status", {}, { timeoutMs: 30_000 });
+ *   console.log(text);
+ * } catch (e) {
+ *   if (!(e instanceof DaemonUnavailable)) throw e;
+ *   console.log(e.message); // says how to start the daemon on this platform
+ * }
+ * ```
  */
 export async function callTool<T = unknown>(
   name: string,
@@ -280,8 +378,30 @@ export async function callTool<T = unknown>(
 }
 
 /**
- * Follow a workspace's logs over the daemon's SSE endpoint, in the same
- * {@link LogTail} shape as core's in-process `composeLogsStream`.
+ * Follows a workspace's container logs and passes each chunk to *onData* as it arrives. Needs the
+ * daemon. It returns at once; failures, including a daemon that is down, reject the returned
+ * `done` promise instead of throwing.
+ *
+ * @param workspace - The workspace's name.
+ * @param service - One service to follow, or null for all of the workspace's services.
+ * @param onData - Called with each chunk of log text.
+ * @param opts - `token`: the bearer token to send; by default `WERKMEISTER_MCP_TOKEN`, else the
+ * machine token; `null` sends none.
+ * @returns A {@link LogTail}. `done` resolves when the stream ends or you call `stop()`. It
+ * rejects with {@link DaemonUnavailable} when the daemon is down, and with `SandboxError`
+ * when the daemon refuses the stream or the logs fail.
+ *
+ * @example
+ * ```ts
+ * import { DaemonUnavailable, streamLogs } from "werkmeister-core/sdk";
+ *
+ * const tail = streamLogs("my-workspace", null, (chunk) => process.stdout.write(chunk));
+ * setTimeout(() => tail.stop(), 10_000);
+ * await tail.done.catch((e) => {
+ *   if (e instanceof DaemonUnavailable) console.log("daemon is down: try `werkmeister feature logs`");
+ *   else throw e;
+ * });
+ * ```
  */
 export function streamLogs(
   workspace: string,

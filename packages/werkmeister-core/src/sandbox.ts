@@ -420,14 +420,31 @@ const STARTING_PROMPT_FORMAT =
   "(`werkmeister registry sync`, `werkmeister infra proxy-reload`, `npm link`, `npm install -g`) " +
   "as a step for the agent; where the source asks for one, say it happens after merge.";
 
+// The `<result>` tags are what extractResult pulls the rewrite out of, past any preamble.
 /**
- * The prompt that rewrites a starting-prompt draft. It tells the model to
- * REWRITE (not perform) the task and to wrap its answer in `<result>` tags
- * (see extractResult) so the rewrite comes out cleanly past any preamble.
+ * Builds the prompt that asks a model to rewrite a starting-prompt draft into a
+ * clear instruction for a coding agent. You run the prompt on your own model; the
+ * model is told to rewrite the task (not perform it) and to put only the rewrite
+ * between `<result>` and `</result>` tags. Runs in-process. It reads the service
+ * registry and, when `formData` names an issue, that issue from the issue tracker.
  *
- * `formData` is the form's current state (all populated inputs); when present it
- * and the service registry are embedded as background context so the rewrite is
- * grounded in the workspace the user is actually setting up.
+ * @param text - The draft to rewrite.
+ * @param instruction - How to rewrite it. An empty string uses the default
+ *   ("a clear, specific, actionable starting instruction").
+ * @param formData - The create form's current values, if any. They and the
+ *   service registry go in as background so the rewrite fits the workspace.
+ * @returns The prompt text.
+ * @throws {@link WorkspaceError} when `text` is empty or only whitespace.
+ *
+ * @example
+ * ```ts
+ * import { buildRefinePrompt } from "werkmeister-core/sdk";
+ * const prompt = await buildRefinePrompt("add a rating field", "", {
+ *   feature: "ratings",
+ *   services: ["api"],
+ * });
+ * // Run `prompt` on your model, then take the text between <result> tags.
+ * ```
  */
 export async function buildRefinePrompt(
   text: string,
@@ -524,19 +541,28 @@ export function parseServiceNames(yaml: string): string[] {
   return names;
 }
 
+// The first half of fetchIssueFormData; the workspaces pane runs `prompt` on its session's own model.
 /**
- * The first half of `fetchIssueFormData`: look the issue up in the
- * configured tracker and build the tools-free extraction prompt over it.
+ * Looks up the issue named in `text` and builds a prompt that turns it into
+ * create-form fields. This is step one of filling the form from an issue: run
+ * `prompt` on your own model (no tools needed), then pass `base` and the answer to
+ * {@link applyIssueFormAnswer}. Runs in-process. It fetches the issue from the
+ * configured issue tracker and reads the service registry
+ * (`~/.werkmeister/services.yaml`) when there is one, so the model can suggest
+ * which services to start.
  *
- * `base` is what the form gets even if the distillation fails: the
- * locally-parsed `issue_id`, plus `task` from the title once the issue is
- * fetched. `prompt` is null when there is no issue to distil (no ref in `text`,
- * or the lookup failed). The workspaces pane runs `prompt` on its session's own
- * model and hands the answer to {@link applyIssueFormAnswer}.
+ * @param text - An issue key or URL, or text that contains one.
+ * @returns `base`, the fields known without a model (`issue_id`, and `task` from
+ *   the issue title), and `prompt`. `base` is `{}` and `prompt` null when `text`
+ *   names no issue; `prompt` is null when the issue could not be fetched.
  *
- * When the service registry (`~/.werkmeister/services.yaml`) is reachable it's
- * embedded as background context, so the model can map the issue onto the
- * werkmeister's actual services and suggest which `services` to spin up.
+ * @example
+ * ```ts
+ * import { applyIssueFormAnswer, buildIssueFormRequest } from "werkmeister-core/sdk";
+ * declare function askModel(prompt: string): Promise<string>; // your own model call
+ * const { base, prompt } = await buildIssueFormRequest("PROJ-12");
+ * const formData = prompt ? await applyIssueFormAnswer(base, await askModel(prompt)) : base;
+ * ```
  */
 export async function buildIssueFormRequest(text: string): Promise<{
   /** Form fields known without the model: `issue_id`, and `task` from the issue title. */
@@ -567,10 +593,27 @@ async function issueExtractPrompt(label: string, ref: string, briefing: string):
   return buildIssueExtractPrompt(label, ref, registry, serviceNames, briefing);
 }
 
+// The second half of fetchIssueFormData.
 /**
- * The second half of `fetchIssueFormData`: layer the model's answer to
- * the extraction prompt onto `base`. An answer with no usable JSON leaves
- * `base` as it is.
+ * Merges a model's answer to {@link buildIssueFormRequest}'s prompt into its
+ * `base` fields. This is step two of filling the create form from an issue. It
+ * reads the JSON in the answer (inside `<result>` tags or bare), keeps `feature`,
+ * `task`, `description` and `starting_prompt` when they are non-empty strings, and
+ * keeps the `services` that exist in the service registry. `base.issue_id` always
+ * wins. Runs in-process and reads the service registry.
+ *
+ * @param base - The `base` that {@link buildIssueFormRequest} returned.
+ * @param answer - The model's reply, or null when you had no answer.
+ * @returns The form fields. An answer with no usable JSON returns `base` unchanged.
+ *
+ * @example
+ * ```ts
+ * import { applyIssueFormAnswer, buildIssueFormRequest } from "werkmeister-core/sdk";
+ * const { base, prompt } = await buildIssueFormRequest("PROJ-12");
+ * const answer = prompt ? '<result>{"feature":"ratings","services":["api"]}</result>' : null;
+ * const formData = await applyIssueFormAnswer(base, answer);
+ * console.log(formData.feature, formData.services);
+ * ```
  */
 export async function applyIssueFormAnswer(
   base: Record<string, unknown>,
@@ -781,7 +824,18 @@ function pickValidServices(raw: unknown, known: string[]): string[] {
   return out;
 }
 
-/** One workspace folder under the workspaces root, as {@link listWorkspaces} returns it. */
+/**
+ * One workspace folder under the workspaces root, as {@link listWorkspaces}
+ * returns it. Its fields come from the folder and its `.werkmeister/workspace.yml`.
+ *
+ * @example
+ * ```ts
+ * import { listWorkspaces, type WorkspaceEntry } from "werkmeister-core/sdk";
+ * const { workspaces } = await listWorkspaces();
+ * const withIssue: WorkspaceEntry[] = workspaces.filter((w) => w.issueId !== null);
+ * for (const w of withIssue) console.log(w.name, w.issueUrl, w.lifecycle);
+ * ```
+ */
 export interface WorkspaceEntry {
   /** The folder name, which other functions take as the workspace's name. */
   name: string;
@@ -863,16 +917,51 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<WorkspaceConfi
   }
 }
 
-/** start_session's arguments for the workspace at `dir`: the pane's ▶ Start work and `werkmeister workspace prompt --args`. */
+// start_session's arguments: what the pane's Start work and `werkmeister workspace prompt --args` use.
+/**
+ * Builds what you need to start an agent session on a workspace: a title, the
+ * workspace's model, the opening prompt and a short background note. Runs
+ * in-process and reads the workspace's `.werkmeister/workspace.yml`. It gives the
+ * same output as `werkmeister workspace prompt --args`.
+ *
+ * @param dir - The workspace folder, e.g. from {@link resolveWorkspaceDir}.
+ * @returns `title` (the issue key and task, cut to under 60 characters, or the
+ *   folder name), `model` (only when the workspace sets one), `prompt` (it differs
+ *   for autonomous workspaces) and `background` (points the agent at `CLAUDE.md`
+ *   and the issue copy). A missing or unreadable `workspace.yml` still returns
+ *   arguments, built from the folder name.
+ *
+ * @example
+ * ```ts
+ * import { resolveWorkspaceDir, startArgs } from "werkmeister-core/sdk";
+ * const dir = await resolveWorkspaceDir("api-42-rate-limit");
+ * const { title, model, prompt, background } = await startArgs(dir);
+ * console.log(title, model ?? "default model", prompt, background);
+ * ```
+ */
 export async function startArgs(dir: string): Promise<StartArgs> {
   return buildStartArgs({ name: path.basename(dir), ...(await readWorkspaceConfig(dir)) });
 }
 
 /**
- * List the workspaces (immediate subdirectories) under the workspaces root,
- * each with a `vscode://file/...` URI (opens the folder in VS Code) and its
- * issue ref + web URL (from `.werkmeister/workspace.yml`). Sorted by name;
- * dotfiles skipped.
+ * Lists the workspaces: every folder directly under the workspaces root, sorted
+ * by name, skipping names that start with a dot. Each comes with its issue,
+ * labels, model, task and PR lifecycle state. Runs in-process: it reads the
+ * folders and their `.werkmeister/workspace.yml` files and makes no network or
+ * docker calls. For container state, use {@link getWorkspaceStatuses}.
+ *
+ * @returns `root`, the folder that was listed, and `workspaces`, one
+ *   {@link WorkspaceEntry} per folder.
+ * @throws {@link WorkspaceError} when the workspaces root can't be read (for
+ *   example, it doesn't exist).
+ *
+ * @example
+ * ```ts
+ * import { listWorkspaces } from "werkmeister-core/sdk";
+ * const { root, workspaces } = await listWorkspaces();
+ * console.log(`${workspaces.length} workspaces in ${root}`);
+ * for (const w of workspaces) console.log(w.name, w.task ?? "", w.lifecycle);
+ * ```
  */
 export async function listWorkspaces(): Promise<{
   /** The workspaces root folder that was listed. */
@@ -920,7 +1009,25 @@ function formTrackerLabel(): string {
   return ids.length === 1 ? trackerById(ids[0]).label : "tracker";
 }
 
-/** Build the RJSF form bundle from core's own prompt definitions. */
+/**
+ * Builds the create-workspace form as JSON Schema, ready for a form library such
+ * as react-jsonschema-form. Show it, check the answers with
+ * {@link validateFormData}, then pass them to {@link createWorkspace}. Runs
+ * in-process. Defaults are resolved against your home directory, so a stray
+ * `.werkmeister/workspace.yml` in the current folder doesn't pre-fill the form.
+ *
+ * @returns `schema` (the fields, their types and which are required), `uiSchema`
+ *   (layout hints), `formData` (the defaults) and `title`.
+ * @throws {@link WorkspaceError} when the form can't be built.
+ *
+ * @example
+ * ```ts
+ * import { getFormSchema } from "werkmeister-core/sdk";
+ * const { schema, formData, title } = await getFormSchema();
+ * const fields = schema.properties as Record<string, unknown>;
+ * console.log(title, Object.keys(fields), formData);
+ * ```
+ */
 export async function getFormSchema(): Promise<FormSchemaBundle> {
   let bundle: Record<string, unknown>;
   try {
@@ -1179,22 +1286,42 @@ export async function prepareCreate(
   return { resolved, issue };
 }
 
+// Creation is workspace_init's, called in-process (it used to be a `workspace new` child; note 087).
+// `command` still names that invocation because callers show it, and `output` is the transcript
+// the CLI would have printed. Inputs resolve against $HOME so a stray ./.werkmeister/workspace.yml
+// under the caller's cwd can't override the submitted form.
 /**
- * Create a workspace, then (optionally) open it in VS Code.
+ * Creates a workspace from create-form answers, then opens it in VS Code unless
+ * you turn that off. The usual flow: {@link getFormSchema} for the form, the
+ * user's answers, {@link validateFormData}, then this. Runs in-process: it creates
+ * the git worktrees and the workspace folder, the same as
+ * `werkmeister workspace new`. When the answers name an issue, it fetches the issue
+ * from the issue tracker first, fails the create if that fetch fails, and fills
+ * empty fields (task, services, description, starting prompt) from it.
  *
- * When the form names an issue, `prepareCreate` fetches it first (a failed
- * fetch fails the create before anything is made) and fills empty fields from it.
+ * @param formData - The form answers. `feature` (a lowercase-hyphen name) is
+ *   required; other keys match the form's fields, e.g. `issue_id` or `services`.
+ * @param opts - Options. `open` (default true) opens VS Code on the new folder.
+ *   `onData` receives each line of the transcript as it is written. `distill` is the
+ *   model that rewrites the issue into fields; `false` skips that step. `force`
+ *   re-initialises an existing workspace. `build: false` skips building images.
+ * @returns `command` (the equivalent `werkmeister workspace new …` command line),
+ *   `output` (the transcript), `workspacePath` (null when it couldn't be read from
+ *   the transcript), `opened` and `openNote` (why VS Code didn't open).
+ * @throws {@link WorkspaceError} when `feature` is missing, the issue can't be
+ *   fetched, or the create fails. The message carries the transcript.
  *
- * The creation itself is `workspace_init`'s, called in this process — it used
- * to be a `werkmeister workspace new` child, which made this package depend on the CLI
- * that depends on it (note 087). `command` still names that invocation because
- * it is what a caller shows the user, and `output` is still the transcript the
- * CLI would have printed: the reporter renders the same lines, and `onData`
- * receives each as it is emitted rather than as a chunk of a pipe.
- *
- * `resolveInputs` runs against the home directory for the same reason the child
- * was spawned there — so a stray `./.werkmeister/workspace.yml` under the caller's
- * cwd can't override the submitted form.
+ * @example
+ * ```ts
+ * import { createWorkspace, getFormSchema, validateFormData } from "werkmeister-core/sdk";
+ * const bundle = await getFormSchema();
+ * const answers = { ...bundle.formData, feature: "rate-limit", issue_id: "PROJ-42" };
+ * type Bundle = Parameters<typeof validateFormData>[0];
+ * const errors = validateFormData(bundle as unknown as Bundle, answers);
+ * if (Object.keys(errors).length) throw new Error(JSON.stringify(errors));
+ * const { workspacePath, output } = await createWorkspace(answers, { open: false });
+ * console.log(workspacePath, output);
+ * ```
  */
 export async function createWorkspace(
   formData: Record<string, unknown>,
@@ -1241,9 +1368,22 @@ export async function createWorkspace(
 }
 
 /**
- * Resolve a workspace name (as listed by {@link listWorkspaces}) to its
- * directory, verifying it exists. Path separators / `..` are rejected so callers
- * can't escape the workspaces root. Throws {@link WorkspaceError} otherwise.
+ * Turns a workspace name, as {@link listWorkspaces} gives it, into the absolute
+ * path of its folder, and checks the folder exists. Names with `/`, `\` or `..`
+ * are rejected, so a name can't point outside the workspaces root. Runs
+ * in-process.
+ *
+ * @param name - The workspace's folder name. Surrounding whitespace is trimmed.
+ * @returns The absolute path of the workspace folder.
+ * @throws {@link WorkspaceError} when the name is empty or holds a path
+ *   separator or `..`, or when no such workspace folder exists.
+ *
+ * @example
+ * ```ts
+ * import { resolveWorkspaceDir } from "werkmeister-core/sdk";
+ * const dir = await resolveWorkspaceDir("api-42-rate-limit");
+ * console.log(dir); // e.g. /Users/me/features/api-42-rate-limit
+ * ```
  */
 export async function resolveWorkspaceDir(name: string): Promise<string> {
   const clean = (name ?? "").trim();
@@ -1395,7 +1535,18 @@ export interface WorkspaceStatus {
   workspaceState: WorkspaceState;
 }
 
-/** An ICM workspace's current stage: 1-based `index` of `total`, `name` without its `NN_` prefix. */
+/**
+ * Where a staged workspace's run is: its current stage, as {@link icmStage}
+ * returns it. `index` counts from 1 out of `total`, and `name` drops the folder's
+ * `NN_` prefix.
+ *
+ * @example
+ * ```ts
+ * import { icmStage, resolveWorkspaceDir, type IcmStage } from "werkmeister-core/sdk";
+ * const stage: IcmStage | null = await icmStage(await resolveWorkspaceDir("api-42-rate-limit"));
+ * console.log(stage ? `${stage.index}/${stage.total} ${stage.name}` : "no stage");
+ * ```
+ */
 export interface IcmStage {
   /** 1-based position of the current stage. */
   index: number;
@@ -1406,8 +1557,21 @@ export interface IcmStage {
 }
 
 /**
- * The first `stages/NN_*` whose `output/` holds no non-dot file (so a lone `.gitkeep`
- * is still empty); null when there is no `stages/` dir or every stage has output.
+ * Finds a staged workspace's current stage: the first `stages/NN_*` folder whose
+ * `output/` holds no files. Files whose names start with a dot don't count, so an
+ * `output/` with only a `.gitkeep` is still empty. Runs in-process and only reads
+ * the folder.
+ *
+ * @param dir - The workspace folder, e.g. from {@link resolveWorkspaceDir}.
+ * @returns The current {@link IcmStage}, or null when there is no `stages/`
+ *   folder or every stage has output (the run is finished).
+ *
+ * @example
+ * ```ts
+ * import { icmStage, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ * const stage = await icmStage(await resolveWorkspaceDir("api-42-rate-limit"));
+ * if (stage) console.log(`stage ${stage.index} of ${stage.total}: ${stage.name}`);
+ * ```
  */
 export async function icmStage(dir: string): Promise<IcmStage | null> {
   const names = await fs.readdir(path.join(dir, "stages")).catch(() => null);
@@ -1557,10 +1721,25 @@ function slotPortLabel(slot: number, ports: Record<string, any> | null): string 
 }
 
 /**
- * Live container status for every workspace: one `docker ps` sweep matched to
- * each workspace's Compose project (`COMPOSE_PROJECT_NAME` from its `.env`, or
- * `werkmeister-<feature>` from workspace.yml). Sorted by name to align with
- * {@link listWorkspaces}.
+ * Gets the live status of every workspace: its containers' state, health, slot
+ * and ports, its agent session, its current stage and what it needs from you,
+ * plus the shared infrastructure stack's containers. Runs in-process. It runs one
+ * `docker ps` sweep and matches each workspace's Compose project
+ * (`COMPOSE_PROJECT_NAME` in its `.env`, or `werkmeister-<feature>` from
+ * `workspace.yml`), and reads each workspace's files and session logs.
+ *
+ * @returns `statuses`, one row per workspace folder sorted by name (the same
+ *   order as {@link listWorkspaces}), and `infra`. When docker can't be reached,
+ *   every row's and the infra's `state` is `"unknown"` with no containers; the
+ *   call doesn't throw. A missing workspaces root gives no rows.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceStatuses } from "werkmeister-core/sdk";
+ * const { statuses, infra } = await getWorkspaceStatuses();
+ * console.log(`infra: ${infra.state}`);
+ * for (const s of statuses) console.log(s.name, s.state, `${s.running}/${s.total}`, s.ports ?? "");
+ * ```
  */
 export async function getWorkspaceStatuses(): Promise<{
   /** One row per workspace folder, sorted by name. */
@@ -2085,11 +2264,29 @@ export function prFacts(v: {
   };
 }
 
+// Kept separate from listWorkspaces because the gh lookups are network calls.
+// shortcut: no concurrency cap on the gh fan-out; add one if workspace×repo count grows large.
 /**
- * For every workspace, list its repo worktrees and each one's PR (via `gh`).
- * Kept separate from {@link listWorkspaces} because the `gh` lookups are network
- * calls — the table renders instantly and fills PRs in asynchronously.
- * ponytail: no concurrency cap on the gh fan-out; add one if workspace×repo count grows large.
+ * Lists every workspace with its code worktrees and the pull request for each
+ * worktree's current branch. Runs in-process and calls the `gh` CLI once per
+ * worktree, so it is slower than {@link listWorkspaces}. A lookup that fails
+ * (no PR, branch not pushed, `gh` missing) gives a worktree with a null `url`
+ * and `state` rather than an error.
+ *
+ * @returns One entry per workspace, sorted by name: `name`, `repos` (each with
+ * `repo`, `branch`, `url`, `state`, `title`, `labels` and CI facts), `needs`
+ * (what the PRs need from a person) and `phaseDetail` (e.g. "behind main", or null).
+ *
+ * @example
+ * ```ts
+ * import { getWorkspacePRs } from "werkmeister-core/sdk";
+ *
+ * for (const ws of await getWorkspacePRs()) {
+ *   for (const pr of ws.repos) {
+ *     if (pr.url) console.log(`${ws.name} ${pr.repo}: ${pr.state} ${pr.url}`);
+ *   }
+ * }
+ * ```
  */
 export async function getWorkspacePRs(): Promise<WorkspacePrs[]> {
   const root = workspacesRoot();
@@ -2859,23 +3056,33 @@ export async function switchKubeContext(env: KubeSwitchEnv): Promise<{
   return { context: match, env };
 }
 
+// launchFeatureWindow returns once the window is up and tagged; supervise() keeps
+// later tabs tagged and owns the cleanup, and runs unawaited. The browser is spawned
+// detached, so the window outlives this process.
 /**
- * Launch a feature-tagged incognito Chrome window for a workspace: sets the
- * `X-Feature` routing cookie and tags the window (title prefix + corner badge).
+ * Opens an incognito Chrome window on a workspace's feature, with the
+ * `X-Feature` routing cookie set and the window tagged with the feature name.
+ * Runs in-process and returns once the window is open; the window stays open
+ * after the call. It starts at the workspace's `test_path` (else `/`).
+ * Requests reach the workspace's containers only while it is up; otherwise
+ * they fall through to the cluster.
  *
- * This used to spawn `werkmeister feature open` detached, because that command blocks for
- * the window's lifetime and the window has to outlive the call — the last place
- * core drove the CLI it depends on (note 087). `launchFeatureWindow` now
- * returns as soon as the window is up and tagged, and `supervise()` — which
- * keeps tabs opened later tagged, and owns the cleanup — runs unawaited. The
- * browser itself is spawned detached, so the window survives this process.
+ * @param name - The workspace's folder name, as {@link listWorkspaces} lists it.
+ * @throws {@link WorkspaceError} when `name` is not a workspace, its `.env`
+ * has no `FEATURE`, no service in `services.yaml` declares `feature_router:`
+ * (so there is no URL to open), or Chrome could not be launched.
  *
- * Feature name and start path come from the workspace, the way `werkmeister feature open`
- * reads them from its cwd. Routing only *resolves* if the feature is `up`;
- * otherwise the cookie is set and traffic falls through to k8s.
+ * @example
+ * ```ts
+ * import { openFeatureBrowser, runWorkspaceAction } from "werkmeister-core/sdk";
+ *
+ * await runWorkspaceAction("my-workspace", "up");
+ * const { path } = await openFeatureBrowser("my-workspace");
+ * console.log(`Opened the feature browser for ${path}`);
+ * ```
  */
 export async function openFeatureBrowser(name: string): Promise<{
-  /** The start path opened on the feature's host (`test_path`, else `/`). */
+  /** The workspace folder the window was opened for. */
   path: string;
 }> {
   const target = await resolveWorkspaceDir(name);
@@ -3028,7 +3235,25 @@ export async function resumeAndNudge(
   return { ...result, nudge: "headless" };
 }
 
-/** The pending Resume nudge for workspace *name*, removed so only one caller sends it. */
+/**
+ * Takes the message waiting for a workspace's live Claude session after a
+ * resume. When {@link runWorkspaceAction} resumes a workspace whose session was
+ * mid-turn and is still open, it leaves a "continue" message for that session
+ * instead of sending it; this returns that message and deletes it, so only one
+ * caller sends it. Runs in-process.
+ *
+ * @param name - The workspace's folder name.
+ * @returns The message to send to the session, or null when none is waiting.
+ * @throws {@link WorkspaceError} when `name` is not a workspace.
+ *
+ * @example
+ * ```ts
+ * import { claimResumeNudge } from "werkmeister-core/sdk";
+ *
+ * const message = await claimResumeNudge("my-workspace");
+ * if (message) console.log(`Send this to the session: ${message}`);
+ * ```
+ */
 export async function claimResumeNudge(name: string): Promise<string | null> {
   return claimNudge(await resolveWorkspaceDir(name));
 }
@@ -3038,22 +3263,45 @@ export const WORKSPACE_ACTIONS = ["up", "stop", "restart", "down", "pause", "res
 /** One of `WORKSPACE_ACTIONS`, the verb `runWorkspaceAction` takes. */
 export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
 
+// Calls the lifecycle API in-process (note 079, step 5) rather than spawning the CLI;
+// the transcript the CLI would have printed is collected and returned as `output`, so the
+// `{ command, output, path }` shape the MCP tool renders is unchanged.
 /**
- * Run a lifecycle action (up/stop/restart/down/pause/resume) against a workspace.
+ * Runs a lifecycle action on a workspace's containers and returns its progress
+ * output. The feature it acts on is the `FEATURE` in the workspace's `.env`,
+ * which can differ from the folder name. Runs in-process, except the capacity
+ * scheduling step (on `up`, and when `stop` or `down` frees room), which uses the
+ * werkmeister daemon when it is running and otherwise runs in-process.
  *
- * Calls `werkmeister-core/lifecycle` in-process — the payoff step 5 built the API
- * for (note 079) — rather than spawning the CLI. The transcript the CLI would
- * have printed is collected through a reporter and returned as `output`, so the
- * `{ command, output, path }` contract the MCP tool renders is unchanged.
+ * @param name - The workspace's folder name, as {@link listWorkspaces} lists it.
+ * @param action - One of:
+ * - `up`: starts the workspace's containers and routes the proxy to them, or
+ *   queues the workspace when the machine's capacity budget is full.
+ * - `stop`: stops the containers, keeping them so `up` or `restart` can start them again.
+ * - `restart`: restarts the containers in place.
+ * - `down`: removes the containers, gives back the workspace's slot and reloads the proxy.
+ * - `pause`: freezes the running containers and holds the workspace's Claude session.
+ * - `resume`: brings back what `pause` froze, releases the session, and tells it to
+ *   continue if it was mid-turn.
+ * @returns `command`, a label for what ran (e.g. `werkmeister up (in my-workspace)`);
+ * `output`, the progress transcript without ANSI colours; and `path`, the workspace folder.
+ * @throws {@link WorkspaceError} when `name` is not a workspace, its `.env` has no
+ * `FEATURE`, it declares `FEATURE=infra` (the shared stack, not a workspace), or
+ * the action fails (e.g. stopping a workspace that isn't running); the message
+ * then carries the transcript.
  *
- * The feature name comes from the workspace's own `.env`, because the directory
- * name is NOT the feature name (e.g. `proj-2044-frontend` → FEATURE
- * `frontend`); `up` additionally needs the directory, which it is handed rather
- * than left to resolve from a cwd that belongs to the caller.
+ * @example
+ * ```ts
+ * import { runWorkspaceAction, WorkspaceError } from "werkmeister-core/sdk";
  *
- * Throws {@link WorkspaceError} on failure (e.g. stopping a feature that isn't
- * running), with the transcript attached — the shape the CLI's non-zero exit
- * used to produce.
+ * try {
+ *   const { output } = await runWorkspaceAction("my-workspace", "up");
+ *   console.log(output);
+ * } catch (e) {
+ *   if (e instanceof WorkspaceError) console.error(e.message);
+ *   else throw e;
+ * }
+ * ```
  */
 export async function runWorkspaceAction(
   name: string,
@@ -3134,7 +3382,24 @@ export async function runWorkspaceAction(
 // Sessions: the readers live in harness/<id>/ (SW-187, SW-384); these map a workspace or
 // reconcile-session name to the folder they read and dispatch on its `harness:`.
 
-/** A workspace's sessions (newest first) with a display title, for the chat panel's picker. */
+/**
+ * Lists a workspace's Claude sessions, newest first, each with a title. Runs
+ * in-process and reads the session transcripts on disk.
+ *
+ * @param name - The workspace's folder name.
+ * @returns One entry per session: `sessionId`, `title`, `updatedAt` (ISO time of
+ * its last write) and `isNewest`. Empty when the workspace has no sessions.
+ * @throws {@link WorkspaceError} when `name` is not a workspace.
+ *
+ * @example
+ * ```ts
+ * import { listSessions } from "werkmeister-core/sdk";
+ *
+ * for (const s of await listSessions("my-workspace")) {
+ *   console.log(`${s.updatedAt} ${s.sessionId} ${s.title}`);
+ * }
+ * ```
+ */
 export async function listSessions(name: string): Promise<
   Array<{
     /** The harness's session id (Claude Code's transcript file name). */
@@ -3260,9 +3525,10 @@ export interface K8sForwardHealth {
   detail: string | null;
 }
 
+// The probes are k8s.ts's WIRE_PROBES.
 /**
  * Check every default k8s forward in parallel, each with the probe its
- * health_endpoint names (see `werkmeister-core/k8s`'s `WIRE_PROBES`).
+ * `health_endpoint` names in the service registry.
  */
 export async function getK8sForwardsHealth(): Promise<{
   /** One per default forward in services.yaml. */
@@ -3348,8 +3614,27 @@ async function openClaudeSession(
 }
 
 /**
- * Opens the workspace's latest Claude session (or *sessionId*, or a new one when *fresh*) in a
- * Terminal or VS Code, with *prompt* as the first message when given.
+ * Opens a workspace's Claude session for a person to work in: the newest
+ * session, the one named by `sessionId`, or a new one when `fresh` is true.
+ * Runs in-process and opens a macOS Terminal window or VS Code; it returns once
+ * the window is opened, not when the session ends.
+ *
+ * @param name - The workspace's folder name.
+ * @param sessionId - The session to resume; omit for the newest one.
+ * @param fresh - True starts a new session instead of resuming one. Defaults to false.
+ * @param prompt - A first message to send to the session.
+ * @param launcher - `"terminal"` or `"vscode"`; omit to pick the one the caller runs in
+ * (the `WERKMEISTER_LAUNCHER` environment variable overrides it).
+ * @throws {@link WorkspaceError} when `name` is not a workspace, or Terminal or
+ * VS Code could not be opened.
+ *
+ * @example
+ * ```ts
+ * import { resumeClaudeInTerminal } from "werkmeister-core/sdk";
+ *
+ * const { sessionId, launcher } = await resumeClaudeInTerminal("my-workspace");
+ * console.log(`Opened ${sessionId ?? "a new session"} in ${launcher}`);
+ * ```
  */
 export async function resumeClaudeInTerminal(
   name: string,
@@ -3377,7 +3662,23 @@ export async function resumeClaudeInTerminal(
   return { path: target, sessionId: resumeId, launcher: opened };
 }
 
-/** Opens a Terminal window following the workspace's container logs, for the pane's Logs. */
+/**
+ * Opens a macOS Terminal window that follows a workspace's container logs.
+ * Runs in-process; the window runs `werkmeister feature logs <feature>`, so the
+ * `werkmeister` CLI must be on the Terminal's `PATH`. Returns once the window is open.
+ *
+ * @param name - The workspace's folder name.
+ * @throws {@link WorkspaceError} when `name` is not a workspace, its `.env` has
+ * no `FEATURE`, or Terminal could not be opened.
+ *
+ * @example
+ * ```ts
+ * import { followLogsInTerminal } from "werkmeister-core/sdk";
+ *
+ * const { feature } = await followLogsInTerminal("my-workspace");
+ * console.log(`Following logs for ${feature}`);
+ * ```
+ */
 export async function followLogsInTerminal(name: string): Promise<{
   /** The feature (from the workspace's `.env`) whose logs the Terminal follows. */
   feature: string;
