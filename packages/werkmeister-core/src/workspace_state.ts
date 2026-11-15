@@ -110,7 +110,7 @@ export interface StateFacts {
   notices: Record<string, Notice>;
   /** The transcript-tail guess, used only when no session has a record (pre-SW-46, or a session outside the workspace). */
   transcriptAsk: { what: string; at: string } | null;
-  /** `autonomous` in workspace.yml: the agent approves its own gates. */
+  /** `autonomous` in workspace.yml: the agent approves its own stage gates; PR files stay the person's (SW-771). */
   autonomous: boolean;
 }
 
@@ -240,8 +240,10 @@ export function workspaceState(f: StateFacts): WorkspaceState {
         source: "text",
       });
   }
-  const handedOver = !f.autonomous && !STILL_ON_IT.has(activity.id);
-  for (const g of handedOver ? f.gates : [])
+  // SW-771: an autonomous run self-checks its stage gates but the person approves its PR files.
+  const personsGate = (file: string) => !f.autonomous || /(^|\/)pr-[^/]*\.md$/.test(file);
+  const handedOver = !STILL_ON_IT.has(activity.id);
+  for (const g of handedOver ? f.gates.filter((g) => personsGate(g.file)) : [])
     need({
       id: `gate:${g.file}`,
       kind: "gate",

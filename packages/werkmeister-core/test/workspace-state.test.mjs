@@ -330,8 +330,16 @@ test("needs-you: a gate is not handed over while a background shell, a capacity 
     assert.deepEqual(kinds(state({ sessions: { s } })), []);
   assert.deepEqual(kinds(state({ services: [{ name: "api", state: "starting" }] })), []);
 
-  // An autonomous workspace approves its own gates.
+  // An autonomous workspace approves its own stage gates, but not its PR file (SW-771).
   assert.deepEqual(kinds(state({ autonomous: true, sessions: { s: idle } })), []);
+  const prFile = [{ file: "stages/04_propose/output/pr-repo.md", at: ago(MIN) }];
+  assert.deepEqual(kinds(state({ autonomous: true, gates: prFile, sessions: { s: idle } })), [
+    "gate",
+  ]);
+  assert.deepEqual(
+    kinds(state({ autonomous: true, gates: prFile, sessions: shell("pnpm test") })),
+    [],
+  );
 
   // Handed over: idle, nothing running, not autonomous.
   assert.deepEqual(kinds(state({ sessions: { s: idle } })), ["gate"]);

@@ -551,8 +551,8 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "autonomous",
     label: "Autonomous run",
     help:
-      "Off by default. On: an icm run goes from stage 01 to `werkmeister pr open` with no human check " +
-      "(each stage self-checks and the agent approves its own PR file), and .claude/settings.json " +
+      "Off by default. On: an icm run goes from stage 01 to `werkmeister pr open` with one human check " +
+      "(each stage self-checks; the agent then asks the person to approve the PR file), and .claude/settings.json " +
       "allows the git, werkmeister, docker, gh, node and python3 calls a headless session needs. " +
       "The person reviews the PR; `werkmeister pr gate` still applies.",
     boolean: true,

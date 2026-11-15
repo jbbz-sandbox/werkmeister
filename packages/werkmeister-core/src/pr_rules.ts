@@ -18,7 +18,8 @@ export const CHAT_APPROVAL = `A direct chat reply from the person ("decided", "a
 
 export function buildPrRulesMd(prFileDir: string, autonomous = false): string {
   const approver = autonomous
-    ? "The agent sets `draft → approved` after its self-check, with every decision it made under `## Recommendations for reviewer` in the PR body; the person reviews the PR."
+    ? // SW-771: the person approves in every mode; the agent asks after its self-check.
+      `The person sets \`draft → approved\` after the agent's self-check, which puts every decision it made under \`## Recommendations for reviewer\` in the PR body; the agent asks for it. ${CHAT_APPROVAL}`
     : `The person sets \`draft → approved\`; that flip is the approval. ${CHAT_APPROVAL}`;
   return `# PR rules — read before opening, merging or closing out
 
@@ -76,7 +77,7 @@ ${approver} Tooling writes every other status.
 | Test | run each touched service's registry test command; the exit code decides |
 | Exercise | observe the change in this workspace's running containers; PASS/FAIL per check |
 | Gate | rule 3 |
-| Approve | ${autonomous ? "the agent" : "the person"} sets \`status: approved\` |
+| Approve | the person sets \`status: approved\` |
 | Open | \`werkmeister pr open\` creates the PR |
 | Merge | the person merges it |
 | Ship | the merge is part of a release — the work is done |
