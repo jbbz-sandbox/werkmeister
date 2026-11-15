@@ -237,7 +237,8 @@ export function takeDownProject(
 const COMPOSE_TIMEOUT_S = 300;
 // A cold `up` holds the whole setup install and build (queued behind the
 // host-wide install slots and turbo-build lock) before it starts a service (SW-86).
-const COMPOSE_UP_TIMEOUT_S = 20 * 60;
+// WERKMEISTER_UP_TIMEOUT_S is test-only: up_exit.test.ts times `up` out in seconds (SW-755).
+const COMPOSE_UP_TIMEOUT_S = Number(process.env["WERKMEISTER_UP_TIMEOUT_S"] || 20 * 60);
 
 /**
  * Run `docker compose -f <file> <args>`.
