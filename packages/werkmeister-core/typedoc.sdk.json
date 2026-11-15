@@ -1,5 +1,6 @@
 {
   "entryPoints": ["src/sdk.ts"],
+  "plugin": ["./typedoc-require-example.mjs"],
   "tsconfig": "tsconfig.json",
   "emit": "none",
   "excludePrivate": true,
