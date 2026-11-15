@@ -78,9 +78,13 @@ export function startPrompt(autonomous: boolean): string {
 
 /** start_session's arguments besides initiation, cwd, use_worktree and context. */
 export interface StartArgs {
+  /** The session title, under 60 characters: issue key and task, else the workspace name, cut with `…`. */
   title: string;
+  /** The workspace's model; absent to use the default. */
   model?: string;
+  /** The first message: `start the run` plus the run limits (autonomous) or the interactive note. */
   prompt: string;
+  /** Points the session at the workspace's `CLAUDE.md` and issue copy. */
   background: string;
 }
 

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   bundledPackages,
+  callToolTable,
   cliGuide,
   fill,
   licenceTable,
@@ -154,5 +155,30 @@ test("bundledPackages reads each entry's header, scoped names included", () => {
   assert.throws(
     () => bundledPackages(`preamble\n\nnot a header\n\ntext\n`),
     /unexpected entry header "not a header"/,
+  );
+});
+
+test("callToolTable lists each tool's arguments, optional ones marked, enums as unions", () => {
+  const tools = [
+    {
+      name: "skills",
+      title: "Check | sync",
+      inputSchema: {
+        properties: { workspace: { type: "string" }, action: { enum: ["check", "sync"] } },
+        required: ["action"],
+      },
+    },
+    { name: "list-workspaces", title: "List", inputSchema: { type: "object" } },
+  ];
+  assert.equal(
+    callToolTable(tools, new Set(["list-workspaces"])),
+    [
+      "2 tools.",
+      "",
+      "| Tool | What it does | Arguments |",
+      "| --- | --- | --- |",
+      '| `skills` | Check \\| sync | `workspace?: string`, `action: "check" \\| "sync"` |',
+      "| `list-workspaces` | List (UI-only) | none |",
+    ].join("\n"),
   );
 });

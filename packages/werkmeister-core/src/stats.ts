@@ -271,11 +271,17 @@ export function saveReport(
  * honest about — `durationMinutes` is what elapsed, not what was asked for.
  */
 export interface CollectionRun {
+  /** Aggregated stats keyed by container name; empty when nothing was sampled. */
   stats: Record<string, ContainerStats>;
+  /** Suggested limits per container, from the observed peaks plus 50% headroom. */
   recommendations: Recommendation[];
+  /** The most samples any one container got. */
   samples: number;
+  /** Minutes that actually elapsed, which is shorter than asked for after an abort. */
   durationMinutes: number;
+  /** Whether a report was written. */
   saved: boolean;
+  /** The written report's path; null when none was saved. */
   reportPath: string | null;
 }
 
@@ -432,8 +438,11 @@ export interface ServiceUsage {
   status: UsageStatus;
 }
 
+/** What `optimizeReport` found: each container's peak against its limit, and suggested limits. */
 export interface OptimizeReport {
+  /** One row per sampled container. */
   usage: ServiceUsage[];
+  /** Suggested limits per container, from the observed peaks plus 50% headroom. */
   recommendations: Recommendation[];
 }
 

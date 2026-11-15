@@ -95,6 +95,45 @@ export function mcpSource() {
     .join("\n");
 }
 
+/** A JSON Schema as a TypeScript-ish type; `\|` keeps a union's pipes out of the table's columns. */
+function schemaType(s = {}) {
+  if (s.enum) return s.enum.map((v) => JSON.stringify(v)).join(" \\| ");
+  if (s.anyOf) return s.anyOf.map(schemaType).join(" \\| ");
+  if (s.type === "array") return `${schemaType(s.items)}[]`;
+  return [s.type ?? "unknown"].flat().join(" \\| ");
+}
+
+/** SW-748: the `callTool` reference, from `tools/list`; *uiOnly* names the App-only tools. */
+export function callToolTable(tools, uiOnly = new Set()) {
+  const args = ({ inputSchema: { properties = {}, required = [] } = {} }) =>
+    Object.entries(properties)
+      .map(([k, s]) => `\`${k}${required.includes(k) ? "" : "?"}: ${schemaType(s)}\``)
+      .join(", ") || "none";
+  return [
+    `${tools.length} tools.`,
+    "",
+    "| Tool | What it does | Arguments |",
+    "| --- | --- | --- |",
+    ...tools.map(
+      (t) =>
+        `| \`${t.name}\` | ${md(t.title ?? "", true)}${uiOnly.has(t.name) ? " (UI-only)" : ""} | ${args(t)} |`,
+    ),
+  ].join("\n");
+}
+
+/** Every tool the daemon serves, as `tools/list` gives them, from the built MCP server. */
+async function listedTools() {
+  const server = join(ROOT, "apps/werkmeister-mcp/dist/server.js");
+  if (!existsSync(server))
+    throw new Error(`apps/werkmeister-mcp/dist/server.js is missing — ${BUILD_FIRST}`);
+  const { connectInMemoryClient, createServer } = await import(pathToFileURL(server).href);
+  // The daemon registers the scheduler tool too; createServer() leaves it out by default.
+  const client = await connectInMemoryClient(createServer({ scheduler: true }), "gen-docs");
+  const { tools } = await client.listTools();
+  await client.close();
+  return tools;
+}
+
 export const BUILD_FIRST =
   "run `pnpm turbo run build --filter=werkmeister` first, then `pnpm run docs:gen`";
 
@@ -373,6 +412,10 @@ export async function loadRegions() {
       "| --- | --- |",
       ...tools.map((t) => `| \`${t.name}\` | ${md(t.title, true)}${t.app ? " (UI-only)" : ""} |`),
     ].join("\n"),
+    "sdk-call-tools": callToolTable(
+      await listedTools(),
+      new Set(tools.filter((t) => t.app).map((t) => t.name)),
+    ),
     "cli-reference": cliGuide(commands),
     // Written by the same build as dist/main.js, which cliReference() already requires.
     "third-party-npm": licenceTable(

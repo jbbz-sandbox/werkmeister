@@ -55,11 +55,15 @@ const INFRA_KEYS = [
 ];
 const SETUP_KEYS = ["image", "command", "node_modules_volume"];
 
+/** The fragment text {@link renderFragment} produced, and what changed. */
 export interface Rendered {
+  /** Absolute path the fragment is written to. */
   path: string;
+  /** The full file text: the existing bytes with new keys spliced in, or a new file with the header. */
   yaml: string;
   /** Dotted paths of every key added, e.g. `services.api.internal_port`. */
   added: string[];
+  /** False when the existing file already had everything, so there is nothing to write. */
   changed: boolean;
   /** Sections the existing file shapes in a way that can't be extended, with what was left out. */
   skipped: string[];
@@ -141,6 +145,7 @@ function sections(plan: Plan): [string, Entries][] {
   ];
 }
 
+/** Render *plan* as fragment text. An existing file only gains missing keys and entries; its own text is kept byte for byte. */
 export function renderFragment(plan: Plan): Rendered {
   const original = plan.existing ?? "";
   const doc = parseDocument(original);

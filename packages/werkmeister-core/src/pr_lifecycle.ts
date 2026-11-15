@@ -101,6 +101,7 @@ export type PrStatus =
   | "shipped"
   | "closed"
   | "abandoned";
+/** Where a workspace stands, from first commit to close-out; see {@link lifecycleOf}. */
 export type Lifecycle =
   | "working"
   | "ready"
@@ -132,11 +133,15 @@ export type Run = (
 
 /** Everything that leaves the process, so tests stub the seam and keep the logic real. */
 export interface Deps {
+  /** Runs a host command and resolves with its output and exit code; never rejects. */
   run: Run;
   /** HTTP status of a GET, or 0 when unreachable. */
   httpStatus: (url: string) => Promise<number>;
+  /** The machine's service registry (`~/.werkmeister/services.yaml`). */
   services: ServicesConfig;
+  /** The archetypes services build on. */
   archetypes: ArchetypeRegistry;
+  /** The registry's `repos:`, keyed by code worktree directory name. */
   repos: ReposConfig;
   /** Fixed tracker and statuses (tests); absent: the workspace's own, through its project (SW-104). */
   tracker?: IssueTrackerStrategy;
@@ -147,11 +152,23 @@ export interface Deps {
     ws: string,
     message: string,
     paths: string[],
-  ) => Promise<{ ok: boolean; message: string }>;
+  ) => Promise<{
+    /** False when the commit or push failed. */
+    ok: boolean;
+    /** One report line: what was committed and pushed, or why not. */
+    message: string;
+  }>;
   /** *abandoned*: don't push a code branch that would hold only the handoff commit (SW-91). */
-  remove: (name: string, abandoned: boolean) => Promise<{ output: string }>;
+  remove: (
+    name: string,
+    abandoned: boolean,
+  ) => Promise<{
+    /** The removal's report, printed as-is. */
+    output: string;
+  }>;
   /** Terminal sessions still open in the workspace, one line each. */
   terminals: (ws: string) => Promise<string[]>;
+  /** The source clone that owns worktree *dir*; null when it cannot be resolved. */
   sourceOf: (dir: string) => Promise<string | null>;
   /** The PR file's callback fields for the session running `pr open` (#236). */
   session: (ws: string) => Promise<Record<string, string>>;
@@ -165,18 +182,37 @@ export interface Deps {
   /** Regenerate the machine registry (registry_sync.ts); never throws. */
   syncRegistry: () => Step[];
   /** Each running feature and its local services; [] when docker can't be read. */
-  runningServices: () => { feature: string; services: string[] }[];
+  runningServices: () => {
+    /** The running feature's name. */
+    feature: string;
+    /** Its workspace's local services. */
+    services: string[];
+  }[];
   /** Stop the workspace's feature containers (SW-39); one line, never throws. */
   stop: (ws: string) => Promise<string>;
   /** Whether the `pr watch` schedule is installed (SW-437). */
   prWatch: () => PrWatchScheduleState;
   /** `os.loadavg()` and the core count, read before and after each gate check (SW-209). */
-  hostLoad: () => { load: number[]; cores: number };
+  hostLoad: () => {
+    /** The 1, 5 and 15 minute load averages. */
+    load: number[];
+    /** Logical CPU count, to scale *load* against. */
+    cores: number;
+  };
   /** Bytes available and total, read once before the gate starts anything (SW-620). */
-  hostMemory: () => { free: number; total: number };
+  hostMemory: () => {
+    /** Bytes available now. */
+    free: number;
+    /** Bytes installed. */
+    total: number;
+  };
+  /** Wait *ms* milliseconds; stubbed so tests don't wait. */
   sleep: (ms: number) => Promise<void>;
   /** One idle-reaper pass over every workspace (SW-39). */
-  reapIdle: () => Promise<{ lines: string[] }>;
+  reapIdle: () => Promise<{
+    /** One report line per workspace stopped or started from the waiting queue; [] when nothing changed. */
+    lines: string[];
+  }>;
   /** Start one of the feature's services and wait for it (SW-34); throws on failure. */
   startService: (
     ws: string,
@@ -191,7 +227,14 @@ export interface Deps {
     ws: string,
     feature: string,
     services: string[],
-  ) => Promise<{ port: number; holder: string }[]>;
+  ) => Promise<
+    {
+      /** The host port already bound. */
+      port: number;
+      /** What binds it: a container name, or `a host process`. */
+      holder: string;
+    }[]
+  >;
 }
 
 // Test suites outlast runCapture's 120 s timeout, which is sized for `claude -p`.
@@ -1526,11 +1569,22 @@ export function formatGate(dir: string, g: GateResult): string[] {
 
 // ---- open / status ---------------------------------------------------------
 
+/**
+ * `werkmeister pr gate`: run the pre-PR gate for each current PR file, or only *only*'s,
+ * and return its report; opens nothing.
+ */
 export async function gatePrs(
   ws: string,
   only?: string,
   deps: Deps = defaultDeps(),
-): Promise<{ ok: boolean; lines: string[]; retry?: true }> {
+): Promise<{
+  /** False when any PR's gate failed. */
+  ok: boolean;
+  /** The report to print, one gate block per PR file. */
+  lines: string[];
+  /** Set when every failure was a capacity wait (load or memory): rerun later; the command exits 75. */
+  retry?: true;
+}> {
   const all = readPrFiles(ws);
   const files = selectFiles(ws, all, only, (f) => !superseded(f, all));
   const lines: string[] = [];
@@ -1626,11 +1680,22 @@ function selectFiles(
   return files;
 }
 
+/**
+ * `werkmeister pr open`: gate, push and open a PR for each `status: approved` PR file
+ * (or only *only*'s), then record the opened PRs on the record branch.
+ */
 export async function openPrs(
   ws: string,
   only?: string,
   deps: Deps = defaultDeps(),
-): Promise<{ ok: boolean; lines: string[]; retry?: true }> {
+): Promise<{
+  /** False when any PR failed its gate or could not be opened. */
+  ok: boolean;
+  /** The report to print, per PR file. */
+  lines: string[];
+  /** Set when every failure was a capacity wait (load or memory): rerun later; the command exits 75. */
+  retry?: true;
+}> {
   const all = readPrFiles(ws);
   const files = selectFiles(ws, all, only, (f) => statusOf(f) === "approved");
   const lines: string[] = [];
@@ -2085,14 +2150,19 @@ async function moveIssueForPrs(
 
 /** One message owed to the session that opened a PR. */
 export interface PrCallback {
+  /** The workspace folder. */
   ws: string;
+  /** The PR's code worktree directory name. */
   dir: string;
+  /** The PR's GitHub URL. */
   url: string;
+  /** The Claude Code session id to resume with the message. */
   session: string;
-  /** The folder the session started in, which `--resume` needs; null in callbacks from before SW-16. */
+  /** The folder the session started in, which `--resume` needs; null in callbacks written by older versions. */
   sessionDir: string | null;
   /** The desktop app's `local_…` id: delivered by the werkmeister mod, never headless. */
   hostSession: string | null;
+  /** The text to send the session, e.g. "PR … merged. Run `werkmeister pr status` …". */
   message: string;
 }
 
@@ -2131,32 +2201,77 @@ export function callbackMessage(status: string, url: string, release?: string): 
 // conflict, claimed in `notified_checks` / `notified_queue` / `notified_review` / `notified_conflict`.
 
 /** The `gh pr view` fields `refreshPrStatus` reads; the wake fields only on an open PR. */
-interface PrView {
+export interface PrView {
+  /** `OPEN`, `MERGED` or `CLOSED`. */
   state?: string;
-  mergeCommit?: { oid?: string } | null;
+  /** The merge commit; null until merged. */
+  mergeCommit?: {
+    /** Its SHA. */
+    oid?: string;
+  } | null;
+  /** `APPROVED`, `CHANGES_REQUESTED` or `REVIEW_REQUIRED`; empty when no review is required. */
   reviewDecision?: string;
-  latestReviews?: Array<{ state?: string }>;
-  number?: number;
-  headRefOid?: string;
-  baseRefName?: string;
-  mergeable?: string;
-  statusCheckRollup?: Array<{
-    __typename?: string;
-    name?: string;
-    context?: string;
-    conclusion?: string;
+  /** Each reviewer's most recent review. */
+  latestReviews?: Array<{
+    /** e.g. `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`. */
     state?: string;
+  }>;
+  /** The PR number on GitHub. */
+  number?: number;
+  /** SHA of the PR branch's head commit. */
+  headRefOid?: string;
+  /** The branch the PR merges into. */
+  baseRefName?: string;
+  /** `MERGEABLE`, `CONFLICTING` or `UNKNOWN` (GitHub still computing). */
+  mergeable?: string;
+  /** The head commit's checks: GitHub Actions check runs and commit statuses mixed. */
+  statusCheckRollup?: Array<{
+    /** `CheckRun` or `StatusContext`, which says which of the fields below are set. */
+    __typename?: string;
+    /** A check run's name. */
+    name?: string;
+    /** A commit status's name. */
+    context?: string;
+    /** A check run's result (e.g. `SUCCESS`, `FAILURE`); empty while it runs. */
+    conclusion?: string;
+    /** A commit status's state (e.g. `SUCCESS`, `FAILURE`, `PENDING`). */
+    state?: string;
+    /** A check run's page. */
     detailsUrl?: string;
+    /** A commit status's page. */
     targetUrl?: string;
   }>;
+  /** Every submitted review, oldest first. */
   reviews?: Array<{
-    author?: { login?: string };
+    /** Who submitted it. */
+    author?: {
+      /** GitHub username. */
+      login?: string;
+    };
+    /** e.g. `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`. */
     state?: string;
+    /** The review's top-level text (Markdown); empty for a bare approval. */
     body?: string;
+    /** ISO 8601 time it was submitted. */
     submittedAt?: string;
   }>;
-  comments?: Array<{ author?: { login?: string }; body?: string; createdAt?: string }>;
-  files?: Array<{ path?: string }>;
+  /** Conversation comments on the PR, oldest first (not line comments). */
+  comments?: Array<{
+    /** Who wrote it. */
+    author?: {
+      /** GitHub username. */
+      login?: string;
+    };
+    /** The comment text (Markdown). */
+    body?: string;
+    /** ISO 8601 time it was posted. */
+    createdAt?: string;
+  }>;
+  /** The files the PR changes. */
+  files?: Array<{
+    /** Repo-relative path. */
+    path?: string;
+  }>;
 }
 
 export type WakeEvent =
@@ -2660,7 +2775,12 @@ export async function adoptPr(
   ws: string,
   opts: { pr?: string; noPr?: string; repo?: string },
   deps: Deps = defaultDeps(),
-): Promise<{ ok: boolean; lines: string[] }> {
+): Promise<{
+  /** Always true: failures throw WorkspaceError. */
+  ok: boolean;
+  /** The report to print. */
+  lines: string[];
+}> {
   const dir = prFileDir(ws);
   if (!dir) throw new WorkspaceError("This workspace has no stage to hold a PR file.");
   let repo = opts.repo;
@@ -2745,7 +2865,7 @@ export async function adoptPr(
 
 /**
  * `werkmeister pr new <worktree> --slug <slug>`: a follow-up PR for code written after *worktree*'s
- * PR merged (SW-103). Cuts `<branch>-<slug>` from base, since a squash-merged branch's commits
+ * PR merged. Cuts `<branch>-<slug>` from base, since a squash-merged branch's commits
  * are not on base, and writes `pr-<worktree>-<slug>.md` at `status: draft`.
  */
 export async function newPr(
@@ -2753,7 +2873,12 @@ export async function newPr(
   worktree: string,
   slug: string,
   deps: Deps = defaultDeps(),
-): Promise<{ ok: boolean; lines: string[] }> {
+): Promise<{
+  /** Always true: failures throw WorkspaceError. */
+  ok: boolean;
+  /** The report to print. */
+  lines: string[];
+}> {
   if (!/^[a-z0-9][a-z0-9-]*$/.test(slug))
     throw new WorkspaceError("--slug: lowercase letters, digits and dashes.");
   const dir = prFileDir(ws);

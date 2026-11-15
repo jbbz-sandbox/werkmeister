@@ -270,11 +270,17 @@ export async function containerRunning(name: string): Promise<boolean> {
   }
 }
 
+/** One stats sample of a running container, as `docker stats --no-stream` reports it. */
 export interface ContainerStat {
+  /** Container name, without Docker's leading `/`; the short ID when it has none. */
   name: string;
+  /** CPU share over the sample window; 100 is one full core. */
   cpuPercent: number;
+  /** Resident memory in MiB, page cache excluded. */
   memMib: number;
+  /** The memory limit in MiB; Docker reports the host's memory when none is set. */
   memLimitMib: number;
+  /** The container's Docker labels. */
   labels: Record<string, string>;
 }
 

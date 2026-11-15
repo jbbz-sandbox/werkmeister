@@ -76,16 +76,24 @@ export interface SchemaProp {
   minLength?: number;
 }
 
-/** The RJSF bundle {@link buildFormSchema} returns. */
+/** The RJSF bundle `buildFormSchema` returns. */
 export type FormBundle = {
+  /** The JSON Schema: one property per unresolved prompt. */
   schema: {
+    /** Always `object`: the form is one object of fields. */
     type: "object";
+    /** The form heading, the same as the bundle's `title`. */
     title: string;
+    /** One field per unresolved prompt, keyed by the prompt's key. */
     properties: Record<string, SchemaProp>;
+    /** Keys of the fields that may not be left empty; absent when none. */
     required?: string[];
   };
+  /** RJSF widget hints per field key, plus `ui:order` for the prompts' order. */
   uiSchema: Record<string, unknown>;
+  /** Each field's starting value: the resolved value, else the prompt's default. */
   formData: Record<string, unknown>;
+  /** The given title, else `Initialize <name>`. */
   title: string;
 };
 

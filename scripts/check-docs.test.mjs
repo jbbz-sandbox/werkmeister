@@ -4,7 +4,15 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { checkDoc, checkMan, isIgnored, jiraKeyLines, listFiles, slug } from "./check-docs.mjs";
+import {
+  checkDoc,
+  checkMan,
+  checkSdkParity,
+  isIgnored,
+  jiraKeyLines,
+  listFiles,
+  slug,
+} from "./check-docs.mjs";
 import { BUILD_FIRST } from "./gen-docs.mjs";
 
 const ctx = {
@@ -175,4 +183,63 @@ test("flags a Jira key in prose, not in code, a link or a fence (SW-715)", () =>
   assert.deepEqual(jiraKeyLines("apps/cli/src/commands/pr.help.md", text), [
     "apps/cli/src/commands/pr.help.md:1: Jira key in prose, readers can't open it: Fixed in SW-12.",
   ]);
+});
+
+const PARITY = [
+  "# SDK parity",
+  "",
+  "## MCP tools",
+  "",
+  "| Tool | SDK export | Note |",
+  "| --- | --- | --- |",
+  "| `up` | `runWorkspaceAction` | |",
+  "| `open-workspaces-ui` | | excluded: a browser for a person |",
+  "",
+  "## CLI commands",
+  "",
+  "| Command | SDK export | Note |",
+  "| --- | --- | --- |",
+  "| `feature up` | `runWorkspaceAction` | |",
+  "",
+  "Hidden aliases: `up` → `feature up`.",
+].join("\n");
+const parity = {
+  tools: ["up", "open-workspaces-ui"],
+  commands: [
+    { name: "feature up", hidden: false },
+    { name: "up", hidden: true },
+  ],
+  sdk: new Set(["runWorkspaceAction"]),
+};
+
+test("checkSdkParity passes a table that covers every tool and command", () => {
+  assert.deepEqual(checkSdkParity(PARITY, parity), []);
+});
+
+test("checkSdkParity names a tool or command with no row", () => {
+  assert.deepEqual(
+    checkSdkParity(PARITY, {
+      ...parity,
+      tools: [...parity.tools, "kube-switch"],
+      commands: [...parity.commands, { name: "feature stop", hidden: false }],
+    }),
+    [
+      "docs/sdk-parity.md: MCP tool `kube-switch` has no row",
+      "docs/sdk-parity.md: CLI command `feature stop` has no row",
+    ],
+  );
+});
+
+test("checkSdkParity names an export the SDK lacks", () => {
+  assert.deepEqual(checkSdkParity(PARITY, { ...parity, sdk: new Set() }), [
+    "docs/sdk-parity.md: row `up`: `runWorkspaceAction` is not on werkmeister-core/sdk",
+    "docs/sdk-parity.md: row `feature up`: `runWorkspaceAction` is not on werkmeister-core/sdk",
+  ]);
+});
+
+test("checkSdkParity wants an excluded: reason on a row with no export", () => {
+  assert.deepEqual(
+    checkSdkParity(PARITY.replace("excluded: a browser for a person", "later"), parity),
+    ["docs/sdk-parity.md: row `open-workspaces-ui` names no SDK export and no `excluded:` reason"],
+  );
 });

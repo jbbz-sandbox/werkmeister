@@ -110,7 +110,7 @@ export function deniedIn(stdout: string): string[] {
 /**
  * Whether a message relayed at `sentAt` ran in the target session: a user turn
  * after the send that holds its text. SendMessage succeeding and an idle notice
- * arriving prove nothing: a UserPromptSubmit hook can drop the prompt (SW-348).
+ * arriving prove nothing: a UserPromptSubmit hook can drop the prompt.
  */
 export function relayPickedUp(
   messages: ClaudeMessage[],

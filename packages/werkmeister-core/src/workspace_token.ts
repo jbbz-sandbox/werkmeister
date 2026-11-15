@@ -46,13 +46,14 @@ export function mintWorkspaceToken(name: string, workspaceRoot: string): string 
   return token;
 }
 
+/** Delete workspace *name*'s host-side token so the daemon stops accepting it; a missing token is not an error. */
 export function revokeWorkspaceToken(name: string): void {
   fs.rmSync(path.join(tokensDir(), name), { force: true });
 }
 
 /**
- * Token names with no workspace folder under *workspacesRoot* (SW-446): the
- * leftovers of tests that ran before SW-433 and of workspaces removed by hand.
+ * Token names with no workspace folder under *workspacesRoot*: the
+ * leftovers of tests from older versions and of workspaces removed by hand.
  * A root that cannot be read, or holds no workspace folder while tokens exist,
  * throws: a wrong root would otherwise make every live token look stale.
  */

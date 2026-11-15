@@ -35,7 +35,9 @@ export interface InitContext {
   isCreate?: boolean;
 }
 
+/** How a workspace's context layer is written, kept fresh and fed to the agent (jit, icm, ...). */
 export interface ContextStrategy {
+  /** The `context_strategy` value in workspace.yml that selects this strategy. */
   readonly id: StrategyId;
   /** initWorkspace's context-layer step. Idempotent; re-run on every init. */
   init(ctx: InitContext): void;
@@ -44,7 +46,10 @@ export interface ContextStrategy {
   /** Backs `werkmeister skills check` and MCP `skills` tool. Empty array = fresh. */
   check(workspaceRoot: string): string[];
   /** Backs `werkmeister skills sync` and MCP `skills` tool. */
-  sync(workspaceRoot: string): { wrote: string[] };
+  sync(workspaceRoot: string): {
+    /** The files it rewrote; empty when nothing had drifted. */
+    wrote: string[];
+  };
   /** SessionStart re-injection text, or null. Backs `werkmeister notes context`. */
   sessionContext(workspaceRoot: string, hookPayload: Record<string, unknown>): string | null;
   /** PreToolUse gate. Backs `werkmeister internal gate`; must fail open. */

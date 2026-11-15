@@ -50,6 +50,7 @@ Changelogs, `docs/superpowers/`, `docs/research/` and the naming, context-manage
 | --- | --- | --- |
 | `autonomous-allow`, `autonomous-deny` | `docs/context-strategies.md` | `packages/werkmeister-core/src/harness/claude/hooks_gen.ts::autonomousRules`, `AUTONOMOUS_DENY` |
 | `mcp-tools` | `apps/werkmeister-mcp/README.md` | each `registerTool` / `registerAppTool` call's name and `title` in `apps/werkmeister-mcp/src` |
+| `sdk-call-tools` | `apps/docs-site/sdk-index.md` | the built MCP server's `tools/list` (`apps/werkmeister-mcp/dist/server.js`): each tool's name, title and `inputSchema` arguments |
 | `cli-reference` | `docs/cli-reference.md` | commander's commands, groups, arguments and options, through the CLI's hidden `__reference` mode, plus each command's `apps/cli/src/commands/<command>.help.md` |
 | `third-party-npm` | `docs/third-party.md` | each entry header in `apps/cli/dist/THIRD-PARTY-LICENSES.txt` (`scripts/write-licenses.mjs`) |
 | `workspaces` | `README.md` | each `apps/*` and `packages/*` `package.json`'s `name` and `description` |

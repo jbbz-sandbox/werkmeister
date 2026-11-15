@@ -73,6 +73,7 @@ export interface RunningContainer {
   workingDir?: string;
 }
 
+/** Options for {@link migrate}. */
 export interface MigrateOptions {
   /** Also rename each workspace's `.sandbox/` to `.werkmeister/`. */
   workspaces?: boolean;
@@ -142,6 +143,10 @@ function workspacesRootBeforeMove(legacy: string): string {
   return configured ? path.resolve(expandUser(String(configured))) : workspacesRoot();
 }
 
+/**
+ * Run every migration step in order: move `~/.sandbox` to `~/.werkmeister`, then repair old names.
+ * Resolves to one Step per repair; safe to repeat, and with `checkOnly` only reports.
+ */
 export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
   const checkOnly = Boolean(opts.checkOnly);
   const home = os.homedir();

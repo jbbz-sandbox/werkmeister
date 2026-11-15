@@ -77,7 +77,9 @@ export function projectTracker(project: Project): IssueTrackerStrategy {
 
 /** Where a lookup happens: a workspace's `project:` and/or text holding an issue ref. */
 export interface TrackerAt {
+  /** A project name from the machine's projects; one not found is warned about once and ignored. */
   project?: string;
+  /** Any text with an issue ref in it (an issue id, branch name, URL); used when `project` is absent or unknown. */
   text?: string;
 }
 

@@ -102,7 +102,8 @@ try {
     'intercept-leave': async () => ({ left: await core.leaveIntercept({ ...(await interceptArgs()), dockerDaemon: args.dockerDaemon === true }) }),
     'workspace-prs': () => core.getWorkspacePRs(),
     'dismiss-notice': async () => core.clearNotice(await core.resolveWorkspaceDir(args.name), args.id),
-    connect: async () => ({ ok: await core.up() }),
+    // The plugin and the CLI whose core this loads update separately; core before SW-748 named it up.
+    connect: async () => ({ ok: await (core.infraUp ?? core.up)() }),
     'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
     'workspace-path': async () => ({ path: await core.resolveWorkspaceDir(args.name) }),
     'start-args': () => core.startArgs(args.path),

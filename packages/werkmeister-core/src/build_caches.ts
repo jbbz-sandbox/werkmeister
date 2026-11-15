@@ -201,25 +201,39 @@ function snapshotOf(
   };
 }
 
+/** What `pruneCaches` did, or would do, to one cache. */
 export interface PruneResult {
+  /** The cache name; a leftover volume under the old `sandbox-<key>` name reads `<name> (<volume>)`. */ // name-check: ignore
   name: string;
+  /** The rule applied: `max_age` and `prune` from the registry, `reset` when asked to empty it. */
   action: "max_age" | "prune" | "reset" | "skipped";
+  /** What happened or would happen, the command's output, or why it was skipped or failed. */
   detail: string;
+  /** False when the prune failed or could not be attempted; a deliberate skip is still ok. */
   ok: boolean;
 }
 
+/** Which caches `pruneCaches` touches, and how. */
 export interface PruneOptions {
+  /** One registry cache; absent for every cache. */
   name?: string;
+  /** Empty the cache entirely instead of applying its prune rule. */
   reset?: boolean;
+  /** Prune even while a running container mounts the cache. */
   force?: boolean;
+  /** Report what would be removed without removing it. */
   dryRun?: boolean;
 }
 
 /** Docker reads `pruneCaches` needs; tests swap these for fakes. */
 export interface PruneDeps {
+  /** The registry's caches, keyed by name. */
   caches: CacheRegistry;
+  /** One row per cache, as `cacheSnapshots` reads it. */
   snapshots: (caches: CacheRegistry) => Promise<CacheSnapshot[]>;
+  /** Names of the running containers mounting *source*; null when Docker is unreachable. */
   busy: (source: string) => Promise<string[] | null>;
+  /** Runs one command synchronously, capturing its output. */
   run: (argv: string[]) => RunResult;
 }
 

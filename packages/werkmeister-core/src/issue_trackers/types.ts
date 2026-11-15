@@ -40,16 +40,23 @@ export interface IssueComment {
 export interface Issue {
   /** The canonical ref: `PROJ-12`, `owner/repo#12`. */
   ref: string;
+  /** The issue's summary line. */
   title?: string;
+  /** The tracker's own status name, e.g. `In Progress`; GitHub: `Open` or `Closed`. */
   status?: string;
   /** Jira's status category; GitHub: `done` when closed. Where the issue sits, whatever the status is named. */
   statusCategory?: "new" | "indeterminate" | "done";
   /** GitHub labels, where its `status:` label lives. */
   labels?: string[];
+  /** Jira's issue type name, e.g. `Bug`; GitHub: the labels, comma-joined. */
   type?: string;
+  /** Jira: the display name; GitHub: assignee logins, comma-joined. Absent when unassigned. */
   assignee?: string;
+  /** The issue body as text; absent when empty or not fetched. */
   description?: string;
+  /** The issue's web page. */
   url?: string;
+  /** Oldest first; absent when not fetched. */
   comments?: IssueComment[];
 }
 
@@ -79,7 +86,9 @@ export interface TrackerAuth {
   fix: string;
 }
 
+/** One tracker's implementation; get the right one from `issueTracker()`, never by naming it. */
 export interface IssueTrackerStrategy {
+  /** The key `overrides.issue_tracker` selects this tracker by. */
   readonly id: TrackerId;
   /** The tracker's name in prose and buttons: `Jira`, `GitHub`. */
   readonly label: string;
@@ -105,15 +114,23 @@ export interface IssueTrackerStrategy {
    * The issues guide's routing: the "Where" table's app-code row, the
    * search-first step, and where and how to file werkmeister issues when this
    * tracker takes those too (absent: GitHub). `issueId` is the workspace's own issue, "" when none;
-   * `workspace` its name, searched for too since issues filed from a workspace name it (SW-434).
+   * `workspace` its name, searched for too since issues filed from a workspace name it.
    */
   filingGuide(
     issueId: string,
     workspace?: string,
   ): {
+    /** The "Where" table's markdown row for bugs in app code: where they go and the command that files them. */
     row: string;
+    /** The search-first step as one markdown paragraph, with the queries to run. */
     search: string;
-    werkmeister?: { where: string; command: string };
+    /** Where werkmeister's own issues go; absent when they go to GitHub instead. */
+    werkmeister?: {
+      /** The tracker and project, in prose. */
+      where: string;
+      /** The filing command, as markdown. */
+      command: string;
+    };
   };
   /**
    * File a new issue; it comes back with its ref and url. Absent when agents

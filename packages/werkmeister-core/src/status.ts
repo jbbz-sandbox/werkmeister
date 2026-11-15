@@ -169,14 +169,17 @@ const STATUS_READ = (cmd: string[]) => runAsyncRunner(cmd, undefined, 15);
 
 /** What `werkmeister feature status --intercepts --json` prints. */
 export interface InterceptsSnapshot {
+  /** False when telepresence couldn't be asked (absent, disconnected, or errored). */
   available: boolean;
-  /** Telepresence is on PATH, connected or not: a disconnected install can still intercept (SW-12). */
+  /** Telepresence is on PATH, connected or not: a disconnected install can still intercept. */
   installed: boolean;
+  /** The namespace the telepresence daemon is connected to; null when not connected. */
   connected_namespace: string | null;
+  /** One row per active feature × local service; empty when telepresence is not installed. */
   intercepts: InterceptRow[];
   /**
    * Registry services with k8s coordinates, sorted. Present even when telepresence
-   * isn't, so a UI can hide the intercept control on local-only services (SW-21).
+   * isn't, so a UI can hide the intercept control on local-only services.
    */
   remote_services: string[];
 }
@@ -226,24 +229,37 @@ export interface FeatureSnapshot {
   crash_loops: CrashLoop[];
 }
 
+/** What `werkmeister feature status --json` prints: the whole machine in one read. */
 export interface StatusSnapshot {
   /** Null when the stats sweep failed. */
   host: HostSummary | null;
+  /** The live shared-infra containers (proxy and the like); stopped ones are left out. */
   infrastructure: InfraContainer[];
+  /** The workspaces dashboard web server. */
   mcp_web_server: WebServerStatus;
+  /** One entry per k8s port-forward the registry declares. */
   k8s_forwards: ForwardStatus[];
+  /** Every feature holding a slot, in slot order. */
   features: FeatureSnapshot[];
-  /** SW-181: features queued for capacity, first in line first. */
+  /** Features queued for capacity, first in line first. */
   waiting: string[];
-  /** SW-69: the registry's build and package caches. */
+  /** The registry's build and package caches. */
   caches: CacheSnapshot[];
+  /** Counts rolled up from the fields above. */
   summary: {
+    /** Features holding a slot. */
     total_features: number;
+    /** Slots still free for another feature. */
     available_slots: number;
+    /** At least one infra container is up and every one is healthy or running. */
     infra_healthy: boolean;
+    /** k8s forwards whose health check passes. */
     k8s_alive: number;
+    /** k8s forwards declared. */
     k8s_total: number;
+    /** Telepresence could be asked for its intercepts. */
     telepresence_available: boolean;
+    /** Local services currently intercepted, across every feature. */
     intercepts_active: number;
   };
 }

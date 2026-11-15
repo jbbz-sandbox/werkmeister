@@ -1234,10 +1234,20 @@ export async function pause(feature: string): Promise<PauseResult> {
   return { feature, slot, containers };
 }
 
+/** What `resume` brought back for a paused feature. */
 export interface ResumeResult {
+  /** The feature that was resumed. */
   feature: string;
+  /** Absolute path of the feature's workspace folder. */
   workspace: string;
-  containers: { name: string; did: "unpaused" | "started" | "missing" }[];
+  /** Each container Pause froze, in pause order; one already running is left out. */
+  containers: {
+    /** Docker container name. */
+    name: string;
+    /** `started` when it had been stopped meanwhile; `missing` when it no longer exists. */
+    did: "unpaused" | "started" | "missing";
+  }[];
+  /** The agent was mid-turn at pause time, so the caller should tell the session to continue. */
   wasWorking: boolean;
 }
 
@@ -1356,12 +1366,15 @@ export async function down(
 
 /** A service dropped back to k8s, and what the feature still runs locally. */
 export interface RemoveResult {
+  /** The feature the service was dropped from. */
   feature: string;
+  /** The service that now falls back to k8s. */
   removed: string;
   /** The feature's surviving local services, sorted. */
   remaining: string[];
   /** True when nothing local was left, so the containers were stopped rather than restarted. */
   containersStopped: boolean;
+  /** False when Caddy was not running, so only the Caddyfile was rewritten. */
   proxyReloaded: boolean;
 }
 
@@ -1433,27 +1446,20 @@ export async function removeService(feature: string, service: string): Promise<R
 /** What the regenerated Caddyfile now routes, and whether Caddy took it. */
 export interface ProxyReloadResult {
   /** The features written into the Caddyfile, sorted by name. */
-  features: { feature: string; slot: number; services: string[] }[];
+  features: {
+    /** Feature name. */
+    feature: string;
+    /** The slot number its ports are offset by. */
+    slot: number;
+    /** Services it runs locally; empty when everything routes to k8s. */
+    services: string[];
+  }[];
   /** Caddy was down and `start` was asked for, so it was started rather than reloaded. */
   started: boolean;
   /** False when Caddy rejected the config, or failed to start. */
   ok: boolean;
 }
 
-/**
- * Regenerate the Caddyfile from the active features and hand it to Caddy.
- *
- * Separate from `down` so a multi-feature teardown pays for one reload rather
- * than one per feature. `up` reloads inline instead because it may also have to
- * *start* Caddy, which is part of bringing a feature up.
- *
- * `start` selects the whole `werkmeister infra proxy-reload` spelling, not just the
- * start-if-down fallback: that command has always used different progress
- * wording and listed the features it wrote, and teardown's three callers
- * (`commands/down.ts` twice, `sandbox.ts` twice) print neither. Defaulting it
- * to false is what keeps their output where it was — and stops a teardown
- * starting a proxy nobody asked for.
- */
 /**
  * The four side effects `reloadProxy` performs, injectable so a test can assert
  * the sequence without writing a real Caddyfile or bouncing a live Caddy.
@@ -1467,11 +1473,25 @@ export interface ProxyReloadResult {
 export interface ProxyOps {
   /** Returns the written path; `reloadProxy` ignores it. */
   generate: () => Promise<unknown>;
-  slots: () => Promise<Record<string, { slot: number; services: string[] }>>;
+  /** Every feature holding a slot, keyed by feature name. */
+  slots: () => Promise<
+    Record<
+      string,
+      {
+        /** The slot number its ports are offset by. */
+        slot: number;
+        /** Services it runs locally. */
+        services: string[];
+      }
+    >
+  >;
+  /** Whether the Caddy container is up. */
   running: () => Promise<boolean>;
+  /** Hands Caddy the new Caddyfile; false when Caddy rejected it. */
   reload: () => Promise<boolean>;
+  /** Starts Caddy when it is down; false when it failed to start. */
   start: () => boolean;
-  /** Every host the Caddyfile just written routes (SW-341). */
+  /** Every host the Caddyfile just written routes. */
   hosts: () => string[];
   /** Omitted: the platform resolver. */
   lookup?: HostLookup;
@@ -1490,6 +1510,20 @@ const REAL_PROXY_OPS: ProxyOps = {
   hosts: () => ingressHostnames(),
 };
 
+/**
+ * Regenerate the Caddyfile from the active features and hand it to Caddy.
+ *
+ * Separate from `down` so a multi-feature teardown pays for one reload rather
+ * than one per feature. `up` reloads inline instead because it may also have to
+ * *start* Caddy, which is part of bringing a feature up.
+ *
+ * `start` selects the whole `werkmeister infra proxy-reload` spelling, not just the
+ * start-if-down fallback: that command has always used different progress
+ * wording and listed the features it wrote, and teardown's three callers
+ * (`commands/down.ts` twice, `sandbox.ts` twice) print neither. Defaulting it
+ * to false is what keeps their output where it was — and stops a teardown
+ * starting a proxy nobody asked for.
+ */
 export async function reloadProxy(
   { start = false }: { start?: boolean } = {},
   ops: ProxyOps = REAL_PROXY_OPS,
@@ -1623,7 +1657,9 @@ export interface CleanPlan {
 
 /** What a sweep found, and what it then actually removed. */
 export interface CleanResult extends CleanPlan {
+  /** Orphaned volumes actually deleted; empty on a dry run, and short of `orphanedVolumes` when a removal failed. */
   removedVolumes: string[];
+  /** Stale slots actually released; empty on a dry run. */
   releasedSlots: string[];
 }
 
