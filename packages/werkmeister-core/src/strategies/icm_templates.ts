@@ -186,6 +186,10 @@ const CPU_PROFILE =
   "When the ticket is about gate, test or build speed, sample the container cgroup `cpu.stat` `usage_usec` every 5 s across a cold run and report the cores in use per phase before naming a critical path or any lever. " +
   "Task start and end times alone do not show whether a path matters. If the run holds all its CPUs, only a CPU cut shortens it, and the decision says so.";
 
+// SW-796: sw-752 decided on one "−40% CPU-s" run under host load 4–7; a paired, alternating A/B under the load wait showed it 30% slower.
+const TIMING_CLAIM =
+  "A CPU or wall-time number that a decision or acceptance criterion rests on comes from paired, alternating A/B runs (A1 B1 A2 B2 A3 B3, at least 3 each) through `.werkmeister/bin/with-temp-home` with its load wait on, in a Linux container (on macOS the wrapper waits on free memory only, never on load), never from a single run or `--no-wait`; record every run's numbers and the host load beside them.";
+
 // SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
 const NAME_HISTORY_STEP =
   "For each decision that renames, keeps or removes a name, a fallback or an alias, record its definition site (file and line) and the commit that introduced it (`git log -S <name>`, in the repo that defines it). " +
@@ -304,7 +308,9 @@ const feature: Stage[] = [
           "A recommended answer that rests on an external API, permission or platform behaviour (a token scope, a hosted API's response, a cloud permission) is checked live, read-only (a list, get, `--help` or dry run, never a write), before it goes into `decisions.md`, with the command and its result beside it. When it cannot be checked read-only, write `unverified` in the option text itself, so the question the person is asked carries the word, not only the file. " +
           PREAPPROVED_INPUT +
           " " +
-          CPU_PROFILE,
+          CPU_PROFILE +
+          " " +
+          TIMING_CLAIM,
         "Write `output/inventory.md`: steps 1–3.",
         NAME_HISTORY_STEP,
         `Write \`output/decisions.md\`: every open question in \`BRIEF.md\`, each as a heading with \`status: proposed\`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference). ${CRITERION_REACH}`,
@@ -376,7 +382,7 @@ const feature: Stage[] = [
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
-        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE} ${PROBE_RULE} ${EXERCISE_WORKAROUND}`,
+        `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE} ${PROBE_RULE} ${EXERCISE_WORKAROUND} ${TIMING_CLAIM}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
@@ -493,7 +499,7 @@ const bugfix: Stage[] = [
       process: [
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE} ${PROBE_RULE}`,
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
-        `Exercise one neighbouring path through each caller \`repro.md\` listed. Capture the output. ${EXERCISE_WORKAROUND}`,
+        `Exercise one neighbouring path through each caller \`repro.md\` listed. Capture the output. ${EXERCISE_WORKAROUND} ${TIMING_CLAIM}`,
         `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
         // SW-579: the review step rewrites exercise.md, so recorded MANUAL results come first.
         MANUAL_STEP,
@@ -575,7 +581,7 @@ const refactor: Stage[] = [
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
-        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE} ${PROBE_RULE} ${EXERCISE_WORKAROUND}`,
+        `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE} ${PROBE_RULE} ${EXERCISE_WORKAROUND} ${TIMING_CLAIM}`,
         `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],

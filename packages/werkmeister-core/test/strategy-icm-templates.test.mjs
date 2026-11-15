@@ -142,6 +142,12 @@ test("each template renders with no undefined and a route per stage", async () =
             /^3\. .*`usage_usec` every 5 s.*cores in use per phase.*only a CPU cut shortens it/m,
             `${wt}/${d}`,
           );
+        // SW-796: a timing number behind a decision or criterion comes from a paired A/B under the load wait.
+        const timing =
+          /paired, alternating A\/B runs \(A1 B1 A2 B2 A3 B3, at least 3 each\).*load wait on, in a Linux container .*never from a single run or `--no-wait`; record every run's numbers and the host load/;
+        if (d.endsWith("_research"))
+          assert.match(c, new RegExp(`^3\\. .*${timing.source}`, "m"), `${wt}/${d}`);
+        if (c.includes("Write `output/exercise.md`")) assert.match(c, timing, `${wt}/${d}`);
         // SW-612: the exercise step stops for `machine setup` on the unresolved-hostname warning, and names no service.
         if (/Reload the running code|reload and exercise the service/.test(c)) {
           assert.match(
