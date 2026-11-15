@@ -42,3 +42,17 @@ test("every incremental package keeps its build-info inside the dist/ turbo cach
     );
   assert.ok(readJsonc(join(root, "turbo.json")).tasks.build.outputs.includes("dist/**"));
 });
+
+// SW-766: without this ordering typecheck runs beside build again: a second tsc (~60 CPU-s per gate row) writing the same dist/tsconfig.tsbuildinfo at once.
+test("core and MCP typecheck depend on their own build", () => {
+  const rootTasks = readJsonc(join(root, "turbo.json")).tasks;
+  const mcpTasks = readJsonc(join(root, "apps/werkmeister-mcp/turbo.json")).tasks;
+  assert.ok(
+    rootTasks["werkmeister-core#typecheck"]?.dependsOn?.includes("build"),
+    'turbo.json: werkmeister-core#typecheck must dependOn "build"',
+  );
+  assert.ok(
+    mcpTasks.typecheck?.dependsOn?.includes("build"),
+    'apps/werkmeister-mcp/turbo.json: typecheck must dependOn "build"',
+  );
+});
