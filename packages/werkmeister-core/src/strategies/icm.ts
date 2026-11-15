@@ -310,10 +310,10 @@ function stopPoints(stages: Stage[]): string[] {
   return [
     "## Stop points",
     "",
-    "Walk every stage without stopping: each stage's self-check is its approval. Stop only at:",
+    "Walk every stage without stopping: each stage's self-check is its approval, except the PR file's, which the person gives. Stop only at:",
     "",
     proposeDir(stages)
-      ? "1. the PR URL from `werkmeister pr open`"
+      ? "1. each PR file's approval, then the PR URL from `werkmeister pr open`"
       : "1. the last stage's `output/` written",
     "2. a question only a person can answer",
     "3. a gate failure outside this issue's scope",

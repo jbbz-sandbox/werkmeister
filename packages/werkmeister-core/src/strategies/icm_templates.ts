@@ -239,9 +239,8 @@ const propose: Stage = {
   check: "approve each PR file; `werkmeister pr open` opens it",
   standards: "none",
   contract: (v) => ({
-    oneJob: `One job: prove each acceptance criterion, ${v.group.length ? "check the per-ticket commits in" : "commit in"} each code worktree, and write one PR file per repo touched. ${
-      v.autonomous ? "You approve it after the self-check" : "Approving is the person's act"
-    }; opening is \`werkmeister pr open\`.`,
+    // SW-771: the person approves the PR file in every mode; the auto-mode classifier blocks a self-approval.
+    oneJob: `One job: prove each acceptance criterion, ${v.group.length ? "check the per-ticket commits in" : "commit in"} each code worktree, and write one PR file per repo touched. Approving is the person's act; opening is \`werkmeister pr open\`.`,
     inputs: [
       "Working (this run): `../../BRIEF.md` § Acceptance criteria",
       "Working (this run): `../*/output/` — every prior stage's artifacts",
@@ -273,7 +272,7 @@ const propose: Stage = {
     ],
     humanCheck: `Read each \`pr-*.md\`. Set \`status: approved\` on each one to open — that flip is the approval. Then \`werkmeister pr open\`, run detached as \`_shared/pr-rules.md\` rule 3 shows, runs the gate and opens it. Merging is yours. After the release, \`werkmeister pr status\`, then ${v.group.length ? `check each member reads Done — \`werkmeister issue view <KEY>\` for ${keys(v.group)}; \`pr status\` moves them with the workspace's issue, so move one by hand only if it didn't — then ` : ""}the post-mortem (\`postmortem\` skill), then ask the person before \`werkmeister workspace close\`. Code written after a PR merged (e.g. found at release) is a follow-up: \`werkmeister pr new <worktree> --slug <slug>\`. ${CHAT_APPROVAL}`,
     selfCheck:
-      "Review each `pr-*.md` once against `../../BRIEF.md` and the live issue. Add `## Recommendations for reviewer` to its body — every decision and question collected on the way — then set `status: approved` yourself and run `werkmeister pr open` detached, as `_shared/pr-rules.md` rule 3 shows. Stop at the PR URL. Merging is the person's." +
+      `Review each \`pr-*.md\` once against \`../../BRIEF.md\` and the live issue. Add \`## Recommendations for reviewer\` to its body — every decision and question collected on the way — then ask the person to approve each PR file. ${askLine(v.questionTool)} On their yes, run \`werkmeister pr open\` detached, as \`_shared/pr-rules.md\` rule 3 shows. Stop at the PR URL. Merging is the person's.` +
       (v.group.length
         ? ` When the PR ships, check each member reads Done (\`werkmeister issue view <KEY>\` for ${keys(v.group)}) before the post-mortem; \`pr status\` moves them with the workspace's issue, so move one by hand only if it didn't.`
         : ""),
