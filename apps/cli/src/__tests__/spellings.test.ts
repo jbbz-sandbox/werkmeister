@@ -4,6 +4,10 @@
  *
  * Driven through `__parse`, which stops after commander and prints the command and
  * namespace, so no case touches docker, a workspace or the tracker.
+ *
+ * SW-754: the CASES table runs in one `__parse --batch` process. The cold-start cases (SW-445,
+ * SW-216, SW-459, below) each start their own process, so the single-set path and real exit
+ * codes stay covered.
  */
 import { execFile } from "node:child_process";
 import * as path from "node:path";
@@ -26,6 +30,26 @@ async function parse(argv: string[]) {
     timeout: 170_000,
   });
   return { ...JSON.parse(res.stdout), stderr: res.stderr };
+}
+
+type Parsed = {
+  // A set commander refused has only stderr and exitCode; every test reads those through toMatchObject.
+  command: string;
+  args: Record<string, unknown>;
+  stderr: string;
+  exitCode?: number;
+};
+
+// Same async spawn and timeout as parse(), for the same SW-567 reasons; one line of JSON per set.
+async function parseBatch(sets: string[][]): Promise<Parsed[]> {
+  const res = await run(process.execPath, [MAIN, "__parse", "--batch", JSON.stringify(sets)], {
+    cwd: CLI_DIR,
+    timeout: 170_000,
+  });
+  const lines = res.stdout.trim().split("\n");
+  if (lines.length !== sets.length)
+    throw new Error(`${sets.length} sets, ${lines.length} lines:\n${res.stdout}\n${res.stderr}`);
+  return lines.map((l) => JSON.parse(l));
 }
 
 // [old argv, new argv]; the same argv twice is a spelling SW-186 kept, which must not warn.
@@ -277,9 +301,15 @@ const CASES: [string[], string[]][] = [
   ],
 ];
 
+// Started by the first case, never at module load, so a failed spawn fails inside a test.
+let table: Promise<Parsed[]> | undefined;
+const tableResults = () => (table ??= parseBatch(CASES.flat()));
+
 describe("command spellings", () => {
-  it.each(CASES)("%j", async (oldArgv, newArgv) => {
-    const [before, after] = await Promise.all([parse(oldArgv), parse(newArgv)]);
+  // %j formats only the first argument, so the titles (and snapshot keys) are unchanged.
+  it.each(CASES.map(([o, n], i) => [o, n, i] as const))("%j", async (oldArgv, newArgv, i) => {
+    const results = await tableResults();
+    const [before, after] = [results[2 * i], results[2 * i + 1]];
     expect(before.args).toMatchSnapshot();
     expect(after.args).toMatchObject(before.args);
     expect(after.stderr).toBe("");
@@ -291,6 +321,27 @@ describe("command spellings", () => {
         `removed in \\d+\\.\\d+\\.\\d+; use 'werkmeister ${newArgv[0] === "ws" ? "workspace" : newArgv[0]} ${newArgv[1]}`,
       ),
     );
+  });
+
+  it("a batch carries no state from one set to the next, and an error ends only its own set", async () => {
+    const issue = ["issue", "create", "--project", "SW", "--title", "t"];
+    const [linked, unlinked, noBuild, build, refused, after] = await parseBatch([
+      [...issue, "--relates", "SW-1"],
+      issue,
+      ["workspace", "init", "--no-build"],
+      ["workspace", "init"],
+      ["workspace", "status"],
+      ["feature", "up", "f"],
+    ]);
+    expect(linked.args.relates).toEqual(["SW-1"]);
+    expect(unlinked.args.relates).toEqual([]);
+    expect(noBuild.args.build).toBe(false);
+    expect(build.args.build).toBe(true);
+    expect(refused).toMatchObject({
+      exitCode: 1,
+      stderr: expect.stringContaining("unknown command 'status'"),
+    });
+    expect(after).toMatchObject({ command: "feature up", stderr: "" });
   });
 
   // SW-445: the `workspace <feature>` default outlived its 0.58.0 removal and made any
