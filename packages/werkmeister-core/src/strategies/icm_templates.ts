@@ -181,6 +181,11 @@ const implementReview = (v: IcmVars) => reviewStep("rerun the host test step abo
 const PREAPPROVED_INPUT =
   "When the change adds or widens an input to a pre-approved command (an allow rule, or a wrapper an allow rule covers), the decision defaults to an allowlist of accepted values and lists what each accepted value can reach: files, env vars, network addresses, processes. A blocklist needs a stated reason.";
 
+// SW-789: sw-751 named the build chain as the critical path from task start/end times; the row held all 3 CPUs for ~170 s, so only a CPU cut shortens it.
+const CPU_PROFILE =
+  "When the ticket is about gate, test or build speed, sample the container cgroup `cpu.stat` `usage_usec` every 5 s across a cold run and report the cores in use per phase before naming a critical path or any lever. " +
+  "Task start and end times alone do not show whether a path matters. If the run holds all its CPUs, only a CPU cut shortens it, and the decision says so.";
+
 // SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
 const NAME_HISTORY_STEP =
   "For each decision that renames, keeps or removes a name, a fallback or an alias, record its definition site (file and line) and the commit that introduced it (`git log -S <name>`, in the repo that defines it). " +
@@ -297,7 +302,9 @@ const feature: Stage[] = [
           "When a decision rests on how an external tool behaves (a CLI command or flag, a plugin API, an event name), check it against the installed tool, not only its docs: record `<bin> --version`, and confirm each fact with `<bin> <cmd> --help` or a real run or plugin load. `decisions.md` names the version and, beside each fact, the command that confirmed it; a fact only the docs support is marked `unverified: docs only`, and no decision rests on it. If the tool cannot be installed, say so and mark every such fact `unverified`. " +
           // SW-605: sw-583 recommended a GitHub API call as `unverified` only in the file; the person approved it and a read-only call later returned 403.
           "A recommended answer that rests on an external API, permission or platform behaviour (a token scope, a hosted API's response, a cloud permission) is checked live, read-only (a list, get, `--help` or dry run, never a write), before it goes into `decisions.md`, with the command and its result beside it. When it cannot be checked read-only, write `unverified` in the option text itself, so the question the person is asked carries the word, not only the file. " +
-          PREAPPROVED_INPUT,
+          PREAPPROVED_INPUT +
+          " " +
+          CPU_PROFILE,
         "Write `output/inventory.md`: steps 1–3.",
         NAME_HISTORY_STEP,
         `Write \`output/decisions.md\`: every open question in \`BRIEF.md\`, each as a heading with \`status: proposed\`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference). ${CRITERION_REACH}`,
