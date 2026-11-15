@@ -1,6 +1,6 @@
 /**
- * The one set of fakes for fixtures and core tests (SW-427): a fake `gh` and `docker` that read one
- * `world.json` and log each call. `seedFixture` and `withFakeGh` both write them, so a gh verb added
+ * The one set of fakes for fixtures and core tests (SW-427): a fake `gh` and `docker` that read their
+ * world from plain files beside them and log each call. `seedFixture` and `withFakeGh` both write them, so a gh verb added
  * here reaches every test. They stay generated text, not files in a folder: the CLI bundles core,
  * so a folder read at runtime would be missing from the published build.
  */
@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 import * as http from "node:http";
 import * as path from "node:path";
 
-/** What the fakes answer. Absent fields take the defaults in FAKE_JS. */
+/** What the fakes answer. Absent fields take the defaults in FAKE_SH. */
 export interface FakeWorld {
   /** `gh issue view` prints it as JSON; null or absent exits 1 ("could not resolve"). */
   issue?: unknown;
@@ -50,85 +50,88 @@ export interface Fakes {
 // Only the gate's `ps --format {{.Names}}\t{{.State}}` sees running containers; every other `ps`
 // (-q/-aq by label) finds none, so no teardown of a pre-rename project runs on a fake hit. Only the
 // scheduler's exact feature-label `ps -q` and its NanoCpus `inspect` see `containers` (SW-685).
-const FAKE_JS = `import { spawnSync } from "node:child_process";
-import * as fs from "node:fs";
-const [, , tool, dir, ...args] = process.argv;
-const worldFile = dir + "/world.json";
-const world = JSON.parse(fs.readFileSync(worldFile, "utf8"));
-// A gate exec logs as \`exec <container> <row command>\`: the inlined with-temp-home script is ~1.5 KB a row (SW-511).
-const logged = tool === "docker" && args[0] === "exec" ? ["exec", args[1], args.at(-1)] : args;
-fs.appendFileSync(dir + "/" + (tool === "gh" ? "calls" : "docker-calls"), logged.join(" ").replace(/\\n/g, " ") + "\\n");
-const out = (s) => process.stdout.write(s);
-const fail = (msg) => { process.stderr.write(msg + "\\n"); process.exit(1); };
-const verb = args.slice(0, 2).join(" ");
-const labels = world.labels ?? [];
-if (tool === "gh") {
-  switch (verb) {
-    case "auth status":
-      process.stderr.write((world.auth ?? 0) === 0 ? "  ✓ Logged in to github.com account octo (keyring)\\n" : "You are not logged into any GitHub hosts.\\n");
-      process.exit(world.auth ?? 0);
-    case "api user": out("octo\\n"); break;
-    // The gate's merge row (SW-457): any other \`gh api\` path still falls through to unhandled.
-    case "api " + args[1]:
-      if (!args[1].includes("/rules/branches/")) fail("fake gh: unhandled: " + args.join(" "));
-      out(JSON.stringify(world.rules ?? []) + "\\n");
-      break;
-    case "search prs": out("[]\\n"); break;
-    case "pr list": break;
-    case "pr create": out((world.prUrl ?? "https://github.com/o/app/pull/1") + "\\n"); break;
-    case "pr view": {
-      const state = world.prState ?? "OPEN";
-      out(JSON.stringify({
-        url: args[2], number: 1, title: "fixture", state, headRefName: "me/demo", baseRefName: "main", headRefOid: "",
-        mergeCommit: state === "MERGED" ? { oid: "0".repeat(40) } : null, mergeable: "MERGEABLE", reviewDecision: "",
-        latestReviews: [], reviews: [], comments: [], files: [], statusCheckRollup: [],
-      }) + "\\n");
-      break;
-    }
-    case "repo view": process.exit(world.repoView ?? 0);
-    case "label create":
-      if (!labels.includes(args[2])) fs.writeFileSync(worldFile, JSON.stringify({ ...world, labels: [...labels, args[2]] }));
-      break;
-    case "issue edit":
-      if (args[5] === "--add-label" && !labels.includes(args[6])) fail("'" + args[6] + "' not found");
-      break;
-    case "issue view":
-      if (world.issue == null) fail("could not resolve");
-      out(JSON.stringify(world.issue) + "\\n");
-      break;
-    case "issue list": out(JSON.stringify(world.issues ?? []) + "\\n"); break;
-    case "project item-list": out(JSON.stringify({ items: world.items ?? [] }) + "\\n"); break;
-    case "issue close": case "issue comment": break;
-    default: fail("fake gh: unhandled: " + args.join(" "));
-  }
-} else {
-  switch (args[0]) {
-    case "ps":
-      if (args.some((a) => a.includes("{{.Names}}"))) out((world.running ?? []).map((c) => c + "\\trunning\\n").join(""));
-      else if (args.join(" ") === "ps -q --filter label=com.werkmeister.feature") out((world.containers ?? []).map((_, i) => "c" + i + "\\n").join(""));
-      break;
-    case "inspect":
-      out(args[1] === "--format" && args[2].includes("NanoCpus") ? (world.containers ?? []).map((l) => l + "\\n").join("") : "false\\n");
-      break;
-    case "exec":
-      if (world.execCwd) process.exit(spawnSync("sh", ["-c", args.at(-1)], { cwd: world.execCwd, stdio: "inherit" }).status ?? 1);
-      break;
-    case "stop": case "compose": case "network": break;
-    default: fail("fake docker: unhandled: " + args.join(" "));
-  }
-}
+// POSIX sh, not node: a fixture flow makes dozens of gh/docker calls and a node start was ~100 ms
+// each. The world is plain files next to the script (writeFakes), so there is no JSON to parse.
+const FAKE_SH = `get() { v=$2; [ -f "$dir/$1" ] && IFS= read -r v < "$dir/$1"; printf '%s' "$v"; }
+show() { IFS= read -r v < "$dir/$1"; printf '%s\\n' "$v"; }
+out() { printf '%s\\n' "$1"; }
+fail() { printf '%s\\n' "$1" >&2; exit 1; }
+if [ "$tool" = gh ]; then log=calls; else log=docker-calls; fi
+# A gate exec logs as \`exec <container> <row command>\`: the inlined with-temp-home script is ~1.5 KB a row (SW-511).
+if [ "$tool" = docker ] && [ "$1" = exec ]; then for last; do :; done; line="exec $2 $last"; else line="$*"; fi
+case "$line" in *'
+'*) line=$(printf '%s' "$line" | tr '\\n' ' ') ;; esac
+printf '%s\\n' "$line" >> "$dir/$log"
+if [ "$tool" = gh ]; then
+  case "$1 $2" in
+    "auth status")
+      a=$(get auth 0)
+      if [ "$a" = 0 ]; then out '  ✓ Logged in to github.com account octo (keyring)' >&2; else out 'You are not logged into any GitHub hosts.' >&2; fi
+      exit "$a" ;;
+    "api user") out octo ;;
+    "api "*)
+      # The gate's merge row (SW-457): any other \`gh api\` path still falls through to unhandled.
+      case "$2" in */rules/branches/*) show rules.json ;; *) fail "fake gh: unhandled: $*" ;; esac ;;
+    "search prs") out '[]' ;;
+    "pr list") ;;
+    "pr create") out "$(get prUrl https://github.com/o/app/pull/1)" ;;
+    "pr view")
+      state=$(get prState OPEN)
+      merge=null
+      [ "$state" = MERGED ] && merge='{"oid":"0000000000000000000000000000000000000000"}'
+      url=
+      [ $# -ge 3 ] && url=$(printf '%s' "$3" | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g; s/^/"url":"/; s/$/",/')
+      out "{\${url}\\"number\\":1,\\"title\\":\\"fixture\\",\\"state\\":\\"$state\\",\\"headRefName\\":\\"me/demo\\",\\"baseRefName\\":\\"main\\",\\"headRefOid\\":\\"\\",\\"mergeCommit\\":$merge,\\"mergeable\\":\\"MERGEABLE\\",\\"reviewDecision\\":\\"\\",\\"latestReviews\\":[],\\"reviews\\":[],\\"comments\\":[],\\"files\\":[],\\"statusCheckRollup\\":[]}" ;;
+    "repo view") exit "$(get repoView 0)" ;;
+    "label create") grep -Fxq -- "$3" "$dir/labels" || printf '%s\\n' "$3" >> "$dir/labels" ;;
+    "issue edit")
+      if [ "$6" = --add-label ] && ! grep -Fxq -- "$7" "$dir/labels"; then fail "'$7' not found"; fi ;;
+    "issue view") [ -f "$dir/issue.json" ] || fail "could not resolve"; show issue.json ;;
+    "issue list") show issues.json ;;
+    "project item-list") show items.json ;;
+    "issue close"|"issue comment") ;;
+    *) fail "fake gh: unhandled: $*" ;;
+  esac
+else
+  case "$1" in
+    ps)
+      case "$*" in
+        *'{{.Names}}'*) while IFS= read -r c; do printf '%s\\trunning\\n' "$c"; done < "$dir/running" ;;
+        "ps -q --filter label=com.werkmeister.feature") i=0; while IFS= read -r c; do printf 'c%s\\n' "$i"; i=$((i + 1)); done < "$dir/containers" ;;
+      esac ;;
+    inspect)
+      if [ "$2" = --format ] && case "$3" in *NanoCpus*) true ;; *) false ;; esac; then cat "$dir/containers"; else out false; fi ;;
+    exec)
+      if [ -f "$dir/execCwd" ]; then cd -P "$(cat "$dir/execCwd")" 2>/dev/null || exit 1; sh -c "$last"; exit $?; fi ;;
+    stop|compose|network) ;;
+    *) fail "fake docker: unhandled: $*" ;;
+  esac
+fi
 `;
 
-const shim = (dir: string, tool: string) =>
-  `#!/bin/sh\nexec '${process.execPath}' '${path.join(dir, "fake.mjs")}' ${tool} '${dir}' "$@"\n`;
+/** Newline-terminated lines, or nothing for an empty list. */
+const lines = (xs: string[]) => xs.map((x) => `${x}\n`).join("");
 
 /** Write the fakes and *world* into *dir* (created if missing); returns where they are. */
 export function writeFakes(dir: string, world: FakeWorld = {}): Fakes {
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "world.json"), JSON.stringify(world));
-  fs.writeFileSync(path.join(dir, "fake.mjs"), FAKE_JS);
+  const put = (name: string, body: string) => fs.writeFileSync(path.join(dir, name), body);
+  put("auth", String(world.auth ?? 0));
+  put("repoView", String(world.repoView ?? 0));
+  put("labels", lines(world.labels ?? []));
+  put("issues.json", JSON.stringify(world.issues ?? []));
+  put("items.json", JSON.stringify({ items: world.items ?? [] }));
+  put("rules.json", JSON.stringify(world.rules ?? []));
+  put("running", lines(world.running ?? []));
+  put("containers", lines(world.containers ?? []));
+  if (world.issue != null) put("issue.json", JSON.stringify(world.issue));
+  if (world.prUrl !== undefined) put("prUrl", world.prUrl);
+  if (world.prState !== undefined) put("prState", world.prState);
+  if (world.execCwd) put("execCwd", world.execCwd);
   for (const tool of ["gh", "docker"])
-    fs.writeFileSync(path.join(dir, tool), shim(dir, tool), { mode: 0o755 });
+    fs.writeFileSync(path.join(dir, tool), `#!/bin/sh\ntool=${tool} dir='${dir}'\n${FAKE_SH}`, {
+      mode: 0o755,
+    });
   return {
     gh: path.join(dir, "gh"),
     docker: path.join(dir, "docker"),
