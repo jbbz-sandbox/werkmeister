@@ -524,7 +524,7 @@ export function validateStandardModules(standardsDir?: string | null): string[] 
 export interface StandardsCheck {
   /** The tree that was checked (resolved even when it does not exist). */
   dir: string;
-  /** Repo standards trees checked too ({@link repoStandardTrees}). */
+  /** Repo standards trees checked too (`repoStandardTrees`). */
   repoTrees: string[];
   /** Loadable modules found, repo trees included. Zero means the global tree itself is unusable. */
   moduleCount: number;

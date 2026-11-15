@@ -116,19 +116,27 @@ export function installedPlaywrightVersion(cwd: string): string | null {
   }
 }
 
+/** What `runFeatureTests` runs, and against which feature. */
 export interface TestRunArgs {
+  /** The feature the suite routes to, through the `X-Feature` cookie. */
   feature: string;
+  /** The workspace root; its folder and each repo worktree under it are searched for a Playwright config. */
   workspace: string;
+  /** Extra arguments passed through to `playwright test`. */
   extraArgs?: string[];
+  /** Aborts the Playwright run. */
   signal?: AbortSignal;
 }
 
+/** How a `runFeatureTests` run ended. */
 export interface TestRunResult {
+  /** Playwright's exit code; 1 when no suite was found. */
   status: number;
   /** null when no suite was found and nothing ran. */
   cwd: string | null;
   /** Set only when nothing ran; says why and what to do instead. */
   message?: string;
+  /** The feature's slot; null when it holds none and the suite ran by header routing alone. */
   slot: number | null;
 }
 

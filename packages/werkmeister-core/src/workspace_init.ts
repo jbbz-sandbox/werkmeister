@@ -149,7 +149,7 @@ export interface InitWorkspaceOptions {
   issue?: IssueSnapshot;
   /**
    * False skips the image build. `--no-start` still creates the containers, and on a
-   * throwaway root they outlive it on the real daemon, holding a slot (SW-66).
+   * throwaway root they outlive it on the real daemon, holding a slot.
    */
   build?: boolean;
 }
@@ -678,7 +678,10 @@ export async function initWorkspace(
   args: Record<string, unknown>,
   workspaceRootOverride?: string,
   opts: InitWorkspaceOptions = {},
-): Promise<{ containers: boolean }> {
+): Promise<{
+  /** False when the workspace names a feature but no slot was free, so compose.yml was not generated. */
+  containers: boolean;
+}> {
   // 1. Find workspace root. A WorkspaceRootError propagates: printing its
   //    (already rendered) message and choosing an exit status is the CLI's job.
   const workspaceRoot = workspaceRootOverride ?? findWorkspaceRoot();

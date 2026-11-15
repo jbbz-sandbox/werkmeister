@@ -27,27 +27,31 @@ export type HooksSupport =
 
 /** Where one harness reads werkmeister's context layer (proposal § 4.3 projection rows). */
 export interface HarnessLayout {
+  /** The harness this layout belongs to. */
   readonly id: HarnessId;
   /** The file the harness reads first. */
   readonly instructionsFile: string;
   /** Workspace-relative dir the harness loads project skills from. */
   readonly skillsDir: string;
+  /** Whether werkmeister's hooks can be written for this harness, and how. */
   readonly hooks: HooksSupport;
   /** Whether `.claude/agents`-style subagent definitions are projected. */
   readonly agents: boolean;
-  /** The tool a human check asks its questions with (SW-517); absent → a plain-text block. */
+  /** The tool a human check asks its questions with; absent → a plain-text block. */
   readonly questionTool?: string;
   /** Appended to the instructions file; "" when the harness needs no note. */
   notice(): string;
 }
 
+/** How `sendTurn` runs one turn. */
 export interface TurnOptions {
-  /** Workspace root whose autonomous rules the turn gets, `autonomous` or not: nobody is there to approve (SW-313). */
+  /** Workspace root whose autonomous rules the turn gets, `autonomous` or not: nobody is there to approve. */
   unattended?: string;
   /** Wait for the turn to end and return a {@link TurnResult}. */
   wait?: boolean;
 }
 
+/** What a waited-for turn reports once it ends. */
 export interface TurnResult {
   /** The calls refused for lack of approval, as `tool: command`. */
   denied: string[];
@@ -62,24 +66,33 @@ export interface TurnState {
   error: string | null;
 }
 
-/** {@link TurnState} for callers; `idle` means this process started no turn (also after a restart). */
+/** `TurnState` for callers; `idle` means this process started no turn (also after a restart). */
 export interface TurnStatus {
+  /** `failed` covers a non-zero exit and a harness binary that would not spawn. */
   state: "idle" | "running" | "done" | "failed";
+  /** When the turn was started (ISO); null when `idle`. */
   startedAt: string | null;
+  /** The harness process's exit code; null while running, when idle, or when it never spawned. */
   exitCode: number | null;
+  /** Why the turn failed, with the tail of its stderr; null unless `failed`. */
   error: string | null;
 }
 
+/** One entry of a session transcript. */
 export interface SessionMessage {
   /** "tool" entries are compact activity rows ("Bash: npm test") from tool_use blocks. */
   role: "user" | "assistant" | "tool";
+  /** The message text, or the activity row for a tool entry. */
   text: string;
+  /** When the harness logged the entry (ISO); null when the line carried none. */
   timestamp: string | null;
 }
 
+/** The recent messages of a folder's newest session. */
 export interface SessionTranscript {
   /** Session ID of the newest session, or null if none. */
   sessionId: string | null;
+  /** The folder whose sessions were read. */
   workspacePath: string;
   /** Last N user/assistant text messages, oldest first. */
   messages: SessionMessage[];
@@ -134,11 +147,17 @@ export interface SessionUsage {
   totals: UsageTotals;
   estUsd: number | null;
 }
+/** A workspace's token usage and estimated cost, summed across its sessions. */
 export interface WorkspaceUsage {
+  /** The workspace name the caller asked about. */
   name: string;
+  /** Token counts summed over every session and model. */
   totals: UsageTotals;
+  /** Estimated cost in USD over the models with a known price; null when none has one. */
   estUsd: number | null;
+  /** Per-model totals, costliest first. */
   byModel: ModelUsage[];
+  /** Per-session totals. */
   sessions: SessionUsage[];
 }
 

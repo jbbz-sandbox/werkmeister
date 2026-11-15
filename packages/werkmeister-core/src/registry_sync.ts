@@ -411,6 +411,7 @@ export function registryChanges(before: string | null, after: string): RegistryC
   return out;
 }
 
+/** Options for {@link syncRegistry}; every field is optional and defaults to the live machine. */
 export interface SyncRegistryOptions {
   /** Defaults to `paths.repos_root`. */
   reposRoot?: string;
@@ -420,9 +421,9 @@ export interface SyncRegistryOptions {
   now?: () => number;
   /** Leave a hand-written registry untouched (a failing step) instead of backing it up and replacing it. */
   generatedOnly?: boolean;
-  /** A checkout whose `.werkmeister/services.yaml` replaces its repo's fragment under repos_root (SW-281). */
+  /** A checkout whose `.werkmeister/services.yaml` replaces its repo's fragment under repos_root. */
   from?: string;
-  /** Write here instead of `~/.werkmeister/services.yaml` (SW-281). */
+  /** Write here instead of `~/.werkmeister/services.yaml`. */
   target?: string;
 }
 

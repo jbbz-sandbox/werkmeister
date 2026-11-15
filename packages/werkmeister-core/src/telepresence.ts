@@ -638,20 +638,31 @@ function resolveServiceDef(service: string, localServices: string[]): Record<str
   return svcDef;
 }
 
+/** What `startIntercept` intercepts, and for which feature. */
 export interface InterceptArgs {
+  /** The feature whose local container receives the traffic; it must hold a slot. */
   feature: string;
+  /** The registry service to intercept; must be one of `localServices`. */
   service: string;
   /** The workspace's SERVICES list — the caller reads it, never this module. */
   localServices: string[];
+  /** Connect through telepresence's containerized daemon (`connect --docker`) instead of the host one. */
   dockerDaemon?: boolean;
+  /** Aborts the telepresence subprocesses. */
   signal?: AbortSignal;
 }
 
+/** The intercept `startIntercept` set up. */
 export interface InterceptResult {
+  /** The intercepted service. */
   service: string;
+  /** The kube context the intercept runs in. */
   context: string;
+  /** The k8s namespace of the deployment. */
   namespace: string;
+  /** The k8s Deployment whose traffic is rerouted. */
   deployment: string;
+  /** The localhost port the matching requests now reach. */
   localPort: number;
   /** The request header the intercept filters on (see buildInterceptArgs). */
   header: string;
@@ -740,13 +751,17 @@ export async function startIntercept(a: InterceptArgs): Promise<InterceptResult>
   };
 }
 
+/** Which intercepts `leaveIntercept` ends. */
 export interface LeaveInterceptArgs {
+  /** The feature whose intercepts end. */
   feature: string;
   /** One service, or null/absent for every local service of the feature. */
   service?: string | null;
+  /** The workspace's SERVICES list; without `service`, every one with a deployment is left. */
   localServices: string[];
   /** Leave through the containerized daemon `startIntercept({ dockerDaemon })` connected. */
   dockerDaemon?: boolean;
+  /** Aborts the telepresence subprocesses. */
   signal?: AbortSignal;
 }
 

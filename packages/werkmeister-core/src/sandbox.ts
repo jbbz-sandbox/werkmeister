@@ -198,12 +198,17 @@ const execFileAsync = promisify(execFile);
 
 /** The render-ready RJSF bundle {@link getFormSchema} builds for the create form. */
 export interface FormSchemaBundle {
+  /** The JSON Schema: one property per form field. */
   schema: Record<string, unknown>;
+  /** RJSF widget hints per field key, plus `ui:order`. */
   uiSchema: Record<string, unknown>;
+  /** Each field's starting value. */
   formData: Record<string, unknown>;
+  /** The form heading. */
   title: string;
 }
 
+/** What `createWorkspace` did: the command it stands for, its transcript, and where the workspace landed. */
 export interface CreateResult {
   /** The CLI command that was run, e.g. `werkmeister workspace new foo --services bar`. */
   command: string;
@@ -1028,8 +1033,11 @@ async function openInVscode(target: string): Promise<{ opened: boolean; note?: s
 
 export type Distiller = (prompt: string) => Promise<string | null>;
 
+/** How `createWorkspace` runs: where it reports, what it reads, and what it may discard. */
 export interface CreateOptions {
+  /** Open the new workspace in VS Code afterwards; default true. */
   open?: boolean;
+  /** Called with each chunk of progress output as it is reported, besides the collected transcript. */
   onData?: (chunk: string) => void;
   /** Report through the caller's reporter (the CLI's terminal) instead of collecting a transcript. */
   live?: boolean;
@@ -1039,9 +1047,11 @@ export interface CreateOptions {
   distill?: false | Distiller;
   /** A snapshot the caller already fetched (the CLI wizard), so it isn't fetched twice. */
   issue?: IssueSnapshot;
+  /** Reads a task title piped on stdin, used when no task resolved; leave unset in-process so fd 0 is never read. */
   readStdinTask?: () => string;
+  /** Discard rather than abort: drop dirty worktrees and delete a clashing `<user>/<workspace>` branch on origin. */
   force?: boolean;
-  /** False skips init-workspace's image build, so no container is created (SW-66). */
+  /** False skips init-workspace's image build, so no container is created. */
   build?: boolean;
 }
 
@@ -1281,7 +1291,10 @@ async function resolveSessionDir(name: string): Promise<string> {
  * Open a workspace (by name, as listed by {@link listWorkspaces}) in VS Code.
  * Throws if the workspace doesn't exist or VS Code couldn't be launched.
  */
-export async function openWorkspace(name: string): Promise<{ path: string }> {
+export async function openWorkspace(name: string): Promise<{
+  /** Absolute path of the workspace folder that was opened. */
+  path: string;
+}> {
   const target = await resolveWorkspaceDir(name);
   const { opened, note } = await openInVscode(target);
   if (!opened) throw new WorkspaceError(note ?? "Could not launch VS Code.");
@@ -1313,16 +1326,20 @@ async function readWorkspaceFeature(dir: string): Promise<string | null> {
   }
 }
 
+/** One workspace's containers, session and run position, as the status sweep reads them. */
 export interface WorkspaceStatus {
+  /** The workspace folder name. */
   name: string;
   /** Docker Compose project (`werkmeister-<feature>`), or null if undeterminable. */
   project: string | null;
   /**
    * up = all running, partial = some, stopped = created but none running, down = no containers,
-   * paused = held by Pause (its record exists; SW-70), unknown = docker unavailable.
+   * paused = held by Pause (its record exists), unknown = docker unavailable.
    */
   state: "up" | "partial" | "stopped" | "paused" | "down" | "unknown";
+  /** Containers running now. */
   running: number;
+  /** Containers in the Compose project, not counting setup jobs that finished cleanly. */
   total: number;
   /** Feature slot (from the `com.werkmeister.slot` label), or null when no containers. */
   slot: number | null;
@@ -1332,7 +1349,12 @@ export interface WorkspaceStatus {
    * Per-container health: the card's Containers row and the Health tab's breakdown.
    * Same buckets as {@link InfraStatus}. Empty when docker is unreachable or nothing runs.
    */
-  services: { name: string; state: ServiceHealth }[];
+  services: {
+    /** The Compose service name. */
+    name: string;
+    /** Its display bucket: the healthcheck verdict, else the container state. */
+    state: ServiceHealth;
+  }[];
   /** The harness that reads the workspace (`harness:` in workspace.yml), so callers pick its session commands. */
   harness: HarnessId;
   /** The session signal of the workspace's harness: claude-send turn state + what the agent is doing. */
@@ -1349,17 +1371,27 @@ export interface WorkspaceStatus {
   autoStop: boolean;
   /** mtime (ISO) of the workspace's newest session file, or null when it has none. */
   lastActivity: string | null;
-  /** The earliest running container's start and what started it (SW-41); null when none runs. */
+  /** The earliest running container's start and what started it; null when none runs. */
   started: Started | null;
   /** Containers restarting under their restart policy; empty when docker is unreachable. */
   crashLoops: CrashLoop[];
   /** When Pause ran and the containers Resume brings back; null when not paused. */
-  paused: { at: string; containers: string[] } | null;
+  paused: {
+    /** When Pause ran, ISO. */
+    at: string;
+    /** The containers running at pause time, in dependency order. */
+    containers: string[];
+  } | null;
   /** Resume left a "continue" for a live session; the pane delivers it to Desktop. */
   resumeNudge: boolean;
-  /** Sessions with a `pr watch` wake held for them (SW-418) and the file's mtime; each one's band prompts it when idle. */
-  heldWakes: { session: string; at: string }[];
-  /** Phase, activity and the needs-you list (SW-487); PR items come from {@link getWorkspacePRs}. */
+  /** Sessions with a `pr watch` wake held for them and the file's mtime; each one's band prompts it when idle. */
+  heldWakes: {
+    /** The session id the wake is held for. */
+    session: string;
+    /** The wake file's mtime, ISO. */
+    at: string;
+  }[];
+  /** Phase, activity and the needs-you list; PR items come from {@link getWorkspacePRs}. */
   workspaceState: WorkspaceState;
 }
 
@@ -1408,15 +1440,23 @@ function jitPhase(dir: string): string | null {
 
 /** Shared-infrastructure (`werkmeister infra connect`) container state — the `w9r-infra` Compose project. */
 export interface InfraStatus {
+  /** up = all running, partial = some, down = none, unknown = docker unavailable. */
   state: "up" | "partial" | "down" | "unknown";
+  /** Infra containers running now. */
   running: number;
+  /** Infra containers in the project, not counting setup jobs that finished cleanly. */
   total: number;
   /**
    * Per-container health for the Health tab's itemized view. Mirrors
    * `werkmeister feature status`: `healthy` (healthcheck passed), `starting` (healthcheck
    * warming up), `running` (up, no/failing healthcheck), or `down`.
    */
-  services: { name: string; state: ServiceHealth }[];
+  services: {
+    /** The Compose service name. */
+    name: string;
+    /** Its display bucket: the healthcheck verdict, else the container state. */
+    state: ServiceHealth;
+  }[];
 }
 
 export interface ComposeProjectTally {
@@ -1686,7 +1726,9 @@ export interface CheckInRow {
   workspaceState: WorkspaceState | null;
 }
 
+/** What `/check-in` should look at: the kept workspaces and which of them need a courier. */
 export interface CheckInTriage {
+  /** The workspaces root folder, where `.check-in-last` lives. */
   root: string;
   /** When the previous check-in ran (`<root>/.check-in-last`), or null on a first run. */
   since: string | null;
@@ -1778,7 +1820,7 @@ async function proposedGates(dir: string): Promise<string[]> {
  * Step 1 of the check-in skill in one call: each workspace's labels, container
  * and Claude state, proposed stage gates and whether its transcript moved since
  * the last check-in, filtered by `skip` / `focus`. Merged PRs a release tag now
- * contains are shipped first (SW-65). Marks this sweep as the last check-in, so
+ * contains are shipped first. Marks this sweep as the last check-in, so
  * a second call reports only what moved in between.
  */
 export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
@@ -1934,10 +1976,13 @@ export interface RepoPr {
   /** When the newest review was submitted. */
   reviewAt?: string | null;
 }
+/** One workspace's PRs, one per repo worktree, and what they need from the person. */
 export interface WorkspacePrs {
+  /** The workspace folder name. */
   name: string;
+  /** One entry per repo worktree, with its open PR if it has one. */
   repos: RepoPr[];
-  /** The PR needs-you items ({@link prNeeds}); a UI lists them after `WorkspaceStatus.state.needs`. */
+  /** The PR needs-you items (`prNeeds`); a UI lists them after `WorkspaceStatus.state.needs`. */
   needs: NeedItem[];
   /** "waiting on review", "behind main", or null. */
   phaseDetail: string | null;
@@ -2139,9 +2184,13 @@ export function reviewStatusOf(v: PrView): ReviewStatus {
   return "PENDING";
 }
 
+/** The Open Pull Requests tab: open PRs in the org updated in the last 30 days. */
 export interface OpenPrsResult {
+  /** The GitHub login `gh` is authenticated as. */
   me: string;
+  /** PRs authored by `me`. */
   mine: OpenPr[];
+  /** Other authors' PRs labelled `ready-for-human-approval`: the approval queue. */
   others: OpenPr[];
 }
 
@@ -2387,7 +2436,10 @@ export async function getOpenPrs(): Promise<OpenPrsResult> {
 }
 
 /** Approve a PR: `gh pr review <url> --approve`. No label change. */
-export async function approvePr(url: string): Promise<{ ok: true }> {
+export async function approvePr(url: string): Promise<{
+  /** Always true; a failed review throws instead. */
+  ok: true;
+}> {
   const res = await runCapture("gh", ["pr", "review", url, "--approve"]).catch((e) => {
     throw new WorkspaceError(`gh pr review failed: ${(e as Error).message}`);
   });
@@ -2746,7 +2798,9 @@ export async function removeWorkspace(
 
 // --- Kube context -----------------------------------------------------------
 
+/** The cluster a kube context name points at, by its name; `other` when it matches none or there is no context. */
 export type KubeEnv = "dev" | "stage" | "prod" | "other";
+/** The environments `switchKubeContext` can switch to. */
 export type KubeSwitchEnv = "dev" | "stage" | "prod";
 
 /** Classify a kube context name (e.g. `sb-stage-cluster`) as dev/stage/prod. */
@@ -2758,7 +2812,12 @@ function classifyContext(ctx: string): KubeEnv {
 }
 
 /** Current kubectl context and its classified environment. */
-export async function getKubeContext(): Promise<{ context: string | null; env: KubeEnv }> {
+export async function getKubeContext(): Promise<{
+  /** The current context name; null when kubectl is missing or none is set. */
+  context: string | null;
+  /** The environment the context name points at. */
+  env: KubeEnv;
+}> {
   let res: { stdout: string; stderr: string; code: number | null };
   try {
     res = await runCapture("kubectl", ["config", "current-context"]);
@@ -2775,9 +2834,12 @@ export async function getKubeContext(): Promise<{ context: string | null; env: K
  * the context name pattern (robust to per-machine project IDs). Throws
  * {@link WorkspaceError} if kubectl is missing or no matching context exists.
  */
-export async function switchKubeContext(
-  env: KubeSwitchEnv,
-): Promise<{ context: string; env: KubeEnv }> {
+export async function switchKubeContext(env: KubeSwitchEnv): Promise<{
+  /** The context name now in use. */
+  context: string;
+  /** The environment that was asked for. */
+  env: KubeEnv;
+}> {
   let list: { stdout: string; stderr: string; code: number | null };
   try {
     list = await runCapture("kubectl", ["config", "get-contexts", "-o", "name"]);
@@ -2910,7 +2972,12 @@ export async function runConnect(): Promise<{ command: string; output: string }>
  * browser UI (native app only), so `url` is null there. Used to conditionally
  * offer the "container UI" link.
  */
-export async function getDockerUi(): Promise<{ provider: string; url: string | null }> {
+export async function getDockerUi(): Promise<{
+  /** `orbstack`, else the docker context name; `unknown` when docker can't be run. */
+  provider: string;
+  /** The provider's browser dashboard; null when it has none. */
+  url: string | null;
+}> {
   let res: { stdout: string; stderr: string; code: number | null };
   try {
     res = await runCapture("docker", ["context", "show"]);
@@ -2925,7 +2992,7 @@ export async function getDockerUi(): Promise<{ provider: string; url: string | n
 
 /**
  * Resume *feature* (workspace *name* at *ws*), then tell its session to continue
- * when Pause cut a working turn (SW-70). With no live `claude` process the nudge
+ * when Pause cut a working turn. With no live `claude` process the nudge
  * goes headless; a live one would fork under a second `claude -p --resume`, so
  * the nudge waits in a file the pane delivers to Desktop, and the session's next
  * prompt clears it.
@@ -2934,7 +3001,12 @@ export async function resumeAndNudge(
   name: string,
   ws: string,
   feature: string,
-): Promise<ResumeResult & { nudge: "headless" | "pending" | "none" }> {
+): Promise<
+  ResumeResult & {
+    /** How "continue" reached the session: sent headless, left for the pane to deliver, or not needed. */
+    nudge: "headless" | "pending" | "none";
+  }
+> {
   const result = await resume(feature);
   if (!result.wasWorking) {
     info("Session: it was not mid-turn, so nothing to continue");
@@ -2963,6 +3035,7 @@ export async function claimResumeNudge(name: string): Promise<string | null> {
 
 /** The container-lifecycle verbs a workspace's stack supports. */
 export const WORKSPACE_ACTIONS = ["up", "stop", "restart", "down", "pause", "resume"] as const;
+/** One of `WORKSPACE_ACTIONS`, the verb `runWorkspaceAction` takes. */
 export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
 
 /**
@@ -3078,7 +3151,7 @@ export async function listSessions(name: string): Promise<
   return harnessFor(dir).listSessions(dir);
 }
 
-/** A workspace's token usage and USD estimate ({@link HarnessAdapter.usage}). */
+/** A workspace's token usage and USD estimate (`HarnessAdapter.usage`). */
 export async function getWorkspaceUsage(name: string): Promise<WorkspaceUsage> {
   const dir = await resolveWorkspaceDir(name);
   return harnessFor(dir).usage(name, dir);
@@ -3100,7 +3173,7 @@ export async function parseSessionText(name: string, text: string): Promise<Sess
   return harnessFor(await resolveSessionDir(name)).parseSession(text);
 }
 
-/** The newest session's last `limit` messages for a session key ({@link HarnessAdapter.transcript}). */
+/** The newest session's last `limit` messages for a session key (`HarnessAdapter.transcript`). */
 export async function getClaudeTranscript(
   name: string,
   limit = 20,
@@ -3112,7 +3185,7 @@ export async function getClaudeTranscript(
 
 /**
  * Send one message to a session key's newest session, or start one
- * when it has none ({@link HarnessAdapter.sendTurn}).
+ * when it has none (`HarnessAdapter.sendTurn`).
  *
  * FIRE-AND-FORGET: agentic turns routinely exceed the caller's MCP request
  * timeout (~60s), so this does NOT wait for the reply; callers poll
@@ -3125,9 +3198,13 @@ export async function sendToClaudeSession(
   startDir?: string,
   opts?: TurnOptions,
 ): Promise<{
+  /** The session the message went to; null when a new one was started, its id not known yet. */
   sessionId: string | null;
+  /** Always true: the turn was started, not finished. */
   started: boolean;
+  /** True when there was no session to continue, so a new one was started. */
   startedNew: boolean;
+  /** The finished turn's result; null unless `opts.wait`. */
   result: TurnResult | null;
 }> {
   const body = message.trim();
@@ -3151,7 +3228,7 @@ export async function sendToClaudeSession(
   };
 }
 
-/** The most recent `claude-send` turn for a session key ({@link HarnessAdapter.turnStatus}). */
+/** The most recent `claude-send` turn for a session key (`HarnessAdapter.turnStatus`). */
 export async function getClaudeTurnStatus(
   name: string,
 ): Promise<ReturnType<HarnessAdapter["turnStatus"]>> {
@@ -3171,9 +3248,13 @@ export async function getClaudeTurnStatus(
 // container's own probe.sh reads the same field and must agree with this.
 // ---------------------------------------------------------------------------
 
+/** One k8s port-forward's probe result. */
 export interface K8sForwardHealth {
+  /** The service or infrastructure entry the forward is for, from services.yaml. */
   name: string;
+  /** The host port the forward listens on (`k8s_forward_port`). */
   port: number;
+  /** Whether its probe passed. */
   healthy: boolean;
   /** e.g. "HTTP 200", "timeout", "ECONNREFUSED …" */
   detail: string | null;
@@ -3184,8 +3265,11 @@ export interface K8sForwardHealth {
  * health_endpoint names (see `werkmeister-core/k8s`'s `WIRE_PROBES`).
  */
 export async function getK8sForwardsHealth(): Promise<{
+  /** One per default forward in services.yaml. */
   forwards: K8sForwardHealth[];
+  /** How many forwards passed their probe. */
   healthy: number;
+  /** How many forwards were checked. */
   total: number;
   /** The forwarder is down and no running workspace needs it (SW-42): neutral, not a fault. */
   stopped: boolean;
@@ -3390,7 +3474,16 @@ export async function launchPrReconcile(
   url: string,
   issueRef?: string,
   launcher?: Launcher,
-): Promise<{ sessionKey: string; slug: string; issue: Issue; launcher: Launcher }> {
+): Promise<{
+  /** The session key the dashboard's chat panel and the transcript tools take. */
+  sessionKey: string;
+  /** `<repo>-<number>`, the session's folder under the reconcile root. */
+  slug: string;
+  /** The linked issue's card; `ref` is "" when none was found. */
+  issue: Issue;
+  /** Where the session window opened. */
+  launcher: Launcher;
+}> {
   if (!isValidPrUrl(url)) {
     throw new WorkspaceError(`Refusing to reconcile a non-GitHub-PR URL: ${url}`);
   }

@@ -13,7 +13,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, normalize, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { slug } from "../apps/docs-site/slug.mjs";
 import {
   BUILD_FIRST,
@@ -334,6 +334,45 @@ export function listFiles(root) {
     .filter(Boolean);
 }
 
+/**
+ * SW-748: docs/sdk-parity.md has a row for every MCP tool and CLI command (a hidden alias may
+ * instead be named under "Hidden aliases"), and each row names SDK exports that exist or says
+ * `excluded:` and why.
+ */
+export function checkSdkParity(text, { tools, commands, sdk }) {
+  const section = (h) => text.split(`\n## ${h}\n`)[1]?.split("\n## ")[0] ?? "";
+  const rows = (s) =>
+    [...s.matchAll(/^\| `([^`]+)` \|([^|]*)\|([^|]*)\|$/gm)].map((m) => ({
+      name: m[1],
+      exports: [...m[2].matchAll(/`(\w+)`/g)].map((e) => e[1]),
+      note: m[3].trim(),
+    }));
+  const toolRows = rows(section("MCP tools"));
+  const commandRows = rows(section("CLI commands"));
+  const aliases = text.split("Hidden aliases")[1] ?? "";
+  const problems = [];
+  const report = (msg) => problems.push(`docs/sdk-parity.md: ${msg}`);
+  for (const t of tools)
+    if (!toolRows.some((r) => r.name === t)) report(`MCP tool \`${t}\` has no row`);
+  for (const r of toolRows)
+    if (!tools.includes(r.name)) report(`row \`${r.name}\` names no MCP tool`);
+  for (const c of commands)
+    if (
+      !commandRows.some((r) => r.name === c.name) &&
+      !(c.hidden && aliases.includes(`\`${c.name}\``))
+    )
+      report(`CLI command \`${c.name}\` has no row`);
+  for (const r of commandRows)
+    if (!commands.some((c) => c.name === r.name)) report(`row \`${r.name}\` names no CLI command`);
+  for (const r of [...toolRows, ...commandRows]) {
+    if (!r.exports.length && !r.note.startsWith("excluded:"))
+      report(`row \`${r.name}\` names no SDK export and no \`excluded:\` reason`);
+    for (const e of r.exports)
+      if (!sdk.has(e)) report(`row \`${r.name}\`: \`${e}\` is not on werkmeister-core/sdk`);
+  }
+  return problems;
+}
+
 /** The built CLI's commands and their long flags, hidden ones included. */
 function loadCli() {
   return {
@@ -384,8 +423,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const published = site.themeConfig.sidebar["/"].flatMap((g) =>
     g.items.filter((i) => !i.link.endsWith("/")).map((i) => `${i.link.slice(1)}.md`),
   );
+  const sdk = await import(pathToFileURL(join(ROOT, "packages/werkmeister-core/dist/sdk.js")).href);
   const problems = [
     ...docs.flatMap((rel) => checkDoc(rel, readFileSync(join(ROOT, rel), "utf8"), ctx)),
+    ...checkSdkParity(readFileSync(join(ROOT, "docs/sdk-parity.md"), "utf8"), {
+      tools: mcpTools(mcpSource()).map((t) => t.name),
+      commands: cliReference(),
+      sdk: new Set(Object.keys(sdk)),
+    }),
     ...published.flatMap((rel) => jiraKeyLines(rel, readFileSync(join(ROOT, rel), "utf8"))),
     ...checkMan(pages, MAN_DIR),
     ...(withMan(readFileSync(CLI_PACKAGE, "utf8"), pages) === readFileSync(CLI_PACKAGE, "utf8")

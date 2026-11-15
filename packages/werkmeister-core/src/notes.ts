@@ -30,12 +30,19 @@ const _FILENAME_RE = new RegExp(
   "^(?<number>\\d{3})-(?<type>" + NOTE_TYPES.join("|") + ")-(?<slug>[a-z0-9][a-z0-9-]*)\\.md$",
 );
 
+/** One parsed `NNN-<type>-<slug>.md` note file. */
 export interface Note {
+  /** The note file's path. */
   path: string;
+  /** The `NNN` sequence number from the filename. */
   number: number;
+  /** The frontmatter's `type`, else the filename's. */
   type: string;
+  /** The filename's slug, without number, type or `.md`. */
   slug: string;
+  /** The parsed YAML frontmatter; empty when missing or malformed. */
   frontmatter: Record<string, any>;
+  /** The text after the frontmatter; the whole file when the frontmatter could not be parsed. */
   body: string;
 }
 

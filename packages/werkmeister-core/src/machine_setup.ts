@@ -137,9 +137,13 @@ export interface PluginSpec {
  * typo'd token is not a reason to call machine setup a failure.
  */
 export interface Step {
+  /** What was checked or converged, shown as the line's name (e.g. `config services.yaml`). */
   label: string;
+  /** True when the step converged or is healthy. */
   ok: boolean;
+  /** One-line outcome: what changed, or why it failed and how to fix it. */
   detail: string;
+  /** A failure here renders as a warning and does not fail the run. */
   optional?: boolean;
   /** Required but left undone on purpose (e.g. sudo skipped without a TTY): ⚠, exit 0, setup is not "set up". */
   pending?: boolean;

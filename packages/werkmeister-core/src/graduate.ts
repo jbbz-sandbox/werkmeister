@@ -222,10 +222,15 @@ export function reconcileGraduating(
   return closed;
 }
 
+/** Where `graduateNote` scaffolds a decision, and as what. */
 export interface GraduateNoteOptions {
+  /** The standards module to write into; it must exist and use the Rules/Don't/Going-deeper shape. */
   domain: string;
+  /** `rule` adds a bullet to the module's Rules; `example` or `anti-pattern` writes a references file. */
   kind: string;
+  /** The references file's name; the note's slug when null. */
   slug?: string | null;
+  /** The standards tree to write into; the configured one when null. */
   standardsDir?: string | null;
   /** The workspace strategy's `decisions`; jit's notes when omitted. */
   decisions?: DecisionSource;

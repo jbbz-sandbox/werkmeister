@@ -5,12 +5,16 @@
  */
 import type { Runner } from "../machine_setup.js";
 
+/** `stated`: a file says so; `guessed`: a heuristic, worth a review; `inferred`: Claude answered from the repo. */
 export type Confidence = "stated" | "guessed" | "inferred";
 
 /** One field value and where it came from. For a guess, `source` is the reason written as the YAML comment. */
 export interface FieldValue {
+  /** The value as it would be written to the fragment. */
   value: unknown;
+  /** The file or rule it came from; for a guess, the reason. */
   source: string;
+  /** How far the value can be trusted. */
   confidence: Confidence;
 }
 
@@ -32,8 +36,11 @@ export interface Finding {
   fields: Record<string, FieldValue>;
 }
 
+/** Something detection left out instead of failing on. */
 export interface Skipped {
+  /** The file or detector left out. */
   item: string;
+  /** Why, as shown to the person. */
   reason: string;
 }
 

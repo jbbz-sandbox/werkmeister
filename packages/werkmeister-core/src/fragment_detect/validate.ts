@@ -20,6 +20,10 @@ export function defaultSchemaPath(): string {
   return path.join(sandboxRoot(), "infra", "schemas", "services-fragment.schema.json");
 }
 
+/**
+ * Check *rendered* against the fragment JSON Schema, then trial-merge it with every other repo's
+ * fragment under *reposRoot*. Returns the problems found; empty means safe to write.
+ */
 export function validateFragment(
   rendered: Rendered,
   plan: Plan,
@@ -60,6 +64,7 @@ export function validateFragment(
   return errors;
 }
 
+/** Write the fragment to its path, creating `.werkmeister/` if needed. */
 export function writeFragment(rendered: Rendered): void {
   fs.mkdirSync(path.dirname(rendered.path), { recursive: true });
   fs.writeFileSync(rendered.path, rendered.yaml);

@@ -20,6 +20,23 @@ test("every core.<fn> the pane script calls is a function on werkmeister-core/sd
   assert.deepEqual(missing, []);
 });
 
+// SW-748: the bare `up` read like the workspace verb; the infra lifecycle is named for what it starts.
+test("the shared-infra lifecycle is infra*, and the bare up is gone", () => {
+  for (const name of [
+    "infraUp",
+    "infraDown",
+    "infraStop",
+    "infraRestart",
+    "infraHealth",
+    "connectK8s",
+  ])
+    assert.equal(typeof sdk[name], "function", name);
+  assert.equal(sdk.up, undefined);
+  // Connect calls `(core.infraUp ?? core.up)()`, which test 1's `core.<fn>(` scan can't see.
+  assert.match(script, /\bcore\.infraUp\b/);
+  assert.deepEqual(sdk.WORKSPACE_ACTIONS, ["up", "stop", "restart", "down", "pause", "resume"]);
+});
+
 test("the pane script imports no core file by path", () => {
   assert.doesNotMatch(script, /dist\/|\.js['"]\)|resolve\('werkmeister-core'\)/);
 });

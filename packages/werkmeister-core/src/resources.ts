@@ -57,9 +57,11 @@ export interface HostSummary {
   featureCpuPercent: number;
 }
 
+/** One CPU and memory sample across every workspace, from {@link getWorkspaceResources}. */
 export interface WorkspaceResources {
   /** Keyed by compose project, `WorkspaceStatus.project`. */
   projects: Record<string, Usage>;
+  /** Machine load and the CPU all feature containers use together. */
   host: HostSummary;
 }
 

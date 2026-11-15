@@ -37,25 +37,39 @@ export interface SetupPlan {
   fields: Record<string, FieldValue>;
 }
 
+/** Everything `werkmeister machine detect` would write for one repo, before rendering. */
 export interface Plan {
+  /** The repo's directory name, as the registry keys it. */
   repo: string;
+  /** Absolute repo root. */
   root: string;
+  /** Absolute path of the repo's `.werkmeister/services.yaml` fragment, whether or not it exists. */
   fragmentPath: string;
   /** The existing fragment's text, or null when the repo has none. */
   existing: string | null;
+  /** Detected services, sorted by name; a service already in the fragment keeps its name there. */
   services: ResolvedService[];
+  /** Detected datastores and other in-cluster dependencies, sorted by name. */
   infrastructure: ResolvedInfra[];
+  /** The shared install service, or null when the repo has no root package.json or no Node service. */
   setup: SetupPlan | null;
   /** Keys listed in .env.example-style files, per service name. */
   envExample: Record<string, string[]>;
+  /** Findings (k8s, compose, Helm) that no source directory matched; the Claude pass can assign them. */
   unmatched: Finding[];
+  /** Files and detectors left out, each with why. */
   skipped: Skipped[];
 }
 
+/** Inputs to {@link planFragment} beyond the repo itself. */
 export interface PlanOptions {
+  /** Directory holding every registered repo; their fragments' ports count as taken. */
   reposRoot: string;
+  /** Runs `git` to list the repo's files. */
   runner: Runner;
+  /** Path of `services.local.yaml`; its ports count as taken. Need not exist. */
   localPath: string;
+  /** Port offsets available in one feature slot, the ceiling for a new `port_offset`. */
   portsPerSlot: number;
 }
 
@@ -86,6 +100,10 @@ function envExampleKeys(ctx: DetectContext, dir: string): string[] {
   return [...keys].sort();
 }
 
+/**
+ * Scan *root* and work out its fragment: detected services and infrastructure, with free ports
+ * allocated for any entry the existing fragment doesn't already set. Throws if that fragment doesn't parse.
+ */
 export function planFragment(root: string, opts: PlanOptions): Plan {
   const abs = path.resolve(root);
   const repo = path.basename(abs);
@@ -265,22 +283,60 @@ export function planSummary(plan: Plan) {
     Object.fromEntries(
       Object.entries(f).map(([k, v]) => [
         k,
-        { value: v.value, source: v.source, confidence: v.confidence },
+        {
+          /** The field's value as it would be written to the fragment. */
+          value: v.value,
+          /** Where the value came from; for a guess, the reason written as the YAML comment. */
+          source: v.source,
+          /** Whether a file stated it, the scan guessed it, or Claude inferred it. */
+          confidence: v.confidence,
+        },
       ]),
     );
   return {
+    /** The repo's directory name. */
     repo: plan.repo,
+    /** Absolute path of the fragment file. */
     fragment: plan.fragmentPath,
+    /** True when the repo already had a fragment, so only missing keys would be added. */
     existed: plan.existing !== null,
+    /** Detected services, sorted by name. */
     services: plan.services.map((s) => ({
+      /** Service name as the fragment keys it. */
       name: s.name,
+      /** Repo-relative source directory ("." is the repo root). */
       dir: s.dir,
+      /** Planned fields by key. */
       fields: fields(s.fields),
-      conflicts: s.conflicts.map((c) => ({ key: c.key, chosen: c.chosen, also: c.also })),
+      /** Keys where two files stated different values. */
+      conflicts: s.conflicts.map((c) => ({
+        /** The field the sources disagree on. */
+        key: c.key,
+        /** The value the plan uses. */
+        chosen: c.chosen,
+        /** The other stated values, not used. */
+        also: c.also,
+      })),
     })),
-    infrastructure: plan.infrastructure.map((i) => ({ name: i.name, fields: fields(i.fields) })),
-    setup: plan.setup ? { name: plan.setup.name, fields: fields(plan.setup.fields) } : null,
+    /** Detected infrastructure entries, sorted by name. */
+    infrastructure: plan.infrastructure.map((i) => ({
+      /** Infrastructure name as the fragment keys it. */
+      name: i.name,
+      /** Planned fields by key. */
+      fields: fields(i.fields),
+    })),
+    /** The shared install service, or null when there is none. */
+    setup: plan.setup
+      ? {
+          /** The name the Node services' `setup_service` points at. */
+          name: plan.setup.name,
+          /** Planned fields by key. */
+          fields: fields(plan.setup.fields),
+        }
+      : null,
+    /** `.env.example` keys no service declares yet, per service name. */
     envExample: plan.envExample,
+    /** Files and detectors left out, each with why. */
     skipped: plan.skipped,
   };
 }

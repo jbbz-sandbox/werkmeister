@@ -414,9 +414,13 @@ export interface ServiceEndpoint {
   type: string;
 }
 
+/** Where each registered service answers for one running feature, from {@link featureServices}. */
 export interface FeatureServices {
+  /** The feature asked about. */
   feature: string;
+  /** The port slot the feature holds; its services' host ports are this slot's base plus their offset. */
   slot: number;
+  /** One per registered service, sorted by name, including those with nowhere to answer. */
   endpoints: ServiceEndpoint[];
 }
 

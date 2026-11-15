@@ -1,5 +1,5 @@
 /**
- * Which app opens an interactive Claude session (SW-195): macOS Terminal, or a
+ * Which app opens an interactive Claude session: macOS Terminal, or a
  * VS Code integrated terminal through the werkmeister extension's URI handler.
  * Pure: the `open`/osascript calls stay in sandbox.ts.
  */

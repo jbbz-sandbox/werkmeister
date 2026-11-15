@@ -18,28 +18,49 @@ export type QuestionKind =
   | "conflict"
   | "unmatched";
 
+/** One field the scan had to guess, put to Claude. */
 export interface Question {
+  /** `<service>.<key>`, or `unmatched.<name>`; an answer names it as `item`. */
   id: string;
+  /** Which rule {@link applyAnswers} checks the answer against. */
   kind: QuestionKind;
+  /** The service asked about, or null for an unmatched finding. */
   service: string | null;
+  /** The question in plain English. */
   prompt: string;
+  /** What the scan already knows (dir, current guess, files), for Claude to start from. */
   facts: Record<string, unknown>;
+  /** When set, the answer must be one of these (a subset, for list questions). */
   choices?: unknown[];
 }
 
+/** Claude's answer to one {@link Question}, in the shape of `ANSWER_SCHEMA`. */
 export interface Answer {
+  /** The `id` of the question answered. */
   item: string;
+  /** The proposed value; checked against the question's kind and choices before use. */
   value: unknown;
+  /** One sentence naming the evidence; written into the fragment as a comment. */
   reason: string;
+  /** Repo files that support the answer. */
   files_read: string[];
 }
 
 export type Resolver = (repoRoot: string, questions: Question[]) => Promise<Answer[]>;
 
+/** What {@link applyAnswers} made of Claude's answers. */
 export interface ApplyResult {
+  /** A copy of the plan with the accepted answers applied; the input plan is unchanged. */
   plan: Plan;
+  /** Question ids whose answers landed in the plan. */
   accepted: string[];
-  rejected: { item: string; reason: string }[];
+  /** Answers left out, each with the rule they broke. */
+  rejected: {
+    /** The answer's `item`, as Claude sent it. */
+    item: string;
+    /** Why it was refused. */
+    reason: string;
+  }[];
 }
 
 export const ANSWER_SCHEMA = {
@@ -64,6 +85,7 @@ export const ANSWER_SCHEMA = {
   },
 };
 
+/** The questions worth asking Claude about *plan*: guessed fields, `.env.example` keys, conflicts and unmatched findings, skipping keys the existing fragment already sets. */
 export function collectQuestions(plan: Plan): Question[] {
   const existing = plan.existing ? (parseYaml(plan.existing) ?? {}) : {};
   const inFile = (svc: string, key: string) => existing?.services?.[svc]?.[key] !== undefined;
@@ -175,6 +197,7 @@ function applyUnmatched(next: Plan, id: string, value: unknown, reason: string):
   return null;
 }
 
+/** Check each answer against its question and apply the ones that pass, as `inferred` fields. Unknown or repeated items are rejected. */
 export function applyAnswers(plan: Plan, answers: Answer[]): ApplyResult {
   const next: Plan = structuredClone(plan);
   const questions = new Map(collectQuestions(plan).map((q) => [q.id, q]));
