@@ -77,3 +77,9 @@ test("esbuild.mjs bundles a require of @grpc/* that is not installed", () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("the built extension carries dockerode, which core loads with a run-time require", () => {
+  // A .vsix ships no node_modules, so a require left for run time fails on the first Docker call.
+  const bundle = readFileSync(join(pkgDir, "dist/extension.cjs"), "utf8");
+  assert.match(bundle, /dockerode[\\/]lib[\\/]docker\.js/);
+});

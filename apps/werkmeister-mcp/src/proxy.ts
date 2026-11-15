@@ -185,6 +185,9 @@ export async function runProxy(): Promise<void> {
   );
 
   await server.connect(new StdioServerTransport());
+  // A client ends the session by closing stdin. The daemon connection would keep this process
+  // up past that, until the client's 2 s grace ran out and it sent SIGTERM.
+  process.stdin.on("end", () => process.exit(0));
 
   // An idle session learns of a rebuild, or of a daemon that came back, without making a call.
   setInterval(async () => {

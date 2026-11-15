@@ -168,8 +168,13 @@ export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<Run
       env: spawnEnv(cmd, opts.env),
       stdio,
       signal: opts.signal,
-      timeout: opts.timeout !== undefined ? timeoutMs(opts.timeout) : undefined,
     });
+    // Not spawn's own `timeout`: Node leaves that timer running when the command is missing,
+    // and it holds the process open for the whole timeout after the ENOENT.
+    const timer =
+      opts.timeout !== undefined
+        ? setTimeout(() => child.kill(), timeoutMs(opts.timeout))
+        : undefined;
 
     let stdout = "";
     let stderr = "";
@@ -194,6 +199,7 @@ export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<Run
     const aborted = (): boolean => opts.signal?.aborted === true;
 
     child.on("error", (e) => {
+      clearTimeout(timer);
       const code = (e as NodeJS.ErrnoException).code;
       if (aborted()) {
         fail(`Command aborted: ${cmd.join(" ")}`, -1, "ABORT_ERR");
@@ -207,11 +213,12 @@ export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<Run
     });
 
     child.on("close", (status) => {
+      clearTimeout(timer);
       if (aborted()) {
         fail(`Command aborted: ${cmd.join(" ")}`, -1, "ABORT_ERR");
         return;
       }
-      // Not aborted, so a kill can only be the timeout we passed to spawn. Asked of
+      // Not aborted, so a kill can only be the timeout above. Asked of
       // the child, not its exit shape: docker compose traps the SIGTERM and exits
       // 130 with no signal (SW-86).
       if (child.killed && opts.timeout !== undefined) {
