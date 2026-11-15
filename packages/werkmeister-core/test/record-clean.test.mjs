@@ -146,7 +146,7 @@ test("up's settings refresh is a no-op after a fresh init", async () => {
     const settings = () => fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8");
     await withSandboxHome(
       async () => {
-        await withReporter(collectingReporter(), () => initWorkspace({}, root));
+        await withReporter(collectingReporter(), () => initWorkspace({}, root, { build: false }));
         const afterInit = settings();
         withReporter(collectingReporter(), () => strategyById("icm").refresh(root));
         assert.equal(settings(), afterInit);
