@@ -1,4 +1,4 @@
-# SDK symbol pages with no @example yet (SW-762). The docs-render test fails when one gains an example: delete its line.
+# SDK exports with no @example yet (SW-762). docs:sdk fails when one gains an example: delete its line.
 functions/adoptPr
 functions/applyAnswers
 functions/approvePr
