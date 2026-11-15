@@ -89,7 +89,12 @@ test("a changed test or smoke picks itself", () =>
     edit(root, "pkg/test/c.test.mjs");
     assert.deepEqual(pick(root).files, ["test/c.test.mjs"]);
     fs.writeFileSync(path.join(root, "pkg/test/new.smoke.mjs"), "\n");
-    assert.deepEqual(command(pick(root)), ["sh", "run-tests.sh", "test/c.test.mjs", "test/new.smoke.mjs"]);
+    assert.deepEqual(command(pick(root)), [
+      "sh",
+      "run-tests.sh",
+      "test/c.test.mjs",
+      "test/new.smoke.mjs",
+    ]);
   }));
 
 test("a file outside the package picks the tests that name its path", () =>
@@ -142,7 +147,10 @@ test("run-tests.sh given .mjs files runs only those", () => {
   const { NODE_TEST_CONTEXT: _, ...env } = process.env;
   try {
     fs.mkdirSync(path.join(dir, "test"));
-    fs.copyFileSync(path.join(import.meta.dirname, "..", "run-tests.sh"), path.join(dir, "run-tests.sh"));
+    fs.copyFileSync(
+      path.join(import.meta.dirname, "..", "run-tests.sh"),
+      path.join(dir, "run-tests.sh"),
+    );
     fs.writeFileSync(path.join(dir, "test", "no-gh.sh"), "#!/bin/sh\n");
     for (const n of ["one", "two"]) {
       fs.writeFileSync(

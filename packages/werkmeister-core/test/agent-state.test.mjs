@@ -589,7 +589,9 @@ test("hooks: a headless wake turn on an open session's id leaves its ask (SW-487
 });
 
 // SW-70: while `paused.json` exists the same hook holds the session.
-const { pauseGate, PAUSED_REASON, writePaused, writeNudge } = await import("../dist/agent_state.js");
+const { pauseGate, PAUSED_REASON, writePaused, writeNudge } = await import(
+  "../dist/agent_state.js"
+);
 
 test("pause gate: PreToolUse ends the turn and denies, UserPromptSubmit blocks, the rest pass", () => {
   const dir = workspace("j-gate", null);

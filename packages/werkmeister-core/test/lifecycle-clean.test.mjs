@@ -11,7 +11,9 @@ import { test } from "node:test";
 
 import { withSandboxHome } from "./fixtures.mjs";
 
-const { classifyVolumes, featureFromVolume, volumeBaseNames } = await import("../dist/lifecycle.js");
+const { classifyVolumes, featureFromVolume, volumeBaseNames } = await import(
+  "../dist/lifecycle.js"
+);
 
 test("featureFromVolume extracts the feature from a per-feature volume name", () => {
   assert.equal(featureFromVolume("foo-bar-node-modules", ["node-modules"]), "foo-bar");

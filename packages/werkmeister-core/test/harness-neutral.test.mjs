@@ -12,7 +12,8 @@ import { stubAdapter } from "../dist/harness/stub/index.js";
 import { runTurn, turnEvents, turnStatus } from "../dist/harness/turn.js";
 
 const IDLE = { state: "idle", startedAt: null, exitCode: null, error: null };
-const src = (f) => fs.readFileSync(path.join(import.meta.dirname, "..", "src", "harness", f), "utf-8");
+const src = (f) =>
+  fs.readFileSync(path.join(import.meta.dirname, "..", "src", "harness", f), "utf-8");
 
 test("the neutral modules and the opencode adapter import nothing from harness/claude", () => {
   for (const f of [

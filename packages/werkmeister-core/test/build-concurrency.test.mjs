@@ -7,7 +7,10 @@ import { test } from "node:test";
 
 test("the install script takes the single turbo-build lock", () => {
   const script = fs.readFileSync(
-    new URL("../../../apps/cli/infra/compose/scripts/werkmeister-install-startup.sh", import.meta.url),
+    new URL(
+      "../../../apps/cli/infra/compose/scripts/werkmeister-install-startup.sh",
+      import.meta.url,
+    ),
     "utf8",
   );
   assert.equal(script.match(/flock "\$LOCKS\/turbo-build"/g)?.length, 1);

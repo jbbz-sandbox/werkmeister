@@ -10,7 +10,10 @@ import { test } from "node:test";
 
 import { dotDir } from "../dist/config.js";
 import { buildFormSchema } from "../dist/form_schema.js";
-import { writeWorkspaceModel, writeWorkspacePermissions } from "../dist/harness/claude/hooks_gen.js";
+import {
+  writeWorkspaceModel,
+  writeWorkspacePermissions,
+} from "../dist/harness/claude/hooks_gen.js";
 import { deniedIn } from "../dist/harness/claude/session.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { claudeResumeCommand, claudeSendArgs } from "../dist/sandbox.js";
