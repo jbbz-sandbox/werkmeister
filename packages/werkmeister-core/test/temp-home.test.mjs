@@ -8,18 +8,24 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import { installExecutable } from "../dist/shared_exec.js";
 import { tempHomeWrapper, writeTempHomeWrapper } from "../dist/temp_home.js";
 
 // The wrapper calls the global werkmeister, which would wait on a loaded host; only the SW-224 tests below let it.
 process.env.WERKMEISTER_NO_WAIT = "1";
 
-function wrapper() {
+// macOS scans each newly written executable on its first run (~0.5 s), so a test's own copy of a
+// static script costs that every time; `shared` makes the wrapper and the stubs below symlinks to one
+// copy (src/shared_exec.ts). The test of writeTempHomeWrapper itself passes false: it chmods and rewrites.
+function wrapper(shared = true) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "temp-home-"));
-  return { root, bin: writeTempHomeWrapper(root) };
+  const bin = writeTempHomeWrapper(root);
+  if (shared) installExecutable(bin, fs.readFileSync(bin, "utf8"));
+  return { root, bin };
 }
 
 test("written executable at .werkmeister/bin/with-temp-home, rewritten in place", () => {
-  const { root, bin } = wrapper();
+  const { root, bin } = wrapper(false);
   try {
     assert.equal(bin, path.join(root, ".werkmeister", "bin", "with-temp-home"));
     assert.equal(tempHomeWrapper(root), bin);
@@ -107,10 +113,9 @@ test("DOCKER_CONFIG keeps the caller's ~/.docker unless already set, exported be
 function stubbedPath(root, waitExit = 0) {
   const bin = path.join(root, "stub-bin");
   fs.mkdirSync(bin);
-  fs.writeFileSync(
+  installExecutable(
     path.join(bin, "werkmeister"),
-    `#!/bin/sh\necho "werkmeister $*" >> "${root}/calls"\necho "waiting for host load 90.0 to fall to 8"\nexit ${waitExit}\n`,
-    { mode: 0o755 },
+    `#!/bin/sh\necho "werkmeister $*" >> "\${0%/*}/../calls"\necho "waiting for host load 90.0 to fall to 8"\nexit ${waitExit}\n`,
   );
   const { WERKMEISTER_NO_WAIT: _, ...env } = process.env;
   return { ...env, PATH: `${bin}:${process.env.PATH}` };
@@ -252,12 +257,9 @@ test("killing the wrapper during its host-load wait stops the wait too (SW-456)"
   const stub = path.join(root, "stub-bin");
   fs.mkdirSync(stub);
   const pidFile = path.join(root, "wait.pid");
-  fs.writeFileSync(
+  installExecutable(
     path.join(stub, "werkmeister"),
-    `#!/bin/sh\necho $$ > "${pidFile}"\nexec sleep 300\n`,
-    {
-      mode: 0o755,
-    },
+    `#!/bin/sh\necho $$ > "\${0%/*}/../wait.pid"\nexec sleep 300\n`,
   );
   const { WERKMEISTER_NO_WAIT: _, ...env } = process.env;
   // A killed process its new parent hasn't reaped yet is a zombie: kill(pid, 0) still succeeds on it.

@@ -9,6 +9,8 @@ import * as fs from "node:fs";
 import * as http from "node:http";
 import * as path from "node:path";
 
+import { installExecutable } from "./shared_exec.js";
+
 /** What the fakes answer. Absent fields take the defaults in FAKE_SH. */
 export interface FakeWorld {
   /** `gh issue view` prints it as JSON; null or absent exits 1 ("could not resolve"). */
@@ -52,7 +54,10 @@ export interface Fakes {
 // scheduler's exact feature-label `ps -q` and its NanoCpus `inspect` see `containers` (SW-685).
 // POSIX sh, not node: a fixture flow makes dozens of gh/docker calls and a node start was ~100 ms
 // each. The world is plain files next to the script (writeFakes), so there is no JSON to parse.
-const FAKE_SH = `get() { v=$2; [ -f "$dir/$1" ] && IFS= read -r v < "$dir/$1"; printf '%s' "$v"; }
+const FAKE_SH = `#!/bin/sh
+# $0 is the fake's own path, possibly a symlink to one shared copy (shared_exec.ts): its folder holds the world.
+tool=\${0##*/} dir=\${0%/*}
+get() { v=$2; [ -f "$dir/$1" ] && IFS= read -r v < "$dir/$1"; printf '%s' "$v"; }
 show() { IFS= read -r v < "$dir/$1"; printf '%s\\n' "$v"; }
 out() { printf '%s\\n' "$1"; }
 fail() { printf '%s\\n' "$1" >&2; exit 1; }
@@ -128,10 +133,7 @@ export function writeFakes(dir: string, world: FakeWorld = {}): Fakes {
   if (world.prUrl !== undefined) put("prUrl", world.prUrl);
   if (world.prState !== undefined) put("prState", world.prState);
   if (world.execCwd) put("execCwd", world.execCwd);
-  for (const tool of ["gh", "docker"])
-    fs.writeFileSync(path.join(dir, tool), `#!/bin/sh\ntool=${tool} dir='${dir}'\n${FAKE_SH}`, {
-      mode: 0o755,
-    });
+  for (const tool of ["gh", "docker"]) installExecutable(path.join(dir, tool), FAKE_SH);
   return {
     gh: path.join(dir, "gh"),
     docker: path.join(dir, "docker"),
