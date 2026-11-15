@@ -670,18 +670,44 @@ export interface InterceptResult {
   remoteHost: string | null;
 }
 
+// Every subprocess goes through `runAsyncRunner`, so neither a bad request nor a
+// slow `telepresence connect` can take down a host serving other work.
+// Argument validation runs before the version probe: a caller that asked for a
+// service it does not run should hear that, not "install telepresence", and the
+// cheap check never spawns anything.
 /**
- * Start a header-scoped intercept of *service* pointing at the feature's local
- * container, and return the facts a caller needs to render or use it.
+ * Starts a telepresence intercept that sends a service's cluster traffic to
+ * this workspace's local container. Only requests carrying the workspace's
+ * feature header are rerouted, so other users of the cluster are not affected.
+ * Runs in-process; it shells out to `telepresence` (connecting first if needed).
  *
- * Callable in-process: every failure is a coded {@link SandboxError} and every
- * subprocess goes through `runAsyncRunner`, so neither a bad request nor a
- * slow `telepresence connect` can take down a host that is serving other work.
+ * @param a - The intercept to start:
+ *   - `feature`: the workspace's feature name; its containers must be up.
+ *   - `service`: the service to intercept, with k8s coordinates in
+ *     `~/.werkmeister/services.yaml`.
+ *   - `localServices`: the workspace's services (see
+ *     `readServicesFromWorkspace`); `service` must be one of them.
+ *   - `dockerDaemon`: connect through a containerized telepresence daemon.
+ *   - `signal`: aborts the telepresence calls.
+ * @returns Where the intercept runs: `context`, `namespace`, `deployment`, the
+ *   `localPort` it targets, the `header` it filters on, and `remoteHost` (the
+ *   service's cluster hostname, or null when it has no ingress).
+ * @throws `SandboxError` with a `code` saying why: `NOT_LOCAL` (not one
+ *   of `localServices`), `NOT_INTERCEPTABLE` (no k8s coordinates),
+ *   `TELEPRESENCE_VERSION` (missing or unsupported telepresence), `NOT_RUNNING`
+ *   (the workspace has no slot), `PORT_CLOSED` (the local container isn't
+ *   listening), `INTERCEPT_FAILED`, or `FIXTURE` (intercepts are off under
+ *   `WERKMEISTER_FIXTURE`).
  *
- * Argument validation runs BEFORE the version probe, unlike the command this
- * replaces. A caller that asked for a service it does not run should hear that,
- * not "install telepresence" — and the reordering means the cheap check never
- * spawns anything.
+ * @example
+ * ```ts
+ * import { readServicesFromWorkspace, resolveWorkspaceDir, startIntercept } from "werkmeister-core/sdk";
+ *
+ * const dir = await resolveWorkspaceDir("my-workspace");
+ * const localServices = readServicesFromWorkspace(dir);
+ * const result = await startIntercept({ feature: "my-feature", service: "api", localServices });
+ * console.log(`${result.deployment} → localhost:${result.localPort} (${result.header})`);
+ * ```
  */
 export async function startIntercept(a: InterceptArgs): Promise<InterceptResult> {
   if (isFixture()) {
@@ -765,13 +791,35 @@ export interface LeaveInterceptArgs {
   signal?: AbortSignal;
 }
 
+// The best-effort sweep matches `leaveFeatureIntercepts`, which
+// `werkmeister feature down` calls where a failure must never block teardown.
 /**
- * End intercepts and return the deployments actually left.
+ * Ends a workspace's telepresence intercepts. With `service` set it ends that
+ * one and throws if it can't; without it, it tries every local service and
+ * skips failures. Afterwards it removes traffic agents no other intercept uses,
+ * and quits telepresence when no intercept remains. Runs in-process; it shells
+ * out to `telepresence`.
  *
- * With *service* set this is strict — an unknown service or a failed detach
- * throws, because the caller named one thing and it did not happen. Without it
- * the sweep is best-effort, matching `leaveFeatureIntercepts`, which
- * `werkmeister feature down` calls where a failure must never block teardown.
+ * @param a - What to leave:
+ *   - `feature`: the workspace's feature name.
+ *   - `service`: one service to leave; null or absent leaves all of them.
+ *   - `localServices`: the workspace's services (see
+ *     `readServicesFromWorkspace`).
+ *   - `dockerDaemon`: leave through the containerized daemon, as when the
+ *     intercept was started with `dockerDaemon: true`.
+ *   - `signal`: aborts the telepresence calls.
+ * @returns The k8s deployments actually left; empty when none were.
+ * @throws `SandboxError` only when `service` is set: `NOT_LOCAL`,
+ *   `NOT_INTERCEPTABLE`, or `INTERCEPT_FAILED` when telepresence refused.
+ *
+ * @example
+ * ```ts
+ * import { leaveIntercept, readServicesFromWorkspace, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const localServices = readServicesFromWorkspace(await resolveWorkspaceDir("my-workspace"));
+ * const left = await leaveIntercept({ feature: "my-feature", localServices });
+ * console.log(`Left: ${left.join(", ") || "nothing"}`);
+ * ```
  */
 export async function leaveIntercept(a: LeaveInterceptArgs): Promise<string[]> {
   // Every call, the post-leave cleanup included, goes to the daemon the intercept used.

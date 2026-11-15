@@ -25,7 +25,8 @@ export type HooksSupport =
       missing: string;
     };
 
-/** Where one harness reads werkmeister's context layer (proposal § 4.3 projection rows). */
+// The projection rows of proposal § 4.3.
+/** Where one harness reads werkmeister's context layer: its instructions file and skills folder, and whether it takes hooks and subagents. */
 export interface HarnessLayout {
   /** The harness this layout belongs to. */
   readonly id: HarnessId;

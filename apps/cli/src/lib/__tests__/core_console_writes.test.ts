@@ -39,7 +39,12 @@ describe("werkmeister-core console writes", () => {
     ];
     const offenders = files
       .filter((f) => !f.endsWith(".d.ts") && !ALLOWED.has(f))
-      .filter((f) => /\bconsole\.\w+\(/.test(fs.readFileSync(path.join(CORE, f), "utf8")));
+      // TSDoc blocks are dropped first: an SDK `@example` may call console.log, and comments never run.
+      .filter((f) =>
+        /\bconsole\.\w+\(/.test(
+          fs.readFileSync(path.join(CORE, f), "utf8").replace(/\/\*\*[\s\S]*?\*\//g, ""),
+        ),
+      );
 
     expect(offenders).toEqual([]);
   });

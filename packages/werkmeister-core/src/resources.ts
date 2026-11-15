@@ -263,8 +263,28 @@ export function loadNote(load: number[], cores: number): string {
 }
 
 /**
- * One stats sweep, as `docker stats --no-stream` makes it, for every workspace at
- * once. Cut off after *timeoutMs*: a wedged daemon gives partial numbers, never a hang.
+ * Measures CPU and memory for every workspace at once, from one
+ * `docker stats --no-stream` sweep, plus the host's load. Runs in-process; it
+ * shells out to docker.
+ *
+ * @param timeoutMs - Cuts the sweep off after this many milliseconds (default
+ *   20 000). A wedged docker gives partial numbers, never a hang.
+ * @returns `projects`: usage keyed by compose project, each with `cpuPercent`
+ *   (percent of one core, summed over its containers) and `memMib`. `host`:
+ *   `load` (1, 5 and 15 minute load averages), `cores`, and
+ *   `featureCpuPercent` (every workspace container's CPU summed, shared
+ *   infrastructure left out).
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceResources } from "werkmeister-core/sdk";
+ *
+ * const { projects, host } = await getWorkspaceResources(10_000);
+ * for (const [project, use] of Object.entries(projects)) {
+ *   console.log(`${project}: ${use.cpuPercent}% CPU, ${use.memMib} MiB`);
+ * }
+ * console.log(`load ${host.load[0]} on ${host.cores} cores`);
+ * ```
  */
 export async function getWorkspaceResources(timeoutMs = 20_000): Promise<WorkspaceResources> {
   const stats = await containerStats(AbortSignal.timeout(timeoutMs));

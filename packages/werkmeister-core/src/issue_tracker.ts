@@ -117,7 +117,30 @@ export function defaultProject(): Project | null {
   return marked.length === 1 ? marked[0] : null;
 }
 
-/** The tracker for `at` (see projectFor), else the machine's (`overrides.issue_tracker`). */
+// Project resolution is `projectFor`.
+/**
+ * Returns the issue tracker (Jira, GitHub, ...) for a lookup. It picks the
+ * project named by `at.project`, else the first configured project whose tracker
+ * finds an issue ref in `at.text` that its scope holds; with neither, it falls
+ * back to the machine's tracker (`overrides.issue_tracker` in the config).
+ * Runs in-process and only reads the config; the tracker's own methods make the
+ * network calls.
+ *
+ * @param at - Where the lookup happens. `project` is a project name from the
+ *   config's `projects:`; `text` is any text holding an issue ref (a key, a URL,
+ *   a branch name). Omit it for the machine's tracker.
+ * @returns The tracker: parse refs with `parseRef`, build links with `url`,
+ *   read issues with `fetchIssue`.
+ *
+ * @example
+ * ```ts
+ * import { issueTracker } from "werkmeister-core/sdk";
+ *
+ * const tracker = issueTracker({ text: "feature/PROJ-42-login" });
+ * const ref = tracker.parseRef("feature/PROJ-42-login");
+ * if (ref) console.log(tracker.url(ref));
+ * ```
+ */
 export function issueTracker(at?: TrackerAt): IssueTrackerStrategy {
   const project = at ? projectFor(at) : null;
   return project ? projectTracker(project) : REGISTRY[loadIssueTracker()];

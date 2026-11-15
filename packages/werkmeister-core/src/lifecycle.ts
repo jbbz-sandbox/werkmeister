@@ -631,7 +631,22 @@ function readSlotFromWorkspace(workspace: string): number | null {
   return null;
 }
 
-/** Read the SERVICES list from <workspace>/.env (written by init-workspace). */
+/**
+ * Reads the services a workspace runs: the `SERVICES` list in its `.env`, which
+ * `werkmeister workspace init` writes. Runs in-process and only reads that file.
+ *
+ * @param workspace - Absolute path of the workspace folder.
+ * @returns The service names, in file order. Empty when the `.env` or its
+ *   `SERVICES` line is missing.
+ *
+ * @example
+ * ```ts
+ * import { readServicesFromWorkspace, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const dir = await resolveWorkspaceDir("my-workspace");
+ * console.log(readServicesFromWorkspace(dir)); // e.g. ["api", "web"]
+ * ```
+ */
 export function readServicesFromWorkspace(workspace: string): string[] {
   const envFile = path.join(workspace, ".env");
   if (!fs.existsSync(envFile) || !fs.statSync(envFile).isFile()) {
