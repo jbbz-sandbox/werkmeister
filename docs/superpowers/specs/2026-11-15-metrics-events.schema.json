@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "werkmeister/metrics-event/v1",
+  "title": "werkmeister metrics event (one line of ~/.werkmeister/metrics/events-YYYY-MM.jsonl)",
+  "description": "Proposed in SW-772. Append-only, one JSON object per line, one appendFileSync (a single write() on an O_APPEND file) per line so concurrent writers don't interleave; lines stay under 4096 bytes as a sanity cap. Never leaves the machine. The examples are illustrative shapes, not recorded data.",
+  "type": "object",
+  "required": ["v", "at", "event", "workspace"],
+  "properties": {
+    "v": { "const": 1 },
+    "at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the event happened, UTC ISO 8601"
+    },
+    "event": {
+      "enum": [
+        "queue.wait",
+        "queue.admit",
+        "ask",
+        "answer",
+        "stage.done",
+        "gate.start",
+        "gate.end",
+        "pr.open",
+        "pr.merged",
+        "release"
+      ]
+    },
+    "workspace": {
+      "type": "string",
+      "description": "Workspace folder name, e.g. sw-753-incremental-tsc"
+    },
+    "ticket": { "type": "string", "description": "Tracker key, e.g. SW-753" },
+    "session": { "type": "string", "description": "Claude session id (ask, answer)" },
+    "version": {
+      "type": "string",
+      "description": "werkmeister version+commit that wrote the line, e.g. 0.91.3+1dbfac70"
+    },
+    "feature": { "type": "string", "description": "queue.*: the feature asking for capacity" },
+    "position": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "queue.wait: place in the queue"
+    },
+    "waited_s": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "queue.admit: seconds since the matching queue.wait; answer: seconds since the matching ask"
+    },
+    "kind": {
+      "enum": ["question", "plan", "permission", "wrap-up"],
+      "description": "ask: what the person is asked for"
+    },
+    "stage": {
+      "type": "string",
+      "pattern": "^\\d{2}_[a-z_]+$",
+      "description": "stage.done: the stage whose output was committed"
+    },
+    "commit": {
+      "type": "string",
+      "description": "stage.done: record-branch commit that first filled output/"
+    },
+    "run": {
+      "type": "string",
+      "description": "gate.*: id shared by a gate.start and its gate.end"
+    },
+    "exit": {
+      "type": "integer",
+      "description": "gate.end: exit code; 75 = retry later (host load)"
+    },
+    "retry": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "gate.start: 0 for the first run in this workspace, n for the nth rerun"
+    },
+    "pr": { "type": "string", "format": "uri", "description": "pr.*, release: the PR URL" },
+    "tag": { "type": "string", "description": "release: the release tag" }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": { "properties": { "event": { "const": "queue.wait" } } },
+      "then": { "required": ["feature", "position"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "queue.admit" } } },
+      "then": { "required": ["feature", "waited_s"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "ask" } } },
+      "then": { "required": ["session", "kind"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "answer" } } },
+      "then": { "required": ["session", "waited_s"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "stage.done" } } },
+      "then": { "required": ["stage", "commit"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "gate.start" } } },
+      "then": { "required": ["run", "retry"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "gate.end" } } },
+      "then": { "required": ["run", "exit"] }
+    },
+    {
+      "if": { "properties": { "event": { "enum": ["pr.open", "pr.merged"] } } },
+      "then": { "required": ["pr"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "release" } } },
+      "then": { "required": ["pr", "tag"] }
+    }
+  ],
+  "examples": [
+    {
+      "v": 1,
+      "at": "2026-11-15T06:05:40Z",
+      "event": "queue.wait",
+      "workspace": "sw-755-up-timeout-setting",
+      "feature": "sw-755-up-timeout-setting",
+      "position": 1
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T06:51:10Z",
+      "event": "queue.admit",
+      "workspace": "sw-755-up-timeout-setting",
+      "feature": "sw-755-up-timeout-setting",
+      "waited_s": 2730
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T07:00:00Z",
+      "event": "ask",
+      "workspace": "sw-753-incremental-tsc",
+      "ticket": "SW-753",
+      "session": "70c75897-dca2-4bf6-8e4f-9e9452f903a0",
+      "kind": "question"
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T07:06:25Z",
+      "event": "answer",
+      "workspace": "sw-753-incremental-tsc",
+      "ticket": "SW-753",
+      "session": "70c75897-dca2-4bf6-8e4f-9e9452f903a0",
+      "waited_s": 385
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T06:14:12Z",
+      "event": "stage.done",
+      "workspace": "sw-753-incremental-tsc",
+      "ticket": "SW-753",
+      "stage": "02_spec",
+      "commit": "a1b2c3d"
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T07:20:00Z",
+      "event": "gate.start",
+      "workspace": "sw-753-incremental-tsc",
+      "run": "g1",
+      "retry": 0,
+      "version": "0.91.0+eb91a575"
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T07:31:58Z",
+      "event": "gate.end",
+      "workspace": "sw-753-incremental-tsc",
+      "run": "g1",
+      "exit": 0
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T15:34:09Z",
+      "event": "pr.open",
+      "workspace": "sw-753-incremental-tsc",
+      "ticket": "SW-753",
+      "pr": "https://github.com/jbbz-sandbox/werkmeister/pull/871"
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T15:42:29Z",
+      "event": "pr.merged",
+      "workspace": "sw-753-incremental-tsc",
+      "ticket": "SW-753",
+      "pr": "https://github.com/jbbz-sandbox/werkmeister/pull/871"
+    },
+    {
+      "v": 1,
+      "at": "2026-11-16T09:00:00Z",
+      "event": "release",
+      "workspace": "sw-753-incremental-tsc",
+      "pr": "https://github.com/jbbz-sandbox/werkmeister/pull/871",
+      "tag": "werkmeister@0.91.4"
+    }
+  ]
+}
