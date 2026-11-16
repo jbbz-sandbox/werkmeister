@@ -1,5 +1,19 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.92.0
+
+### Minor Changes
+
+- 06090ba: SW-574: `werkmeister pr gate` and `pr open` no longer start a service's container for a test row another row in the same gate already runs. A service is covered when its registry entry sets `test_covered_by: <service>`, or when its command matches the other row's except for a strict subset of its `--filter`s. The covered row reads `covered by <service>` and passes or fails with that row.
+
+### Patch Changes
+
+- b5f6186: Capacity queue (SW-729): a queued whole-feature head that would fit no longer holds every start behind it. Only another feature stopping starts that head, and room can free without one (a timed-out gate's stop, a Docker restart), so on an idle host starts waited 10 minutes and exited 75 again and again. The exit-75 message now says how long the head has really waited, the same figure `budget status` shows, instead of always "5 min".
+- 9661069: SW-736: `04_propose` step 2 now runs the release check after the commit. A check that compares the branch with its base in git history (such as `changeset status --since`) does not see an uncommitted release entry.
+- b5dd7d4: SW-771: the person approves the PR file in every run. An autonomous `04_propose` self-check now asks for the approval through the question tool instead of setting `status: approved` itself, and `pr-rules.md` and the stop points say so.
+- 4218982: SW-796: a CPU or wall-time number that a decision or acceptance criterion rests on now has to come from paired, alternating A/B runs (at least 3 each) through `with-temp-home` with its load wait on, never a single run or `--no-wait`, with every run's numbers and the host load recorded. The rule is in the feature research stage (step 3) and in every stage that writes `exercise.md`.
+- e39e4ef: SW-801: in an autonomous run, a question no option settles (none meets the acceptance criteria, or the issue says to ask the person) stays `status: proposed` and stops the run for the person. The agent never flips a question it has put to the person. The rule is in the stage self-checks and the brief's "Nobody is asked" line.
+
 ## 0.91.5
 
 ### Patch Changes
