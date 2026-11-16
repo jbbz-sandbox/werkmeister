@@ -10,6 +10,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import YAML from "yaml";
 
+import { waitingPath } from "./agent_state.js";
+import { COMPOSE_FILE } from "./compose_file.js";
 import { containerOf } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { writeFakes } from "./fixture_fakes.js";
@@ -64,7 +66,11 @@ export interface FixtureOptions {
   config?: Record<string, unknown>;
   /** Containers the fake docker shows the scheduler as running, so a start can wait for capacity (SW-685). */
   containers?: FixtureContainer[];
-  /** Features in the waiting queue, `scheduler/queue.json` (SW-685). */
+  /**
+   * The waiting queue, `scheduler/queue.json` (SW-685), one `<feature>[:<waitedMin>[:<service>,...]]` each.
+   * With a wait, the waiter also gets a workspace with a compose.yml, a lease and a waiting.json whose
+   * `since` is that many minutes back (and `services`, a service start), so admission prices and ages it (SW-809).
+   */
   queue?: string[];
 }
 
@@ -81,6 +87,8 @@ export interface FixtureContainer {
 
 // Names become folders under the fixture and lines in the fakes, from a pre-approved wrapper's input.
 const NAME = /^[a-z0-9][a-z0-9-]*$/;
+const QUEUE_ENTRY =
+  /^([a-z0-9][a-z0-9-]*)(?::(\d+)(?::([a-z0-9][a-z0-9-]*(?:,[a-z0-9][a-z0-9-]*)*))?)?$/;
 
 // The only config.yaml keys --config may add: others (jira, github_ingest, paths…) reach real services or repos from a pre-approved run.
 const CONFIG_KEYS = ["budget"];
@@ -197,10 +205,10 @@ export function fixturePreset({
         `--running: bad value ${JSON.stringify(bad)}: feature and workspace are lowercase names, startedAt a date, memory and nanoCpus whole numbers`,
       );
   }
-  const badName = opts.queue?.find((f) => !NAME.test(f));
-  if (badName !== undefined)
+  const badEntry = opts.queue?.find((q) => !QUEUE_ENTRY.test(q));
+  if (badEntry !== undefined)
     throw new Error(
-      `--queue: bad feature ${JSON.stringify(badName)}: lowercase names, comma-separated`,
+      `--queue: bad entry ${JSON.stringify(badEntry)}: <feature>[:<waitedMin>[:<service>,...]], lowercase names and whole minutes`,
     );
   const libChange = "packages/lib/index.js";
   const gateChange = change ?? (opts.fragmentChange === undefined ? libChange : undefined);
@@ -332,21 +340,48 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
   git(workspace, "remote", "add", "origin", record);
   git(workspace, "push", "-q", "-u", "origin", FIXTURE_BRANCH);
 
+  const leases: Record<string, { slot: number; workspace: string }> = {};
   if (opts.slotsFull) {
-    const leases: Record<string, { slot: number; workspace: string }> = {};
     for (let slot = 1; slot <= YAML.parse(PORTS).feature_slots.count; slot++) {
       const other = path.join(root, "ws", `other-${slot}`);
       fs.mkdirSync(other, { recursive: true });
       leases[`other-${slot}`] = { slot, workspace: other };
     }
-    // leasesPath() beside configFile: the env that points it here isn't set yet in this process.
-    write(path.join(path.dirname(configFile), "scheduler", "leases.json"), JSON.stringify(leases));
   }
-  if (opts.queue)
-    write(
-      path.join(path.dirname(configFile), "scheduler", "queue.json"),
-      JSON.stringify(opts.queue),
+  const now = Date.now();
+  const queue = (opts.queue ?? []).map((entry, i) => {
+    const [feature = entry, waitedMin, services] = QUEUE_ENTRY.exec(entry)?.slice(1) ?? [];
+    if (waitedMin === undefined) return feature;
+    const ws = path.join(root, "ws", feature);
+    const names = services?.split(",");
+    // 1 CPU and 1 GiB each, so `budget status` and admission have a cost to show and price.
+    const compose = Object.fromEntries(
+      (names ?? ["app"]).map((s) => [
+        s,
+        {
+          image: "fixture",
+          deploy: { resources: { limits: { cpus: "1" }, reservations: { memory: "1g" } } },
+        },
+      ]),
     );
+    write(path.join(ws, COMPOSE_FILE), YAML.stringify({ services: compose }));
+    leases[feature] = { slot: Object.keys(leases).length + 1, workspace: ws };
+    write(
+      waitingPath(ws),
+      JSON.stringify({
+        position: i + 1,
+        reason: "waiting for capacity",
+        ...(names && { services: names }),
+        since: new Date(now - Number(waitedMin) * 60_000).toISOString(),
+      }),
+    );
+    return feature;
+  });
+  // leasesPath() beside configFile: the env that points it here isn't set yet in this process.
+  if (Object.keys(leases).length)
+    write(path.join(path.dirname(configFile), "scheduler", "leases.json"), JSON.stringify(leases));
+  if (opts.queue)
+    write(path.join(path.dirname(configFile), "scheduler", "queue.json"), JSON.stringify(queue));
   const containers = (opts.containers ?? []).map((c) => {
     const ws = path.join(root, "ws", c.workspace);
     fs.mkdirSync(ws, { recursive: true });
@@ -417,7 +452,7 @@ const SCRIPT = `#!/bin/sh
 # Generated by \`werkmeister workspace init\` (SW-292); rerun it to regenerate.
 # Runs this workspace's own built werkmeister CLI against a seeded fixture workspace, removed on exit:
 # temp HOME and registry, a local bare origin, logging fakes for gh and docker, dead Docker and daemon.
-# usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]...] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...
+# usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...
 # It only ever runs that CLI, never another command, so one allow rule can cover it (SW-172, SW-231);
 # --exec-runs, given first, also runs the registry's rows on the host, so the workspace asks before it (SW-473).
 ws=$(cd "$(dirname "$0")/../.." && pwd -P) || exit 1

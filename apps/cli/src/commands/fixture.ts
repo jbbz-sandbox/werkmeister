@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]...] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -21,7 +21,7 @@ import {
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]...] [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -69,9 +69,11 @@ export function parse(argv: string[]) {
     else if (a === "--merged") opts.merged = true;
     else if (a === "--behind") opts.behind = true;
     else if (a === "--slots-full") opts.slotsFull = true;
-    else if (a === "--queue" && argv[i + 1] !== undefined)
-      opts.queue = (argv[++i] as string).split(",");
-    else if (a === "--running" && argv[i + 1] !== undefined) {
+    else if (a === "--queue" && argv[i + 1] !== undefined) {
+      // An entry with a wait is one waiter whose commas list its services (SW-809).
+      const v = argv[++i] as string;
+      opts.queue = [...(opts.queue ?? []), ...(v.includes(":") ? [v] : v.split(","))];
+    } else if (a === "--running" && argv[i + 1] !== undefined) {
       // fixturePreset checks each value; here only the shape: five tab-separated columns a line.
       const file = inside(process.cwd(), argv[++i] as string);
       if (!file || !fs.existsSync(file)) return { bad: a };

@@ -283,6 +283,46 @@ test("containers and queue seed what the scheduler reads from Docker and queue.j
   });
 });
 
+test("a queue entry with a wait seeds its lease, compose.yml and waiting.json (SW-809)", async () => {
+  const { readQueue, waiters } = await import("../dist/scheduler_state.js");
+  const { readWaiting } = await import("../dist/agent_state.js");
+  await withFixtureWorkspace(
+    async (fx) => {
+      const before = Date.now();
+      assert.deepEqual(readQueue(), ["head", "svc", "plain"]);
+      const leases = readLeases();
+      assert.equal(leases.head?.workspace, path.join(fx.root, "ws", "head"));
+      assert.equal(leases.svc?.workspace, path.join(fx.root, "ws", "svc"));
+      assert.equal(leases.plain, undefined, "a name-only entry seeds only its name");
+      assert.notEqual(leases.head.slot, leases.svc.slot);
+      assert.ok(fs.existsSync(path.join(leases.head.workspace, "compose.yml")));
+      const head = readWaiting(leases.head.workspace);
+      const waited = before - Date.parse(head.since);
+      assert.ok(waited >= 239 * 60_000 && waited < 240 * 60_000, `waited ${waited} ms`);
+      assert.equal(head.services, undefined);
+      assert.deepEqual(readWaiting(leases.svc.workspace).services, ["api", "web"]);
+      const [h, s, p] = waiters(readQueue(), []);
+      assert.equal(Math.round(h.waitedMs / 60_000), 239);
+      assert.ok(h.cost.cpus > 0, "a whole-feature head is priced from its compose.yml");
+      assert.equal(s.gate, false);
+      assert.equal(Math.round(s.waitedMs / 60_000), 3);
+      assert.deepEqual(p, { feature: "plain", waitedMs: 0, gate: false });
+    },
+    { queue: ["head:239", "svc:3:api,web", "plain"] },
+  );
+  const { fixturePreset } = await import("../dist/fixture_workspace.js");
+  for (const bad of [
+    "head:",
+    "head:-1",
+    "head:1.5",
+    "head:2:",
+    "head:2:API",
+    "head:2:a,,b",
+    "head:2:a:b",
+  ])
+    assert.throws(() => fixturePreset({ queue: [bad] }), /--queue: bad entry/, bad);
+});
+
 test("a seed value that could leave the fixture or isn't a number is refused (SW-685)", async () => {
   const { fixturePreset } = await import("../dist/fixture_workspace.js");
   const ok = {
@@ -300,7 +340,7 @@ test("a seed value that could leave the fixture or isn't a number is refused (SW
     { nanoCpus: -1 },
   ])
     assert.throws(() => fixturePreset({ containers: [{ ...ok, ...bad }] }), /--running: bad value/);
-  assert.throws(() => fixturePreset({ queue: ["ok", "-x"] }), /--queue: bad feature "-x"/);
+  assert.throws(() => fixturePreset({ queue: ["ok", "-x"] }), /--queue: bad entry "-x"/);
   assert.doesNotThrow(() => fixturePreset({ containers: [ok], queue: ["ok"] }));
 });
 
