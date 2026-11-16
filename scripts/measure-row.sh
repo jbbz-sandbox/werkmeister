@@ -1,7 +1,7 @@
 #!/bin/sh
 # One cold gate row with its cost and the load around it (SW-790, from SW-751's measure.sh).
 # Run in the service's container from the repo root, e.g.:
-#   docker exec -w /app <workspace>-werkmeister-core sh scripts/measure-row.sh -w <workspace> -o <dir> [-l label] [-- cmd...]
+#   docker exec -w /app <feature>-werkmeister-core sh scripts/measure-row.sh -w <workspace path> -o <dir> [-l label] [-- cmd...]
 # Writes <dir>/<label>/: row.log, summary.json (turbo --summarize), cpu-samples.txt (<s> <cores> every 5 s),
 # totals.txt. Waits first while the VM is busier than ROW_LOAD_LIMIT cores (default 1.0), up to
 # ROW_LOAD_WAIT s (default 600), then exits 75 without measuring. scripts/ab-row.sh runs it per A/B side.
@@ -27,8 +27,7 @@ shift $((OPTIND - 1))
 wrap=$ws/.werkmeister/bin/with-temp-home
 [ -x "$wrap" ] || { echo "measure-row: no $wrap; is -w the workspace folder?" >&2; exit 2; }
 [ "$PWD" = /app ] && [ -f turbo.json ] || { echo "measure-row: run from /app in the container (docker exec -w /app)" >&2; exit 2; }
-# The container mounts every workspace and the real ~/.werkmeister: write only under this one.
-case $out/ in "$ws"/*) ;; *) echo "measure-row: -o $out is outside $ws" >&2; exit 2 ;; esac
+own_out measure-row
 case $label in "" | .* | */*) echo "measure-row: -l takes a plain name, got '$label'" >&2; exit 2 ;; esac
 [ "$#" -gt 0 ] || set -- pnpm turbo run typecheck test --continue --force --summarize \
   --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core --filter=werkmeister-plugin
@@ -36,17 +35,16 @@ dir=$out/$label
 
 wait_quiet || exit $?
 mkdir -p "$dir" || exit 1
-cg() { awk '/^usage_usec/ { print $2 }' /sys/fs/cgroup/cpu.stat; }
 load() { cut -d' ' -f1-3 /proc/loadavg | tr ' ' /; }
 load_before=$(load)
 v0=$(vm_cpu_usec)
-c0=$(cg)
+c0=$(cgroup_usec)
 rm -rf .turbo/runs
 t0=$(date +%s.%N)
 (
   prev=$c0
   while sleep 5; do
-    now=$(cg)
+    now=$(cgroup_usec)
     awk -v t0="$t0" -v a="$prev" -v b="$now" -v t="$(date +%s.%N)" 'BEGIN { printf "%.0f %.2f\n", t - t0, (b - a) / 5e6 }'
     prev=$now
   done
@@ -58,7 +56,7 @@ trap 'exit 130' HUP INT TERM
 "$wrap" --no-wait "$@" >"$dir/row.log" 2>&1
 rc=$?
 t1=$(date +%s.%N)
-c1=$(cg)
+c1=$(cgroup_usec)
 v1=$(vm_cpu_usec)
 load_after=$(load)
 cp .turbo/runs/*.json "$dir/summary.json" 2>/dev/null
