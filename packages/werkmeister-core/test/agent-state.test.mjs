@@ -608,7 +608,7 @@ test("pause gate: PreToolUse ends the turn and denies, UserPromptSubmit blocks, 
 });
 
 // SW-181: waiting.json holds the session the same way; paused wins when both exist.
-const { writeWaiting, serviceWaitContext, writeWakeNudge, liveWaiting } = await import(
+const { writeWaiting, serviceWaitContext, writeWakeNudge, liveWaiting, waitingPath } = await import(
   "../dist/agent_state.js"
 );
 
@@ -625,6 +625,41 @@ test("waiting gate: denies tool calls and blocks prompts with the queue position
   );
   writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: false });
   assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).stopReason, PAUSED_REASON);
+});
+
+// SW-713: a waiting.json its feature's queue entry outlived held the session with a stale position
+// while budget status showed nothing waiting.
+test("waiting gate: a waiting.json the queue no longer holds is cleared and holds nothing", () => {
+  const dir = workspace("j-wait-stale", null);
+  write(path.join(dir, ".env"), "FEATURE=stale\n");
+  const cfg = path.join(root, "stale-home", "config.yaml");
+  const queue = path.join(path.dirname(cfg), "scheduler", "queue.json");
+  const was = process.env.WERKMEISTER_CONFIG_FILE;
+  process.env.WERKMEISTER_CONFIG_FILE = cfg;
+  const old = (ms) => {
+    const when = new Date(Date.now() - ms);
+    fs.utimesSync(waitingPath(dir), when, when);
+  };
+  try {
+    write(queue, JSON.stringify(["stale"]));
+    writeWaiting(dir, { position: 2, reason: "waiting for capacity" });
+    old(60_000);
+    assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).continue, false, "still queued");
+
+    write(queue, JSON.stringify(["other"]));
+    writeWaiting(dir, { position: 2, reason: "waiting for capacity" });
+    assert.equal(
+      pauseGate({ hook_event_name: "PreToolUse" }, dir).continue,
+      false,
+      "just written: the queue may not have caught up",
+    );
+    old(60_000);
+    assert.equal(pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir), null);
+    assert.equal(fs.existsSync(waitingPath(dir)), false);
+  } finally {
+    if (was === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+    else process.env.WERKMEISTER_CONFIG_FILE = was;
+  }
 });
 
 // SW-545: a service start waiting for capacity (waiting.json with `services`, SW-540) is the session's
