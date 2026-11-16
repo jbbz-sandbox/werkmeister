@@ -155,18 +155,27 @@ test("run-tests.sh given .mjs files runs only those", () => {
     for (const n of ["one", "two"]) {
       fs.writeFileSync(
         path.join(dir, "test", `${n}.test.mjs`),
-        `import { test } from "node:test";\ntest("${n}", () => console.log("ran ${n}"));\n`,
+        `import { test } from "node:test";\ntest("${n}", () => console.log("ran ${n} " + (process.env.NODE_TEST_CONTEXT ? "isolated" : "shared")));\n`,
       );
       fs.writeFileSync(path.join(dir, "test", `${n}.smoke.mjs`), `console.log("smoke ${n}");\n`);
     }
+    fs.writeFileSync(path.join(dir, "test", "shared-process.list"), "test/one.test.mjs\n");
     const out = execFileSync("sh", ["run-tests.sh", "test/one.test.mjs", "test/two.smoke.mjs"], {
       cwd: dir,
       env,
       encoding: "utf8",
     });
-    assert.match(out, /ran one/);
+    assert.match(out, /ran one shared/);
     assert.match(out, /smoke two/);
     assert.doesNotMatch(out, /ran two|smoke one/);
+    // SW-802: listed files share one process, the rest stay one process per file.
+    const both = execFileSync("sh", ["run-tests.sh", "test/one.test.mjs", "test/two.test.mjs"], {
+      cwd: dir,
+      env,
+      encoding: "utf8",
+    });
+    assert.match(both, /ran one shared/);
+    assert.match(both, /ran two isolated/);
     const smokeOnly = execFileSync("sh", ["run-tests.sh", "test/one.smoke.mjs"], {
       cwd: dir,
       env,
