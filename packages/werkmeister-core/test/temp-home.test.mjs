@@ -87,6 +87,30 @@ test("corepack keeps the caller's cache unless COREPACK_HOME is already set", ()
   }
 });
 
+// SW-799: scratch dirs a wrapped command makes in os.tmpdir() go with the temp HOME.
+test("TMPDIR is the temp HOME's own dir, so os.tmpdir() scratch is gone after exit (SW-799)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const r = spawnSync(
+      bin,
+      ["node", "-e", "console.log(require('os').tmpdir() + '\\n' + process.env.HOME)"],
+      { encoding: "utf8" },
+    );
+    assert.equal(r.status, 0, r.stderr);
+    const [tmpdir, home] = r.stdout.trim().split("\n");
+    assert.equal(tmpdir, home, "TMPDIR is the temp HOME");
+    // realpath both sides: macOS's /var is a symlink to /private/var.
+    assert.equal(
+      fs.realpathSync(path.dirname(tmpdir)),
+      fs.realpathSync(os.tmpdir()),
+      "under the caller's temp dir",
+    );
+    assert.ok(!fs.existsSync(tmpdir), `${tmpdir} removed after exit`);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // SW-285: OrbStack and Docker Desktop keep the compose plugin and context under ~/.docker.
 test("DOCKER_CONFIG keeps the caller's ~/.docker unless already set, exported before HOME swaps (SW-285)", () => {
   const { root, bin } = wrapper();

@@ -30,6 +30,8 @@ no_wait=\${WERKMEISTER_NO_WAIT:-}
 # 75: the wait is spent and load is still over, so running would pile on (SW-540); any other failure runs.
 } || { s=$?; [ "$s" -ne 75 ] || exit 75; }
 tmp=$(mktemp -d) || exit 1
+# os.tmpdir() scratch from the wrapped command goes with the temp HOME (SW-799).
+export TMPDIR="$tmp"
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' HUP INT TERM
 # Corepack keeps pnpm under HOME; without this a fresh HOME re-downloads it every run.
