@@ -326,6 +326,29 @@ test("grantWaiters dequeues a waiter with no local services once up starts it (S
   }
 });
 
+// SW-737: a head whose re-up throws (HOST_LOAD, NO_COMPOSE, ...) aborted the whole pass, so every
+// tick failed on it and the waiters behind it were never started, on an idle host too.
+test("grantWaiters starts the waiters behind a head whose up throws, and keeps that head queued", async () => {
+  const prev = process.env.WERKMEISTER_FIXTURE;
+  process.env.WERKMEISTER_FIXTURE = "1";
+  try {
+    await withHome(async (home) => {
+      const k8s = workspace(home, "services: {}\n");
+      fs.writeFileSync(path.join(k8s, ".env"), "FEATURE=k8s\nSLOT=4\n");
+      const broken = path.join(home, "broken");
+      fs.mkdirSync(path.join(broken, ".werkmeister"), { recursive: true }); // no compose.yml: up throws
+      writeLeases({ broken: { slot: 3, workspace: broken }, k8s: { slot: 4, workspace: k8s } });
+      await enqueue("broken", broken);
+      await enqueue("k8s", k8s);
+      assert.deepEqual(await grantWaiters(), ["k8s"]);
+      assert.deepEqual(readQueue(), ["broken"]);
+    });
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_FIXTURE;
+    else process.env.WERKMEISTER_FIXTURE = prev;
+  }
+});
+
 // SW-630: a setup service's install ran 78 min at load ~413 and compose's --wait gave up at 20 min.
 const SETUP_COMPOSE = `services:
   install:

@@ -10,6 +10,15 @@ import * as path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const ops: string[] = [];
+vi.mock("werkmeister-core/scheduler_client", async (orig) => ({
+  ...(await orig<typeof import("werkmeister-core/scheduler_client")>()),
+  // Local as before; a grant is recorded and reported handed to the daemon.
+  schedulerOp: async (op: string, _args: unknown, local: () => Promise<unknown>) => {
+    ops.push(op);
+    return op === "grant-later" ? 1 : local();
+  },
+}));
 vi.mock("werkmeister-core/proc", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/proc")>()),
   run: vi.fn(),
@@ -350,5 +359,45 @@ describe("admitServiceStart", () => {
     expect(err.message).toContain("running: other (3 CPUs, 0.0 GiB, working)");
     expect(err.message).toContain("Rerun the same command; nothing to ask a person.");
     expect(readQueue()).toEqual([]);
+  });
+
+  // SW-737: it released core with stop(grant: false); giving up left that room to nobody.
+  it("a released start that times out runs a grant for those still waiting", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ other: { slot: 1, workspace: other }, mine: { slot: 2, workspace: mine } });
+    let mineCpus = 3;
+    both(other, mine, 3, () => mineCpus);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      { name: "mine-core", status: "running", service: "core" } as never,
+    ]);
+    vi.mocked(composeStop).mockImplementation(async (f: string) => {
+      if (f === "mine") mineCpus = 0;
+      return true;
+    });
+    await enqueue("later", workspace("later", { autonomous: true }));
+    ops.length = 0;
+    await expect(
+      admitServiceStart("mine", mine, "api", { sleep: async () => {}, waitMs: 0 }),
+    ).rejects.toMatchObject({ code: "NO_CAPACITY" });
+    expect(ops.at(-1)).toBe("grant-later");
+    expect(readQueue()).toEqual(["later"]);
+  });
+
+  it("a start that gives up with nobody else waiting runs no grant", async () => {
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), ON_DEMAND);
+    writeLeases({ mine: { slot: 2, workspace: mine } });
+    busy(other, 7);
+    ops.length = 0;
+    await expect(
+      admitServiceStart("mine", mine, "api", { sleep: async () => {}, waitMs: 0 }),
+    ).rejects.toMatchObject({ code: "NO_CAPACITY" });
+    expect(ops).not.toContain("grant-later");
   });
 });
