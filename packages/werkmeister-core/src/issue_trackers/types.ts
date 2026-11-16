@@ -36,7 +36,18 @@ export interface IssueComment {
   body: string;
 }
 
-/** One issue, as much of it as the tracker returned. `ref` is always set. */
+/**
+ * One issue from Jira or GitHub, with as much as the tracker returned. Only
+ * `ref` is always set; the rest is absent when the tracker did not send it.
+ *
+ * @example
+ * ```ts
+ * import { type Issue, issueTracker } from "werkmeister-core/sdk";
+ *
+ * const issue: Issue | null = await issueTracker({ text: "PROJ-12" }).fetchIssue("PROJ-12");
+ * if (issue) console.log(`${issue.ref} [${issue.status ?? "?"}] ${issue.title ?? ""}`);
+ * ```
+ */
 export interface Issue {
   /** The canonical ref: `PROJ-12`, `owner/repo#12`. */
   ref: string;
@@ -56,7 +67,7 @@ export interface Issue {
   description?: string;
   /** The issue's web page. */
   url?: string;
-  /** Oldest first; absent when not fetched. */
+  /** The comments, oldest first, each with `author`, `body` and maybe `created`; absent when not fetched. */
   comments?: IssueComment[];
 }
 
@@ -86,17 +97,31 @@ export interface TrackerAuth {
   fix: string;
 }
 
-/** One tracker's implementation; get the right one from `issueTracker()`, never by naming it. */
+/**
+ * One issue tracker (Jira or GitHub): parse issue refs, build links, and read,
+ * move, comment on and file issues. Get one from {@link issueTracker}. The
+ * methods that return a Promise call the tracker over the network, in-process;
+ * the others only read the config.
+ *
+ * @example
+ * ```ts
+ * import { issueTracker, type IssueTrackerStrategy } from "werkmeister-core/sdk";
+ *
+ * const tracker: IssueTrackerStrategy = issueTracker();
+ * const ref = tracker.parseRef("feature/PROJ-42-login");
+ * if (ref) await tracker.updateIssue(ref, { comment: "Picked up." });
+ * ```
+ */
 export interface IssueTrackerStrategy {
-  /** The key `overrides.issue_tracker` selects this tracker by. */
+  /** The tracker's id, `"jira"` or `"github"`: the value `overrides.issue_tracker` in the config selects it by. */
   readonly id: TrackerId;
   /** The tracker's name in prose and buttons: `Jira`, `GitHub`. */
   readonly label: string;
   /** What a ref looks like, for prompts and placeholders: `PROJ-123`. */
   readonly refExample: string;
-  /** The tracker's own name for each issue type in the filing guide, when it has types (GitHub uses labels). */
+  /** The tracker's own name for each of `bug`, `feature` and `task`; absent when it has no issue types (GitHub uses labels). */
   readonly issueTypes?: Record<IssueKind, string>;
-  /** A regex the form and wizard hold a typed ref to, or null for any text. */
+  /** A regular expression a typed ref must match, or null when any text goes. */
   readonly refPattern: string | null;
   /** The first ref in `text` (a bare id, a short form, a URL, a branch name, a PR body), canonical; null when none. */
   parseRef(text: string): string | null;
@@ -106,15 +131,14 @@ export interface IssueTrackerStrategy {
   holds(ref: string): boolean;
   /** The issue's web page, or null when it cannot be built from config. */
   url(ref: string): string | null;
-  /** One issue with its description and comments. Null when it cannot be read, the reasons pushed onto *why*; never throws. */
+  /** One issue with its description and comments. Null when it cannot be read, with the reasons pushed onto `why`. Never throws. */
   fetchIssue(ref: string, why?: string[]): Promise<Issue | null>;
   /** Many issues at once (title, status, url at least). Refs it cannot read are left out; never throws. */
   fetchIssues(refs: string[]): Promise<Record<string, Issue>>;
   /**
-   * The issues guide's routing: the "Where" table's app-code row, the
-   * search-first step, and where and how to file werkmeister issues when this
-   * tracker takes those too (absent: GitHub). `issueId` is the workspace's own issue, "" when none;
-   * `workspace` its name, searched for too since issues filed from a workspace name it.
+   * Markdown that tells an agent where to file a bug and how to search for an
+   * existing one first. `issueId` is the workspace's own issue ("" when none)
+   * and `workspace` its name; both go into the search queries.
    */
   filingGuide(
     issueId: string,
@@ -124,7 +148,7 @@ export interface IssueTrackerStrategy {
     row: string;
     /** The search-first step as one markdown paragraph, with the queries to run. */
     search: string;
-    /** Where werkmeister's own issues go; absent when they go to GitHub instead. */
+    /** Where bugs in werkmeister itself go; absent when they go to GitHub instead. */
     werkmeister?: {
       /** The tracker and project, in prose. */
       where: string;
@@ -133,19 +157,20 @@ export interface IssueTrackerStrategy {
     };
   };
   /**
-   * File a new issue; it comes back with its ref and url. Absent when agents
-   * file with the tracker's own CLI (GitHub: `gh issue create`). Throws with the tracker's reason.
+   * Files a new issue (`project`, `type`, `title`, `body`) and resolves with
+   * its ref and url. Absent on GitHub, where you file with `gh issue create`.
+   * Rejects with the tracker's reason.
    */
   createIssue?(issue: NewIssue): Promise<Issue>;
-  /** Link `ref` "relates to" `to`; only trackers with `createIssue` have it. Throws with the tracker's reason on refusal. */
+  /** Links `ref` "relates to" `to`. Only trackers with `createIssue` have it. Rejects with the tracker's reason. */
   linkIssue?(ref: string, to: string): Promise<void>;
   /**
-   * Open work in priority order: `board`'s ready column in board rank when given,
-   * else the scope's open issues. Throws with the tracker's reason.
+   * Open issues in priority order: the given board's ready column (`{ id, ready }`)
+   * in board order, else every open issue the tracker covers. Rejects with the tracker's reason.
    */
   listReady(board?: Board): Promise<Issue[]>;
-  /** Move the issue's status and/or add a comment. Throws with the tracker's reason. */
+  /** Moves the issue to `update.status` (by name) and/or adds `update.comment`. Rejects with the tracker's reason. */
   updateIssue(ref: string, update: IssueUpdate): Promise<void>;
-  /** Whether this machine can read issues, and the one command or doc that fixes it. Never throws. */
+  /** Whether this machine can read issues: `ok` and `who` is signed in, else `reason` and `fix`, the command or doc that repairs it. Never throws. */
   checkAuth(): Promise<TrackerAuth>;
 }

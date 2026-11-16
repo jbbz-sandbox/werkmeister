@@ -116,37 +116,88 @@ export function installedPlaywrightVersion(cwd: string): string | null {
   }
 }
 
-/** What `runFeatureTests` runs, and against which feature. */
+/**
+ * What {@link runFeatureTests} runs, and against which feature.
+ *
+ * @example
+ * ```ts
+ * import { resolveWorkspaceDir, type TestRunArgs } from "werkmeister-core/sdk";
+ *
+ * const args: TestRunArgs = {
+ *   feature: "my-feature",
+ *   workspace: await resolveWorkspaceDir("my-workspace"),
+ *   extraArgs: ["--grep", "checkout"],
+ * };
+ * console.log(`testing ${args.feature} in ${args.workspace}`);
+ * ```
+ */
 export interface TestRunArgs {
-  /** The feature the suite routes to, through the `X-Feature` cookie. */
+  /** The feature the suite's requests route to, through the `X-Feature` cookie. */
   feature: string;
-  /** The workspace root; its folder and each repo worktree under it are searched for a Playwright config. */
+  /** The workspace folder; it and each repo worktree directly under it are searched for a Playwright config. */
   workspace: string;
-  /** Extra arguments passed through to `playwright test`. */
+  /** Extra arguments passed through to `playwright test`, e.g. `["--grep", "login"]`. */
   extraArgs?: string[];
   /** Aborts the Playwright run. */
   signal?: AbortSignal;
 }
 
-/** How a `runFeatureTests` run ended. */
+/**
+ * How a {@link runFeatureTests} run ended.
+ *
+ * @example
+ * ```ts
+ * import { runFeatureTests, type TestRunResult } from "werkmeister-core/sdk";
+ *
+ * const result: TestRunResult = await runFeatureTests({
+ *   feature: "my-feature",
+ *   workspace: "/path/to/workspace",
+ * });
+ * if (result.cwd === null) console.log(result.message);
+ * else console.log(`playwright exited ${result.status} in ${result.cwd}`);
+ * ```
+ */
 export interface TestRunResult {
-  /** Playwright's exit code; 1 when no suite was found. */
+  /** Playwright's exit code (0 means every test passed); 1 when no suite was found. */
   status: number;
-  /** null when no suite was found and nothing ran. */
+  /** The folder the suite ran in; null when no suite was found and nothing ran. */
   cwd: string | null;
-  /** Set only when nothing ran; says why and what to do instead. */
+  /** Set only when nothing ran; says why, and how to validate each service instead. */
   message?: string;
-  /** The feature's slot; null when it holds none and the suite ran by header routing alone. */
+  /** The feature's port slot; null when it holds none and the suite ran by header routing alone. */
   slot: number | null;
 }
 
+// The project's playwright config reads WERKMEISTER_FEATURE (and SANDBOX_FEATURE,
+// until suites move) to attach the X-Feature cookie, so it is set whether or not
+// a slot exists: a feature with no slot still routes by header, which is why the
+// CLI warns rather than refusing.
 /**
- * Run the Playwright suite for *feature*.
+ * Runs the workspace's Playwright suite (`npx playwright test`) against a
+ * feature. It uses the first `playwright.config.{ts,js,mjs}` found in the
+ * workspace folder or a repo worktree under it, and sets `WERKMEISTER_FEATURE`
+ * (and `WERKMEISTER_SLOT` when the feature holds a slot) so the suite routes
+ * its requests to that feature. A feature with no slot still runs, routed by
+ * header alone. Runs in-process; it shells out to `npx` and allows the suite
+ * 10 minutes. Playwright's output goes to your terminal, or through the
+ * werkmeister reporter when there is no terminal.
  *
- * `WERKMEISTER_FEATURE` (and `SANDBOX_FEATURE`, until suites move) is what the project's playwright config reads to attach the
- * `X-Feature` cookie, so it is set whether or not a slot exists — a feature
- * with no slot still routes by header, which is why the CLI warns rather than
- * refusing.
+ * @param args - What to run; see {@link TestRunArgs}.
+ * @returns How the run ended; see {@link TestRunResult}. A failing suite is a
+ *   non-zero `status`, not an error.
+ * @throws {@link SandboxError} with code `NPX_MISSING` when `npx` is not on
+ *   PATH, or `TEST_TIMEOUT` when the suite runs past 10 minutes. An abort
+ *   through `signal` rejects with the underlying process error.
+ *
+ * @example
+ * ```ts
+ * import { resolveWorkspaceDir, runFeatureTests } from "werkmeister-core/sdk";
+ *
+ * const workspace = await resolveWorkspaceDir("my-workspace");
+ * const { status, message } = await runFeatureTests({ feature: "my-feature", workspace });
+ * if (message) console.log(message);
+ * process.exitCode = status;
+ * ```
  */
 export async function runFeatureTests({
   feature,

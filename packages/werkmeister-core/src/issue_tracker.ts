@@ -75,11 +75,23 @@ export function projectTracker(project: Project): IssueTrackerStrategy {
   return FACTORIES[project.tracker](project.scope);
 }
 
-/** Where a lookup happens: a workspace's `project:` and/or text holding an issue ref. */
+/**
+ * Tells {@link issueTracker} which tracker to pick: by project name, or by an
+ * issue ref found in some text. Leave both out for the machine's default tracker.
+ *
+ * @example
+ * ```ts
+ * import { issueTracker, type TrackerAt } from "werkmeister-core/sdk";
+ *
+ * const at: TrackerAt = { project: "payments", text: "PAY-81" };
+ * const tracker = issueTracker(at);
+ * console.log(tracker.label, tracker.url("PAY-81"));
+ * ```
+ */
 export interface TrackerAt {
-  /** A project name from the machine's projects; one not found is warned about once and ignored. */
+  /** A project name from the config's `projects:`. A name not found there prints a warning once and is ignored. */
   project?: string;
-  /** Any text with an issue ref in it (an issue id, branch name, URL); used when `project` is absent or unknown. */
+  /** Any text with an issue ref in it (an issue key, branch name, URL); used when `project` is absent or not found. */
   text?: string;
 }
 

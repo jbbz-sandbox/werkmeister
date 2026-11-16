@@ -76,15 +76,28 @@ export function startPrompt(autonomous: boolean): string {
     : `start the run\n\n${INTERACTIVE_LINE}\n${GATE_LINE}`;
 }
 
-/** start_session's arguments besides initiation, cwd, use_worktree and context. */
+// start_session's arguments besides initiation, cwd, use_worktree and context.
+/**
+ * What you need to start an agent session on a workspace, as
+ * {@link startArgs} returns it.
+ *
+ * @example
+ * ```ts
+ * import { resolveWorkspaceDir, startArgs, type StartArgs } from "werkmeister-core/sdk";
+ *
+ * const args: StartArgs = await startArgs(await resolveWorkspaceDir("my-workspace"));
+ * console.log(`${args.title} (${args.model ?? "default model"})`);
+ * console.log(args.prompt);
+ * ```
+ */
 export interface StartArgs {
-  /** The session title, under 60 characters: issue key and task, else the workspace name, cut with `…`. */
+  /** The session title, under 60 characters: the issue key and task, else the workspace name, cut with `…`. */
   title: string;
-  /** The workspace's model; absent to use the default. */
+  /** The workspace's model; absent when the workspace uses the default. */
   model?: string;
-  /** The first message: `start the run` plus the run limits (autonomous) or the interactive note. */
+  /** The first message: `start the run`, plus the run limits for an autonomous workspace or an interactive note otherwise. */
   prompt: string;
-  /** Points the session at the workspace's `CLAUDE.md` and issue copy. */
+  /** A short note that points the session at the workspace's `CLAUDE.md` and issue copy. */
   background: string;
 }
 

@@ -57,11 +57,32 @@ export interface HostSummary {
   featureCpuPercent: number;
 }
 
-/** One CPU and memory sample across every workspace, from {@link getWorkspaceResources}. */
+/**
+ * One CPU and memory sample across every workspace, as
+ * {@link getWorkspaceResources} returns it.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceResources, type WorkspaceResources } from "werkmeister-core/sdk";
+ *
+ * const res: WorkspaceResources = await getWorkspaceResources();
+ * const busiest = Object.entries(res.projects).sort(([, a], [, b]) => b.cpuPercent - a.cpuPercent)[0];
+ * if (busiest) console.log(`${busiest[0]} uses ${busiest[1].cpuPercent}% CPU`);
+ * console.log(`all workspaces: ${res.host.featureCpuPercent}% CPU on ${res.host.cores} cores`);
+ * ```
+ */
 export interface WorkspaceResources {
-  /** Keyed by compose project, `WorkspaceStatus.project`. */
+  /**
+   * Usage per workspace, keyed by compose project (the `project` field of
+   * {@link WorkspaceStatus}). Each holds `cpuPercent` (percent of one core,
+   * summed over the workspace's containers) and `memMib` (memory in MiB).
+   */
   projects: Record<string, Usage>;
-  /** Machine load and the CPU all feature containers use together. */
+  /**
+   * The machine: `load` (1, 5 and 15 minute load averages), `cores`, and
+   * `featureCpuPercent` (every workspace container's CPU summed, shared
+   * infrastructure left out).
+   */
   host: HostSummary;
 }
 

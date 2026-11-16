@@ -167,19 +167,41 @@ export function buildInterceptRows(
  */
 const STATUS_READ = (cmd: string[]) => runAsyncRunner(cmd, undefined, 15);
 
-/** What `werkmeister feature status --intercepts --json` prints. */
+/**
+ * Telepresence intercepts across every running workspace, as
+ * {@link interceptsSnapshot} returns it. It is the same data
+ * `werkmeister feature status --intercepts --json` prints.
+ *
+ * @example
+ * ```ts
+ * import { interceptsSnapshot, type InterceptsSnapshot } from "werkmeister-core/sdk";
+ *
+ * const snap: InterceptsSnapshot = await interceptsSnapshot();
+ * if (!snap.installed) console.log("telepresence is not installed");
+ * const blocked = snap.intercepts.filter((r) => !r.interceptable);
+ * for (const r of blocked) console.log(`${r.feature}/${r.service}: ${r.blocker}`);
+ * ```
+ */
 export interface InterceptsSnapshot {
-  /** False when telepresence couldn't be asked (absent, disconnected, or errored). */
+  /** False when telepresence couldn't be asked (not installed, disconnected, or errored). */
   available: boolean;
   /** Telepresence is on PATH, connected or not: a disconnected install can still intercept. */
   installed: boolean;
   /** The namespace the telepresence daemon is connected to; null when not connected. */
   connected_namespace: string | null;
-  /** One row per active feature × local service; empty when telepresence is not installed. */
+  /**
+   * One row per running workspace and local service; empty when telepresence is
+   * not installed. Each row has `feature`, `service`, `deployment` (the k8s
+   * Deployment, or null), `interceptable`, `blocker` (why not, or null),
+   * `intercepted`, and `intercepted_by` (the feature holding the intercept, or
+   * null when that can't be read; don't assume an intercept of unknown owner is
+   * yours).
+   */
   intercepts: InterceptRow[];
   /**
-   * Registry services with k8s coordinates, sorted. Present even when telepresence
-   * isn't, so a UI can hide the intercept control on local-only services.
+   * Registry services with k8s coordinates, sorted. Filled even when
+   * telepresence is missing, so a UI can hide the intercept control on
+   * local-only services.
    */
   remote_services: string[];
 }
@@ -256,21 +278,46 @@ export interface FeatureSnapshot {
   crash_loops: CrashLoop[];
 }
 
-/** What `werkmeister feature status --json` prints: the whole machine in one read. */
+/**
+ * The whole machine in one read, as {@link statusSnapshot} returns it. It is
+ * the same data `werkmeister feature status --json` prints.
+ *
+ * @example
+ * ```ts
+ * import { statusSnapshot, type StatusSnapshot } from "werkmeister-core/sdk";
+ *
+ * const snap: StatusSnapshot = await statusSnapshot();
+ * for (const f of snap.features) {
+ *   console.log(`${f.name}: ${f.containers_running}/${f.containers_total} up, ports ${f.port_range}`);
+ * }
+ * console.log(`${snap.summary.available_slots} slots free, ${snap.waiting.length} waiting`);
+ * ```
+ */
 export interface StatusSnapshot {
-  /** Null when the stats sweep failed. */
+  /**
+   * Machine load: `load` (1, 5 and 15 minute averages), `cores`, and
+   * `featureCpuPercent` (all workspace containers' CPU summed). Null when the
+   * docker stats sweep failed.
+   */
   host: HostSummary | null;
-  /** The live shared-infra containers (proxy and the like); stopped ones are left out. */
+  /** The running shared-infrastructure containers (the proxy and the like), each with `service` and a `display` state; stopped ones are left out. */
   infrastructure: InfraContainer[];
-  /** The workspaces dashboard web server. */
+  /** The workspaces dashboard web server: `running`, `pid`, `port`, `url` and `healthy`. */
   mcp_web_server: WebServerStatus;
-  /** One entry per k8s port-forward the registry declares. */
+  /** One entry per k8s port-forward the registry declares: `name`, `listen_port`, `remote_port`, `health_path` and `status` (`alive` when its health check passes). */
   k8s_forwards: ForwardStatus[];
-  /** Every feature holding a slot, in slot order. */
+  /**
+   * Every workspace holding a slot, in slot order. Each has `name`, `slot`,
+   * `services`, `port_range` (`start-end`), `containers` (one-shot setup
+   * containers that finished cleanly are left out), `containers_running`,
+   * `containers_total`, its `intercepts` rows, `cpu_percent` and `mem_mib`
+   * (null when unmeasured), `started_at` and `started_by` (what started it:
+   * `up`, `gate`, `restart` or `person`), and `crash_loops`.
+   */
   features: FeatureSnapshot[];
   /** Features queued for capacity, first in line first. */
   waiting: string[];
-  /** The registry's build and package caches. */
+  /** The registry's build and package caches: `name`, `kind` (`volume` or `host`), `source`, `exists`, `size_bytes` and `created_at`. */
   caches: CacheSnapshot[];
   /** Counts rolled up from the fields above. */
   summary: {
@@ -307,7 +354,29 @@ export async function featureVitals(): Promise<FeatureVitals> {
   return { health, resources };
 }
 
-/** Everything `werkmeister feature status` knows, in one machine-readable read. */
+/**
+ * Reports everything `werkmeister feature status` knows in one machine-readable
+ * read: shared infrastructure, the dashboard server, k8s port-forwards, every
+ * running workspace with its containers, usage and intercepts, the queue
+ * waiting for capacity, and the build caches. Runs in-process; it shells out
+ * to docker and `telepresence`, and asks the werkmeister daemon for the
+ * waiting queue when the daemon is running.
+ *
+ * @returns See {@link StatusSnapshot}. A failed docker stats sweep or cache
+ *   read leaves those fields null or empty instead of failing the call.
+ * @throws {@link SandboxError} when the daemon took the waiting-queue call but
+ *   failed it or did not answer in time.
+ *
+ * @example
+ * ```ts
+ * import { statusSnapshot } from "werkmeister-core/sdk";
+ *
+ * const { features, summary } = await statusSnapshot();
+ * const looping = features.filter((f) => f.crash_loops.length > 0);
+ * console.log(`${summary.total_features} running, infra healthy: ${summary.infra_healthy}`);
+ * for (const f of looping) console.log(`${f.name} is crash-looping`);
+ * ```
+ */
 export async function statusSnapshot(): Promise<StatusSnapshot> {
   const vitals = featureVitals();
   // A missing or old registry must not cost the rest of status.

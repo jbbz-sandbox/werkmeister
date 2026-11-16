@@ -18,27 +18,63 @@ export type QuestionKind =
   | "conflict"
   | "unmatched";
 
-/** One field the scan had to guess, put to Claude. */
+/**
+ * One thing the scan could not settle, put as a question to whoever reads the repo
+ * (usually Claude). {@link collectQuestions} lists them; send back an {@link Answer} per
+ * question you can answer.
+ *
+ * @example
+ * ```ts
+ * import { collectQuestions, planFragment, type Question } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const questions: Question[] = collectQuestions(plan);
+ * for (const q of questions) console.log(`${q.id} (${q.kind}): ${q.prompt}`, q.choices ?? "");
+ * ```
+ */
 export interface Question {
-  /** `<service>.<key>`, or `unmatched.<name>`; an answer names it as `item`. */
+  /** `<service>.<key>`, or `unmatched.<name>`. An answer names it as its `item`. */
   id: string;
-  /** Which rule {@link applyAnswers} checks the answer against. */
+  /**
+   * What is asked, which sets the rule {@link applyAnswers} checks the answer against:
+   * `command`, `health_endpoint`, `environment`, `secrets`, `depends_on`, `conflict` or `unmatched`.
+   */
   kind: QuestionKind;
   /** The service asked about, or null for an unmatched finding. */
   service: string | null;
   /** The question in plain English. */
   prompt: string;
-  /** What the scan already knows (dir, current guess, files), for Claude to start from. */
+  /** What the scan already knows (dir, current guess, files), as a starting point for the answer. */
   facts: Record<string, unknown>;
   /** When set, the answer must be one of these (a subset, for list questions). */
   choices?: unknown[];
 }
 
-/** Claude's answer to one {@link Question}, in the shape of `ANSWER_SCHEMA`. */
+/**
+ * An answer to one {@link Question}, usually from Claude reading the repo. Pass a list
+ * of them to {@link applyAnswers}.
+ *
+ * @example
+ * ```ts
+ * import type { Answer } from "werkmeister-core/sdk";
+ *
+ * const answer: Answer = {
+ *   item: "api.health_endpoint",
+ *   value: "/healthz",
+ *   reason: "src/server.ts registers GET /healthz",
+ *   files_read: ["src/server.ts"],
+ * };
+ * ```
+ */
 export interface Answer {
   /** The `id` of the question answered. */
   item: string;
-  /** The proposed value; checked against the question's kind and choices before use. */
+  /** The proposed value. Checked against the question's kind and choices before use. */
   value: unknown;
   /** One sentence naming the evidence; written into the fragment as a comment. */
   reason: string;
@@ -48,7 +84,32 @@ export interface Answer {
 
 export type Resolver = (repoRoot: string, questions: Question[]) => Promise<Answer[]>;
 
-/** What {@link applyAnswers} made of Claude's answers. */
+/**
+ * What {@link applyAnswers} made of a list of answers: the updated plan, and which
+ * answers it took or refused.
+ *
+ * @example
+ * ```ts
+ * import { type Answer, type ApplyResult, applyAnswers, planFragment } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const answers: Answer[] = [
+ *   {
+ *     item: "api.command",
+ *     value: "npm run dev",
+ *     reason: "package.json dev script",
+ *     files_read: ["package.json"],
+ *   },
+ * ];
+ * const result: ApplyResult = applyAnswers(plan, answers);
+ * for (const r of result.rejected) console.warn(`${r.item}: ${r.reason}`);
+ * ```
+ */
 export interface ApplyResult {
   /** A copy of the plan with the accepted answers applied; the input plan is unchanged. */
   plan: Plan;
@@ -56,7 +117,7 @@ export interface ApplyResult {
   accepted: string[];
   /** Answers left out, each with the rule they broke. */
   rejected: {
-    /** The answer's `item`, as Claude sent it. */
+    /** The answer's `item`, as sent. */
     item: string;
     /** Why it was refused. */
     reason: string;
@@ -85,7 +146,31 @@ export const ANSWER_SCHEMA = {
   },
 };
 
-/** The questions worth asking Claude about *plan*: guessed fields, `.env.example` keys, conflicts and unmatched findings, skipping keys the existing fragment already sets. */
+/**
+ * Lists what is worth asking about a plan: guessed commands and health endpoints,
+ * `.env.example` keys, `depends_on`, values two files disagree on, and findings that
+ * matched no service. Keys the existing fragment already sets are not asked. Runs
+ * in-process; it only builds the questions, and getting them answered (for example by
+ * Claude) is up to you.
+ *
+ * @param plan - A plan from {@link planFragment}.
+ * @returns One {@link Question} per open item, possibly none.
+ * @throws `Error` from the YAML parser when `plan.existing` doesn't parse.
+ *
+ * @example
+ * ```ts
+ * import { collectQuestions, planFragment } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const questions = collectQuestions(plan);
+ * console.log(JSON.stringify(questions, null, 2));
+ * ```
+ */
 export function collectQuestions(plan: Plan): Question[] {
   const existing = plan.existing ? (parseYaml(plan.existing) ?? {}) : {};
   const inFile = (svc: string, key: string) => existing?.services?.[svc]?.[key] !== undefined;
@@ -197,7 +282,38 @@ function applyUnmatched(next: Plan, id: string, value: unknown, reason: string):
   return null;
 }
 
-/** Check each answer against its question and apply the ones that pass, as `inferred` fields. Unknown or repeated items are rejected. */
+/**
+ * Checks each answer against the question it names and applies the ones that pass, as
+ * `inferred` fields. An answer to an unknown question, a second answer to the same
+ * question, or a value that breaks the question's rule is rejected with the reason.
+ * Runs in-process; the input plan is not changed.
+ *
+ * @param plan - The plan the questions came from (see {@link collectQuestions}).
+ * @param answers - The answers, each naming its question's `id` as `item`.
+ * @returns An {@link ApplyResult}: the updated copy of the plan, and the accepted and rejected items.
+ * @throws `Error` from the YAML parser when `plan.existing` doesn't parse.
+ *
+ * @example
+ * ```ts
+ * import { applyAnswers, planFragment, renderFragment } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const { plan: next, accepted } = applyAnswers(plan, [
+ *   {
+ *     item: "api.health_endpoint",
+ *     value: "/healthz",
+ *     reason: "src/server.ts registers GET /healthz",
+ *     files_read: ["src/server.ts"],
+ *   },
+ * ]);
+ * console.log(accepted, renderFragment(next).yaml);
+ * ```
+ */
 export function applyAnswers(plan: Plan, answers: Answer[]): ApplyResult {
   const next: Plan = structuredClone(plan);
   const questions = new Map(collectQuestions(plan).map((q) => [q.id, q]));

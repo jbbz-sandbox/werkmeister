@@ -35,28 +35,43 @@ export interface InitContext {
   isCreate?: boolean;
 }
 
-/** How a workspace's context layer is written, kept fresh and fed to the agent (jit, icm, ...). */
+/**
+ * How a workspace's context layer (its `CLAUDE.md` and whatever else the agent
+ * reads) is written, kept fresh and fed to the agent. There are two: `icm`
+ * (staged pipeline folders) and `jit` (standards and skills delivered as the
+ * agent works). Get the one a workspace uses from {@link strategyFor}. Every
+ * method runs in-process on the workspace's files.
+ *
+ * @example
+ * ```ts
+ * import { resolveWorkspaceDir, strategyFor, type ContextStrategy } from "werkmeister-core/sdk";
+ *
+ * const dir = await resolveWorkspaceDir("my-workspace");
+ * const strategy: ContextStrategy = strategyFor(dir);
+ * if (strategy.check(dir).length) console.log(`synced: ${strategy.sync(dir).wrote.join(", ")}`);
+ * ```
+ */
 export interface ContextStrategy {
-  /** The `context_strategy` value in workspace.yml that selects this strategy. */
+  /** The `context_strategy` value in `workspace.yml` that selects this strategy: `icm` or `jit`. */
   readonly id: StrategyId;
-  /** initWorkspace's context-layer step. Idempotent; re-run on every init. */
+  /** Writes the context layer during `werkmeister workspace init`. Safe to re-run. */
   init(ctx: InitContext): void;
-  /** Called by `up` after secrets are validated and before the slot is allocated. */
+  /** Refreshes the context layer; `werkmeister feature up` calls it before starting containers. */
   refresh(workspaceRoot: string): void;
-  /** Backs `werkmeister skills check` and MCP `skills` tool. Empty array = fresh. */
+  /** Lists what is out of date in the context layer, one message each; empty means fresh. Same as `werkmeister skills check`. */
   check(workspaceRoot: string): string[];
-  /** Backs `werkmeister skills sync` and MCP `skills` tool. */
+  /** Rewrites whatever {@link ContextStrategy.check} found out of date. Same as `werkmeister skills sync`. */
   sync(workspaceRoot: string): {
     /** The files it rewrote; empty when nothing had drifted. */
     wrote: string[];
   };
-  /** SessionStart re-injection text, or null. Backs `werkmeister notes context`. */
+  /** Text to re-inject into the agent's context at session start, or null for none. Same as `werkmeister notes context`. */
   sessionContext(workspaceRoot: string, hookPayload: Record<string, unknown>): string | null;
-  /** PreToolUse gate. Backs `werkmeister internal gate`; must fail open. */
+  /** The pre-tool-use hook gate. It fails open: a problem in the gate never blocks the agent. */
   gate(): void;
-  /** Workspace-relative paths this strategy owns. A trailing `*` in the last segment is a prefix glob. */
+  /** Workspace-relative paths this strategy writes and owns. A trailing `*` in the last segment matches any name with that prefix. */
   ownedPaths(): string[];
-  /** Where graduation (`notes graduate`, `down`, MCP `notes`) finds decisions and records their state. */
+  /** Where the workspace's recorded decisions are listed and marked as graduated into standards. */
   readonly decisions: DecisionSource;
 }
 

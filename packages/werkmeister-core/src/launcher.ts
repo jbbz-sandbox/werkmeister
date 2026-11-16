@@ -4,6 +4,21 @@
  * Pure: the `open`/osascript calls stay in sandbox.ts.
  */
 
+/**
+ * Where an interactive Claude session opens: `"terminal"` for a macOS Terminal
+ * window, `"vscode"` for a VS Code terminal (through the werkmeister VS Code
+ * extension). When you pass none, werkmeister picks the one you are running
+ * in; the `WERKMEISTER_LAUNCHER` environment variable overrides that.
+ *
+ * @example
+ * ```ts
+ * import { type Launcher, resumeClaudeInTerminal } from "werkmeister-core/sdk";
+ *
+ * const where: Launcher = "vscode";
+ * const opened = await resumeClaudeInTerminal("my-workspace", undefined, false, undefined, where);
+ * console.log(opened.launcher);
+ * ```
+ */
 export type Launcher = "terminal" | "vscode";
 
 /** `WERKMEISTER_LAUNCHER` wins (unknown values ignored); else the caller's own terminal; else Terminal.app. */

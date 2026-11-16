@@ -55,7 +55,24 @@ const INFRA_KEYS = [
 ];
 const SETUP_KEYS = ["image", "command", "node_modules_volume"];
 
-/** The fragment text {@link renderFragment} produced, and what changed. */
+/**
+ * The fragment text {@link renderFragment} produced, and what changed. Pass it to
+ * {@link validateFragment}, then {@link writeFragment}.
+ *
+ * @example
+ * ```ts
+ * import { planFragment, type Rendered, renderFragment } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const rendered: Rendered = renderFragment(plan);
+ * if (!rendered.changed) console.log(`${rendered.path} already has everything`);
+ * ```
+ */
 export interface Rendered {
   /** Absolute path the fragment is written to. */
   path: string;
@@ -145,7 +162,30 @@ function sections(plan: Plan): [string, Entries][] {
   ];
 }
 
-/** Render *plan* as fragment text. An existing file only gains missing keys and entries; its own text is kept byte for byte. */
+/**
+ * Renders a plan as `services.yaml` fragment text. A repo with no fragment gets a whole
+ * new file with a header comment. An existing fragment only gains the keys and entries
+ * it lacks; its own text, comments included, is kept byte for byte. Guessed and inferred
+ * values carry their reason as a YAML comment. Runs in-process and writes nothing.
+ *
+ * @param plan - A plan from {@link planFragment} or {@link applyAnswers}.
+ * @returns The {@link Rendered} text, its path, the keys added, and sections that could not be extended.
+ *
+ * @example
+ * ```ts
+ * import { planFragment, renderFragment } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const rendered = renderFragment(plan);
+ * console.log(rendered.yaml);
+ * for (const note of rendered.skipped) console.warn(note);
+ * ```
+ */
 export function renderFragment(plan: Plan): Rendered {
   const original = plan.existing ?? "";
   const doc = parseDocument(original);

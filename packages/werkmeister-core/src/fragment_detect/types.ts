@@ -5,14 +5,44 @@
  */
 import type { Runner } from "../machine_setup.js";
 
-/** `stated`: a file says so; `guessed`: a heuristic, worth a review; `inferred`: Claude answered from the repo. */
+/**
+ * How far a detected field value can be trusted. `stated`: a file in the repo says so.
+ * `guessed`: a heuristic picked it, so review it. `inferred`: an answer accepted by
+ * {@link applyAnswers} supplied it.
+ *
+ * @example
+ * ```ts
+ * import type { Confidence } from "werkmeister-core/sdk";
+ *
+ * const needsReview = (c: Confidence): boolean => c !== "stated";
+ * console.log(needsReview("guessed")); // true
+ * ```
+ */
 export type Confidence = "stated" | "guessed" | "inferred";
 
-/** One field value and where it came from. For a guess, `source` is the reason written as the YAML comment. */
+/**
+ * One planned field of a service or infrastructure entry, and where it came from.
+ * {@link planFragment} fills a `Record<string, FieldValue>` per entry, keyed by the
+ * `services.yaml` field name.
+ *
+ * @example
+ * ```ts
+ * import { type FieldValue, planFragment } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const command: FieldValue | undefined = plan.services[0]?.fields.command;
+ * if (command) console.log(command.value, command.confidence, command.source);
+ * ```
+ */
 export interface FieldValue {
   /** The value as it would be written to the fragment. */
   value: unknown;
-  /** The file or rule it came from; for a guess, the reason. */
+  /** The file or rule it came from. For a guess, the reason, written into the fragment as a YAML comment. */
   source: string;
   /** How far the value can be trusted. */
   confidence: Confidence;
@@ -36,7 +66,24 @@ export interface Finding {
   fields: Record<string, FieldValue>;
 }
 
-/** Something detection left out instead of failing on. */
+/**
+ * A file or detector that {@link planFragment} left out instead of failing on, such as
+ * a manifest that doesn't parse. Listed in `Plan.skipped`.
+ *
+ * @example
+ * ```ts
+ * import { planFragment, type Skipped } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const skipped: Skipped[] = plan.skipped;
+ * for (const s of skipped) console.warn(`skipped ${s.item}: ${s.reason}`);
+ * ```
+ */
 export interface Skipped {
   /** The file or detector left out. */
   item: string;

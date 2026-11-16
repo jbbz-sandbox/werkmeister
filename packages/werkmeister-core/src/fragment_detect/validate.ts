@@ -21,8 +21,39 @@ export function defaultSchemaPath(): string {
 }
 
 /**
- * Check *rendered* against the fragment JSON Schema, then trial-merge it with every other repo's
- * fragment under *reposRoot*. Returns the problems found; empty means safe to write.
+ * Checks a rendered fragment before you write it: first against the fragment JSON
+ * Schema, then by trial-merging it with every other repo's fragment under `reposRoot`,
+ * which catches clashes such as a duplicate service name. Runs in-process and writes
+ * nothing.
+ *
+ * @param rendered - The fragment from {@link renderFragment}.
+ * @param plan - The plan it was rendered from. The file at its `fragmentPath` is left out of the merge, so the old copy can't clash with the new one.
+ * @param reposRoot - Directory holding every registered repo.
+ * @param schemaPath - The fragment JSON Schema file. Defaults to the one in the werkmeister install.
+ * @returns The problems found, one sentence each. Empty means the fragment is safe to write.
+ * @throws `Error` when the schema file can't be read, or when the merge fails for a reason other than a registry conflict.
+ *
+ * @example
+ * ```ts
+ * import {
+ *   planFragment,
+ *   renderFragment,
+ *   validateFragment,
+ *   writeFragment,
+ * } from "werkmeister-core/sdk";
+ *
+ * const reposRoot = "/home/me/repos";
+ * const plan = planFragment(`${reposRoot}/my-app`, {
+ *   reposRoot,
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const rendered = renderFragment(plan);
+ * const problems = validateFragment(rendered, plan, reposRoot);
+ * if (problems.length) console.error(problems.join("\n"));
+ * else if (rendered.changed) writeFragment(rendered);
+ * ```
  */
 export function validateFragment(
   rendered: Rendered,
@@ -64,7 +95,30 @@ export function validateFragment(
   return errors;
 }
 
-/** Write the fragment to its path, creating `.werkmeister/` if needed. */
+/**
+ * Writes a rendered fragment to `rendered.path`, creating the repo's `.werkmeister/`
+ * folder if needed and replacing any file already there. Runs in-process. Check the
+ * fragment with {@link validateFragment} first, and skip the write when
+ * `rendered.changed` is false.
+ *
+ * @param rendered - The fragment from {@link renderFragment}.
+ * @throws `Error` from the file system when the folder or file can't be written.
+ *
+ * @example
+ * ```ts
+ * import { planFragment, renderFragment, writeFragment } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const rendered = renderFragment(plan);
+ * if (rendered.changed) writeFragment(rendered);
+ * console.log(`added: ${rendered.added.join(", ") || "nothing"}`);
+ * ```
+ */
 export function writeFragment(rendered: Rendered): void {
   fs.mkdirSync(path.dirname(rendered.path), { recursive: true });
   fs.writeFileSync(rendered.path, rendered.yaml);

@@ -46,16 +46,52 @@ export function mintWorkspaceToken(name: string, workspaceRoot: string): string 
   return token;
 }
 
-/** Delete workspace *name*'s host-side token so the daemon stops accepting it; a missing token is not an error. */
+/**
+ * Deletes a workspace's daemon token (`~/.werkmeister/tokens/<name>`), so the
+ * werkmeister daemon stops accepting calls made with it. Containers in that
+ * workspace can no longer reach the daemon until the workspace is
+ * initialized again. Runs in-process and only deletes the file; it does not
+ * call the daemon.
+ *
+ * @param name - The workspace folder's name (not its feature name).
+ * @returns Nothing. A workspace with no token is not an error.
+ * @throws A file system error when the token exists but can't be deleted.
+ *
+ * @example
+ * ```ts
+ * import { revokeWorkspaceToken } from "werkmeister-core/sdk";
+ *
+ * revokeWorkspaceToken("api-42-rate-limit");
+ * console.log("token revoked");
+ * ```
+ */
 export function revokeWorkspaceToken(name: string): void {
   fs.rmSync(path.join(tokensDir(), name), { force: true });
 }
 
+// The leftovers are mostly from tests of older versions and from workspaces
+// removed by hand.
 /**
- * Token names with no workspace folder under *workspacesRoot*: the
- * leftovers of tests from older versions and of workspaces removed by hand.
- * A root that cannot be read, or holds no workspace folder while tokens exist,
- * throws: a wrong root would otherwise make every live token look stale.
+ * Lists daemon tokens (in `~/.werkmeister/tokens`) whose workspace folder no
+ * longer exists under a workspaces root, so you can revoke them. Runs
+ * in-process and only reads folders; it does not call the daemon.
+ *
+ * @param workspacesRoot - The folder that holds your workspaces (the
+ *   `paths.workspaces_root` setting in your werkmeister config).
+ * @returns The stale token names, sorted; empty when there are none.
+ * @throws `Error` when `workspacesRoot` can't be read, or holds no workspace
+ *   folder while tokens exist: a wrong root would otherwise make every live
+ *   token look stale.
+ *
+ * @example
+ * ```ts
+ * import { revokeWorkspaceToken, staleTokens } from "werkmeister-core/sdk";
+ *
+ * for (const name of staleTokens("/Users/me/features")) {
+ *   revokeWorkspaceToken(name);
+ *   console.log(`revoked ${name}`);
+ * }
+ * ```
  */
 export function staleTokens(workspacesRoot: string): string[] {
   const live = new Set(

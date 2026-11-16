@@ -101,7 +101,26 @@ export type PrStatus =
   | "shipped"
   | "closed"
   | "abandoned";
-/** Where a workspace stands, from first commit to close-out; see {@link lifecycleOf}. */
+/**
+ * Where a workspace stands, from first commit to close-out, as
+ * {@link lifecycleOf} reads it from the workspace's PR files:
+ *
+ * - `working`: no PR file yet, or one still in draft.
+ * - `ready`: every PR file is approved, so its PRs can be opened.
+ * - `pr-open`: at least one PR is open on GitHub.
+ * - `merged`: every PR has merged (or been closed) but not all are released.
+ * - `shipped`: every PR is released, closed or abandoned.
+ * - `closed-out`: the workspace has been closed out.
+ * - `abandoned`: every PR was abandoned.
+ *
+ * @example
+ * ```ts
+ * import { type Lifecycle, lifecycleOf, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const state: Lifecycle = lifecycleOf(await resolveWorkspaceDir("my-workspace")).state;
+ * if (state === "shipped") console.log("Ready to close out");
+ * ```
+ */
 export type Lifecycle =
   | "working"
   | "ready"
@@ -1706,8 +1725,30 @@ export function formatGate(dir: string, g: GateResult): string[] {
 // ---- open / status ---------------------------------------------------------
 
 /**
- * `werkmeister pr gate`: run the pre-PR gate for each current PR file, or only *only*'s,
- * and return its report; opens nothing.
+ * Runs the pre-PR gate for a workspace, the same checks `werkmeister pr gate`
+ * runs, without opening anything: each code worktree's lint and tests, a clean
+ * worktree, a passing exercise result and the release check. It covers every
+ * current PR file, or only one. Runs in-process and calls `git`, Docker and the
+ * repo's own test commands; it may start a container for the tests and stops
+ * it again afterwards.
+ *
+ * @param ws - The workspace folder's absolute path, e.g. from {@link resolveWorkspaceDir}.
+ * @param only - A PR file's name without `pr-` and `.md`, or a code worktree's
+ *   folder name, to gate just that one.
+ * @param deps - The services it uses; leave it at its default.
+ * @returns `ok`, false when any gate failed; `lines`, the report to print, one
+ *   block per PR file; and `retry`, set when every failure was the machine
+ *   being too busy or low on memory, so running it again later may pass.
+ * @throws {@link WorkspaceError} when the workspace has no matching PR file.
+ *
+ * @example
+ * ```ts
+ * import { gatePrs, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const { ok, lines, retry } = await gatePrs(await resolveWorkspaceDir("my-workspace"));
+ * console.log(lines.join("\n"));
+ * if (!ok) console.log(retry ? "Machine busy: try again later" : "Gate failed");
+ * ```
  */
 export async function gatePrs(
   ws: string,
@@ -1817,8 +1858,32 @@ function selectFiles(
 }
 
 /**
- * `werkmeister pr open`: gate, push and open a PR for each `status: approved` PR file
- * (or only *only*'s), then record the opened PRs on the record branch.
+ * Opens a GitHub pull request for each PR file a person has set to
+ * `status: approved` (or only one), the same pass `werkmeister pr open` makes.
+ * Each one must pass the gate (see {@link gatePrs}) first. Runs in-process and
+ * calls `git` and `gh`. It has side effects: it pushes the branch, creates the
+ * PR (or reuses one already open for the branch), writes the URL into the PR
+ * file, moves the issue to In Review, commits the record, and stops the
+ * workspace's containers once every PR is open.
+ *
+ * @param ws - The workspace folder's absolute path, e.g. from {@link resolveWorkspaceDir}.
+ * @param only - A PR file's name without `pr-` and `.md`, or a code worktree's
+ *   folder name, to open just that one.
+ * @param deps - The services it uses; leave it at its default.
+ * @returns `ok`, false when any PR failed its gate or could not be pushed or
+ *   opened; `lines`, the report to print, including each PR's URL; and
+ *   `retry`, set when every failure was the machine being too busy or low on
+ *   memory, so running it again later may pass.
+ * @throws {@link WorkspaceError} when no PR file matches or none is approved.
+ *
+ * @example
+ * ```ts
+ * import { openPrs, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const { ok, lines } = await openPrs(await resolveWorkspaceDir("my-workspace"));
+ * console.log(lines.join("\n"));
+ * if (!ok) process.exitCode = 1;
+ * ```
  */
 export async function openPrs(
   ws: string,
@@ -2304,9 +2369,23 @@ async function moveIssueForPrs(
 // `pr open` writes `session` (and `host_session` inside the desktop app) into the PR file;
 // a watch pass tells that session once per status change, tracked by `notified`.
 
-/** One message owed to the session that opened a PR. */
+/**
+ * One message owed to the Claude session that opened a PR, for example that
+ * the PR merged or a check failed. {@link watchPrs} returns these in `desktop`
+ * when called with `desktop: true`, for you to deliver to sessions open in the
+ * Claude desktop app.
+ *
+ * @example
+ * ```ts
+ * import { type PrCallback, watchPrs } from "werkmeister-core/sdk";
+ *
+ * const { desktop } = await watchPrs({ desktop: true });
+ * const owed: PrCallback[] = desktop.filter((cb) => cb.hostSession !== null);
+ * for (const cb of owed) console.log(`${cb.hostSession}: ${cb.message}`);
+ * ```
+ */
 export interface PrCallback {
-  /** The workspace folder. */
+  /** The workspace folder's absolute path. */
   ws: string;
   /** The PR's code worktree directory name. */
   dir: string;
@@ -2314,9 +2393,9 @@ export interface PrCallback {
   url: string;
   /** The Claude Code session id to resume with the message. */
   session: string;
-  /** The folder the session started in, which `--resume` needs; null in callbacks written by older versions. */
+  /** The folder the session started in, which resuming it needs; null when the PR was opened by an older werkmeister. */
   sessionDir: string | null;
-  /** The desktop app's `local_…` id: delivered by the werkmeister mod, never headless. */
+  /** The desktop app's `local_…` session id when the PR was opened there, else null. Such a session must get the message through the desktop app, not a headless resume. */
   hostSession: string | null;
   /** The text to send the session, e.g. "PR … merged. Run `werkmeister pr status` …". */
   message: string;
@@ -2356,7 +2435,27 @@ export function callbackMessage(status: string, url: string, release?: string): 
 // While a PR is open, a pass also wakes its session on a failed check, a review or a
 // conflict, claimed in `notified_checks` / `notified_queue` / `notified_review` / `notified_conflict`.
 
-/** The `gh pr view` fields `refreshPrStatus` reads; the wake fields only on an open PR. */
+/**
+ * A pull request as `gh pr view --json` reports it: the fields werkmeister
+ * reads to track a PR. Every field is optional. {@link refreshPrStatus}
+ * returns one per PR still open, in `views`; the checks, reviews, comments and
+ * merge-conflict fields are filled only for an open PR.
+ *
+ * @example
+ * ```ts
+ * import { type PrView, refreshPrStatus, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const { views } = await refreshPrStatus(await resolveWorkspaceDir("my-workspace"));
+ * const failing = (v: PrView) =>
+ *   (v.statusCheckRollup ?? []).filter((c) => (c.conclusion ?? c.state) === "FAILURE");
+ * for (const [file, v] of views)
+ *   console.log(
+ *     file,
+ *     v.mergeable,
+ *     failing(v).map((c) => c.name ?? c.context),
+ *   );
+ * ```
+ */
 export interface PrView {
   /** `OPEN`, `MERGED` or `CLOSED`. */
   state?: string;
@@ -2943,9 +3042,31 @@ export async function watchPrs(
 }
 
 /**
- * `werkmeister pr adopt`: record a fix that landed outside the workspace, so close-out can run.
- * With *pr*, write the PR from `gh pr view` and let `refreshPrStatus` promote it; with
- * *noPr*, the fix is already on base and the file is `closed` with that reason.
+ * Records work that landed outside the workspace, so the workspace can be
+ * closed out: the same as `werkmeister pr adopt`. Give `pr` to adopt an open or
+ * merged GitHub PR (it writes a PR file from `gh pr view`, then refreshes its
+ * status); give `noPr` with a reason when the fix is already on the base branch
+ * and there is no PR. Runs in-process, calls `gh` and `git`, and commits the
+ * new PR file to the workspace record.
+ *
+ * @param ws - The workspace folder's absolute path, e.g. from {@link resolveWorkspaceDir}.
+ * @param opts - `pr`: a PR number or URL. `noPr`: why there is no PR.
+ *   `repo`: the code worktree it belongs to; needed when the workspace has
+ *   more than one.
+ * @param deps - The services it uses; leave it at its default.
+ * @returns `ok` (always true) and `lines`, the report to print.
+ * @throws {@link WorkspaceError} when neither `pr` nor a non-empty `noPr` is
+ *   given, the repo is ambiguous, the PR is closed unmerged or already tracked,
+ *   its PR file already exists, or `gh pr view` fails.
+ *
+ * @example
+ * ```ts
+ * import { adoptPr, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const ws = await resolveWorkspaceDir("my-workspace");
+ * const { lines } = await adoptPr(ws, { pr: "https://github.com/acme/api/pull/42" });
+ * console.log(lines.join("\n"));
+ * ```
  */
 export async function adoptPr(
   ws: string,
@@ -3040,9 +3161,30 @@ export async function adoptPr(
 }
 
 /**
- * `werkmeister pr new <worktree> --slug <slug>`: a follow-up PR for code written after *worktree*'s
- * PR merged. Cuts `<branch>-<slug>` from base, since a squash-merged branch's commits
- * are not on base, and writes `pr-<worktree>-<slug>.md` at `status: draft`.
+ * Starts a follow-up PR for code written after a worktree's PR merged, the same
+ * as `werkmeister pr new <worktree> --slug <slug>`. Creates a fresh branch
+ * `<branch>-<slug>` from the base branch (a squash-merged branch's commits are
+ * not on base) and writes a draft `pr-<worktree>-<slug>.md` for you to fill in.
+ * Runs in-process, calls `git` in the worktree, and commits the new PR file to
+ * the workspace record.
+ *
+ * @param ws - The workspace folder's absolute path, e.g. from {@link resolveWorkspaceDir}.
+ * @param worktree - The code worktree's folder name.
+ * @param slug - A short name for the follow-up: lowercase letters, digits and dashes.
+ * @param deps - The services it uses; leave it at its default.
+ * @returns `ok` (always true) and `lines`, the report to print.
+ * @throws {@link WorkspaceError} when the slug is invalid, the worktree has no
+ *   PR yet or one not yet merged, the file already exists, the worktree has
+ *   uncommitted changes, or a `git` step fails.
+ *
+ * @example
+ * ```ts
+ * import { newPr, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const ws = await resolveWorkspaceDir("my-workspace");
+ * const { lines } = await newPr(ws, "api", "retry-fix");
+ * console.log(lines.join("\n"));
+ * ```
  */
 export async function newPr(
   ws: string,

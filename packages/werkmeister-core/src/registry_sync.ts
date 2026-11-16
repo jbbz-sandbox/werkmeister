@@ -411,19 +411,31 @@ export function registryChanges(before: string | null, after: string): RegistryC
   return out;
 }
 
-/** Options for {@link syncRegistry}; every field is optional and defaults to the live machine. */
+/**
+ * Options for {@link syncRegistry}. Every field is optional; with none set, it
+ * regenerates `~/.werkmeister/services.yaml` from the repos under your repos root.
+ *
+ * @example
+ * ```ts
+ * import { syncRegistry, type SyncRegistryOptions } from "werkmeister-core/sdk";
+ *
+ * const opts: SyncRegistryOptions = { checkOnly: true };
+ * const [step] = syncRegistry(opts);
+ * console.log(step?.ok ? "registry up to date" : step?.detail);
+ * ```
+ */
 export interface SyncRegistryOptions {
-  /** Defaults to `paths.repos_root`. */
+  /** Folder to search for repo fragments. Defaults to `paths.repos_root` in your werkmeister config. */
   reposRoot?: string;
-  /** Report what would happen; write nothing. */
+  /** Report whether the registry is missing or out of date, and write nothing. */
   checkOnly?: boolean;
-  /** Clock for the backup suffix (tests). */
+  /** Clock for the backup file's suffix, in milliseconds. Defaults to `Date.now`. */
   now?: () => number;
-  /** Leave a hand-written registry untouched (a failing step) instead of backing it up and replacing it. */
+  /** Leave a hand-written registry untouched (reported as a failing step) instead of backing it up and replacing it. */
   generatedOnly?: boolean;
-  /** A checkout whose `.werkmeister/services.yaml` replaces its repo's fragment under repos_root. */
+  /** A repo checkout whose `.werkmeister/services.yaml` replaces that repo's fragment, to preview a branch. */
   from?: string;
-  /** Write here instead of `~/.werkmeister/services.yaml`. */
+  /** Write to this file instead of `~/.werkmeister/services.yaml`. */
   target?: string;
 }
 
@@ -507,12 +519,32 @@ export function workspaceServices(
   return services;
 }
 
+// The first Step's label, `config services.yaml`, matches the other registry
+// files' steps in machine_setup. A RegistryError becomes a failing step.
 /**
- * Regenerate `~/.werkmeister/services.yaml` from every fragment under repos_root.
+ * Regenerates the service registry, `~/.werkmeister/services.yaml`, from the
+ * `.werkmeister/services.yaml` fragment in each repo under your repos root,
+ * plus your local overlay `~/.werkmeister/services.local.yaml`. A hand-written
+ * registry is backed up before it is replaced. Runs in-process and works on
+ * files directly; it does not call the werkmeister daemon.
  *
- * One Step, label `config services.yaml`, matching the other registry files'
- * steps in machine_setup. Never throws: a bad fragment or a collision is a
- * failing step whose detail is the RegistryError message.
+ * @param opts - What to read and where to write; see {@link SyncRegistryOptions}.
+ *   Defaults to the live machine.
+ * @returns Report lines. The first, labelled `config services.yaml`, says
+ *   whether the registry was generated, already up to date, or could not be
+ *   built (`ok: false`, with the reason in `detail`). Any further lines name
+ *   fragments your local overlay disabled.
+ * @throws Nothing for a bad fragment or a service name collision; those come
+ *   back as a failing step.
+ *
+ * @example
+ * ```ts
+ * import { syncRegistry } from "werkmeister-core/sdk";
+ *
+ * for (const step of syncRegistry()) {
+ *   console.log(`${step.ok ? "ok  " : "FAIL"} ${step.label}: ${step.detail}`);
+ * }
+ * ```
  */
 export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   const label = "config services.yaml";

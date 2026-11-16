@@ -22,7 +22,26 @@ import { loadConfigFile } from "./workspace_prompts.js";
 
 export const ISSUE_POINTS = ["in_progress", "in_review", "merged", "done", "abandoned"] as const;
 export type IssuePoint = (typeof ISSUE_POINTS)[number];
-/** Per point: a Jira status name, a GitHub label (or `closed` / `not planned`), or null to skip. */
+/**
+ * The tracker status to use at each point of a workspace's life: `in_progress`,
+ * `in_review`, `merged`, `done` and `abandoned`. Each value is a Jira status
+ * name, a GitHub label (or `closed` / `not planned`), or null to leave the
+ * issue alone at that point.
+ *
+ * @example
+ * ```ts
+ * import { type IssueStatuses, startIssue } from "werkmeister-core/sdk";
+ *
+ * const statuses: IssueStatuses = {
+ *   in_progress: "Doing",
+ *   in_review: "Code Review",
+ *   merged: null,
+ *   done: "Done",
+ *   abandoned: null,
+ * };
+ * console.log(await startIssue("/work/my-workspace", undefined, statuses));
+ * ```
+ */
 export type IssueStatuses = Record<IssuePoint, string | null>;
 
 const DEFAULTS: Record<TrackerId, IssueStatuses> = {
@@ -165,7 +184,29 @@ function currentStage(ws: string): string {
   return `stage ${empty ?? dirs[0] ?? "01"}`;
 }
 
-/** `werkmeister issue start`: the first stage or phase began, so the issue moves to in_progress. */
+// The SDK side of `werkmeister issue start`.
+/**
+ * Moves the workspace's issue (or issues) to "in progress" and comments which
+ * stage the work started in. It only moves forward: an issue already in review
+ * or done stays where it is. Runs in-process and calls the issue tracker
+ * directly, not the werkmeister daemon.
+ *
+ * @param ws - The workspace folder's path.
+ * @param tracker - The tracker to use. Defaults to the one {@link issueTracker} picks for the workspace.
+ * @param statuses - The status names to use. Defaults to the configured ones
+ *   (Jira: `In Progress`; GitHub: the `status: in progress` label).
+ * @returns One line per issue, joined with `; `, e.g. `PROJ-12 → In Progress`;
+ *   `no issue` when the workspace has none. A tracker that refuses the move
+ *   gives a line saying so, not an error.
+ *
+ * @example
+ * ```ts
+ * import { startIssue } from "werkmeister-core/sdk";
+ *
+ * const line = await startIssue("/work/my-workspace");
+ * console.log(line); // "PROJ-12 → In Progress"
+ * ```
+ */
 export async function startIssue(
   ws: string,
   tracker?: IssueTrackerStrategy,

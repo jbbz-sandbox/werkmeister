@@ -638,21 +638,57 @@ function resolveServiceDef(service: string, localServices: string[]): Record<str
   return svcDef;
 }
 
-/** What `startIntercept` intercepts, and for which feature. */
+/**
+ * What {@link startIntercept} intercepts, and for which feature.
+ *
+ * @example
+ * ```ts
+ * import {
+ *   readServicesFromWorkspace,
+ *   resolveWorkspaceDir,
+ *   type InterceptArgs,
+ * } from "werkmeister-core/sdk";
+ *
+ * const localServices = readServicesFromWorkspace(await resolveWorkspaceDir("my-workspace"));
+ * const args: InterceptArgs = {
+ *   feature: "my-feature",
+ *   service: "api",
+ *   localServices,
+ *   signal: AbortSignal.timeout(60_000),
+ * };
+ * console.log(`intercepting ${args.service} for ${args.feature}`);
+ * ```
+ */
 export interface InterceptArgs {
-  /** The feature whose local container receives the traffic; it must hold a slot. */
+  /** The feature whose local container receives the traffic; its containers must be up. */
   feature: string;
-  /** The registry service to intercept; must be one of `localServices`. */
+  /** The registry service to intercept; must be one of `localServices` and have k8s coordinates in the registry. */
   service: string;
-  /** The workspace's SERVICES list — the caller reads it, never this module. */
+  /** The workspace's services, e.g. from {@link readServicesFromWorkspace}. */
   localServices: string[];
-  /** Connect through telepresence's containerized daemon (`connect --docker`) instead of the host one. */
+  /** Connect through telepresence's containerized daemon (`telepresence connect --docker`) instead of the host one. */
   dockerDaemon?: boolean;
   /** Aborts the telepresence subprocesses. */
   signal?: AbortSignal;
 }
 
-/** The intercept `startIntercept` set up. */
+/**
+ * The intercept {@link startIntercept} set up.
+ *
+ * @example
+ * ```ts
+ * import { startIntercept, type InterceptResult } from "werkmeister-core/sdk";
+ *
+ * const r: InterceptResult = await startIntercept({
+ *   feature: "my-feature",
+ *   service: "api",
+ *   localServices: ["api"],
+ * });
+ * console.log(`${r.namespace}/${r.deployment} → localhost:${r.localPort}`);
+ * if (r.remoteHost)
+ *   console.log(`send requests to ${r.remoteHost} with header ${r.header}: my-feature`);
+ * ```
+ */
 export interface InterceptResult {
   /** The intercepted service. */
   service: string;
@@ -664,7 +700,7 @@ export interface InterceptResult {
   deployment: string;
   /** The localhost port the matching requests now reach. */
   localPort: number;
-  /** The request header the intercept filters on (see buildInterceptArgs). */
+  /** The request header the intercept filters on; only requests whose value is the feature name are rerouted. */
   header: string;
   /** The service's cluster hostname, or null if it routes no ingress. */
   remoteHost: string | null;
@@ -781,15 +817,30 @@ export async function startIntercept(a: InterceptArgs): Promise<InterceptResult>
   };
 }
 
-/** Which intercepts `leaveIntercept` ends. */
+/**
+ * Which intercepts {@link leaveIntercept} ends.
+ *
+ * @example
+ * ```ts
+ * import { leaveIntercept, type LeaveInterceptArgs } from "werkmeister-core/sdk";
+ *
+ * const args: LeaveInterceptArgs = {
+ *   feature: "my-feature",
+ *   service: "api",
+ *   localServices: ["api", "web"],
+ * };
+ * const left = await leaveIntercept(args);
+ * console.log(left.length ? `left ${left.join(", ")}` : "no intercept to leave");
+ * ```
+ */
 export interface LeaveInterceptArgs {
   /** The feature whose intercepts end. */
   feature: string;
-  /** One service, or null/absent for every local service of the feature. */
+  /** One service to leave; null or absent leaves every local service of the feature. */
   service?: string | null;
-  /** The workspace's SERVICES list; without `service`, every one with a deployment is left. */
+  /** The workspace's services; without `service`, every one with a k8s deployment is left. */
   localServices: string[];
-  /** Leave through the containerized daemon `startIntercept({ dockerDaemon })` connected. */
+  /** Leave through the containerized daemon, as when the intercept was started with `dockerDaemon: true`. */
   dockerDaemon?: boolean;
   /** Aborts the telepresence subprocesses. */
   signal?: AbortSignal;

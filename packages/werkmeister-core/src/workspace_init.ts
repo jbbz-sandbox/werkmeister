@@ -133,25 +133,43 @@ function fail(message: string): never {
   throw new WorkspaceInitError(message);
 }
 
-/** Caller-supplied affordances that a library cannot assume for itself. */
+/**
+ * Options for {@link initWorkspace} that a library can't decide for itself.
+ * Every field is optional.
+ *
+ * @example
+ * ```ts
+ * import {
+ *   initWorkspace,
+ *   resolveWorkspaceDir,
+ *   type InitWorkspaceOptions,
+ * } from "werkmeister-core/sdk";
+ *
+ * const opts: InitWorkspaceOptions = { build: false };
+ * const { containers } = await initWorkspace({}, await resolveWorkspaceDir("my-workspace"), opts);
+ * console.log(containers ? "compose.yml written" : "no free slot");
+ * ```
+ */
 export interface InitWorkspaceOptions {
   /**
-   * Read a task title piped on stdin, used only when no `--task` / config value
-   * resolved. The CLI passes a reader; in-process callers leave it unset so fd 0
-   * — which may be an MCP transport — is never touched.
+   * Reads a task title from stdin, used only when no task was given or
+   * configured. Leave it unset in a server or MCP process, so stdin is never
+   * touched.
    */
   readStdinTask?: () => string;
   /**
-   * Discard rather than abort: repo worktrees dropped from workspace.yml go
-   * even when dirty, and a `<user>/<workspace>` branch already on origin is
-   * deleted instead of blocking creation.
+   * Discard instead of stopping: repo worktrees dropped from `workspace.yml`
+   * are removed even when they have uncommitted changes, and a
+   * `<user>/<workspace>` branch already on origin is deleted instead of
+   * blocking creation.
    */
   force?: boolean;
-  /** The snapshot createWorkspace fetched; written to .werkmeister/issue.md before the strategy runs. */
+  /** An issue already fetched from the tracker; written to `.werkmeister/issue.md` before the context layer is written. */
   issue?: IssueSnapshot;
   /**
-   * False skips the image build. `--no-start` still creates the containers, and on a
-   * throwaway root they outlive it on the real daemon, holding a slot.
+   * False skips building the images. Otherwise the images are built and the
+   * containers created (not started); on a throwaway root those containers
+   * outlive it on the real docker daemon, holding a slot.
    */
   build?: boolean;
 }
@@ -667,14 +685,48 @@ function logMeta(task: string, meta: Record<string, string>): void {
   }
 }
 
+// `workspaceRootOverride` is how `werkmeister workspace new` hands over the
+// directory it just created: everything below resolves paths from the root, not
+// the cwd, so it runs in-process instead of re-execing the CLI in the new folder.
 /**
- * Execute `werkmeister workspace init`.
+ * Does what `werkmeister workspace init` does: brings an existing workspace in
+ * line with its `.werkmeister/workspace.yml`. It saves the resolved inputs,
+ * refreshes the issue copy when asked, adds or removes repo worktrees,
+ * rewrites the context layer (`CLAUDE.md` and the rest), mints the
+ * workspace's daemon token, generates `compose.yml` with a port slot, and
+ * builds the images. Runs in-process; it shells out to git and docker and does
+ * not call the werkmeister daemon. Progress is printed through the werkmeister
+ * reporter.
  *
- * `workspaceRootOverride` is how `werkmeister workspace new` hands over the directory it
- * just created: everything below resolves paths from the root rather than the
- * cwd, so with it supplied this runs in-process instead of `workspace` having to
- * re-exec the CLI in the new directory just to move `findWorkspaceRoot`'s
- * starting point.
+ * @param args - Inputs that override `workspace.yml`, keyed as in that file:
+ *   `feature`, `work_type`, `context_strategy`, `harness`, `repos`,
+ *   `services`, `issue_id`, `project`, `test_path`, `description`, `task`,
+ *   `starting_prompt`, `labels`, `group`, `autonomous`, `model` and
+ *   `auto_stop`. Also `config_file` (another config file to read),
+ *   `refresh_issue` (re-fetch the issue copy), `force`, and `prune_context`
+ *   (delete a previous strategy's files git can restore). Pass `{}` to use
+ *   the workspace's own config.
+ * @param workspaceRootOverride - The workspace folder. Omit it to find the
+ *   workspace from the current directory.
+ * @param opts - See {@link InitWorkspaceOptions}.
+ * @returns `containers`: false when the workspace names a feature but no port
+ *   slot was free, so `compose.yml` was not generated.
+ * @throws {@link WorkspaceError} when init stops on a problem (no
+ *   `workspace.yml` and no `feature`, a bad input, an issue that can't be
+ *   fetched, a worktree with uncommitted changes). The message has already
+ *   been printed through the reporter. `Error` when no root is given and the
+ *   current directory isn't inside a workspace. {@link SandboxError} with
+ *   code `UNKNOWN_CONTEXT_STRATEGY` or `UNKNOWN_HARNESS` for an unknown
+ *   `context_strategy` or `harness`.
+ *
+ * @example
+ * ```ts
+ * import { initWorkspace, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const dir = await resolveWorkspaceDir("my-workspace");
+ * const { containers } = await initWorkspace({ refresh_issue: true }, dir);
+ * if (!containers) console.log("No free slot: compose.yml was not generated.");
+ * ```
  */
 export async function initWorkspace(
   args: Record<string, unknown>,

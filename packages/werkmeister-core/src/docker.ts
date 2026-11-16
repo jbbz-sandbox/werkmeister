@@ -270,7 +270,20 @@ export async function containerRunning(name: string): Promise<boolean> {
   }
 }
 
-/** One stats sample of a running container, as `docker stats --no-stream` reports it. */
+/**
+ * One CPU and memory sample of a running container, with the same numbers
+ * `docker stats --no-stream` shows. {@link containerStats} returns one per
+ * running container.
+ *
+ * @example
+ * ```ts
+ * import { containerStats, type ContainerStat } from "werkmeister-core/sdk";
+ *
+ * const stats: ContainerStat[] = await containerStats();
+ * const heavy = stats.filter((s) => s.memMib > 0.8 * s.memLimitMib);
+ * for (const s of heavy) console.log(s.name, s.memMib.toFixed(0), "MiB");
+ * ```
+ */
 export interface ContainerStat {
   /** Container name, without Docker's leading `/`; the short ID when it has none. */
   name: string;
@@ -310,14 +323,29 @@ export function memMib(s: Dockerode.ContainerStats): number {
 }
 
 /**
- * One stats sample for every running container.
+ * Takes one CPU and memory sample of every running Docker container on this
+ * machine, not only werkmeister's. Runs in-process and talks to the Docker
+ * engine directly, not to the werkmeister daemon.
  *
- * Each call costs about a second: the daemon samples twice to produce the CPU
- * delta, exactly as `docker stats --no-stream` does. They run concurrently, so
- * the wall clock is one sample, not one per container.
+ * A call takes about a second, because Docker samples twice to work out CPU
+ * use. All containers are sampled at once, so the time does not grow with
+ * their number. On a busy machine it can take much longer; pass `signal` to
+ * cap it.
  *
- * *signal* cancels the requests in flight: on a loaded daemon one snapshot runs
- * for tens of seconds. An aborted snapshot comes back partial or empty.
+ * @param signal - Cancels the samples still in flight. An aborted call resolves
+ *   with the samples that finished, possibly none.
+ * @returns One {@link ContainerStat} per running container. Empty when Docker
+ *   is not reachable; a container that stops mid-sample is left out. It does
+ *   not throw.
+ *
+ * @example
+ * ```ts
+ * import { containerStats } from "werkmeister-core/sdk";
+ *
+ * const stats = await containerStats(AbortSignal.timeout(10_000));
+ * stats.sort((a, b) => b.cpuPercent - a.cpuPercent);
+ * for (const s of stats.slice(0, 5)) console.log(s.name, `${s.cpuPercent.toFixed(1)}%`);
+ * ```
  */
 export async function containerStats(signal?: AbortSignal): Promise<ContainerStat[]> {
   let running: Dockerode.ContainerInfo[];

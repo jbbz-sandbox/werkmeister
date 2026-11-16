@@ -520,31 +520,56 @@ export function validateStandardModules(standardsDir?: string | null): string[] 
   return errors;
 }
 
-/** Result of {@link checkStandards}: facts, not a rendered report. */
+/**
+ * The result of {@link checkStandards}: facts about the standards trees, not a
+ * rendered report.
+ *
+ * @example
+ * ```ts
+ * import { checkStandards, type StandardsCheck } from "werkmeister-core/sdk";
+ *
+ * const check: StandardsCheck = checkStandards();
+ * if (check.moduleCount === 0) console.error(`unusable standards tree: ${check.errors[0]}`);
+ * else console.log(`${check.moduleCount} modules in ${check.dir}, ${check.errors.length} problems`);
+ * ```
+ */
 export interface StandardsCheck {
-  /** The tree that was checked (resolved even when it does not exist). */
+  /** The global standards folder that was checked, resolved even when it does not exist. */
   dir: string;
-  /** Repo standards trees checked too (`repoStandardTrees`). */
+  /** The per-repo standards folders (`.werkmeister/standards` in each repo under your repos root) that were checked too. */
   repoTrees: string[];
-  /** Loadable modules found, repo trees included. Zero means the global tree itself is unusable. */
+  /** Standard modules found, repo folders included. Zero means the global folder is missing or empty. */
   moduleCount: number;
-  /** Empty means well-formed. */
+  /** One message per problem found; empty means every module is well-formed. */
   errors: string[];
 }
 
+// Errors come back as data because a hook that must never block a launch and a
+// CI gate that must fail loudly both call this and disagree about what a
+// problem is worth. A missing or empty tree is an error, not a clean
+// zero-module pass, and those are the only cases that leave moduleCount at zero,
+// so a renderer can tell "tree unusable" from "modules malformed".
 /**
- * Run every structural validator over the configured standards tree.
+ * Checks the standards: the global folder (the `overrides.standards_dir`
+ * setting in your werkmeister config, if set) and each repo's
+ * `.werkmeister/standards` folder. It validates each module's frontmatter, the
+ * references between modules, name clashes between repo and global modules, and
+ * the standards each registered service names. Runs in-process and only reads
+ * files; it does not call the werkmeister daemon.
  *
- * Returns errors as data — the caller decides the exit code, because a hook
- * that must never block a launch and a CI gate that must fail loudly both call
- * this and disagree about what a problem is worth.
+ * @returns The folders checked, how many modules were found, and every problem
+ *   as a message. It never decides pass or fail for you: treat a non-empty
+ *   `errors` as a failure if your use needs that.
  *
- * A missing or empty tree is itself an error rather than a clean zero-module
- * pass: reporting "0 module(s) checked" and succeeding would go green exactly
- * when there is nothing to check. Those two cases are also the only ones that
- * leave `moduleCount` at zero, which is what lets a renderer tell "the tree is
- * unusable" (one bare message) from "the modules are malformed" (a list) with
- * no extra discriminator.
+ * @example
+ * ```ts
+ * import { checkStandards } from "werkmeister-core/sdk";
+ *
+ * const { errors, moduleCount } = checkStandards();
+ * for (const e of errors) console.error(e);
+ * process.exitCode = errors.length ? 1 : 0;
+ * console.log(`${moduleCount} module(s) checked`);
+ * ```
  */
 export function checkStandards(): StandardsCheck {
   const dir = standardsDirPath();

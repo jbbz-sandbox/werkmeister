@@ -76,24 +76,38 @@ export interface SchemaProp {
   minLength?: number;
 }
 
-/** The RJSF bundle `buildFormSchema` returns. */
+// Built by `buildFormSchema`; `getFormSchema` returns it widened as `FormSchemaBundle`.
+/**
+ * A form described as JSON Schema, ready for a form library such as
+ * react-jsonschema-form (RJSF). {@link getFormSchema} returns one for the
+ * create-workspace form.
+ *
+ * @example
+ * ```ts
+ * import { type FormBundle, getFormSchema } from "werkmeister-core/sdk";
+ *
+ * const form: FormBundle = await getFormSchema();
+ * for (const key of form.schema.required ?? [])
+ *   console.log(`${form.schema.properties[key]?.title ?? key} is required`);
+ * ```
+ */
 export type FormBundle = {
-  /** The JSON Schema: one property per unresolved prompt. */
+  /** The JSON Schema: one property per field the person still has to fill in. */
   schema: {
     /** Always `object`: the form is one object of fields. */
     type: "object";
     /** The form heading, the same as the bundle's `title`. */
     title: string;
-    /** One field per unresolved prompt, keyed by the prompt's key. */
+    /** One field per question, keyed by the field's key. Each has a `title`, a `type` and, for a choice, an `enum`. */
     properties: Record<string, SchemaProp>;
     /** Keys of the fields that may not be left empty; absent when none. */
     required?: string[];
   };
-  /** RJSF widget hints per field key, plus `ui:order` for the prompts' order. */
+  /** RJSF widget hints per field key, plus `ui:order`, the order to show the fields in. */
   uiSchema: Record<string, unknown>;
-  /** Each field's starting value: the resolved value, else the prompt's default. */
+  /** Each field's starting value: what is already known, else the field's default. */
   formData: Record<string, unknown>;
-  /** The given title, else `Initialize <name>`. */
+  /** The form heading, e.g. `Initialize my-workspace`. */
   title: string;
 };
 

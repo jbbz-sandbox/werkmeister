@@ -107,10 +107,25 @@ export function deniedIn(stdout: string): string[] {
   return [...new Set(calls)];
 }
 
+// A send succeeding and an idle notice arriving prove nothing: a UserPromptSubmit hook can drop the prompt.
 /**
- * Whether a message relayed at `sentAt` ran in the target session: a user turn
- * after the send that holds its text. SendMessage succeeding and an idle notice
- * arriving prove nothing: a UserPromptSubmit hook can drop the prompt.
+ * Tells whether a message you sent to a session actually ran there: true when the
+ * transcript holds a user turn, logged after `sentAt`, whose text contains the message.
+ * Runs in-process on messages you already read.
+ *
+ * @param messages - The session's messages, for example `messages` from {@link getClaudeTranscript}.
+ * @param relay - When the message was sent (`sentAt`, ISO) and its `text`.
+ * @returns True once the session has picked the message up.
+ *
+ * @example
+ * ```ts
+ * import { getClaudeTranscript, relayPickedUp, sendToClaudeSession } from "werkmeister-core/sdk";
+ *
+ * const relay = { sentAt: new Date().toISOString(), text: "Run the tests again." };
+ * await sendToClaudeSession("my-workspace", relay.text);
+ * const { messages } = await getClaudeTranscript("my-workspace");
+ * console.log(relayPickedUp(messages, relay) ? "picked up" : "not yet");
+ * ```
  */
 export function relayPickedUp(
   messages: ClaudeMessage[],
