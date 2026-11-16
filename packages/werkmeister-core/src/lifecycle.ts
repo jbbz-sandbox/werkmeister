@@ -1121,6 +1121,8 @@ async function grantWaitersNow(): Promise<string[]> {
     } catch (e) {
       // One waiter's failed re-up (HOST_LOAD, NO_COMPOSE, ...) must not end the pass for the rest (SW-737).
       warn(`Could not start '${feature}' from the waiting queue: ${(e as Error).message}`);
+      // Admission already dropped it from the queue; its session is the only one that can act (SW-682).
+      if (e instanceof SandboxError && e.code === "NEVER_FITS") writeNudge(workspace, e.message);
       continue;
     }
     // Backfill (SW-675): a later waiter may fit; admission itself holds the room for a starved head.
