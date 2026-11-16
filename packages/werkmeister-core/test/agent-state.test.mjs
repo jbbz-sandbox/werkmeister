@@ -652,6 +652,25 @@ test("waiting gate: holds container and test commands only; the record, git and 
     )?.continue,
     false,
   );
+  // SW-832: the MCP forms of the held Bash commands; `workspace-pr status` passes like `pr status`.
+  const mcp = (tool, tool_input = {}) => ({
+    hook_event_name: "PreToolUse",
+    tool_name: `mcp__plugin_werkmeister_werkmeister__${tool}`,
+    tool_input,
+  });
+  for (const input of [
+    mcp("restart"),
+    mcp("test"),
+    mcp("workspace-pr", { action: "gate" }),
+    mcp("workspace-pr", { action: "open" }),
+  ])
+    assert.equal(pauseGate(input, dir)?.continue, false, input.tool_name);
+  for (const input of [
+    mcp("workspace-pr", { action: "status" }),
+    mcp("workspace-prs"),
+    mcp("stop"),
+  ])
+    assert.equal(pauseGate(input, dir), null, input.tool_name);
   for (const command of [
     "git add stages && git commit -m 'approved' && git push",
     'git commit -m "restart docker after node upgrade"',
