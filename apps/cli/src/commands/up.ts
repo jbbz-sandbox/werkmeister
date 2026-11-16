@@ -10,8 +10,17 @@
  * the workspace resolution that depends on cwd, and the summary block.
  */
 
+import * as fs from "node:fs";
+import { findWorkspaceRoot } from "werkmeister-core/gate";
+import { candidateWorkspaceRoots } from "werkmeister-core/global_config";
 import type { UpResult } from "werkmeister-core/lifecycle";
-import { reloadProxy, startService, up as upFeature } from "werkmeister-core/lifecycle";
+import {
+  insideOwnContainer,
+  refreshWorkspaceSettings,
+  reloadProxy,
+  startService,
+  up as upFeature,
+} from "werkmeister-core/lifecycle";
 import { Colors, error, resolveWorkspace } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
 import { interruptSignal } from "../lib/interrupt.js";
@@ -88,6 +97,16 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // SW-132: one service, started the way the PR gate starts it, including an on-demand one.
   if (args.service) {
     const service = args.service as string;
+    // As the whole `up` does: every run starts here, so a deleted ask block comes back from the record (SW-835).
+    // Only from the host and only for the cwd's own workspace: the unpinned autonomous rule lets
+    // `--service x <other>` through, and that must not rewrite another workspace's settings.
+    const own = findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots());
+    if (
+      own !== null &&
+      fs.realpathSync(own) === fs.realpathSync(workspace) &&
+      !insideOwnContainer(feature)
+    )
+      refreshWorkspaceSettings(workspace);
     // park: a timed-out wait keeps its queue place and the grant starts it (SW-701).
     await startService(feature, workspace, service, undefined, { park: true });
     // startService skips Caddy (gate path); unrouted, the cookie hits another feature (SW-338).
