@@ -467,8 +467,10 @@ test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and
   strategyById("icm").refresh(root);
   settings = readSettings(root);
   const ask = workspaceAskRules(root);
-  assert.deepEqual(settings.permissions, { allow: ["Bash(git:*)", ...READ_ONLY_GIT_RULES], ask });
-  assert.deepEqual(readRecord(root), { allow: READ_ONLY_GIT_RULES, ask });
+  // SW-807: an icm refresh keeps the stage grants once autonomous is off.
+  const allow = workspaceAllowRules(root, false);
+  assert.deepEqual(settings.permissions, { allow: ["Bash(git:*)", ...allow], ask });
+  assert.deepEqual(readRecord(root), { allow, ask });
 });
 
 // The rules before narrowing, as a record from an earlier release holds them.
@@ -783,6 +785,10 @@ test("SW-807: no generated rule puts a * before a :* suffix, which Claude Code r
       fs.writeFileSync(path.join(cli, "werkmeister"), "");
       fs.mkdirSync(dotDir(root), { recursive: true });
       fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\nSERVICES=api\n");
+      fs.writeFileSync(
+        path.join(dotDir(root), "workspace.yml"),
+        "context_strategy: icm\nwork_type: feature\n",
+      );
       for (const rules of [
         workspaceAskRules(root),
         workspaceAllowRules(root, true),
@@ -797,4 +803,31 @@ test("SW-807: no generated rule puts a * before a :* suffix, which Claude Code r
         "services:\n  api:\n    type: library\n    repo: demo\n    path: api\n    test: pnpm test\n",
     },
   );
+});
+
+test("SW-807: an ICM run pre-approves only its own issue's start and view, exact; feature, gate and status commands ask", () => {
+  const root = workspace();
+  fs.mkdirSync(dotDir(root), { recursive: true });
+  const yml = (t) => fs.writeFileSync(path.join(dotDir(root), "workspace.yml"), t);
+  yml("context_strategy: jit\nwork_type: bugfix\n");
+  assert.deepEqual(workspaceAllowRules(root, false), READ_ONLY_GIT_RULES);
+  yml('context_strategy: "icm "\nwork_type: bugfix\n');
+  const grants = ["issue start", "issue view"].flatMap((g) => [
+    `Bash(werkmeister ${g})`,
+    `Bash(w9r ${g})`,
+  ]);
+  const interactive = workspaceAllowRules(root, false);
+  assert.deepEqual(new Set(interactive), new Set([...READ_ONLY_GIT_RULES, ...grants]));
+  // Review of SW-807: each of these reaches shared infra, another workspace or the real ~/.werkmeister.
+  for (const cmd of [
+    "feature up",
+    "feature stop",
+    "feature restart",
+    "pr gate",
+    "pr status",
+    "pr open",
+  ])
+    assert.ok(!interactive.some((r) => r.includes(cmd)), cmd);
+  const autonomous = workspaceAllowRules(root, true);
+  for (const r of grants) assert.ok(autonomous.includes(r), r);
 });

@@ -233,6 +233,12 @@ function renderContract(dir: string, stage: Stage, v: IcmVars, step0 = ""): stri
     "## Outputs",
     ...c.outputs.map((o) => `- ${o}`),
     "",
+    "## Pre-approved",
+    ...(stage.grants ?? []).map((g) =>
+      g.endsWith(":*") ? `- \`werkmeister ${g.slice(0, -2)} …\`` : `- \`werkmeister ${g}\``,
+    ),
+    "- Every other command asks. Read and edit files with Read, Edit and Write, never a `python3` heredoc or `python3 -c`, which no run pre-approves (SW-807).",
+    "",
     ...(v.autonomous
       ? ["## Self-check", c.selfCheck ?? SELF_CHECK]
       : ["## Human check", c.humanCheck, "", askLine(v.questionTool)]),
