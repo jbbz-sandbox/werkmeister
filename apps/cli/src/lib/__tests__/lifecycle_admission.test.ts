@@ -406,6 +406,10 @@ describe("admitServiceStart", () => {
       "core stayed stopped; `werkmeister feature up` starts the feature again.",
     );
     expect(err.message).toContain("running: other (3 CPUs, 0.0 GiB, working)");
+    // SW-763: what was asked against what was free (core + api after the release).
+    expect(err.message).toContain(
+      "this start needs 4 CPUs, 0.0 GiB; free 3 CPUs, 8.0 GiB of the budget's 6 CPUs, 8.0 GiB",
+    );
     expect(err.message).toContain("Rerun the same command; nothing to ask a person.");
     expect(readQueue()).toEqual([]);
   });
