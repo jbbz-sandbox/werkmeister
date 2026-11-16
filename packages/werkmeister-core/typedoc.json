@@ -1,6 +1,7 @@
 {
   "entryPoints": ["src"],
   "entryPointStrategy": "expand",
+  "plugin": ["./typedoc-sdk-links.mjs"],
   "tsconfig": "tsconfig.json",
   "emit": "none",
   "validation": { "invalidLink": true, "notExported": false, "notDocumented": false },

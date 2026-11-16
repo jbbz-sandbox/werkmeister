@@ -692,7 +692,7 @@ export interface InterceptResult {
  * @returns Where the intercept runs: `context`, `namespace`, `deployment`, the
  *   `localPort` it targets, the `header` it filters on, and `remoteHost` (the
  *   service's cluster hostname, or null when it has no ingress).
- * @throws `SandboxError` with a `code` saying why: `NOT_LOCAL` (not one
+ * @throws {@link SandboxError} with a `code` saying why: `NOT_LOCAL` (not one
  *   of `localServices`), `NOT_INTERCEPTABLE` (no k8s coordinates),
  *   `TELEPRESENCE_VERSION` (missing or unsupported telepresence), `NOT_RUNNING`
  *   (the workspace has no slot), `PORT_CLOSED` (the local container isn't
@@ -809,7 +809,7 @@ export interface LeaveInterceptArgs {
  *     intercept was started with `dockerDaemon: true`.
  *   - `signal`: aborts the telepresence calls.
  * @returns The k8s deployments actually left; empty when none were.
- * @throws `SandboxError` only when `service` is set: `NOT_LOCAL`,
+ * @throws {@link SandboxError} only when `service` is set: `NOT_LOCAL`,
  *   `NOT_INTERCEPTABLE`, or `INTERCEPT_FAILED` when telepresence refused.
  *
  * @example

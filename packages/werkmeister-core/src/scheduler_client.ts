@@ -30,7 +30,7 @@ export function ownScheduler(): void {
  * @param local - Runs the same operation in this process; used when the daemon can't be reached.
  * @param timeoutMs - How long to wait for the daemon, in milliseconds. Defaults to 120000.
  * @returns The operation's result, from the daemon or from *local*.
- * @throws `SandboxError` when the daemon took the op but failed it or did not answer in
+ * @throws {@link SandboxError} when the daemon took the op but failed it or did not answer in
  * time. A daemon that is down is not an error: *local* runs instead.
  *
  * @example
@@ -69,7 +69,7 @@ export async function schedulerOp<T>(
  * first served). Uses the daemon when it is running, otherwise reads the queue in-process.
  *
  * @returns Each waiting workspace's feature name, first in line first; empty when nothing waits.
- * @throws `SandboxError` when the daemon took the call but failed it or did not answer in
+ * @throws {@link SandboxError} when the daemon took the call but failed it or did not answer in
  * time.
  *
  * @example
