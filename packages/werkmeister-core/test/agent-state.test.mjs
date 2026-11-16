@@ -612,19 +612,64 @@ const { writeWaiting, serviceWaitContext, writeWakeNudge, liveWaiting, waitingPa
   "../dist/agent_state.js"
 );
 
-test("waiting gate: denies tool calls and blocks prompts with the queue position", () => {
+const bash = (command) => ({
+  hook_event_name: "PreToolUse",
+  tool_name: "Bash",
+  tool_input: { command },
+});
+const DOCKER_EXEC = bash("docker exec demo-core pnpm test");
+
+test("waiting gate: denies a container command with the queue position", () => {
   const dir = workspace("j-wait", null);
   writeWaiting(dir, { position: 2, reason: "waiting for capacity" });
-  const pre = pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir);
+  const pre = pauseGate(DOCKER_EXEC, dir);
   assert.equal(pre.continue, false);
   assert.match(pre.stopReason, /Waiting for capacity \(position 2\)/);
   assert.equal(pre.hookSpecificOutput.permissionDecision, "deny");
-  assert.match(
-    pauseGate({ hook_event_name: "UserPromptSubmit" }, dir).reason,
-    /waiting for capacity/,
-  );
   writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: false });
   assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).stopReason, PAUSED_REASON);
+});
+
+// SW-768: queued, the hook held Edit on the PR file and git on the record, so a person's approval
+// couldn't be written; only what needs containers or the CPUs waits.
+test("waiting gate: holds container and test commands only; the record, git and prompts go on", () => {
+  const dir = workspace("j-wait-narrow", null);
+  writeWaiting(dir, { position: 1, reason: "waiting for capacity" });
+  for (const command of [
+    "docker exec demo-core pnpm test",
+    "cd /x && pnpm turbo run test",
+    "/ws/.werkmeister/bin/with-temp-home --no-wait node --test a.test.mjs",
+    "werkmeister feature up --service core",
+    "werkmeister pr gate --tests",
+    "w9r pr open",
+    "sh -c 'docker compose up -d'",
+  ])
+    assert.equal(pauseGate(bash(command), dir)?.continue, false, command);
+  assert.equal(
+    pauseGate(
+      { hook_event_name: "PreToolUse", tool_name: "mcp__plugin_werkmeister_werkmeister__up" },
+      dir,
+    )?.continue,
+    false,
+  );
+  for (const command of [
+    "git add stages && git commit -m 'approved' && git push",
+    'git commit -m "restart docker after node upgrade"',
+    "werkmeister feature stop",
+    "werkmeister budget status",
+    "ls stages/*/output/",
+  ])
+    assert.equal(pauseGate(bash(command), dir), null, command);
+  for (const tool of ["Edit", "Write", "Read", "Grep"])
+    assert.equal(pauseGate({ hook_event_name: "PreToolUse", tool_name: tool }, dir), null, tool);
+  assert.equal(pauseGate({ hook_event_name: "UserPromptSubmit" }, dir), null);
+  // Paused still holds everything.
+  writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: false });
+  assert.equal(
+    pauseGate({ hook_event_name: "PreToolUse", tool_name: "Edit" }, dir).continue,
+    false,
+  );
+  assert.equal(pauseGate({ hook_event_name: "UserPromptSubmit" }, dir).decision, "block");
 });
 
 // SW-713: a waiting.json its feature's queue entry outlived held the session with a stale position
@@ -644,17 +689,17 @@ test("waiting gate: a waiting.json the queue no longer holds is cleared and hold
     write(queue, JSON.stringify(["stale"]));
     writeWaiting(dir, { position: 2, reason: "waiting for capacity" });
     old(60_000);
-    assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).continue, false, "still queued");
+    assert.equal(pauseGate(DOCKER_EXEC, dir).continue, false, "still queued");
 
     write(queue, JSON.stringify(["other"]));
     writeWaiting(dir, { position: 2, reason: "waiting for capacity" });
     assert.equal(
-      pauseGate({ hook_event_name: "PreToolUse" }, dir).continue,
+      pauseGate(DOCKER_EXEC, dir).continue,
       false,
       "just written: the queue may not have caught up",
     );
     old(60_000);
-    assert.equal(pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir), null);
+    assert.equal(pauseGate(DOCKER_EXEC, dir), null);
     assert.equal(fs.existsSync(waitingPath(dir)), false);
   } finally {
     if (was === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
@@ -678,10 +723,9 @@ test("waiting gate: a service-start wait lets prompts and tools through, naming 
   assert.match(ctx, /docs-site, werkmeister-install/);
   assert.match(ctx, /stop/i, "says how to stop the wait");
   assert.equal(pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir), null);
-  // A whole-feature queue (no services) still holds the session as before.
+  // A whole-feature queue (no services) still holds container commands (SW-768).
   writeWaiting(dir, { position: 1, reason: "waiting for capacity" });
-  assert.equal(pauseGate({ hook_event_name: "UserPromptSubmit" }, dir).decision, "block");
-  assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).continue, false);
+  assert.equal(pauseGate(DOCKER_EXEC, dir).continue, false);
 });
 
 /** Run the hook entrypoint as Claude Code does: the event on stdin, the gate on stdout. */
