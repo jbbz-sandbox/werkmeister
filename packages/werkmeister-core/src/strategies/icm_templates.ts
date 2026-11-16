@@ -192,6 +192,10 @@ const CPU_PROFILE =
 const TIMING_CLAIM =
   "A CPU or wall-time number that a decision or acceptance criterion rests on comes from paired, alternating A/B runs (A1 B1 A2 B2 A3 B3, at least 3 each) through `.werkmeister/bin/with-temp-home` with its load wait on, in a Linux container (on macOS the wrapper waits on free memory only, never on load), never from a single run or `--no-wait`; record every run's numbers and the host load beside them.";
 
+// SW-810: sw-800's spec promised a byte-for-byte skill copy; the docs checks failed it only at the gate.
+const COPIED_MARKDOWN =
+  "When the change adds or moves markdown into a repo (a copied skill, doc or reference), copy it into the worktree, run the repo's lint command on it (the `<lint> &&` head of its test command in `werkmeister-context.md`, in the service's container, where the repo's docs checks run) and record each failure in `inventory.md`; then remove the copy. `decisions.md` names the edits the text needs, or that the copy passed unchanged.";
+
 // SW-106 decision 7 renamed a legacy alias that `git log -S` would have shown was meant to be removed.
 const NAME_HISTORY_STEP =
   "For each decision that renames, keeps or removes a name, a fallback or an alias, record its definition site (file and line) and the commit that introduced it (`git log -S <name>`, in the repo that defines it). " +
@@ -324,7 +328,9 @@ const feature: Stage[] = [
           " " +
           CPU_PROFILE +
           " " +
-          TIMING_CLAIM,
+          TIMING_CLAIM +
+          " " +
+          COPIED_MARKDOWN,
         "Write `output/inventory.md`: steps 1–3.",
         NAME_HISTORY_STEP,
         `Write \`output/decisions.md\`: every open question in \`BRIEF.md\`, each as a heading with \`status: proposed\`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference). ${CRITERION_REACH}`,
@@ -354,7 +360,7 @@ const feature: Stage[] = [
       doNotLoad:
         "source files already summarised in `inventory.md` (if it looks wrong, fix `inventory.md` and tell the person), `.werkmeister/*.yml`, other stages.",
       process: [
-        `Write \`output/spec.md\`: what changes, file by file; the interfaces or schemas added; the tests that will prove it; what is explicitly out of scope.${v.group.length ? " This is a grouped PR: list one commit per ticket (`<KEY> …`) and what each holds, but do not fix their order." : ""}${noCommitPlan(v.group)}`,
+        `Write \`output/spec.md\`: what changes, file by file; the interfaces or schemas added; the tests that will prove it; what is explicitly out of scope. Promise an unchanged (byte-for-byte) copy of markdown only when \`inventory.md\` records the repo's lint passing on it; otherwise list the edits.${v.group.length ? " This is a grouped PR: list one commit per ticket (`<KEY> …`) and what each holds, but do not fix their order." : ""}${noCommitPlan(v.group)}`,
         "If the change has a machine-checkable artifact (a schema, an API document, a migration), write it in the repo and validate it with a command that needs no new dependency. Record the exact command in `spec.md`.",
         "Map each acceptance criterion in `BRIEF.md` to the step or test in `spec.md` that satisfies it. A criterion with no mapping is a defect in this stage.",
         // SW-288: a ticket-vs-standard conflict surfaced only in implement, after the code was written.
