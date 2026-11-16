@@ -59,6 +59,11 @@
           "type": "object",
           "additionalProperties": { "type": "string" },
           "description": "Extra repo paths → the service whose test covers them, for paths no service's `path:` owns; each service's `path:` is added on top (SW-450)."
+        },
+        "components": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "This project's tracker components: name → what it covers, e.g. `gate: pr gate, test rows`. One per ticket, the subsystem its fix lands in; backlog triage sets them and groups tickets by them. No command reads it yet."
         }
       },
       "if": { "properties": { "ship": { "const": "tag" } }, "required": ["ship"] },

@@ -142,6 +142,7 @@ repo:
   format: pnpm exec biome check --write {files}  # run by the agent on the files it touched, before tests
   no_service_paths: [docs, .changeset, .gitignore, README.md]  # prefixes that touch no service in the gate
   path_mappings: { plugins: werkmeister-core }  # paths no service's `path:` owns → the service that tests them
+  components: { gate: "pr gate, test rows" }  # the project's tracker components (name → what it covers); triage groups tickets by them
   sync_on_merge: warn                         # warn (default) | auto: when a merged PR changes this fragment
 ```
 
