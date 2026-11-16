@@ -8,6 +8,15 @@ import config from "./.vitepress/config.mjs";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const FILES = globSync("docs/*.md", { cwd: ROOT });
 
+/** The generated SDK pages matching `pattern`; fails when the build hasn't written them, so a scan is never skipped. */
+function sdkPages(pattern) {
+  assert.ok(
+    existsSync(join(ROOT, "apps/docs-site/sdk")),
+    "apps/docs-site/sdk/ is missing: run `pnpm turbo run build --filter=docs-site` first",
+  );
+  return globSync(pattern, { cwd: ROOT });
+}
+
 /** Lines outside ``` fences, as [file, lineNo, text]. */
 function proseLines(f) {
   let fenced = false;
@@ -58,9 +67,7 @@ test("no table row outside its table", () => {
 // Readers can't open the tracker; git history keeps the keys. A key may stay as a link, or as an example in code.
 // Sidebar pages are checked by docs:check in lint (SW-715); the SDK pages exist only after `build` (typedoc), so here.
 test("no Jira key in an SDK page's prose", () => {
-  const pages = existsSync(join(ROOT, "apps/docs-site/sdk"))
-    ? globSync("apps/docs-site/sdk/**/*.md", { cwd: ROOT })
-    : [];
+  const pages = sdkPages("apps/docs-site/sdk/**/*.md");
   const hits = pages
     .flatMap(proseLines)
     .filter(([, , l]) =>
@@ -73,9 +80,7 @@ test("no Jira key in an SDK page's prose", () => {
 // Note numbers, PR numbers, internal entry points and CLI internals mean nothing to an SDK user.
 // Symbol pages only, code spans included: index.md names `werkmeister-core/config` to say it is internal.
 test("no internal reference in an SDK symbol page's prose", () => {
-  const pages = existsSync(join(ROOT, "apps/docs-site/sdk"))
-    ? globSync("apps/docs-site/sdk/*/*.md", { cwd: ROOT })
-    : [];
+  const pages = sdkPages("apps/docs-site/sdk/*/*.md");
   // The lookbehind lets "Defined in: packages/werkmeister-core/src/…" through.
   const internal =
     /\bnote \d+\b|(?<![\w/])#\d+\b|(?<![\w/])werkmeister-core\/(?!sdk\b)\w|\bmain\.ts\b|proposal §/;
