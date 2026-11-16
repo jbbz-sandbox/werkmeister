@@ -1147,9 +1147,14 @@ async function admitOrQueueHere(
         await stop(victim, { grant: false });
       } catch (e) {
         // A failed stop can still have killed it (SW-738): queue it to come back, and wait rather than
-        // start over budget; this start had the head's turn, so it keeps it.
-        if (victimWs) await enqueue(victim, victimWs);
-        warn(`Could not stop '${victim}' to make room (${(e as Error).message}); waiting instead`);
+        // start over budget; this start had the head's turn, so it keeps it. A victim that still runs
+        // stays out of the queue, or the hook holds its agent over live containers (SW-831).
+        const stillRuns = (await getContainerStatus(victim)).some((c) => c.status === "running");
+        if (victimWs && !stillRuns) await enqueue(victim, victimWs);
+        warn(
+          `Could not stop '${victim}' to make room (${(e as Error).message}); waiting instead` +
+            (stillRuns ? `, and '${victim}' keeps running` : ""),
+        );
         return requeueFirst(feature, workspace, starting);
       }
       if (victimWs) await enqueue(victim, victimWs);
