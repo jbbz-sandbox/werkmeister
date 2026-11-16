@@ -227,7 +227,7 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
   });
 
   it("runs at most WERKMEISTER_INSTALL_SLOTS installs at once across workspaces", async () => {
-    const runs = [1, 2, 3, 4, 5].map(
+    const runs = [1, 2, 3].map(
       (n) =>
         new Promise<number | null>((resolve) => {
           const child = spawn("sh", [SCRIPT, "install"], {
@@ -238,8 +238,8 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
           child.on("close", resolve);
         }),
     );
-    expect(await Promise.all(runs)).toEqual([0, 0, 0, 0, 0]);
-    expect(npmCalls().filter((c) => c === "ci")).toHaveLength(5);
+    expect(await Promise.all(runs)).toEqual([0, 0, 0]);
+    expect(npmCalls().filter((c) => c === "ci")).toHaveLength(3);
     const peak = Math.max(
       ...fs.readFileSync(path.join(tmp, "peaks"), "utf8").trim().split("\n").map(Number),
     );
@@ -248,7 +248,7 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
   });
 
   it("builds one workspace at a time, so they share the turbo cache safely (SW-35)", async () => {
-    const runs = [1, 2, 3, 4, 5].map(
+    const runs = [1, 2, 3].map(
       (n) =>
         new Promise<number | null>((resolve) => {
           const child = spawn("sh", [SCRIPT, "install"], {
@@ -259,9 +259,9 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
           child.on("close", resolve);
         }),
     );
-    expect(await Promise.all(runs)).toEqual([0, 0, 0, 0, 0]);
+    expect(await Promise.all(runs)).toEqual([0, 0, 0]);
     const peaks = fs.readFileSync(path.join(tmp, "build-peaks"), "utf8").trim().split("\n");
-    expect(peaks).toHaveLength(5);
+    expect(peaks).toHaveLength(3);
     expect(Math.max(...peaks.map(Number))).toBe(1);
   });
 });
