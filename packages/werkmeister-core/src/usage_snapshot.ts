@@ -3,6 +3,7 @@
  * `usage.md` for people. The transcripts it reads are keyed by the workspace path, so once the
  * folder is removed these files are the only record of what the run cost.
  */
+import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { sandboxRoot } from "./config.js";
@@ -69,7 +70,11 @@ export function usageSummary(s: UsageSnapshot): string {
   return `Usage: ${formatTokens(tokensOf(s.totals))} tokens, ${cost} across ${s.sessionCount} session${s.sessionCount === 1 ? "" : "s"}`;
 }
 
-/** Each `stages/NN_*` finished at its newest output file; mtimes, so approximate. */
+/**
+ * Each `stages/NN_*` finished at the earlier of its first output commit on the record branch and
+ * its oldest output file's mtime. Never the newest: re-editing an earlier stage's file later made
+ * the next stage's minutes negative (SW-774).
+ */
 export function stageTimings(ws: string, firstTurn: string | null): StageTiming[] {
   const root = path.join(ws, "stages");
   let dirs: string[];
@@ -82,8 +87,8 @@ export function stageTimings(ws: string, firstTurn: string | null): StageTiming[
   } catch {
     return [];
   }
-  const newest = (dir: string): number => {
-    let max = 0;
+  const oldest = (dir: string): number => {
+    let min = 0;
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -92,14 +97,26 @@ export function stageTimings(ws: string, firstTurn: string | null): StageTiming[
     }
     for (const e of entries) {
       const p = path.join(dir, e.name);
-      if (e.isDirectory()) max = Math.max(max, newest(p));
-      else if (e.name !== ".gitkeep") max = Math.max(max, fs.statSync(p).mtimeMs);
+      const t = e.isDirectory() ? oldest(p) : e.name === ".gitkeep" ? 0 : fs.statSync(p).mtimeMs;
+      if (t && (!min || t < min)) min = t;
     }
-    return max;
+    return min;
+  };
+  const firstCommitted = (stage: string): number => {
+    const out = `stages/${stage}/output`;
+    const r = spawnSync(
+      "git",
+      ["-C", ws, "log", "--diff-filter=A", "--format=%cI", "--", out, `:!${out}/.gitkeep`],
+      { encoding: "utf8" },
+    );
+    const first = r.status === 0 ? r.stdout.trim().split("\n").pop() : ""; // newest first
+    return first ? Date.parse(first) : 0;
   };
   let prev = firstTurn;
   return dirs.map((stage) => {
-    const ms = newest(path.join(root, stage, "output"));
+    // The earlier of the two: a commit can bundle several stages, and a checkout resets mtimes.
+    const times = [firstCommitted(stage), oldest(path.join(root, stage, "output"))].filter(Boolean);
+    const ms = times.length ? Math.min(...times) : 0;
     const finishedAt = ms ? new Date(ms).toISOString() : null;
     const minutes = finishedAt ? minutesBetween(prev, finishedAt) : null;
     if (finishedAt) prev = finishedAt;
@@ -227,7 +244,7 @@ export function renderUsageMd(s: UsageSnapshot): string {
       ),
     ),
     "",
-    "## Stages (approximate: from output file times)",
+    "## Stages (from each stage's first output commit or oldest output file, whichever is earlier)",
     "",
     ...table(
       "| stage | finished | minutes |\n|---|---|---|",
