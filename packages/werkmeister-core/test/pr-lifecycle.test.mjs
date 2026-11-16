@@ -1270,6 +1270,52 @@ test("gate: a declared test_covered_by covers a row whose command does not nest 
   }
 });
 
+test("gate: a covered service whose branch settings change starts from compose.gate.yml and runs its own row (SW-808)", async () => {
+  const ws = icmWorkspace();
+  try {
+    // Auto-detected and declared covers both back off: the service starts from compose.gate.yml anyway.
+    const declared = { ...NESTED.services.cli, test_covered_by: "werkmeister-core" };
+    for (const services of [NESTED.services, { ...NESTED.services, cli: declared }]) {
+      const d = nestedDeps(BOTH, [], services);
+      d.branchRegistry = () => ({ services, repos: NESTED.repos });
+      d.gateCompose = () => ["cli"];
+      const starts = [];
+      d.startService = async (_ws, feature, service, composeName) => {
+        starts.push(`${feature}-${service} from ${composeName ?? "compose.yml"}`);
+      };
+      const g = await gate(ws, d);
+      assert.deepEqual(failed(g), []);
+      assert.ok(starts.includes("feat-cli from compose.gate.yml"), starts.join("\n"));
+      assert.ok(d.calls.includes(`docker exec feat-cli sh -c ${CLI_CMD}`), d.calls.join("\n"));
+      assert.match(g.checks.find((c) => c.name === "test cli").detail, /→ exit 0/);
+    }
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a local api whose command is a --filter subset of a library row runs its own row and baseline (SW-574, SW-808)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const services = {
+      api: { ...REGISTRY.services.api, test: "npm test --filter=api" },
+      lib: { ...REGISTRY.services.lib, test: "npm test --filter=api --filter=lib" },
+    };
+    const both = [/diff --name-only/, { stdout: "apps/api/x.ts\npackages/lib/y.ts\n" }];
+    const d = deps([both], { services });
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.ok(
+      d.calls.includes("docker exec feat-api sh -c npm test --filter=api"),
+      d.calls.join("\n"),
+    );
+    assert.match(g.checks.find((c) => c.name === "test api").detail, /→ exit 0/);
+    assert.ok(g.checks.some((c) => c.name === "baseline api" && c.ok));
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gate: a failing release check fails unless skip_release gives a reason", async () => {
   const noChangeset = [/changeset status/, { code: 1, stderr: "no changesets were found" }];
   const ws = icmWorkspace();

@@ -1324,6 +1324,16 @@ async function gateChecks(
       earlier.detail = `started on the second attempt (first: ${earlier.detail})`;
     }
   };
+  // Running containers come from compose.yml, rendered from the machine registry; a
+  // touched service whose branch settings render differently runs from compose.gate.yml (SW-118).
+  let changed: string[] = [];
+  if (own)
+    try {
+      changed = deps.gateCompose(ws, feature, services).filter((s) => touched.includes(s));
+    } catch (e) {
+      add("containers", false, `branch compose: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
   const withCommand = touched.filter(
     (s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes),
   );
@@ -1338,9 +1348,14 @@ async function gateChecks(
       ]),
     ),
   );
-  // A local api/web service's baseline row needs its own container, so covering it would save no start.
+  // A local api/web service's baseline needs its own container, and a changed one starts from compose.gate.yml
+  // anyway: covering either saves no start, and the changed one's branch settings would go untested (SW-808).
   for (const s of Object.keys(covers))
-    if (local.has(s) && ["api", "web"].includes(services[s]?.["type"] ?? "")) delete covers[s];
+    if (
+      changed.includes(s) ||
+      (local.has(s) && ["api", "web"].includes(services[s]?.["type"] ?? ""))
+    )
+      delete covers[s];
   // Out of the release pick and the starts too, so a covered service's container never starts (SW-574).
   const tested = withCommand.filter((s) => !covers[s]);
   // A sibling can differ in image, toolchain and node_modules, so each test gets its own container (SW-336).
@@ -1383,16 +1398,6 @@ async function gateChecks(
     });
     return done();
   }
-
-  // Running containers come from compose.yml, rendered from the machine registry; a
-  // touched service whose branch settings render differently runs from compose.gate.yml (SW-118).
-  let changed: string[] = [];
-  if (own)
-    try {
-      changed = deps.gateCompose(ws, feature, services).filter((s) => touched.includes(s));
-    } catch (e) {
-      add("containers", false, `branch compose: ${e instanceof Error ? e.message : String(e)}`);
-    }
 
   let release: GateResult["release"];
   const runRelease = async (container: string): Promise<boolean> => {
