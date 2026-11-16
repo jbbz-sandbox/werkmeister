@@ -981,7 +981,14 @@ async function gateChecks(
   // A failure ends with the host load, so a timeout under load reads as load (SW-209).
   // No wait on host load first (SW-542): the 1-min load counts the gate's own install and
   // rows and, on macOS, stalls no CPU shows; admission already priced these containers.
-  const execCheck = async (name: string, container: string, cmd: string, tail: number) => {
+  const execCheck = async (
+    name: string,
+    container: string,
+    cmd: string,
+    tail: number,
+    // The host's failure, not the change's: names it so the row runs once more (SW-739).
+    retryIf: (r: Awaited<ReturnType<Run>>) => string | null = () => null,
+  ) => {
     touchExecMarker(ws);
     // `docker ps` lists paused containers, and exec into one fails: that is no lint/test verdict (SW-391).
     const state = await deps.run("docker", ["inspect", "-f", "{{.State.Paused}}", container]);
@@ -995,19 +1002,28 @@ async function gateChecks(
     }
     // The container's HOME is the real one, ~/.werkmeister mounted (SW-329). Inline, not the workspace's
     // copy: docs-site doesn't mount the workspace; --no-wait: the gate never waits on load (SW-542).
-    const res = await deps.run("docker", [
-      "exec",
-      container,
-      "sh",
-      "-c",
-      TEMP_HOME_SCRIPT,
-      "with-temp-home",
-      "--no-wait",
-      "sh",
-      "-c",
-      cmd,
-    ]);
+    const exec = () =>
+      deps.run("docker", [
+        "exec",
+        container,
+        "sh",
+        "-c",
+        TEMP_HOME_SCRIPT,
+        "with-temp-home",
+        "--no-wait",
+        "sh",
+        "-c",
+        cmd,
+      ]);
+    let res = await exec();
     const lines = [`${cmd} → exit ${res.code}`];
+    const why = res.code ? retryIf(res) : null;
+    if (why) {
+      // Only before this one retry: the gate itself never waits on load (SW-542).
+      const waited = await waitForHostLoadNow(deps, undefined, "the gate's retry");
+      res = await exec();
+      lines[0] = `${cmd} → exit ${res.code}, retried once after ${why}${waited ? `; ${waited}` : ""}`;
+    }
     // Written on a pass too, so a fixed row never leaves its old failing log behind (SW-317).
     const log = path.join(dotDir(ws), `gate-${file.dir}-${name.replace(/\s+/g, "-")}.log`);
     let saved = `full log: ${log}`;
@@ -1581,7 +1597,7 @@ async function gateChecks(
       );
       continue;
     }
-    await execCheck(`test ${svc}`, container, cmd, 15);
+    await execCheck(`test ${svc}`, container, cmd, 15, hostFailure);
   }
   for (const [svc, by] of Object.entries(covers).sort()) {
     const row = checks.find((c) => c.name === `test ${by}`);
@@ -1647,6 +1663,12 @@ async function uncommittedDiff(
 }
 
 const FAILING_TEST = /\bnot ok\b|✖|×|\bFAIL\b/;
+
+/** Why a failed test row is the host's doing, so the gate runs it once more; null when it may be the change's. */
+function hostFailure(r: { code: number }): string | null {
+  // SIGKILL: the OOM killer or a reaped container under host load (SW-739).
+  return r.code === 137 ? "exit 137 (killed)" : null;
+}
 
 /** A failed row's output: the failing test lines above the tail (first 20), then the last `tail` lines (SW-317). */
 export function failedRowExcerpt(output: string, tail: number): string {
