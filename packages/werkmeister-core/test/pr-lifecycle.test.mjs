@@ -512,6 +512,35 @@ test("fragmentTouched: a changed service entry touches that service; a repo: key
   );
 });
 
+// SW-665: a shared database, broker or cache the repo declares reaches every service, as before SW-573.
+test("fragmentTouched: an infrastructure: or caches: change touches every service (SW-665)", () => {
+  const db = { postgres: { image: "postgres:16" } };
+  const branch = (extra) => ({ ...withApp({}), ...extra });
+  const before = { ...MACHINE, infrastructure: db, caches: {} };
+  assert.equal(
+    fragmentTouched(
+      "app",
+      [FRAG],
+      branch({ infrastructure: { postgres: { image: "postgres:17" } }, caches: {} }),
+      before,
+    ).all,
+    "infrastructure: postgres",
+  );
+  assert.equal(
+    fragmentTouched(
+      "app",
+      [FRAG],
+      branch({ infrastructure: db, caches: { gradle: { path: "/g" } } }),
+      before,
+    ).all,
+    "caches: gradle",
+  );
+  assert.equal(
+    fragmentTouched("app", [FRAG], branch({ infrastructure: db, caches: {} }), before).all,
+    null,
+  );
+});
+
 test("fragmentTouched: a mapping change counts only when it moves a file of this diff (SW-573)", () => {
   const nsp = withApp({ no_service_paths: [...REGISTRY.repos.app.no_service_paths, "scripts"] });
   assert.equal(fragmentTouched("app", [FRAG, "docs/a.md"], nsp, MACHINE).all, null);
