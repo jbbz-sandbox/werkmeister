@@ -3,7 +3,7 @@
  * and the Waiting queue from the scheduler's files. A temp HOME has no daemon
  * token, so the queue is read in-process, not over HTTP.
  */
-import { spawnSync } from "node:child_process";
+import { type ExecFileOptions, execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -58,10 +58,21 @@ beforeAll(() => {
 });
 afterAll(() => fs.rmSync(home, { recursive: true, force: true }));
 
+/** spawnSync's { status, stdout, stderr } without blocking the vitest worker (SW-744). */
+const execAsync = (file: string, args: string[], opts: ExecFileOptions = {}) =>
+  new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) =>
+    execFile(file, args, { ...opts, encoding: "utf8" }, (err, stdout, stderr) =>
+      resolve({
+        status: err ? (typeof err.code === "number" ? err.code : null) : 0,
+        stdout,
+        stderr,
+      }),
+    ),
+  );
+
 const budget = (...argv: string[]) =>
-  spawnSync(process.execPath, [MAIN, "budget", "status", ...argv], {
+  execAsync(process.execPath, [MAIN, "budget", "status", ...argv], {
     cwd: home,
-    encoding: "utf-8",
     env: {
       ...process.env,
       HOME: home,
@@ -72,8 +83,8 @@ const budget = (...argv: string[]) =>
     },
   });
 
-it("prints the budget, leases and Waiting queue as JSON", () => {
-  const res = budget("--json");
+it("prints the budget, leases and Waiting queue as JSON", async () => {
+  const res = await budget("--json");
   expect(res.status, res.stderr).toBe(0);
   const out = JSON.parse(res.stdout);
   expect(out).toMatchObject({
@@ -96,8 +107,8 @@ it("prints the budget, leases and Waiting queue as JSON", () => {
   expect(out.waiters[0]).toMatchObject({ services: null, cpus: null, waited_ms: 0 });
 });
 
-it("lists slots in slot order and the queue in start order", () => {
-  const res = budget();
+it("lists slots in slot order and the queue in start order", async () => {
+  const res = await budget();
   expect(res.status, res.stderr).toBe(0);
   expect(res.stdout).toContain("Budget: 8 GiB memory, 4 CPUs, host load 6, preemption off");
   expect(res.stdout).toMatch(/Slots:\n {2}1 {2}alpha\n {2}2 {2}beta {2}\/ws\/beta\n/);

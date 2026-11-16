@@ -6,7 +6,7 @@
  * so it only happens through main(). Runs from an empty temp dir so that, if the
  * flags were accepted, `up` stops at "Feature name required" before any docker.
  */
-import { spawnSync } from "node:child_process";
+import { type ExecFileOptions, execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -24,21 +24,32 @@ beforeAll(() => {
 });
 afterAll(() => fs.rmSync(cwd, { recursive: true, force: true }));
 
-const sandbox = (...argv: string[]) =>
-  spawnSync(process.execPath, [MAIN, ...argv], { cwd, encoding: "utf-8" });
+/** spawnSync's { status, stdout, stderr } without blocking the vitest worker (SW-744). */
+const execAsync = (file: string, args: string[], opts: ExecFileOptions = {}) =>
+  new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) =>
+    execFile(file, args, { ...opts, encoding: "utf8" }, (err, stdout, stderr) =>
+      resolve({
+        status: err ? (typeof err.code === "number" ? err.code : null) : 0,
+        stdout,
+        stderr,
+      }),
+    ),
+  );
+
+const sandbox = (...argv: string[]) => execAsync(process.execPath, [MAIN, ...argv], { cwd });
 
 describe("sandbox up flags", () => {
   it.each([["-s", "backend"], ["--services", "backend"], ["--force"]])(
     "rejects %s as unknown",
-    (...argv) => {
-      const res = sandbox("up", ...argv);
+    async (...argv) => {
+      const res = await sandbox("up", ...argv);
       expect(res.status).not.toBe(0);
       expect(res.stderr).toContain(`unknown option '${argv[0]}'`);
     },
   );
 
-  it("no longer lists them in --help", () => {
-    const res = sandbox("up", "--help");
+  it("no longer lists them in --help", async () => {
+    const res = await sandbox("up", "--help");
     expect(res.status).toBe(0);
     expect(res.stdout).toContain("--workspace");
     expect(res.stdout).not.toContain("--services");
