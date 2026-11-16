@@ -5,12 +5,13 @@
  * domain and crontab are never touched. The binary takes the host's platform —
  * launchd on macOS, cron in the Linux container; the unit test covers both.
  */
-import { type ExecFileOptions, execFile } from "node:child_process";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { execAsync } from "../../lib/__tests__/helpers/exec_async.js";
 
 const CLI_DIR = path.resolve(fileURLToPath(import.meta.url), "../../../..");
 /** Built by the `test` script. */
@@ -53,18 +54,6 @@ beforeAll(() => {
   });
 });
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
-
-/** spawnSync's { status, stdout, stderr } without blocking the vitest worker (SW-744). */
-const execAsync = (file: string, args: string[], opts: ExecFileOptions = {}) =>
-  new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) =>
-    execFile(file, args, { ...opts, encoding: "utf8" }, (err, stdout, stderr) =>
-      resolve({
-        status: err ? (typeof err.code === "number" ? err.code : null) : 0,
-        stdout,
-        stderr,
-      }),
-    ),
-  );
 
 const cli = (...argv: string[]) =>
   execAsync(process.execPath, [MAIN, "pr", ...argv], { cwd: tmp, env });
