@@ -93,6 +93,28 @@ test("backfill: a start that fits passes the head until the head has waited 5 mi
   assert.deepEqual(admit(budget, [], [w("x", 30)], req("p", 1, 1, true)), { kind: "admit" });
 });
 
+// SW-729: only a grant starts a whole-feature head, and room freed with no release (a timed-out gate's
+// stop, Docker restarted) runs none, so a starved head that fits held every start behind it forever.
+test("backfill: a starved whole-feature head that fits now does not hold a start behind it", () => {
+  const head = (cpus) => ({ ...w("sdk-docs-keys", 239), cost: { memory: 1 * G, cpus } });
+  const core = { ...req("core-test-changed", 1, 1), services: ["werkmeister-core"] };
+  assert.deepEqual(admit(budget, [], [head(3)], core), { kind: "admit" });
+  // It still holds while it doesn't fit: the room is its, once a release grants it.
+  assert.deepEqual(admit(budget, [lease("a", 1, 2)], [head(3)], core), {
+    kind: "wait",
+    position: 2,
+  });
+  // Worst case, 1-CPU starts on 6 CPUs: each passes while the head still fits, so the 4th takes its
+  // room and the head waits for that start's release to grant it.
+  const six = { memory: 16 * G, cpus: 6, preempt: true };
+  const running = [];
+  for (let i = 0; i < 6; i++) {
+    const start = { ...req(`s${i}`, 1, 1), services: ["cli"] };
+    if (admit(six, running, [head(3)], start).kind === "admit") running.push(lease(`s${i}`, 1, 1));
+  }
+  assert.equal(running.length, 4);
+});
+
 // T1: the wave's shape. Core holds 3 of 6; a whole-feature up needing 5 heads the queue.
 test("backfill: a 1-CPU service start passes a whole-feature head that cannot fit", () => {
   const six = { memory: 4 * G, cpus: 6, preempt: true };

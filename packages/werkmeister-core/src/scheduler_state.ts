@@ -455,6 +455,7 @@ export function waiters(queue: string[], running: Lease[], now = Date.now()): Wa
       feature,
       waitedMs: Number.isFinite(since) ? Math.max(0, now - since) : 0,
       gate: !!w?.gate || (!!w?.services && running.some((l) => l.feature === feature)),
+      ...(ws && !w?.services && { cost: featureCost(ws) }),
     };
   });
 }

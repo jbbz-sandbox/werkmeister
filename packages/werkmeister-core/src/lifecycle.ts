@@ -585,7 +585,7 @@ export function capacityWait(feature: string, position: number, stays: boolean):
     lines.push(
       `behind ${head.feature}${need ? ` (needs ${cpus(need.cpus)}, ${gib(need.memory)})` : ""}` +
         (head.waitedMs >= STARVE_MS
-          ? `, which has waited ${STARVE_MS / 60_000} min and gets the next free room`
+          ? `, which has waited ${Math.round(head.waitedMs / 60_000)} min and gets the next free room`
           : ""),
     );
   }
