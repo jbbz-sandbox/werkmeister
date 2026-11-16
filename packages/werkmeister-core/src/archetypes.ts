@@ -100,7 +100,7 @@ export function serviceNoTests(svcDef: ServiceEntry | null | undefined): string 
  * `permissions.allow` rule both use it, so the rule matches what the agent runs.
  */
 export function containerTestCommand(feature: string, svc: string, cmd: string): string {
-  return `docker exec ${feature}-${svc} sh -c '${cmd}'`;
+  return `docker exec ${feature}-${svc} sh -c '${cmd.split("'").join(`'\\''`)}'`;
 }
 
 /** True when *cmd* is simple commands joined only by `&&`: no group, pipe, `||`, `;`, `&`, newline or substitution. */
