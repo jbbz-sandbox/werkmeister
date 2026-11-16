@@ -37,6 +37,7 @@ import { resolveModel } from "./model_tiers.js";
 import { ProcError, run as procRun } from "./proc.js";
 import { loadProjects } from "./projects.js";
 import { info, warn } from "./reporter.js";
+import { stageGrants } from "./strategies/icm_templates.js";
 import { STRATEGY_IDS } from "./strategies/types.js";
 
 function isDir(p: string): boolean {
@@ -153,6 +154,13 @@ export function isTrue(value: unknown): boolean {
  */
 export function readAutonomous(workspaceRoot: string): boolean {
   return isTrue(readWorkspaceField(workspaceRoot, "autonomous"));
+}
+
+/** SW-807: an ICM workspace's stage grants, for the whole run and either mode; none for another strategy. */
+export function readGrants(workspaceRoot: string): string[] {
+  if (String(readWorkspaceField(workspaceRoot, "context_strategy") ?? "").trim() !== "icm")
+    return [];
+  return stageGrants(String(readWorkspaceField(workspaceRoot, "work_type") ?? ""));
 }
 
 /** The workspace's `auto_stop` input (#231); unset follows `autonomous` (SW-39). */

@@ -67,7 +67,7 @@ import { info } from "../../reporter.js";
 import { repoDirs } from "../../standards.js";
 import { tempHomeWrapper } from "../../temp_home.js";
 // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
-import { readAutonomous, readAutoStop, readModel } from "../../workspace_prompts.js";
+import { readAutonomous, readAutoStop, readGrants, readModel } from "../../workspace_prompts.js";
 import { AUTONOMOUS_DENY, CLI_NAMES, cli, pluginTool } from "../autonomous_deny.js";
 import { CODEX_HOOKS_FILE, CODEX_LAUNCH, writeCodexConfig } from "../codex/index.js";
 // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
@@ -602,6 +602,7 @@ export function workspaceAllowRules(
     extra,
     reposConfig,
   );
+  rules.push(...readGrants(workspaceRoot).flatMap(cli));
   if (!autonomous) return rules;
   // Exact: `--prefix`, `--dir`/`-C` reach another workspace, `--script-shell` runs any file.
   // Read from the main checkout, not the worktree: an agent-written `yarn.lock` + `.yarnrc.yml`

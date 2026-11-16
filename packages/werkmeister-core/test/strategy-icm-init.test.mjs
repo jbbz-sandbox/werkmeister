@@ -9,7 +9,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 import {
   buildPrGuardEntry,
-  READ_ONLY_GIT_RULES,
+  workspaceAllowRules,
   workspaceAskRules,
 } from "../dist/harness/claude/hooks_gen.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
@@ -116,7 +116,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
       JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")),
       {
         hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
-        permissions: { allow: READ_ONLY_GIT_RULES, ask: workspaceAskRules(root) },
+        permissions: { allow: workspaceAllowRules(root), ask: workspaceAskRules(root) },
       },
     );
     assert.ok(!fs.existsSync(path.join(root, ".werkmeister", "notes")));
@@ -763,4 +763,26 @@ test("a Run limits block in the description is merged away too; an interactive b
   assert.equal(auto.match(/^## Run limits/gm)?.length, 1);
   assert.doesNotMatch(auto, /werkmeister up/);
   assert.match(await brief({ starting_prompt: `Do it.\n\n${own}` }), /werkmeister up/);
+});
+
+test("SW-807: each bugfix contract lists its own pre-approved commands and steers off python heredocs", async () => {
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      icm.init(ctx);
+      const section = (d) =>
+        fs
+          .readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8")
+          .split("## Pre-approved\n")[1]
+          .split("\n\n")[0];
+      assert.match(
+        section("01_reproduce"),
+        /^- `werkmeister issue start`\n- `werkmeister issue view`\n/,
+      );
+      for (const d of ["02_fix", "03_exercise", "04_propose"])
+        assert.match(section(d), /^- Every other command asks\./);
+      for (const d of ["01_reproduce", "02_fix", "03_exercise", "04_propose"])
+        assert.match(section(d), /never a `python3` heredoc or `python3 -c`/);
+    },
+    { inputs: { work_type: "bugfix" } },
+  );
 });

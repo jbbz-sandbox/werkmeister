@@ -52,6 +52,8 @@ export interface Stage {
   gate?: string;
   /** Which _shared/standards.md rows the contract names. */
   standards: "none" | "all";
+  /** SW-807: `werkmeister` subcommands this stage runs, pre-approved for the whole run; init reads them from here, never from the rendered CONTEXT.md, which the agent can edit. */
+  grants?: string[];
   contract(v: IcmVars): Contract;
 }
 
@@ -231,6 +233,10 @@ const RELEASE_AFTER_COMMIT =
 const LINT =
   "the repo's lint command (the `<lint> &&` head of the test command in `werkmeister-context.md`, when it has one, which the PR gate's lint row runs) and fix what it fails, release entry included.";
 
+// SW-807: exact, this workspace's own issue only. The feature, gate and status commands keep asking:
+// each can reach shared infra, another workspace or the real ~/.werkmeister from agent-editable input.
+const START_GRANTS = ["issue start", "issue view"];
+
 const propose: Stage = {
   name: "propose",
   job: "acceptance walk and PR files",
@@ -288,6 +294,7 @@ const noCommitPlan = (group: string[]) =>
 const feature: Stage[] = [
   {
     name: "research",
+    grants: START_GRANTS,
     job: "inventory the code, surface decisions",
     writes: "`output/inventory.md`, `output/decisions.md`",
     check: "answer every open question in `decisions.md`",
@@ -413,6 +420,7 @@ const feature: Stage[] = [
 const bugfix: Stage[] = [
   {
     name: "reproduce",
+    grants: START_GRANTS,
     job: "reproduce and locate the root cause",
     writes: "`output/repro.md`",
     check: "agree the root cause",
@@ -534,6 +542,7 @@ const bugfix: Stage[] = [
 const refactor: Stage[] = [
   {
     name: "scope",
+    grants: START_GRANTS,
     job: "fix the boundary and the invariants",
     writes: "`output/scope.md`",
     check: "agree what must not change",
@@ -610,6 +619,7 @@ const refactor: Stage[] = [
 const spike: Stage[] = [
   {
     name: "questions",
+    grants: START_GRANTS,
     job: "frame what the spike must answer",
     writes: "`output/questions.md`",
     check: "agree the questions and what settles them",
@@ -689,4 +699,9 @@ export function proposeDir(stages: Stage[]): string | null {
 /** The stage dir whose output holds PR files: propose, else the last stage (spike, SW-83). */
 export function prDir(stages: Stage[]): string {
   return proposeDir(stages) ?? stageDirs(stages)[stages.length - 1];
+}
+
+/** Every stage's grants for *workType*, once each: granted for the whole run (SW-807). */
+export function stageGrants(workType: string): string[] {
+  return [...new Set(templateFor(workType).flatMap((s) => s.grants ?? []))];
 }
