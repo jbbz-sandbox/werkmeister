@@ -27,6 +27,7 @@ vi.mock("werkmeister-core/compose", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/compose")>()),
   composeStop: vi.fn(async () => true),
   composeRestart: vi.fn(async () => true),
+  composeUpServiceAsync: vi.fn(async () => true),
   getContainerStatus: vi.fn(async () => []),
   workspaceForFeature: vi.fn(() => null),
 }));
@@ -45,7 +46,12 @@ vi.mock("werkmeister-core/reporter", async (orig) => ({
 }));
 
 import { readWaiting } from "werkmeister-core/agent_state";
-import { composeStop, getContainerStatus, workspaceForFeature } from "werkmeister-core/compose";
+import {
+  composeStop,
+  composeUpServiceAsync,
+  getContainerStatus,
+  workspaceForFeature,
+} from "werkmeister-core/compose";
 import {
   admitOrQueue,
   admitServiceStart,
@@ -351,7 +357,7 @@ describe("admitServiceStart", () => {
       if (f === "mine") mineCpus = 0;
       return true;
     });
-    started.length = 0;
+    vi.mocked(composeUpServiceAsync).mockClear();
     const sleep = async () => {
       // Released: it holds nothing and waits for core + api (4 CPUs) as one gate request.
       expect(composeStop).toHaveBeenCalledWith("mine");
@@ -359,8 +365,37 @@ describe("admitServiceStart", () => {
       both(other, mine, 0, () => mineCpus); // the other gate finished
     };
     await admitServiceStart("mine", mine, "api", { sleep });
-    expect(started).toEqual(["mine-core"]);
+    // SW-686: through compose, in its dependency order with health waits, not docker start by name.
+    expect(composeUpServiceAsync).toHaveBeenCalledWith(
+      "mine",
+      ["core"],
+      path.join(mine, "compose.yml"),
+      true,
+    );
     expect(readQueue()).toEqual([]);
+  });
+
+  it("a released set that fails to come back names what stayed stopped (SW-686)", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ mine: { slot: 2, workspace: mine } });
+    let mineCpus = 3;
+    both(other, mine, 3, () => mineCpus);
+    vi.mocked(getContainerStatus)
+      .mockResolvedValueOnce([{ name: "mine-core", status: "running", service: "core" } as never])
+      .mockResolvedValueOnce([{ name: "mine-core", status: "exited", service: "core" } as never]);
+    vi.mocked(composeStop).mockImplementation(async (f: string) => {
+      if (f === "mine") mineCpus = 0;
+      return true;
+    });
+    vi.mocked(composeUpServiceAsync).mockResolvedValueOnce(false);
+    const sleep = async () => both(other, mine, 0, () => mineCpus);
+    const err = await admitServiceStart("mine", mine, "api", { sleep }).catch((e) => e);
+    expect(err).toMatchObject({ code: "COMPOSE_UP_FAILED" });
+    expect(err.message).toContain("still stopped: mine-core");
   });
 
   it("a person's workspace keeps its running containers while it waits (review, SW-675)", async () => {
