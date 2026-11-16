@@ -699,6 +699,25 @@ function leftOver(root: string): boolean {
   }
 }
 
+// Starts containers or runs tests. A list of what is held, not of what passes: the ticket names the held
+// set, and an allowlist would hold `werkmeister feature stop`, the command that frees room (SW-768).
+const NEEDS_CAPACITY =
+  /(^|[\s;&|(`/'"])(docker|pnpm|npm|npx|node|turbo|vitest|with-temp-home|with-fixture-workspace)(\s|$)|\b(werkmeister|w9r)\s+(feature\s+(up|restart)|pr\s+(gate|open))\b/;
+const NEEDS_CAPACITY_TOOL = /^mcp__.*werkmeister.*__(up|restart)$/;
+
+function needsCapacity(input: Record<string, any>): boolean {
+  if (input["hook_event_name"] !== "PreToolUse") return false;
+  const tool = String(input["tool_name"] ?? "");
+  // A quoted message (`git commit -m "restart docker"`) is data, not a command (SW-768 review). Only
+  // `-m`/`--message`: other quotes may hold one (`sh -c 'docker …'`).
+  const command = String(input["tool_input"]?.["command"] ?? "").replace(
+    /(\s(?:-m|--message)[= ]?\s*)('[^']*'|"[^"]*")/g,
+    "$1''",
+  );
+  if (tool === "Bash") return NEEDS_CAPACITY.test(command);
+  return NEEDS_CAPACITY_TOOL.test(tool);
+}
+
 /**
  * The hook's stdout while the workspace is paused or waiting for capacity, or null. `continue: false` ends
  * the turn with the transcript intact; the deny also holds where a host ignores it.
@@ -715,8 +734,12 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
     clearWaiting(root);
     return null;
   }
+  // Queued, only what needs this workspace's containers or the CPUs waits: the record, git and
+  // `feature stop` (which frees room) go on, and so do prompts (SW-768).
+  if (waiting && !needsCapacity(input)) return null;
   const reason = waiting
-    ? `Waiting for capacity (position ${waiting.position}). End your turn now; it starts when another feature stops.`
+    ? `Waiting for capacity (position ${waiting.position}): containers and tests wait until this workspace starts, ` +
+      "and the session is told to continue then. Edits and git still work; end your turn if nothing else is left."
     : PAUSED_REASON;
   switch (input["hook_event_name"]) {
     case "PreToolUse": {
@@ -735,9 +758,7 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
       // One guard for every sender: the person, claude-send, PR callbacks, check-in.
       return {
         decision: "block",
-        reason: waiting
-          ? "This workspace is waiting for capacity; it starts on its own."
-          : "This workspace is paused. Press ▶ Resume on its card first.",
+        reason: "This workspace is paused. Press ▶ Resume on its card first.",
       };
     default:
       return null;
