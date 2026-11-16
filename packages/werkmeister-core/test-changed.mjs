@@ -102,7 +102,10 @@ export function selectTests({ changed, pkg, pkgDir, base = "the base" }) {
       }
     }
   }
-  const files = Object.keys(why).sort();
+  // A test the branch deletes still starts a walk; node --test can't run a file that's gone (SW-730).
+  const files = Object.keys(why)
+    .filter((f) => fs.existsSync(path.join(pkgDir, f)))
+    .sort();
   if (files.length) return { mode: "some", files, why };
   if (!inPkg.length) return { mode: "none", reason: `no werkmeister-core changes since ${base}` };
   return { mode: "full", reason: `${inPkg[0]} reached no test` };

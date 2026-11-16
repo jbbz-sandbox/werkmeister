@@ -97,6 +97,15 @@ test("a changed test or smoke picks itself", () =>
     ]);
   }));
 
+// SW-730: node --test fails on a file that is gone, so a deleted test selects nothing.
+test("a deleted test is not selected; the rest of the selection runs", () =>
+  withRepo((root) => {
+    git(root, "rm", "-q", "pkg/test/c.test.mjs");
+    edit(root, "pkg/src/a.ts");
+    git(root, "commit", "-qam", "branch change");
+    assert.deepEqual(pick(root).files, ["test/a.test.mjs", "test/h.test.mjs"]);
+  }));
+
 test("a file outside the package picks the tests that name its path", () =>
   withRepo((root) => {
     edit(root, "tools/x.yaml");
