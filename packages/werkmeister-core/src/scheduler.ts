@@ -44,6 +44,8 @@ export interface Waiter {
   waitedMs: number;
   /** A services start for a feature that already runs containers: a gate, or `up --service` beside them. */
   gate: boolean;
+  /** A whole-feature waiter's cost; unset for a services start, whose own poll admits it. */
+  cost?: Cost;
 }
 
 /** How long the queue head waits before backfill stops passing it and a plain `up` head may preempt (SW-675). */
@@ -111,7 +113,15 @@ export function admit(budget: Budget, running: Lease[], queue: Waiter[], req: Re
   // shortcut: busy also covers a gate exec in the last idle_stop_minutes, so a recent gate's later
   // --service start passes too; tighten to a live-gate signal if heads starve again.
   const endsGate = !!req.services && running.some((l) => l.feature === req.feature && l.busy);
-  const headHolds = !isHead && !endsGate && (order[0].gate || order[0].waitedMs >= STARVE_MS);
+  // Only a release's grant starts a whole-feature head, and room can free without one (a timed-out
+  // gate's stop, a Docker restart), so holding behind one that fits now waits forever (SW-729).
+  const headCost = order[0].cost;
+  const headAwaitsGrant =
+    !!headCost &&
+    used.memory + headCost.memory <= budget.memory &&
+    used.cpus + headCost.cpus <= budget.cpus;
+  const headHolds =
+    !isHead && !endsGate && !headAwaitsGrant && (order[0].gate || order[0].waitedMs >= STARVE_MS);
   if (fits({ memory: 0, cpus: 0 }) && (req.byPerson || !headHolds)) return { kind: "admit" };
 
   // An idle or human-check lease (a session parked on a question) has nobody in it, so the queue head

@@ -210,6 +210,33 @@ test("a service waiter whose poll stopped leaves the queue and its waiting.json;
   });
 });
 
+// SW-729: a queued whole-feature `up` has no poll of its own; only a release's grant starts it.
+test("a starved whole-feature head that fits passes a service start on an idle host and stays queued", async () => {
+  await withHome(async (home) => {
+    const head = workspace(home, COMPOSE);
+    const mine = path.join(home, "mine");
+    fs.mkdirSync(path.join(mine, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), COMPOSE);
+    writeLeases({ head: { slot: 1, workspace: head } });
+    await enqueue("head", head);
+    const since = new Date(Date.now() - 239 * 60_000).toISOString();
+    writeWaiting(head, { position: 1, reason: "waiting for capacity", since });
+    const budget = { memory: 8 * G, cpus: 4, preempt: false };
+    const start = { services: ["api"] };
+    // 3 of 4 CPUs taken: the head (3 CPUs) can't fit, so it keeps the room.
+    const busy = [{ feature: "x", cost: { memory: G, cpus: 3 }, rank: "person", busy: false }];
+    assert.deepEqual(await requestAdmission("mine", mine, false, busy, budget, start), {
+      kind: "wait",
+      position: 2,
+    });
+    assert.deepEqual(await requestAdmission("mine", mine, false, [], budget, start), {
+      kind: "admit",
+    });
+    assert.deepEqual(readQueue(), ["head"]);
+    assert.equal(readWaiting(head).since, since);
+  });
+});
+
 // SW-540: during a wave the queue is no longer empty; a start of nothing must not join it.
 test("a request that starts nothing admits and leaves the queue and waiting.json alone", async () => {
   await withHome(async (home) => {
