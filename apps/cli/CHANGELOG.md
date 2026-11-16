@@ -1,5 +1,15 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.93.0
+
+### Minor Changes
+
+- b649d26: SW-807: an icm workspace pre-approves the exact `werkmeister issue start` and `issue view` (its own issue) for the whole run, interactive or autonomous. Each stage contract lists its pre-approved commands under `## Pre-approved` and says to edit files with Read, Edit and Write, not a `python3` heredoc.
+
+### Patch Changes
+
+- dcd78ab: SW-807: the two `with-temp-home env WERKMEISTER_ROOT=* node --test` ask rules are written as `… node --test*`. With the old `:*` suffix Claude Code read the other `*` literally, warned at every workspace session start, and never asked. Run `werkmeister machine migrate` (or `workspace init`) to rewrite open workspaces.
+
 ## 0.92.2
 
 ### Patch Changes
