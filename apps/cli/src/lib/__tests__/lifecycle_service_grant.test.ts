@@ -58,7 +58,7 @@ vi.mock("werkmeister-core/reporter", async (orig) => ({
 }));
 
 import { readNudge, readWaiting, writeWaiting } from "werkmeister-core/agent_state";
-import { composeUpServiceAsync } from "werkmeister-core/compose";
+import { composeUpServiceAsync, getContainerStatus } from "werkmeister-core/compose";
 import { grantWaiters, startService } from "werkmeister-core/lifecycle";
 import { enqueue, readQueue, writeLeases } from "werkmeister-core/scheduler_state";
 
@@ -123,6 +123,54 @@ it("a parked start whose compose up fails tells its session (SW-701 review)", as
   vi.mocked(composeUpServiceAsync).mockResolvedValueOnce(false);
   expect(await grantWaiters()).toEqual([]);
   expect(readNudge(mine)).toContain("Could not start 'mine' api from the waiting queue");
+});
+
+const container = {
+  name: "mine-api-1",
+  status: "exited",
+  health: "",
+  ports: "",
+  service: "api",
+  role: "",
+  exitCode: 137,
+};
+
+// SW-840: preemption stopped an on-demand container; the grant's `up` starts only the default set,
+// yet told the session its containers were up, so its first `docker exec` failed.
+it("a granted whole-feature waiter is told which containers stayed stopped and how to start them", async () => {
+  await enqueue("mine", mine);
+  const now = new Date().toISOString();
+  fs.mkdirSync(path.join(mine, ".werkmeister", "sessions"), { recursive: true });
+  fs.writeFileSync(
+    path.join(mine, ".werkmeister", "sessions", "s1.json"),
+    JSON.stringify({ status: "idle", at: now }),
+  );
+  vi.mocked(getContainerStatus).mockResolvedValue([
+    container,
+    // A finished one-shot setup container is done, not stopped; a running one needs nothing.
+    { ...container, name: "mine-db-setup-1", service: "db-setup", role: "setup" },
+    { ...container, name: "mine-web-1", service: "web", status: "running" },
+  ]);
+  expect(await grantWaiters()).toEqual(["mine"]);
+  const nudge = readNudge(mine);
+  expect(nudge).toContain("mine-api-1");
+  expect(nudge).toContain("werkmeister feature up --service api");
+  expect(nudge).not.toContain("containers are up");
+  expect(nudge).not.toContain("db-setup");
+  expect(nudge).not.toContain("--service web");
+  vi.mocked(getContainerStatus).mockResolvedValue([]);
+});
+
+it("a granted waiter whose containers all run hears they are up", async () => {
+  await enqueue("mine", mine);
+  fs.mkdirSync(path.join(mine, ".werkmeister", "sessions"), { recursive: true });
+  fs.writeFileSync(
+    path.join(mine, ".werkmeister", "sessions", "s1.json"),
+    JSON.stringify({ status: "idle", at: new Date().toISOString() }),
+  );
+  vi.mocked(getContainerStatus).mockResolvedValueOnce([{ ...container, status: "running" }]);
+  expect(await grantWaiters()).toEqual(["mine"]);
+  expect(readNudge(mine)).toContain("this workspace's containers are up");
 });
 
 it("runs no grant when nobody waits", async () => {

@@ -54,6 +54,7 @@ import {
   composeUpServiceAsync,
   dependencyOrder,
   getContainerStatus,
+  isOneShotService,
   liveProject,
   workspaceForFeature,
 } from "./compose.js";
@@ -1049,6 +1050,22 @@ const GRANTED_NUDGE =
   "Capacity freed: this workspace's containers are up. Continue where you left off.";
 
 /**
+ * The granted session's nudge. Preemption stops on-demand containers too, and the grant's `up` starts
+ * only the default set, so name each one left stopped and how to start it (SW-840).
+ */
+async function grantedNudge(feature: string): Promise<string> {
+  const stopped = (await getContainerStatus(feature)).filter(
+    (c) => c.status !== "running" && !isOneShotService(c.service, c.role),
+  );
+  if (!stopped.length) return GRANTED_NUDGE;
+  return (
+    `Capacity freed: this workspace started, but these containers are still stopped: ${stopped.map((c) => c.name).join(", ")}. ` +
+    `Start them with ${stopped.map((c) => `\`werkmeister feature up --service ${c.service}\``).join(", ")}, ` +
+    "then continue where you left off."
+  );
+}
+
+/**
  * Every running feature as the scheduler sees it, read from Docker now (never a
  * pid: `up` exits once containers start). Longest-inactive first, so ties in
  * preemption go to the feature nothing has touched longest. Null when Docker
@@ -1204,7 +1221,7 @@ async function grantWaitersNow(): Promise<string[]> {
     if (waiting?.parked) {
       if (await startParked(feature, workspace, waiting.parked.service)) {
         started.push(feature);
-        if (liveSessions(workspace).length) writeNudge(workspace, GRANTED_NUDGE);
+        if (liveSessions(workspace).length) writeNudge(workspace, await grantedNudge(feature));
       }
       continue;
     }
@@ -1223,7 +1240,7 @@ async function grantWaitersNow(): Promise<string[]> {
     // Backfill (SW-675): a later waiter may fit; admission itself holds the room for a starved head.
     if (r.waiting !== undefined) continue;
     started.push(feature);
-    if (liveSessions(workspace).length) writeNudge(workspace, GRANTED_NUDGE);
+    if (liveSessions(workspace).length) writeNudge(workspace, await grantedNudge(feature));
   }
   return started;
 }
