@@ -1358,7 +1358,10 @@ async function gateChecks(
   let changed: string[] = [];
   if (own)
     try {
-      changed = deps.gateCompose(ws, feature, services).filter((s) => touched.includes(s));
+      // A skip_tests service runs no row, so its branch settings need no container either (SW-734).
+      changed = deps
+        .gateCompose(ws, feature, services)
+        .filter((s) => touched.includes(s) && !reason(skips[s]));
     } catch (e) {
       add("containers", false, `branch compose: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -1391,16 +1394,17 @@ async function gateChecks(
   const testedIds = [...new Set(tested.map(toRendered).filter((s): s is string => Boolean(s)))];
   // False when its port is taken: the ports row is written and the gate stops.
   const startRepoContainer = async (prefer?: string): Promise<boolean> => {
-    const candidates = [
-      ...touched.map(toRendered).filter((s): s is string => Boolean(s)),
-      ...rendered,
-    ];
+    const all = [...touched.map(toRendered).filter((s): s is string => Boolean(s)), ...rendered];
+    // Last resort: starting it, and the install it needs, is what skip_tests was to avoid (SW-734).
+    const skipped = touched.filter((s) => reason(skips[s])).map(toRendered);
+    const candidates = all.filter((s) => !skipped.includes(s));
     // Lint and release are repo-wide, so any one container serves them; an
     // idle one only sleeps, where a web service would start its dev server.
     const pick =
       prefer ??
       candidates.find((s) => IDLE_SERVICE_TYPES.includes(deps.services[s]?.["type"] ?? "")) ??
-      candidates[0];
+      candidates[0] ??
+      all[0];
     if (!pick) return true;
     if (!(await portsFree([pick]))) return false;
     touchExecMarker(ws);
