@@ -57,7 +57,9 @@ vi.mock("werkmeister-core/reporter", async (orig) => ({
   info: vi.fn(),
 }));
 
-import { startService } from "werkmeister-core/lifecycle";
+import { readNudge, readWaiting, writeWaiting } from "werkmeister-core/agent_state";
+import { composeUpServiceAsync } from "werkmeister-core/compose";
+import { grantWaiters, startService } from "werkmeister-core/lifecycle";
 import { enqueue, readQueue, writeLeases } from "werkmeister-core/scheduler_state";
 
 let tmp: string;
@@ -90,6 +92,37 @@ it("a start admitted on its first poll runs a grant after it starts when someone
   await startService("mine", mine, "api");
   expect(ops).toEqual(["admit", "compose-up", "grant-later"]);
   expect(readQueue()).toEqual(["other"]);
+});
+
+// SW-701: a parked --service start has no poll; the grant starts it and wakes its session.
+it("a grant starts a parked service start that fits, with no grant of its own inside", async () => {
+  await enqueue("mine", mine);
+  writeWaiting(mine, {
+    position: 1,
+    reason: "waiting for capacity",
+    services: ["api"],
+    since: "2026-11-16T00:00:00.000Z",
+    parked: { service: "api" },
+  });
+  ops.length = 0;
+  expect(await grantWaiters()).toEqual(["mine"]);
+  expect(ops.filter((o) => o !== "grant")).toEqual(["admit", "compose-up"]);
+  expect(readQueue()).toEqual([]);
+  expect(readWaiting(mine)).toBeNull();
+});
+
+it("a parked start whose compose up fails tells its session (SW-701 review)", async () => {
+  await enqueue("mine", mine);
+  writeWaiting(mine, {
+    position: 1,
+    reason: "waiting for capacity",
+    services: ["api"],
+    since: "2026-11-16T00:00:00.000Z",
+    parked: { service: "api" },
+  });
+  vi.mocked(composeUpServiceAsync).mockResolvedValueOnce(false);
+  expect(await grantWaiters()).toEqual([]);
+  expect(readNudge(mine)).toContain("Could not start 'mine' api from the waiting queue");
 });
 
 it("runs no grant when nobody waits", async () => {

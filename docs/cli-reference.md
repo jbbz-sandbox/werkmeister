@@ -72,7 +72,7 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 
 **If the workspace lists no services**, the command still proceeds — the feature is registered and routes entirely to k8s. To add services later, list them in `.werkmeister/workspace.yml`, rerun `werkmeister workspace init`, then `werkmeister feature up`.
 
-**If the feature has to wait for capacity**, the command exits 75 without starting containers. It prints `=== Feature '<name>' is waiting for capacity (position N) ===`, who holds the budget, and the head it waits behind. The feature stays queued and starts by itself when room frees, and its session is told to continue. A `--service` start waits up to 10 minutes, then exits 75 the same way. Exit 75 means no capacity yet, not a failure: rerun the command. `werkmeister budget status` shows the queue.
+**If the feature has to wait for capacity**, the command exits 75 without starting containers. It prints `=== Feature '<name>' is waiting for capacity (position N) ===`, who holds the budget, what the start needs against what is free, and the head it waits behind. The feature stays queued and starts by itself when room frees, and its session is told to continue. A `--service` start waits up to 10 minutes, then exits 75 the same way and stays queued: it starts by itself when room frees, and a rerun keeps its place. One that stopped the feature's running containers to wait does not stay queued: `werkmeister feature up` starts the feature again. Exit 75 means no capacity yet, not a failure. `werkmeister budget status` shows the queue.
 
 **If every slot is taken** (12 by default, `feature_slots.count`), the command exits with an error. Free a slot by running `werkmeister feature down` on another feature.
 

@@ -38,6 +38,7 @@ import {
   STALE_SESSION_MS,
   writeNudge,
   writePaused,
+  writeWaiting,
 } from "./agent_state.js";
 import { ensureSharedNetwork, isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
 import { Colors } from "./colors.js";
@@ -434,7 +435,12 @@ export async function startService(
   workspace: string,
   service: string,
   composeName: string = COMPOSE_FILE,
-  { skipCurrentSetups = false }: { skipCurrentSetups?: boolean } = {},
+  {
+    skipCurrentSetups = false,
+    park = false,
+    grant = true,
+    waitMs,
+  }: { skipCurrentSetups?: boolean; park?: boolean; grant?: boolean; waitMs?: number } = {},
 ): Promise<void> {
   refuseInsideOwnContainer(feature, "pr gate");
   migrateWorkspaceCompose(workspace);
@@ -455,7 +461,12 @@ export async function startService(
     skipCurrentSetups && (await setupsCurrent(path.join(workspace, composeName), service));
   // Before admission, as in `up`: a HOST_LOAD throw must not follow a preemption.
   await waitForSetupLoad(workspace, noDeps ? [service] : serviceStarts(workspace, service));
-  await admitServiceStart(feature, workspace, service, { noDeps });
+  await admitServiceStart(feature, workspace, service, {
+    noDeps,
+    park,
+    grant,
+    ...(waitMs !== undefined && { waitMs }),
+  });
   let started: boolean;
   try {
     requireSharedNetwork();
@@ -465,7 +476,7 @@ export async function startService(
   } finally {
     // After the start, not at admission: admission prices only running containers, so a grant before
     // it would hand a waiter the room this start is about to take (SW-737).
-    await grantIfQueued();
+    if (grant) await grantIfQueued();
   }
   if (!started) {
     // A timed-out or cancelled up leaves the container Created, never started (SW-86).
@@ -496,7 +507,17 @@ export async function admitServiceStart(
     sleep = delay,
     waitMs = SERVICE_WAIT_MS,
     noDeps = false,
-  }: { sleep?: (ms: number) => Promise<unknown>; waitMs?: number; noDeps?: boolean } = {},
+    park = false,
+    grant = true,
+  }: {
+    sleep?: (ms: number) => Promise<unknown>;
+    waitMs?: number;
+    noDeps?: boolean;
+    /** On timeout keep the queue place for a grant to start it (SW-701); never after a release. */
+    park?: boolean;
+    /** False inside a grant pass, which would otherwise wait on itself. */
+    grant?: boolean;
+  } = {},
 ): Promise<void> {
   const ownRunning = (await getContainerStatus(feature)).filter((c) => c.status === "running");
   const up = new Set(ownRunning.map((c) => c.service));
@@ -516,6 +537,7 @@ export async function admitServiceStart(
   let starting: Starting = { services };
   let released: string[] = [];
   let admitted = false;
+  let parked = false;
   try {
     for (let waited = 0; ; waited += SERVICE_POLL_MS) {
       // Never byPerson: an agent's gate in a person's workspace must not stop another run's containers.
@@ -552,13 +574,19 @@ export async function admitServiceStart(
         return;
       }
       if (waited >= waitMs) {
+        // A released set can't park: the grant would bring back *service*, not what it stopped.
+        const waiting = park && !released.length ? readWaiting(workspace) : null;
+        if (waiting) {
+          writeWaiting(workspace, { ...waiting, parked: { service } });
+          parked = true;
+        }
         throw new SandboxError(
           `No capacity to start ${services.join(", ")} for '${feature}' after ${waitMs / 60_000} min ` +
-            `(queue position ${position}).` +
+            `(queue position ${position})${parked ? "; it stays queued" : ""}.` +
             (released.length
               ? ` ${[...up].join(", ")} stayed stopped; \`werkmeister feature up\` starts the feature again.`
               : "") +
-            `\n${await capacityWait(feature, position, false, featureCost(workspace, starting.services))}`,
+            `\n${await capacityWait(feature, position, parked, featureCost(workspace, starting.services))}`,
           "NO_CAPACITY",
         );
       }
@@ -570,12 +598,12 @@ export async function admitServiceStart(
       await sleep(SERVICE_POLL_MS);
     }
   } finally {
-    if (!admitted) {
+    if (!admitted && !parked) {
       await dequeue(feature);
       clearWaiting(workspace);
-      // Room it released, or held as the queue head, is free now and no stop will grant it (SW-737).
-      await grantIfQueued();
     }
+    // Room it released, or held as the queue head, is free now and no stop will grant it (SW-737).
+    if (!admitted && grant) await grantIfQueued();
   }
 }
 
@@ -632,7 +660,7 @@ export async function capacityWait(
     const need = ws ? featureCost(ws, readWaiting(ws)?.services) : null;
     lines.push(
       `behind ${head.feature}${need ? ` (needs ${cpus(need.cpus)}, ${gib(need.memory)})` : ""}` +
-        (head.waitedMs >= STARVE_MS
+        (head.waitedMs >= STARVE_MS && !head.parked // a parked head never holds (SW-701)
           ? `, which has waited ${Math.round(head.waitedMs / 60_000)} min and gets the next free room`
           : ""),
     );
@@ -1165,8 +1193,16 @@ async function grantWaitersNow(): Promise<string[]> {
       await dequeue(feature);
       continue;
     }
+    const waiting = readWaiting(workspace);
+    if (waiting?.parked) {
+      if (await startParked(feature, workspace, waiting.parked.service)) {
+        started.push(feature);
+        if (liveSessions(workspace).length) writeNudge(workspace, GRANTED_NUDGE);
+      }
+      continue;
+    }
     // A service start's own poll admits it; `up` would start the wrong set and dequeue it.
-    if (readWaiting(workspace)?.services) continue;
+    if (waiting?.services) continue;
     let r: UpResult;
     try {
       r = await up(feature, workspace, { byPerson: false });
@@ -1183,6 +1219,33 @@ async function grantWaitersNow(): Promise<string[]> {
     if (liveSessions(workspace).length) writeNudge(workspace, GRANTED_NUDGE);
   }
   return started;
+}
+
+/**
+ * A parked `--service` start (SW-701), as `feature up --service` runs it, without its wait: no room
+ * parks it again in place. False when it did not start.
+ */
+async function startParked(feature: string, workspace: string, service: string): Promise<boolean> {
+  try {
+    await startService(feature, workspace, service, COMPOSE_FILE, {
+      park: true,
+      waitMs: 0,
+      grant: false, // this is the grant pass: another would wait on it
+    });
+  } catch (e) {
+    if (!(e instanceof SandboxError && e.code === "NO_CAPACITY")) {
+      const message = `Could not start '${feature}' ${service} from the waiting queue: ${(e as Error).message}`;
+      warn(message);
+      // Its session was told it continues once started; it must hear that it won't (SW-701 review).
+      writeNudge(workspace, message);
+    }
+    return false;
+  }
+  // startService skips Caddy, as `feature up --service` does before its own reload (SW-338).
+  await reloadProxy().catch((e: Error) =>
+    warn(`Proxy not reloaded for '${feature}': ${e.message}`),
+  );
+  return true;
 }
 
 /**

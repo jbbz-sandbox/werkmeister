@@ -464,6 +464,8 @@ export interface WaitingFile {
   gate?: true;
   /** ISO time of the first wait, kept across re-polls: the queue's starvation bound reads it (SW-675). */
   since?: string;
+  /** The `--service` start whose poll gave up but kept its place: the grant starts *service* (SW-701). */
+  parked?: { service: string };
 }
 
 /** The waiting record, or null when there is none or it doesn't parse. */
@@ -477,6 +479,7 @@ export function readWaiting(root: string): WaitingFile | null {
       ...(Array.isArray(o.services) ? { services: o.services.map(String) } : {}),
       ...(o.gate === true ? { gate: true as const } : {}),
       ...(typeof o.since === "string" ? { since: o.since } : {}),
+      ...(typeof o.parked?.service === "string" ? { parked: { service: o.parked.service } } : {}),
     };
   } catch {
     return null;
@@ -489,7 +492,8 @@ export function liveWaiting(root: string): WaitingFile | null {
   // The poll rewrites the file every 15 s; a killed one leaves it behind (no finally on SIGTERM), and the
   // scheduler drops such a waiter after 60 s, so an older file is a dead wait, not a live one.
   const at = fs.statSync(waitingPath(root), { throwIfNoEntry: false })?.mtimeMs ?? 0;
-  return waiting?.services && Date.now() - at > 60_000 ? null : waiting;
+  // A parked start has no poll by design (SW-701).
+  return waiting?.services && !waiting.parked && Date.now() - at > 60_000 ? null : waiting;
 }
 
 export function writeWaiting(root: string, w: WaitingFile): void {
@@ -773,6 +777,16 @@ export function serviceWaitContext(input: Record<string, any>, root: string): st
   if (input["hook_event_name"] !== "UserPromptSubmit") return null;
   const waiting = liveWaiting(root);
   if (!waiting?.services) return null;
+  if (waiting.parked && leftOver(root)) {
+    clearWaiting(root); // its queue entry is gone (`feature down`, a dropped waiter): nothing will start it
+    return null;
+  }
+  if (waiting.parked)
+    return (
+      `This workspace's start of ${waiting.parked.service} is queued for capacity (position ${waiting.position}). ` +
+      "Nothing polls for it: it starts by itself when room frees, and the session is told to continue. " +
+      "Rerunning `werkmeister feature up --service` keeps its place."
+    );
   return (
     `This session's own service start is waiting for capacity (position ${waiting.position}): ` +
     `${waiting.services.join(", ")}. The werkmeister command that started it (pr gate, pr open or ` +

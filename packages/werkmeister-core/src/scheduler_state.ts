@@ -458,7 +458,8 @@ function withoutDeadWaiters(queue: string[]): string[] {
   const leases = readLeases();
   return queue.filter((f) => {
     const ws = leases[f]?.workspace;
-    if (!ws || !readWaiting(ws)?.services) return true;
+    const w = ws ? readWaiting(ws) : null;
+    if (!ws || !w?.services || w.parked) return true; // a parked start has no poll by design (SW-701)
     const at = fs.statSync(waitingPath(ws), { throwIfNoEntry: false })?.mtimeMs ?? 0;
     if (Date.now() - at < WAITER_STALE_MS) return true;
     clearWaiting(ws);
@@ -473,6 +474,16 @@ export function waiters(queue: string[], running: Lease[], now = Date.now()): Wa
     const ws = leases[feature]?.workspace;
     const w = ws ? readWaiting(ws) : null;
     const since = w?.since ? Date.parse(w.since) : Number.NaN;
+    if (ws && w?.parked) {
+      // Started only by a grant, like a whole-feature waiter, so priced like one; never a gate (SW-701).
+      return {
+        feature,
+        waitedMs: Number.isFinite(since) ? Math.max(0, now - since) : 0,
+        gate: false,
+        parked: true,
+        cost: featureCost(ws, w.services),
+      };
+    }
     return {
       feature,
       waitedMs: Number.isFinite(since) ? Math.max(0, now - since) : 0,

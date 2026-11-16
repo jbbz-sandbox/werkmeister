@@ -728,6 +728,42 @@ test("waiting gate: a service-start wait lets prompts and tools through, naming 
   assert.equal(pauseGate(DOCKER_EXEC, dir).continue, false);
 });
 
+// SW-701: a parked start has no poll, so an old file is still live and the context says nothing polls.
+test("waiting gate: a parked service start stays live past 60 s and lets tools through", () => {
+  const dir = workspace("j-wait-parked", null);
+  write(path.join(dir, ".env"), "FEATURE=parked\n");
+  const cfg = path.join(root, "parked-home", "config.yaml");
+  const queue = path.join(path.dirname(cfg), "scheduler", "queue.json");
+  const was = process.env.WERKMEISTER_CONFIG_FILE;
+  process.env.WERKMEISTER_CONFIG_FILE = cfg;
+  const park = () => {
+    writeWaiting(dir, {
+      position: 2,
+      reason: "waiting for capacity",
+      services: ["api"],
+      parked: { service: "api" },
+    });
+    const old = new Date(Date.now() - 10 * 60_000);
+    fs.utimesSync(waitingPath(dir), old, old);
+  };
+  try {
+    write(queue, JSON.stringify(["parked"]));
+    park();
+    assert.equal(liveWaiting(dir)?.parked?.service, "api");
+    const ctx = serviceWaitContext({ hook_event_name: "UserPromptSubmit" }, dir);
+    assert.match(ctx, /start of api is queued for capacity \(position 2\)/);
+    assert.match(ctx, /Nothing polls/);
+    assert.equal(pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir), null);
+    // Its queue entry gone (`feature down`): the promise is false, so the file goes (SW-701 review).
+    write(queue, JSON.stringify([]));
+    assert.equal(serviceWaitContext({ hook_event_name: "UserPromptSubmit" }, dir), null);
+    assert.equal(fs.existsSync(waitingPath(dir)), false);
+  } finally {
+    if (was === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+    else process.env.WERKMEISTER_CONFIG_FILE = was;
+  }
+});
+
 /** Run the hook entrypoint as Claude Code does: the event on stdin, the gate on stdout. */
 function hook(event) {
   const entry = new URL("../dist/agent_state.js", import.meta.url).href;

@@ -225,6 +225,34 @@ test("a service waiter whose poll stopped leaves the queue and its waiting.json;
   });
 });
 
+// SW-701: a parked start has no poll by design; dropping it as dead would lose its place again.
+test("a parked service waiter is not dropped for its old file, and a starved one does not hold", async () => {
+  await withHome(async (home) => {
+    const parked = workspace(home, COMPOSE);
+    const mine = path.join(home, "mine");
+    fs.mkdirSync(path.join(mine, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), COMPOSE);
+    writeLeases({ parked: { slot: 1, workspace: parked } });
+    await enqueue("parked", parked);
+    const since = new Date(Date.now() - 60 * 60_000).toISOString();
+    writeWaiting(parked, {
+      position: 1,
+      reason: "waiting for capacity",
+      services: ["api"],
+      since,
+      parked: { service: "api" },
+    });
+    const old = new Date(Date.now() - 30 * 60_000);
+    fs.utimesSync(waitingPath(parked), old, old);
+    // Waited an hour, past STARVE_MS: only its parked flag keeps it from holding mine (the pure
+    // `admit` test covers one that cannot fit). It stays queued for its grant.
+    const budget = { memory: 8 * G, cpus: 8, preempt: true };
+    assert.deepEqual(await requestAdmission("mine", mine, false, [], budget), { kind: "admit" });
+    assert.deepEqual(readQueue(), ["parked"]);
+    assert.equal(readWaiting(parked)?.parked?.service, "api");
+  });
+});
+
 // SW-729: a queued whole-feature `up` has no poll of its own; only a release's grant starts it.
 test("a starved whole-feature head that fits passes a service start on an idle host and stays queued", async () => {
   await withHome(async (home) => {

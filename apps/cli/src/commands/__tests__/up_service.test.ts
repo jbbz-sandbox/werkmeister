@@ -29,7 +29,8 @@ afterEach(() => vi.restoreAllMocks());
 
 it("starts only the named service in the feature's workspace", async () => {
   await run({ feature: "f", workspace: null, dev: false, service: "docs-site" });
-  expect(startService).toHaveBeenCalledWith("f", "/ws/f", "docs-site");
+  // SW-701: a CLI --service start parks on timeout; the gate's does not.
+  expect(startService).toHaveBeenCalledWith("f", "/ws/f", "docs-site", undefined, { park: true });
   expect(up).not.toHaveBeenCalled();
   expect(lines.join("\n")).toContain("Started f-docs-site");
 });

@@ -88,7 +88,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   // SW-132: one service, started the way the PR gate starts it, including an on-demand one.
   if (args.service) {
     const service = args.service as string;
-    await startService(feature, workspace, service);
+    // park: a timed-out wait keeps its queue place and the grant starts it (SW-701).
+    await startService(feature, workspace, service, undefined, { park: true });
     // startService skips Caddy (gate path); unrouted, the cookie hits another feature (SW-338).
     await reloadProxy();
     console.log(`${Colors.GREEN}Started ${feature}-${service}${Colors.RESET}`);

@@ -475,6 +475,53 @@ describe("admitServiceStart", () => {
     expect(readQueue()).toEqual(["later"]);
   });
 
+  // SW-701: the timed-out start lost its place, and each rerun joined the back with a fresh wait.
+  it("a parked start that times out keeps its place, and a rerun keeps its wait", async () => {
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), ON_DEMAND);
+    writeLeases({ mine: { slot: 2, workspace: mine } });
+    busy(other, 7);
+    const opts = { sleep: async () => {}, waitMs: 0, park: true };
+    const err = await admitServiceStart("mine", mine, "api", opts).catch((e) => e);
+    expect(err).toMatchObject({ code: "NO_CAPACITY" });
+    expect(err.message).toContain("it stays queued");
+    expect(err.message).toContain("It starts by itself when room frees");
+    expect(readQueue()).toEqual(["mine"]);
+    const first = readWaiting(mine);
+    expect(first).toMatchObject({ services: ["api"], parked: { service: "api" } });
+
+    await expect(admitServiceStart("mine", mine, "api", opts)).rejects.toMatchObject({
+      code: "NO_CAPACITY",
+    });
+    expect(readQueue()).toEqual(["mine"]);
+    expect(readWaiting(mine)?.since).toBe(first?.since);
+  });
+
+  it("a start that released its containers does not park: the grant could not bring them back", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ other: { slot: 1, workspace: other }, mine: { slot: 2, workspace: mine } });
+    let mineCpus = 3;
+    both(other, mine, 3, () => mineCpus);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      { name: "mine-core", status: "running", service: "core" } as never,
+    ]);
+    vi.mocked(composeStop).mockImplementation(async (f: string) => {
+      if (f === "mine") mineCpus = 0;
+      return true;
+    });
+    await expect(
+      admitServiceStart("mine", mine, "api", { sleep: async () => {}, waitMs: 0, park: true }),
+    ).rejects.toMatchObject({ code: "NO_CAPACITY" });
+    expect(readQueue()).toEqual([]);
+    expect(readWaiting(mine)).toBeNull();
+  });
+
   it("a start that gives up with nobody else waiting runs no grant", async () => {
     const other = workspace("other", { autonomous: true });
     session(other);
