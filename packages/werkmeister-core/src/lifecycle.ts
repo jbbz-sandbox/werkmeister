@@ -592,7 +592,9 @@ export async function admitServiceStart(
       }
       if (!waited) {
         warn(
-          `Waiting for capacity to start ${services.join(", ")}: position ${position}, up to ${waitMs / 60_000} min`,
+          // SW-734: say how a wait the person doesn't want ends.
+          `Waiting for capacity to start ${services.join(", ")}: position ${position}, up to ${waitMs / 60_000} min. ` +
+            "Stopping the command ends the wait; `pr gate` and `pr open` start no service the PR file's `skip_tests` names.",
         );
       }
       await sleep(SERVICE_POLL_MS);

@@ -5597,3 +5597,57 @@ test("gate: a diff touching the fragment and the lockfile runs merge-base once (
     clean(ws);
   }
 });
+
+test("runGate: a service skip_tests names is never started, from compose.gate.yml either (SW-734)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ extra: "skip_tests:\n  api: checked by hand\n" }) },
+  });
+  try {
+    const d = answer(
+      deps([DIFF_API], { branchRegistry: () => withApp({}), gateCompose: () => ["api"] }),
+      /^docker ps/,
+      [{ stdout: "" }],
+    );
+    await gate(ws, d);
+    assert.ok(!d.started.includes("feat-api"), d.calls.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("runGate: the lint/release container is not one skip_tests names when another fits (SW-734)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ extra: "skip_tests:\n  lib: checked by hand\n" }) },
+  });
+  try {
+    const services = { ...REGISTRY.services, tool: { type: "cli", test: "npm test -w tool" } };
+    const repos = { app: { ...REGISTRY.repos.app, services: ["api", "lib", "tool"] } };
+    const d = answer(
+      deps([[/diff --name-only/, { stdout: "packages/lib/x.ts\n" }]], { services, repos }),
+      /^docker ps/,
+      [{ stdout: "" }],
+    );
+    await gate(ws, d);
+    assert.ok(!d.started.includes("feat-lib"), d.calls.join("\n"));
+    assert.ok(d.started.includes("feat-tool"), d.calls.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("runGate: a skipped idle service loses the lint/release pick to a non-skipped busy one (SW-734)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ extra: "skip_tests:\n  lib: checked by hand\n" }) },
+  });
+  try {
+    const d = answer(
+      deps([[/diff --name-only/, { stdout: "packages/lib/x.ts\n" }]]),
+      /^docker ps/,
+      [{ stdout: "" }],
+    );
+    await gate(ws, d);
+    assert.deepEqual(d.started, ["feat-api"], d.calls.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
