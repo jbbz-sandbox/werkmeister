@@ -245,6 +245,10 @@ const RELEASE_AFTER_COMMIT =
 const LINT =
   "the repo's lint command (the `<lint> &&` head of the test command in `werkmeister-context.md`, when it has one, which the PR gate's lint row runs) and fix what it fails, release entry included.";
 
+// SW-793: sw-772 filed ten follow-ups with no epic; grouping them after the PR meant editing 12 tickets again.
+const followUpGroup = (tool?: string) =>
+  `Before filing 3 or more follow-up tickets, ask the person where they go${tool ? ` (through \`${tool}\`)` : ""}: an existing epic (by name), a new epic (with a proposed title), a label, or none. File each with that parent or label, and record the choice in this stage's output.`;
+
 // SW-807: exact, this workspace's own issue only. The feature, gate and status commands keep asking:
 // each can reach shared infra, another workspace or the real ~/.werkmeister from agent-editable input.
 const START_GRANTS = ["issue start", "issue view"];
@@ -275,7 +279,8 @@ const propose: Stage = {
           // SW-399: a changeset written after the last lint run failed the gate only at `pr open`.
           `Before committing, run ${LINT} ${RELEASE_AFTER_COMMIT}${REBASE}`,
       // SW-535: sw-385 promised a follow-up in decisions.md; nothing said to file it, so the first `pr open` stopped at the gate.
-      "Before the PR file: for each follow-up a decided question in `decisions.md` promises, file it through `../../_shared/issues-report.md` and write its issue key beside that decision. The gate's follow-ups check stays as the backstop.",
+      "Before the PR file: for each follow-up a decided question in `decisions.md` promises, file it through `../../_shared/issues-report.md` and write its issue key beside that decision. The gate's follow-ups check stays as the backstop. " +
+        followUpGroup(v.questionTool),
       "Write `output/pr-<worktree>.md` per repo touched, in the format of `_shared/pr-rules.md`, at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value). Title: `<type>(<scope>): <ISSUE-ID> <summary>`. Body: summary, the test and exercise results from prior outputs (every table with a `result` column — the gate reads them all — has a result cell of exactly `PASS` and the output in its own column: a FAIL cell anywhere in the PR file stops the PR, so describe a pre-fix reproduction in prose, not as a FAIL row), the acceptance table from step 1, and `Fixes <issue>` when the tracker is GitHub." +
         (v.group.length
           ? " Start the body with `Rebase and merge, not squash: one commit per ticket, each revertable alone.` and list each member under the summary."
@@ -673,7 +678,7 @@ const spike: Stage[] = [
       process: [
         "Answer each question by its method. Prototype code lives in `output/` or on a scratch branch, never on the workspace branch.",
         "Write `output/findings.md`: per question, the answer, the evidence (commands and output), and confidence.",
-        "End `findings.md` with a recommendation: the next work item and its work type.",
+        `End \`findings.md\` with a recommendation: the next work item and its work type. ${followUpGroup(v.questionTool)}`,
         "If the brief asks for a deliverable in a code repo (e.g. a doc opened as a PR): commit it on that worktree's branch, and write `output/pr-<worktree>.md` in the format of `_shared/pr-rules.md` at `status: draft`, with `repo:` taken from `git -C <worktree> remote get-url origin` (as `owner/repo`; the gate rejects any other value), an acceptance table and `skip_exercise: <reason>` when there is nothing to exercise.",
       ],
       outputs: [

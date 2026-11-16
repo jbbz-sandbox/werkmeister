@@ -205,6 +205,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /background test or gate job you wait on, check its log.s last-write time: after 10 minutes with no write, stop it and rerun it once/,
             `${wt}/${d}`,
           );
+        // SW-793: 3+ follow-ups get an epic or label the person picks before they are filed.
+        if (/_(propose|findings)$/.test(d))
+          assert.match(
+            c,
+            /Before filing 3 or more follow-up tickets, ask the person where they go.*an existing epic \(by name\), a new epic \(with a proposed title\), a label, or none/,
+            `${wt}/${d}`,
+          );
         // SW-534: an exercise that changes code gets the review rerun on its delta.
         if (d.endsWith("_implement"))
           assert.match(c, /rerun the review on that delta/, `${wt}/${d}`);
