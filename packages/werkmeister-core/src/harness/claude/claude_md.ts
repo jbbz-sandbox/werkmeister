@@ -30,6 +30,7 @@ import {
 import { ingressHostnames, loadFeatureRouters } from "../../feature_routing.js";
 import { loadIngress } from "../../global_config.js";
 import { issueLink } from "../../issue_tracker.js";
+import { HOST_SCRIPT_RULE } from "../../pr_rules.js";
 import { standardsSource, standardsUrl } from "../../skill_gen.js";
 import { getServicePort } from "../../slots.js";
 import { universalStandards } from "../../standards.js";
@@ -645,7 +646,7 @@ How to exercise a change to each service in this workspace.${
     linted
       ? " A test command starting with `<lint> &&` first runs the repo's lint, the same command the PR gate's lint row runs, so a format error fails here, before the tests, and not first at `werkmeister pr open`."
       : ""
-  }
+  } ${HOST_SCRIPT_RULE}
 
 ${validationTable}${repoCommands}
 

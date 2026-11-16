@@ -61,6 +61,21 @@ test("health checks and the feature URL are scoped to the local services", async
   );
 });
 
+// SW-746: JIT sessions read this section to exercise, so the host-script rule reaches them here.
+test("How to validate says a host-only check is a logged script run with one ! sh line", async () => {
+  await withSandboxHome(
+    async () => {
+      const out = buildSandboxContextMd("test", 1, 11100, 11119, ["frontend"], loadServices());
+      const validate = out.slice(out.indexOf("## How to validate"));
+      assert.match(
+        validate,
+        /^How to exercise .*one `! sh <absolute path>` line with the script.s commands shown beside it, then read the log/m,
+      );
+    },
+    { services: SERVICES },
+  );
+});
+
 test("no test path means the feature URL is the host root", async () => {
   await withSandboxHome(
     async () => {
