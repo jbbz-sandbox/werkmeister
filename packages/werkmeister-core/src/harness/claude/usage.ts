@@ -6,6 +6,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import { modelPricingYamlPath } from "../../config.js";
+import { warn } from "../../reporter.js";
 import { isFile } from "../../tool_bins.js";
 import type { ModelUsage, SessionUsage, UsageTotals, WorkspaceUsage } from "../types.js";
 import { findClaudeProjectDir, listSessionFiles, readSessionTitle } from "./transcript.js";
@@ -109,10 +110,15 @@ export function rateFor(prices: Record<string, ModelRate>, model: string): Model
   return base !== model ? prices[base] : undefined;
 }
 
-// Fallback used when ~/.werkmeister/model-pricing.yaml is missing/unparseable.
+// Under ~/.werkmeister/model-pricing.yaml: a file seeded before a model shipped still prices it (SW-773).
 const DEFAULT_PRICES: Record<string, ModelRate> = {
-  "claude-opus-4-8": { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.5 },
-  "claude-sonnet-5": { input: 3, output: 15, cacheWrite: 3.75, cacheRead: 0.3 },
+  "claude-fable-5-2": { input: 8, output: 40, cacheWrite: 10, cacheRead: 0.2 },
+  "claude-opus-5-5": { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.2 },
+  "claude-opus-4-8": { input: 5, output: 25, cacheWrite: 6.25, cacheRead: 0.5 },
+  "claude-sonnet-5-5": { input: 2, output: 10, cacheWrite: 2.5, cacheRead: 0.1 },
+  "claude-sonnet-5": { input: 2, output: 10, cacheWrite: 2.5, cacheRead: 0.2 },
+  // shortcut: ≤100K-token prompt tier only (over 100K costs 5×); add tiers if Haiku runs main sessions.
+  "claude-haiku-5-5": { input: 0.1, output: 0.5, cacheWrite: 0.125, cacheRead: 0.01 },
   "claude-haiku-4-5": { input: 1, output: 5, cacheWrite: 1.25, cacheRead: 0.1 },
 };
 
@@ -127,7 +133,7 @@ export async function loadPriceTable(): Promise<Record<string, ModelRate>> {
   if (!p) return DEFAULT_PRICES;
   try {
     const doc = parseYaml(await fs.readFile(p, "utf-8")) as { models?: Record<string, ModelRate> };
-    return doc?.models && Object.keys(doc.models).length ? doc.models : DEFAULT_PRICES;
+    return { ...DEFAULT_PRICES, ...doc?.models };
   } catch {
     return DEFAULT_PRICES;
   }
@@ -169,9 +175,19 @@ export interface SessionTally {
   reduction: SessionReduction;
 }
 
+const warnedUnpriced = new Set<string>();
+
 /** A workspace's sessions summed by model and by session, priced from the price table. */
 export async function rollUpUsage(name: string, tallies: SessionTally[]): Promise<WorkspaceUsage> {
   const prices = await loadPriceTable();
+  // An unpriced model left every cost null unnoticed for weeks (SW-773). Zero-token
+  // rows (Claude Code's `<synthetic>` error turns) cost nothing, so they don't warn.
+  for (const [model, t] of tallies.flatMap((s) => [...s.reduction.byModel])) {
+    if (!(t.input + t.output + t.cacheCreation + t.cacheRead)) continue;
+    if (rateFor(prices, model) || warnedUnpriced.has(model)) continue;
+    warnedUnpriced.add(model);
+    warn(`No price for model ${model}: its cost is unknown. Add it to ${modelPricingYamlPath()}.`);
+  }
   const wsByModel = new Map<string, UsageTotals>();
   const sessions: SessionUsage[] = [];
 

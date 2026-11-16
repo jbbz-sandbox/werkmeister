@@ -3280,8 +3280,8 @@ test("closeOut writes usage.md + usage.json before removal, and a summary line i
       cacheCreation: 200_000,
       cacheRead: 1_000_000,
     });
-    // Only claude-sonnet-5 is priced: 3 + 1.5 + 0.75 + 0.3.
-    assert.equal(u.estUsd.toFixed(2), "5.55");
+    // Only claude-sonnet-5 is priced: 2 + 1 + 0.5 + 0.2.
+    assert.equal(u.estUsd.toFixed(2), "3.70");
     assert.equal(u.sessionCount, 2);
     assert.equal(u.turns, 3);
     assert.equal(u.firstTurn, "2026-10-30T10:00:00.000Z");
@@ -3306,20 +3306,20 @@ test("closeOut writes usage.md + usage.json before removal, and a summary line i
     assert.ok(!u.note);
 
     const md = fs.readFileSync(path.join(ws, "usage.md"), "utf8");
-    assert.match(md, /^# Usage\n\nUsage: 2\.3M tokens, ~\$5\.55 across 2 sessions\n/);
+    assert.match(md, /^# Usage\n\nUsage: 2\.3M tokens, ~\$3\.70 across 2 sessions\n/);
     for (const h of ["## Tokens by model", "## Sessions", "## Stages"])
       assert.match(md, new RegExp(`^${h}`, "m"));
     assert.match(
       md,
-      /^\| \*\*total\*\* \| 1,000,010 \| 100,005 \| 200,000 \| 1,000,000 \| \$5\.55 \|$/m,
+      /^\| \*\*total\*\* \| 1,000,010 \| 100,005 \| 200,000 \| 1,000,000 \| \$3\.70 \|$/m,
     );
     assert.match(
       md,
-      /^\| s1 \| .* \| 2 \| 1\.1M \| claude-sonnet-5, claude-mystery \| \$4\.50 \|$/m,
+      /^\| s1 \| .* \| 2 \| 1\.1M \| claude-sonnet-5, claude-mystery \| \$3\.00 \|$/m,
     );
     assert.match(
       fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
-      /^Usage: 2\.3M tokens, ~\$5\.55 across 2 sessions; see usage\.md$/m,
+      /^Usage: 2\.3M tokens, ~\$3\.70 across 2 sessions; see usage\.md$/m,
     );
   } finally {
     clean(ws);
