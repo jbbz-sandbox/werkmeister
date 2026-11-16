@@ -1665,9 +1665,15 @@ async function uncommittedDiff(
 const FAILING_TEST = /\bnot ok\b|✖|×|\bFAIL\b/;
 
 /** Why a failed test row is the host's doing, so the gate runs it once more; null when it may be the change's. */
-function hostFailure(r: { code: number }): string | null {
+function hostFailure(r: { code: number; stdout: string; stderr: string }): string | null {
   // SIGKILL: the OOM killer or a reaped container under host load (SW-739).
-  return r.code === 137 ? "exit 137 (killed)" : null;
+  if (r.code === 137) return "exit 137 (killed)";
+  const out = r.stdout + r.stderr;
+  // A worker blocked past vitest's fixed 60 s RPC timeout fails a run whose tests all passed (SW-744).
+  const rpcTimeout = /\[vitest-worker\]: Timeout calling "/.test(out);
+  const realFailure =
+    FAILING_TEST.test(out) || /^\s*Test(s| Files)\s.*\bfailed\b|error TS\d+/m.test(out);
+  return rpcTimeout && !realFailure ? "vitest's worker RPC timeout" : null;
 }
 
 /** A failed row's output: the failing test lines above the tail (first 20), then the last `tail` lines (SW-317). */

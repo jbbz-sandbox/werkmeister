@@ -11,7 +11,7 @@
  * `sha256sum` (util-linux/coreutils), so it runs in the containers and on CI,
  * not on a macOS host.
  */
-import { spawn, spawnSync } from "node:child_process";
+import { execFile, spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -57,8 +57,17 @@ function env(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   };
 }
 
+/** spawnSync's { status, stdout }, without blocking the vitest worker (SW-744). */
 function run(app: string, extra: Record<string, string> = {}, args = ["install"]) {
-  return spawnSync("sh", [SCRIPT, ...args], { cwd: app, env: env(extra), encoding: "utf8" });
+  return new Promise<{ status: number | null; stdout: string }>((resolve) =>
+    execFile(
+      "sh",
+      [SCRIPT, ...args],
+      { cwd: app, env: env(extra), encoding: "utf8" },
+      (err, stdout) =>
+        resolve({ status: err ? (typeof err.code === "number" ? err.code : null) : 0, stdout }),
+    ),
+  );
 }
 
 /** Calls logged since the last read: `<args>` for npm, `pnpm <args>` / `corepack <args>` for those. */
@@ -117,112 +126,112 @@ afterEach(() => {
 });
 
 describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
-  it("installs once, then skips npm ci while nothing changed", () => {
+  it("installs once, then skips npm ci while nothing changed", async () => {
     const app = makeApp("app");
-    expect(run(app).status).toBe(0);
+    expect((await run(app)).status).toBe(0);
     expect(npmCalls()).toEqual(["ci", "run build"]);
     expect(fs.existsSync(stamp(app))).toBe(true);
 
-    const second = run(app);
+    const second = await run(app);
     expect(second.status).toBe(0);
     expect(second.stdout).toContain("skipping npm ci");
     expect(npmCalls()).toEqual(["run build"]);
   });
 
-  it("reinstalls when the lockfile changes", () => {
+  it("reinstalls when the lockfile changes", async () => {
     const app = makeApp("app");
-    run(app);
+    await run(app);
     npmCalls();
     fs.writeFileSync(path.join(app, "package-lock.json"), '{"lockfileVersion":3,"x":1}\n');
-    expect(run(app).status).toBe(0);
+    expect((await run(app)).status).toBe(0);
     expect(npmCalls()).toEqual(["ci", "run build"]);
   });
 
-  it("reinstalls when the Node major changes, not the minor", () => {
+  it("reinstalls when the Node major changes, not the minor", async () => {
     const app = makeApp("app");
-    run(app);
+    await run(app);
     npmCalls();
-    run(app, { NODE_V: "v22.9.0" });
+    await run(app, { NODE_V: "v22.9.0" });
     expect(npmCalls()).toEqual(["run build"]);
-    run(app, { NODE_V: "v24.0.0" });
+    await run(app, { NODE_V: "v24.0.0" });
     expect(npmCalls()).toEqual(["ci", "run build"]);
   });
 
-  it("writes no stamp when npm ci fails, so the next run retries", () => {
+  it("writes no stamp when npm ci fails, so the next run retries", async () => {
     const app = makeApp("app");
-    run(app);
+    await run(app);
     fs.writeFileSync(path.join(app, "package-lock.json"), '{"lockfileVersion":3,"x":2}\n');
     npmCalls();
 
-    expect(run(app, { FAIL_CI: "1" }).status).not.toBe(0);
+    expect((await run(app, { FAIL_CI: "1" })).status).not.toBe(0);
     expect(fs.existsSync(stamp(app))).toBe(false);
     expect(npmCalls()).toEqual(["ci"]);
 
-    expect(run(app).status).toBe(0);
+    expect((await run(app)).status).toBe(0);
     expect(npmCalls()).toEqual(["ci", "run build"]);
   });
 
-  it("reinstalls when the worktree is re-created on a kept node_modules volume (SW-85)", () => {
+  it("reinstalls when the worktree is re-created on a kept node_modules volume (SW-85)", async () => {
     const app = makeApp("app");
-    run(app);
+    await run(app);
     npmCalls();
     // app/node_modules stands in for the volume: it survives, the worktree around it is new.
     for (const f of fs.readdirSync(app)) {
       if (f !== "node_modules") fs.rmSync(path.join(app, f), { recursive: true });
     }
     fs.writeFileSync(path.join(app, "package-lock.json"), '{"lockfileVersion":3}\n');
-    expect(run(app).status).toBe(0);
+    expect((await run(app)).status).toBe(0);
     expect(npmCalls()).toEqual(["ci", "run build"]);
 
     // ...and only once: the next up of the same worktree skips again.
-    run(app);
+    await run(app);
     expect(npmCalls()).toEqual(["run build"]);
   });
 
-  it("reinstalls when the volume is dropped and the worktree kept (`down -v`)", () => {
+  it("reinstalls when the volume is dropped and the worktree kept (`down -v`)", async () => {
     const app = makeApp("app");
-    run(app);
+    await run(app);
     npmCalls();
     fs.rmSync(path.join(app, "node_modules"), { recursive: true });
     fs.mkdirSync(path.join(app, "node_modules"));
-    expect(run(app).status).toBe(0);
+    expect((await run(app)).status).toBe(0);
     expect(npmCalls()).toEqual(["ci", "run build"]);
   });
 
-  it("installs with pnpm when the app has a pnpm lockfile (SW-31)", () => {
+  it("installs with pnpm when the app has a pnpm lockfile (SW-31)", async () => {
     const app = makeApp("app");
     fs.rmSync(path.join(app, "package-lock.json"));
     fs.writeFileSync(path.join(app, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
-    expect(run(app).status).toBe(0);
+    expect((await run(app)).status).toBe(0);
     expect(npmCalls()).toEqual(["pnpm install --frozen-lockfile", "pnpm run build"]);
     expect(fs.existsSync(stamp(app))).toBe(true);
   });
 
-  it("pnpm installs on every run, so a package missing from the volume is repaired (SW-362)", () => {
+  it("pnpm installs on every run, so a package missing from the volume is repaired (SW-362)", async () => {
     const app = makeApp("app");
     fs.rmSync(path.join(app, "package-lock.json"));
     fs.writeFileSync(path.join(app, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
-    run(app);
+    await run(app);
     npmCalls();
     // Same lockfile, same Node: pnpm's own up-to-date check is the skip (2-5 s), and it
     // restores a package deleted under it; the stamp would have skipped the install.
-    expect(run(app).status).toBe(0);
+    expect((await run(app)).status).toBe(0);
     expect(npmCalls()).toEqual(["pnpm install --frozen-lockfile", "pnpm run build"]);
   });
 
-  it("adds corepack's pnpm shim to the tools volume once, in either mode", () => {
+  it("adds corepack's pnpm shim to the tools volume once, in either mode", async () => {
     const app = makeApp("app");
     const tools = path.join(tmp, "tools", "bin");
     fs.rmSync(path.join(tools, "pnpm"));
-    expect(run(app, {}, []).status).toBe(0);
+    expect((await run(app, {}, [])).status).toBe(0);
     expect(npmCalls()).toEqual([`corepack enable --install-directory ${tools} pnpm`]);
-    expect(run(app, {}, []).status).toBe(0);
+    expect((await run(app, {}, [])).status).toBe(0);
     expect(npmCalls()).toEqual([]);
   });
 
-  it("does not install without the `install` argument (the pre-SW-33 command)", () => {
+  it("does not install without the `install` argument (the pre-SW-33 command)", async () => {
     const app = makeApp("app");
-    expect(run(app, {}, []).status).toBe(0);
+    expect((await run(app, {}, [])).status).toBe(0);
     expect(npmCalls()).toEqual([]);
   });
 

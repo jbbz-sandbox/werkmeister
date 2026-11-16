@@ -3,7 +3,7 @@
  * as `with-fixture-workspace`) and runs the built `werkmeister pr gate` against it. The fake docker
  * shows no container running and the workspace has no compose file, so the gate never starts one.
  */
-import { spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -39,12 +39,21 @@ Given(
   },
 );
 
-When("the PR gate runs", (world: GateWorld) => {
-  world.gate = spawnSync(process.execPath, [MAIN, "pr", "gate"], {
-    cwd: world.ws,
-    env: world.env,
-    encoding: "utf8",
-  });
+When("the PR gate runs", async (world: GateWorld) => {
+  // Async so the gate's run doesn't block the vitest worker (SW-744).
+  world.gate = await new Promise((resolve) =>
+    execFile(
+      process.execPath,
+      [MAIN, "pr", "gate"],
+      { cwd: world.ws, env: world.env, encoding: "utf8" },
+      (err, stdout, stderr) =>
+        resolve({
+          status: err ? (typeof err.code === "number" ? err.code : null) : 0,
+          stdout,
+          stderr,
+        }),
+    ),
+  );
 });
 
 Then("the gate passes", (world: GateWorld) => {

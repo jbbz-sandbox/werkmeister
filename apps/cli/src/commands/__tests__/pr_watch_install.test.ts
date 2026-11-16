@@ -5,7 +5,7 @@
  * domain and crontab are never touched. The binary takes the host's platform —
  * launchd on macOS, cron in the Linux container; the unit test covers both.
  */
-import { spawnSync } from "node:child_process";
+import { type ExecFileOptions, execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -54,8 +54,20 @@ beforeAll(() => {
 });
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
+/** spawnSync's { status, stdout, stderr } without blocking the vitest worker (SW-744). */
+const execAsync = (file: string, args: string[], opts: ExecFileOptions = {}) =>
+  new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) =>
+    execFile(file, args, { ...opts, encoding: "utf8" }, (err, stdout, stderr) =>
+      resolve({
+        status: err ? (typeof err.code === "number" ? err.code : null) : 0,
+        stdout,
+        stderr,
+      }),
+    ),
+  );
+
 const cli = (...argv: string[]) =>
-  spawnSync(process.execPath, [MAIN, "pr", ...argv], { cwd: tmp, env, encoding: "utf-8" });
+  execAsync(process.execPath, [MAIN, "pr", ...argv], { cwd: tmp, env });
 const plist = () => path.join(home, "Library", "LaunchAgents", "com.werkmeister.pr-watch.plist");
 const scheduled = () => {
   if (launchd) return fs.existsSync(plist()) ? fs.readFileSync(plist(), "utf8") : "";
@@ -74,8 +86,8 @@ const writeCalls = () =>
 describe("pr watch --install / --uninstall (built binary)", () => {
   const logFile = () => path.join(home, ".werkmeister", "pr-watch.log");
 
-  it("installs and says where the logs go", () => {
-    const res = cli("watch", "--install");
+  it("installs and says where the logs go", async () => {
+    const res = await cli("watch", "--install");
     expect(res.status, res.stderr).toBe(0);
     expect(res.stdout).toContain(launchd ? plist() : "crontab line");
     expect(res.stdout).toContain(logFile());
@@ -85,9 +97,9 @@ describe("pr watch --install / --uninstall (built binary)", () => {
     expect(fs.existsSync(path.dirname(logFile()))).toBe(true);
   });
 
-  it("is idempotent on a rerun", () => {
+  it("is idempotent on a rerun", async () => {
     const before = writeCalls().length;
-    const res = cli("watch", "--install");
+    const res = await cli("watch", "--install");
     expect(res.status, res.stderr).toBe(0);
     expect(res.stdout).toContain("Already installed");
     expect(writeCalls()).toHaveLength(before);
@@ -95,27 +107,27 @@ describe("pr watch --install / --uninstall (built binary)", () => {
     else expect(scheduled().match(/# werkmeister pr watch/g)).toHaveLength(1);
   });
 
-  it("uninstalls cleanly", () => {
-    const res = cli("watch", "--uninstall");
+  it("uninstalls cleanly", async () => {
+    const res = await cli("watch", "--uninstall");
     expect(res.status, res.stderr).toBe(0);
     expect(res.stdout).toContain("Removed");
     expect(scheduled()).not.toContain("pr watch");
   });
 
-  it("reports nothing to remove on a second uninstall", () => {
-    const res = cli("watch", "--uninstall");
+  it("reports nothing to remove on a second uninstall", async () => {
+    const res = await cli("watch", "--uninstall");
     expect(res.status, res.stderr).toBe(0);
     expect(res.stdout).toContain("No PR watch schedule installed");
   });
 
-  it("refuses both flags at once", () => {
-    const res = cli("watch", "--install", "--uninstall");
+  it("refuses both flags at once", async () => {
+    const res = await cli("watch", "--install", "--uninstall");
     expect(res.status).toBe(1);
     expect(res.stdout + res.stderr).toContain("Pick one of --install or --uninstall.");
   });
 
-  it("refuses the flags on another action", () => {
-    const res = cli("status", "--install");
+  it("refuses the flags on another action", async () => {
+    const res = await cli("status", "--install");
     expect(res.status).toBe(1);
     expect(res.stderr).toContain("unknown option '--install'");
   });

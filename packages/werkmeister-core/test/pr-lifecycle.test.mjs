@@ -5534,3 +5534,43 @@ test("runGate: a test row killed twice with exit 137 fails, saying it was retrie
     clean(ws);
   }
 });
+
+const VITEST_RPC_TIMEOUT = [
+  " Test Files  96 passed (96)",
+  "      Tests  744 passed | 2 skipped (746)",
+  "     Errors  1 error",
+  'Error: [vitest-worker]: Timeout calling "onTaskUpdate"',
+  " ❯ Object.onTimeoutError …/vitest@3.2.7/dist/chunks/rpc.-pEldfrD.js:53:10",
+].join("\n");
+
+test("runGate: a test row whose only error is vitest's worker RPC timeout is retried once (SW-744)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = answer(deps([DIFF_API]), API_EXEC, [{ code: 1, stdout: VITEST_RPC_TIMEOUT }, {}]);
+    const g = await gate(ws, d);
+    assert.equal(execs(d), 2);
+    assert.equal(testRow(g).ok, true, testRow(g).detail);
+    assert.match(testRow(g).detail, /retried once after vitest's worker RPC timeout/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("runGate: a real failure beside vitest's RPC timeout fails the row with no retry (SW-744)", async () => {
+  for (const extra of [
+    " FAIL  src/x.test.ts > y",
+    " Test Files  1 failed | 95 passed (96)",
+    "src/x.ts(3,1): error TS2322: Type 'string' is not assignable to type 'number'.",
+  ]) {
+    const ws = icmWorkspace();
+    try {
+      const stdout = `${VITEST_RPC_TIMEOUT}\n${extra}`;
+      const d = answer(deps([DIFF_API]), API_EXEC, [{ code: 1, stdout }, {}]);
+      const g = await gate(ws, d);
+      assert.equal(execs(d), 1, extra);
+      assert.equal(testRow(g).ok, false, extra);
+    } finally {
+      clean(ws);
+    }
+  }
+});

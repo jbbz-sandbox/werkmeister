@@ -7,7 +7,7 @@
  * missing hostnames. Runs the real script against a temp hosts file
  * (WERKMEISTER_HOSTS_FILE), which is user-writable so no step reaches for sudo.
  */
-import { spawnSync } from "node:child_process";
+import { type ExecFileOptions, execFile } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -29,48 +29,59 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-function run(args: string[]) {
+/** spawnSync's { status, stdout, stderr } without blocking the vitest worker (SW-744). */
+const execAsync = (file: string, args: string[], opts: ExecFileOptions = {}) =>
+  new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) =>
+    execFile(file, args, { ...opts, encoding: "utf8" }, (err, stdout, stderr) =>
+      resolve({
+        status: err ? (typeof err.code === "number" ? err.code : null) : 0,
+        stdout,
+        stderr,
+      }),
+    ),
+  );
+
+async function run(args: string[]) {
   const domains = args.flatMap((a) => (a.startsWith("-") ? [a] : ["--domain", a]));
-  const r = spawnSync("bash", [SCRIPT, "--certs-dir", dir, "--no-trust", ...domains], {
-    encoding: "utf8",
+  const r = await execAsync("bash", [SCRIPT, "--certs-dir", dir, "--no-trust", ...domains], {
     env: { ...process.env, WERKMEISTER_INGRESS_HOSTS: "", WERKMEISTER_HOSTS_FILE: hosts },
   });
   return { rc: r.status, out: r.stdout + r.stderr };
 }
 
 describe("generate-certs.sh --check", CERT_TIMEOUT, () => {
-  it("reports a SAN for a host the registry no longer routes", () => {
-    expect(run(["keep.local.test", "gone.local.test"]).rc).toBe(0);
+  it("reports a SAN for a host the registry no longer routes", async () => {
+    expect((await run(["keep.local.test", "gone.local.test"])).rc).toBe(0);
 
-    const check = run(["keep.local.test", "--check"]);
+    const check = await run(["keep.local.test", "--check"]);
 
     expect(check.rc).toBe(1);
     expect(check.out).toContain("gone.local.test");
   });
 
-  it("reports a hosts entry for a host the registry no longer routes", () => {
-    expect(run(["keep.local.test"]).rc).toBe(0);
+  it("reports a hosts entry for a host the registry no longer routes", async () => {
+    expect((await run(["keep.local.test"])).rc).toBe(0);
     // Bare lines, as versions before the managed block appended them.
     fs.writeFileSync(
       hosts,
       "127.0.0.1 localhost\n127.0.0.1 keep.local.test\n127.0.0.1 gone.local.test\n",
     );
 
-    const check = run(["keep.local.test", "--check"]);
+    const check = await run(["keep.local.test", "--check"]);
 
     expect(check.rc).toBe(1);
     expect(check.out).toContain("gone.local.test");
   });
 
-  it("passes once the registry, cert and hosts file agree", () => {
-    expect(run(["keep.local.test"]).rc).toBe(0);
+  it("passes once the registry, cert and hosts file agree", async () => {
+    expect((await run(["keep.local.test"])).rc).toBe(0);
 
-    expect(run(["keep.local.test", "--check"]).rc).toBe(0);
+    expect((await run(["keep.local.test", "--check"])).rc).toBe(0);
   });
 });
 
 describe("generate-certs.sh hosts reconcile", CERT_TIMEOUT, () => {
-  it("prunes removed services and leaves the user's own lines alone", () => {
+  it("prunes removed services and leaves the user's own lines alone", async () => {
     fs.writeFileSync(
       hosts,
       [
@@ -83,7 +94,7 @@ describe("generate-certs.sh hosts reconcile", CERT_TIMEOUT, () => {
       ].join("\n"),
     );
 
-    expect(run(["keep.local.test"]).rc).toBe(0);
+    expect((await run(["keep.local.test"])).rc).toBe(0);
 
     expect(fs.readFileSync(hosts, "utf8")).toBe(
       [

@@ -9,7 +9,7 @@
  *
  * The two cases wait out their timeout side by side, each in its own fixture.
  */
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -47,13 +47,15 @@ exit 0
     { mode: 0o755 },
   );
   const env: NodeJS.ProcessEnv = { ...process.env, ...fx.env, WERKMEISTER_DOCKER_BIN: docker };
-  const init = spawnSync(process.execPath, [MAIN, "workspace", "init"], {
+  const init = spawn(process.execPath, [MAIN, "workspace", "init"], {
     cwd: fx.workspace,
     env,
-    encoding: "utf-8",
+    stdio: ["ignore", "ignore", "pipe"],
     timeout: 60_000,
   });
-  expect(init.status, init.stderr).toBe(0);
+  let initErr = "";
+  init.stderr.on("data", (d) => (initErr += d));
+  expect(await new Promise((resolve) => init.on("close", resolve)), initErr).toBe(0);
   // `up` alone times out in 2 s; WERKMEISTER_TIMEOUT_SCALE would shrink every docker call with it (SW-755).
   env.WERKMEISTER_UP_TIMEOUT_S = "2";
   // Not spawnSync: it would block this worker, and the other case with it, for the whole wait.
