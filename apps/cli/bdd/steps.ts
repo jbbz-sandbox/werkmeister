@@ -3,13 +3,14 @@
  * as `with-fixture-workspace`) and runs the built `werkmeister pr gate` against it. The fake docker
  * shows no container running and the workspace has no compose file, so the gate never starts one.
  */
-import { execFile } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { After, Given, Then, When } from "quickpickle";
 import { expect } from "vitest";
 import { seedFixture } from "werkmeister-core/fixture_workspace";
+
+import { execAsync } from "../src/lib/__tests__/helpers/exec_async.js";
 
 /** Built by the `test` script. */
 const MAIN = path.resolve(import.meta.dirname, "../dist/main.js");
@@ -40,20 +41,10 @@ Given(
 );
 
 When("the PR gate runs", async (world: GateWorld) => {
-  // Async so the gate's run doesn't block the vitest worker (SW-744).
-  world.gate = await new Promise((resolve) =>
-    execFile(
-      process.execPath,
-      [MAIN, "pr", "gate"],
-      { cwd: world.ws, env: world.env, encoding: "utf8" },
-      (err, stdout, stderr) =>
-        resolve({
-          status: err ? (typeof err.code === "number" ? err.code : null) : 0,
-          stdout,
-          stderr,
-        }),
-    ),
-  );
+  world.gate = await execAsync(process.execPath, [MAIN, "pr", "gate"], {
+    cwd: world.ws,
+    env: world.env,
+  });
 });
 
 Then("the gate passes", (world: GateWorld) => {

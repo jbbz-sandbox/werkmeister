@@ -5,26 +5,15 @@
  * The registry lives in main.ts, which runs on import, so the program is read
  * through the built binary's `__reference` mode (see lib/__tests__/complete.test.ts).
  */
-import { type ExecFileOptions, execFile } from "node:child_process";
+
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { execAsync } from "../../lib/__tests__/helpers/exec_async.js";
 
 const CLI_DIR = path.resolve(fileURLToPath(import.meta.url), "../../../..");
 const MIGRATE_SRC = path.resolve(CLI_DIR, "../../packages/werkmeister-core/src/migrate.ts");
-
-/** spawnSync's { status, stdout, stderr } without blocking the vitest worker (SW-744). */
-const execAsync = (file: string, args: string[], opts: ExecFileOptions = {}) =>
-  new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) =>
-    execFile(file, args, { ...opts, encoding: "utf8" }, (err, stdout, stderr) =>
-      resolve({
-        status: err ? (typeof err.code === "number" ? err.code : null) : 0,
-        stdout,
-        stderr,
-      }),
-    ),
-  );
 
 async function registeredCommands(): Promise<string[]> {
   const main = path.join(CLI_DIR, "dist/main.js");

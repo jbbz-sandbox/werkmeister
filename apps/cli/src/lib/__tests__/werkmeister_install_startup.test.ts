@@ -11,12 +11,14 @@
  * `sha256sum` (util-linux/coreutils), so it runs in the containers and on CI,
  * not on a macOS host.
  */
-import { execFile, spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { execAsync } from "./helpers/exec_async.js";
 
 const SCRIPT = path.resolve(
   fileURLToPath(import.meta.url),
@@ -57,17 +59,8 @@ function env(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   };
 }
 
-/** spawnSync's { status, stdout }, without blocking the vitest worker (SW-744). */
 function run(app: string, extra: Record<string, string> = {}, args = ["install"]) {
-  return new Promise<{ status: number | null; stdout: string }>((resolve) =>
-    execFile(
-      "sh",
-      [SCRIPT, ...args],
-      { cwd: app, env: env(extra), encoding: "utf8" },
-      (err, stdout) =>
-        resolve({ status: err ? (typeof err.code === "number" ? err.code : null) : 0, stdout }),
-    ),
-  );
+  return execAsync("sh", [SCRIPT, ...args], { cwd: app, env: env(extra) });
 }
 
 /** Calls logged since the last read: `<args>` for npm, `pnpm <args>` / `corepack <args>` for those. */

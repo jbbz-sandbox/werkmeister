@@ -7,11 +7,12 @@
  * missing hostnames. Runs the real script against a temp hosts file
  * (WERKMEISTER_HOSTS_FILE), which is user-writable so no step reaches for sudo.
  */
-import { type ExecFileOptions, execFile } from "node:child_process";
+
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { execAsync } from "./helpers/exec_async.js";
 
 const SCRIPT = path.resolve(__dirname, "../../../bin/generate-certs.sh");
 // Each case runs openssl RSA keygen; ~1 s alone, up to ~47 s under full-suite load on a busy host (#178).
@@ -28,18 +29,6 @@ beforeEach(() => {
 afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
-
-/** spawnSync's { status, stdout, stderr } without blocking the vitest worker (SW-744). */
-const execAsync = (file: string, args: string[], opts: ExecFileOptions = {}) =>
-  new Promise<{ status: number | null; stdout: string; stderr: string }>((resolve) =>
-    execFile(file, args, { ...opts, encoding: "utf8" }, (err, stdout, stderr) =>
-      resolve({
-        status: err ? (typeof err.code === "number" ? err.code : null) : 0,
-        stdout,
-        stderr,
-      }),
-    ),
-  );
 
 async function run(args: string[]) {
   const domains = args.flatMap((a) => (a.startsWith("-") ? [a] : ["--domain", a]));
