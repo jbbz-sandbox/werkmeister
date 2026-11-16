@@ -155,3 +155,79 @@ test("ab-row rejects a bad ROW_OTHERS_TRIES", async () => {
     return true;
   });
 });
+
+test("measure_one prints the row's cgroup CPU-s and rc, and returns 0 when the command fails", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "mtc-"));
+  const stat = join(dir, "cpu.stat");
+  writeFileSync(stat, "usage_usec 1000000\n");
+  const env = { ROW_CGROUP_STAT: stat, STAT: stat };
+  const bump = `sh -c 'echo "usage_usec 3500000" > "$STAT"; exit 3'`;
+  const { stdout } = await sh(
+    `measure_one core test/a.test.mjs "${join(dir, "a.log")}" ${bump}`,
+    env,
+  );
+  const [suite, file, rc, , cpu] = stdout.trim().split("\t");
+  assert.deepEqual([suite, file, rc, cpu], ["core", "test/a.test.mjs", "3", "2.5"]);
+});
+
+test("measure-test-cpu checks its arguments before it measures", async () => {
+  const ws = realpathSync(mkdtempSync(join(tmpdir(), "mtc-ws-")));
+  mkdirSync(join(ws, ".werkmeister", "bin"), { recursive: true });
+  writeFileSync(join(ws, ".werkmeister", "bin", "with-temp-home"), "#!/bin/sh\n", { mode: 0o755 });
+  const mtc = (...args) =>
+    promisify(execFile)("sh", [join(import.meta.dirname, "measure-test-cpu.sh"), ...args], {
+      env: { ...process.env, WERKMEISTER_FEATURE: "" },
+    });
+  for (const [args, message] of [
+    [["-w", ws], /Run in the service's container/],
+    [["-w", ws, "-o", join(ws, "out"), "-f", "bogus"], /-f takes core or cli, got 'bogus'/],
+    [
+      ["-w", join(ws, "nope"), "-o", join(ws, "out")],
+      /no .*with-temp-home; is -w the workspace folder/,
+    ],
+    [["-w", ws, "-o", join(tmpdir(), "elsewhere")], /is outside/],
+    [["-w", ws, "-o", join(ws, "out"), "-l", "a/b"], /-l takes a plain name/],
+    [["-w", ws, "-o", `${ws}/../escape`], /is outside/],
+  ]) {
+    await assert.rejects(mtc(...args), (e) => {
+      assert.equal(e.code, 2, args.join(" "));
+      assert.match(e.stderr, message);
+      return true;
+    });
+  }
+  // In a container, -w must be the workspace that container serves.
+  writeFileSync(join(ws, ".werkmeister", "workspace.yml"), "feature: other\n");
+  const inContainer = promisify(execFile)(
+    "sh",
+    [join(import.meta.dirname, "measure-test-cpu.sh"), "-w", ws, "-o", join(ws, "out")],
+    { env: { ...process.env, WERKMEISTER_FEATURE: "demo" } },
+  );
+  await assert.rejects(inContainer, (e) => {
+    assert.equal(e.code, 2);
+    assert.match(e.stderr, /is feature 'other', this container's is 'demo'/);
+    return true;
+  });
+});
+
+test("ab-row looks for the container named after the workspace's feature, not its folder", async () => {
+  const ws = realpathSync(mkdtempSync(join(tmpdir(), "ab-feat-")));
+  mkdirSync(join(ws, ".werkmeister"));
+  writeFileSync(join(ws, ".werkmeister", "workspace.yml"), "feature: demo\n");
+  mkdirSync(join(ws, "bin"));
+  writeFileSync(join(ws, "bin", "docker"), "#!/bin/sh\necho false\n", { mode: 0o755 });
+  const repo = join(ws, "repo");
+  mkdirSync(repo);
+  await promisify(execFile)("git", ["init", "-q"], { cwd: repo });
+  const ab = promisify(execFile)(
+    "sh",
+    [join(import.meta.dirname, "ab-row.sh"), "-o", join(ws, "out")],
+    {
+      cwd: repo,
+      env: { ...process.env, PATH: `${join(ws, "bin")}:${process.env.PATH}` },
+    },
+  );
+  await assert.rejects(ab, (e) => {
+    assert.match(e.stderr, /^ab-row: demo-werkmeister-core is not running/);
+    return true;
+  });
+});

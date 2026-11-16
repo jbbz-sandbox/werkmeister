@@ -67,3 +67,18 @@ All three mods are registered in [`plugins/werkmeister/hooks/register.tsx`](../p
 ### Code standards (`w9r-*`) are not in the plugin
 
 The `w9r-implement` / `w9r-research` entry skills and the `w9r-*-standard` code standards are projected into each workspace's `.claude/skills/` by `werkmeister workspace init`. Entry-skill sources live in [`apps/cli/infra/skills/`](../apps/cli/infra/skills), and the standards are rendered at the same step from the tree `overrides.standards_dir` points at (e.g. a [jbbz-sandbox/sandbox-standards](https://github.com/jbbz-sandbox/sandbox-standards) checkout), which `werkmeister standards check` validates. <!-- name-check: ignore -->
+
+## Measuring test CPU
+
+To check whether a change makes the gate cheaper, measure in this workspace's werkmeister-core container (`werkmeister feature up --service werkmeister-core`). Each script reads the container's CPU time from the cgroup's `cpu.stat` `usage_usec`. Before it measures, it waits while the Docker VM is busier than `ROW_LOAD_LIMIT` cores (default 1.0). If the VM is still busy after `ROW_LOAD_WAIT` seconds (default 600), it exits 75 without measuring. The scripts never pause other workspaces: when a run keeps being refused, you decide whether to pause any.
+
+| Question | Command | Prints |
+|---|---|---|
+| What does the whole gate row cost? | `docker exec -w /app <feature>-werkmeister-core sh scripts/measure-row.sh -w <ws> -o <dir>` ([`measure-row.sh`](../scripts/measure-row.sh)) | wall, CPU-s, CPU samples every 5 s, test counts, other workspaces' CPU-s |
+| What does each suite cost? | `docker exec -w /app <feature>-werkmeister-core sh scripts/measure-test-cpu.sh -w <ws> -o <dir>` ([`measure-test-cpu.sh`](../scripts/measure-test-cpu.sh)) | `suites.tsv`: build, core, cli vitest and bdd, mcp, plugin validate/test/install-check |
+| Which test files cost the most? | the same with `-f core` or `-f cli` | `files-core.tsv` / `files-cli.tsv`: each file run alone |
+| Did my change make it cheaper? | `sh scripts/ab-row.sh -o <dir> -n 3 -- <command>` on the host, from the repo worktree ([`ab-row.sh`](../scripts/ab-row.sh)) | runs on the base (A) and your branch (B), alternating, then the median wall and CPU-s of each side |
+
+`<feature>` is `feature:` in the workspace's `.werkmeister/workspace.yml`, `<ws>` the workspace folder's full path, and `<dir>` a path inside it whose parent exists. Each TSV row is `suite file rc wall_s cpu_s others_s`, where `others_s` is the CPU other workspaces used during that row; a high value means the row is noisy. A per-file run gives every file its own process, so the files' totals rank files but don't add up to the suite: the core suite runs the files in `packages/werkmeister-core/test/shared-process.list` in one process.
+
+A single run can be about 30 % off when other workspaces load the host, so compare a change by its `ab-row.sh` medians, with at least 3 pairs. `ab-row.sh` reruns a run in which other workspaces used more than `ROW_OTHERS_LIMIT` CPU-s (default 30). For example, `-- pnpm --filter werkmeister-core test` compares the core suite, and `-- sh -c 'cd packages/werkmeister-core && node --test test/a.test.mjs test/b.test.mjs'` compares a set of files.

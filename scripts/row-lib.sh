@@ -26,6 +26,35 @@ vm_cpu_usec() {
 
 gt() { awk -v a="$1" -v b="$2" 'BEGIN { exit !(a > b) }'; }
 
+# <script name>: resolves $ws and $out to real paths; exits 2 when -o is outside -w, or -w isn't
+# this container's workspace. The container mounts every workspace and the real ~/.werkmeister.
+own_out() {
+  ws=$(cd "$ws" 2>/dev/null && pwd -P) || { echo "$1: -w is not a folder" >&2; exit 2; }
+  o_dir=$(cd "$(dirname "$out")" 2>/dev/null && pwd -P) || { echo "$1: -o: no folder $(dirname "$out")" >&2; exit 2; }
+  out=$o_dir/$(basename "$out")
+  case $out/ in "$ws"/*) ;; *) echo "$1: -o $out is outside $ws" >&2; exit 2 ;; esac
+  o_feature=$(awk '$1 == "feature:" { print $2; exit }' "$ws/.werkmeister/workspace.yml" 2>/dev/null)
+  [ -z "${WERKMEISTER_FEATURE:-}" ] || [ "$o_feature" = "$WERKMEISTER_FEATURE" ] ||
+    { echo "$1: -w $ws is feature '$o_feature', this container's is '$WERKMEISTER_FEATURE'" >&2; exit 2; }
+}
+
+# This container's CPU microseconds; ROW_CGROUP_STAT points a test at a fake file.
+cgroup_usec() { awk '/^usage_usec/ { print $2 }' "${ROW_CGROUP_STAT:-/sys/fs/cgroup/cpu.stat}"; }
+
+# <suite> <file> <log> <cmd...>: runs cmd into log, prints "suite file rc wall_s cpu_s others_s" (tabs).
+# Always returns 0, so a per-file loop goes on past a failing file; rc is in the row.
+measure_one() {
+  m_suite=$1 m_file=$2 m_log=$3
+  shift 3
+  m_c0=$(cgroup_usec) m_v0=$(vm_cpu_usec) m_t0=$(date +%s.%N)
+  "$@" >"$m_log" 2>&1
+  m_rc=$?
+  m_t1=$(date +%s.%N) m_c1=$(cgroup_usec) m_v1=$(vm_cpu_usec)
+  awk -v s="$m_suite" -v f="$m_file" -v rc="$m_rc" -v t0="$m_t0" -v t1="$m_t1" \
+    -v c0="$m_c0" -v c1="$m_c1" -v v0="$m_v0" -v v1="$m_v1" 'BEGIN {
+    printf "%s\t%s\t%d\t%.1f\t%.1f\t%.1f\n", s, f, rc, t1 - t0, (c1 - c0) / 1e6, ((v1 - v0) - (c1 - c0)) / 1e6 }'
+}
+
 # Waits while the VM is busier than ROW_LOAD_LIMIT cores, up to ROW_LOAD_WAIT s (0: check once);
 # returns 75 (with-temp-home's "load still over") when the wait runs out. Sets busy_before, waited_s.
 wait_quiet() {

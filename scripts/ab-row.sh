@@ -43,7 +43,9 @@ repo=$(cd "$repo" && pwd -P)
 ws=$(dirname "$repo")
 while [ "$ws" != / ] && [ ! -f "$ws/.werkmeister/workspace.yml" ]; do ws=$(dirname "$ws"); done
 [ "$ws" != / ] || die "no .werkmeister/workspace.yml above $repo"
-container=${container:-$(basename "$ws")-werkmeister-core}
+# Containers are named after the workspace's feature, which can differ from its folder.
+feature=$(awk '$1 == "feature:" { print $2; exit }' "$ws/.werkmeister/workspace.yml")
+container=${container:-${feature:-$(basename "$ws")}-werkmeister-core}
 [ "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null)" = true ] ||
   die "$container is not running; run werkmeister feature up --service werkmeister-core"
 src=$(docker inspect -f '{{range .Mounts}}{{if eq .Destination "/app"}}{{.Source}}{{end}}{{end}}' "$container")
