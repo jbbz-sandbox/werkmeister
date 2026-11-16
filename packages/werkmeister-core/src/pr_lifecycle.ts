@@ -3355,7 +3355,7 @@ export async function openTerminalSessions(
  * @returns `command`, the matching CLI command; `output`, what it did, one step per line;
  * `path`, the workspace folder (now removed); and `terminals`, `claude` sessions
  * still running in that folder, for a person to exit.
- * @throws `WorkspaceError` when `name` is not a workspace, a reason is
+ * @throws {@link WorkspaceError} when `name` is not a workspace, a reason is
  * empty, the options conflict, another close-out of it is running, the
  * workspace has no `postmortem.md` (without `skipPostmortem`), or a PR is not
  * yet shipped, closed or abandoned (without `abandon` or `noPr`).

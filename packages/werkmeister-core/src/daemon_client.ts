@@ -65,7 +65,7 @@ export function daemonToken(workspaceRoot?: string): string | null {
 /**
  * Thrown when the werkmeister daemon is not reachable: nothing is listening at {@link daemonUrl},
  * or something other than the daemon holds its port. The daemon never saw the call, so it is safe
- * to run the work another way. Its `code` is `DAEMON_DOWN`, and it extends `SandboxError`.
+ * to run the work another way. Its `code` is `DAEMON_DOWN`, and it extends {@link SandboxError}.
  *
  * @example
  * ```ts
@@ -300,7 +300,7 @@ export interface ToolResult<T> {
  * @throws {@link DaemonUnavailable} when the daemon is not running or something else holds its
  * port: the daemon never ran the tool, so you may run the work another way. Also when *signal*
  * aborts the call before any answer came back; the daemon may already be running the tool then.
- * @throws `SandboxError` when the daemon took the call but did not answer in time
+ * @throws {@link SandboxError} when the daemon took the call but did not answer in time
  * (`code` `DAEMON_TIMEOUT`): it may still be running the tool, so do not run it again. Also when
  * the tool fails (the tool's own `code`, or `HTTP_<status>`), and when the daemon runs older code
  * that has no such tool (`DAEMON_STALE`).
@@ -388,7 +388,7 @@ export async function callTool<T = unknown>(
  * @param opts - `token`: the bearer token to send; by default `WERKMEISTER_MCP_TOKEN`, else the
  * machine token; `null` sends none.
  * @returns A {@link LogTail}. `done` resolves when the stream ends or you call `stop()`. It
- * rejects with {@link DaemonUnavailable} when the daemon is down, and with `SandboxError`
+ * rejects with {@link DaemonUnavailable} when the daemon is down, and with {@link SandboxError}
  * when the daemon refuses the stream or the logs fail.
  *
  * @example
