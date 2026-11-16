@@ -212,6 +212,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /Before filing 3 or more follow-up tickets, ask the person where they go.*an existing epic \(by name\), a new epic \(with a proposed title\), a label, or none/,
             `${wt}/${d}`,
           );
+        // SW-746: a host-only check is a logged script the person runs with one `! sh` line.
+        if (c.includes("Write `output/exercise.md`"))
+          assert.match(
+            c,
+            /one `! sh <absolute path>` line with the script.s commands shown beside it, then read the log.*Never ask the person to copy commands out of the transcript/,
+            `${wt}/${d}`,
+          );
         // SW-534: an exercise that changes code gets the review rerun on its delta.
         if (d.endsWith("_implement"))
           assert.match(c, /rerun the review on that delta/, `${wt}/${d}`);

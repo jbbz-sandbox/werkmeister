@@ -8,7 +8,7 @@
  */
 
 import { COMPOSE_FILE } from "../compose_file.js";
-import { APPROVAL_NOTE, CHAT_APPROVAL } from "../pr_rules.js";
+import { APPROVAL_NOTE, CHAT_APPROVAL, HOST_SCRIPT_RULE } from "../pr_rules.js";
 
 export interface IcmVars {
   /** Path from one stage dir to another stage's dir, by stage name: `../01_research`. */
@@ -130,7 +130,8 @@ const diffCheck = (doc: string) =>
 // SW-562: sw-499's two MANUAL rows (a real VS Code window) were approved unrun and shipped as MANUAL, never recorded.
 // SW-613: sw-594's browser row listed pages only ("what am I looking for?"); sw-601 saw another workspace's copy with no cookie set.
 const MANUAL_STEP =
-  "Before asking for approval, list the exercise rows only a person can run (a real VS Code window, a device, a browser). Ask the person for each one's result, one question per row (pass / fail / not run). Each question states the URL to open, how to reach this workspace's copy (the `X-Feature` cookie or selector for a routed hostname, which serves another workspace's copy when none is set, or the container's direct published port, `localhost:<port>`, from `werkmeister-context.md`), and the visible before → after that means PASS; a question that only lists pages to open is not asked. Write the answer into `exercise.md`: PASS or FAIL in the table, and for a row not run a `MANUAL: not run (person's reason)` line under it (the table's result cell stays PASS or FAIL). An approval that skips this keeps those rows MANUAL, and the PR file says why.";
+  "Before asking for approval, list the exercise rows only a person can run (a real VS Code window, a device, a browser). Ask the person for each one's result, one question per row (pass / fail / not run). Each question states the URL to open, how to reach this workspace's copy (the `X-Feature` cookie or selector for a routed hostname, which serves another workspace's copy when none is set, or the container's direct published port, `localhost:<port>`, from `werkmeister-context.md`), and the visible before → after that means PASS; a question that only lists pages to open is not asked. Write the answer into `exercise.md`: PASS or FAIL in the table, and for a row not run a `MANUAL: not run (person's reason)` line under it (the table's result cell stays PASS or FAIL). An approval that skips this keeps those rows MANUAL, and the PR file says why. " +
+  HOST_SCRIPT_RULE;
 
 const SKIPPED = "every skipped test by name with its skip reason and where it ran instead";
 // SW-126: the stages already ran each service's tests in its container before propose (SW-316, SW-430, SW-506); record them per service.
