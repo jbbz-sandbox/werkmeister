@@ -183,6 +183,9 @@ test("each template renders with no undefined and a route per stage", async () =
               `${wt}/${d}`,
             );
         }
+        // SW-126: the build stages record the gate's test result per service.
+        if (/_(implement|fix)$/.test(d))
+          assert.match(c, /`pr gate --tests` result for each service it tested/, `${wt}/${d}`);
         // SW-534: an exercise that changes code gets the review rerun on its delta.
         if (d.endsWith("_implement"))
           assert.match(c, /rerun the review on that delta/, `${wt}/${d}`);

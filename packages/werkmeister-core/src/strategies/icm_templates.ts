@@ -131,6 +131,9 @@ const MANUAL_STEP =
   "Before asking for approval, list the exercise rows only a person can run (a real VS Code window, a device, a browser). Ask the person for each one's result, one question per row (pass / fail / not run). Each question states the URL to open, how to reach this workspace's copy (the `X-Feature` cookie or selector for a routed hostname, which serves another workspace's copy when none is set, or the container's direct published port, `localhost:<port>`, from `werkmeister-context.md`), and the visible before → after that means PASS; a question that only lists pages to open is not asked. Write the answer into `exercise.md`: PASS or FAIL in the table, and for a row not run a `MANUAL: not run (person's reason)` line under it (the table's result cell stays PASS or FAIL). An approval that skips this keeps those rows MANUAL, and the PR file says why.";
 
 const SKIPPED = "every skipped test by name with its skip reason and where it ran instead";
+// SW-126: the stages already ran each service's tests in its container before propose (SW-316, SW-430, SW-506); record them per service.
+const PER_SERVICE =
+  "the `pr gate --tests` result for each service it tested (one line per service row)";
 
 // SW-438: a grouped PR commits per ticket as it goes; the uncommitted-diff contracts contradicted it (sw-323).
 const keys = (group: string[]) => group.map((k) => `\`${k}\``).join(", ");
@@ -403,7 +406,7 @@ const feature: Stage[] = [
         GATE_STEP,
         REVIEW_DELTA,
         `Reload the running code: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} Then exercise the change as the How-to-validate section of \`werkmeister-context.md\` describes for each service touched, and capture the output. ${NO_SERVICE_RULE} ${PROBE_RULE} ${EXERCISE_WORKAROUND} ${TIMING_CLAIM}`,
-        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
+        `Write \`output/exercise.md\`: \`git diff --stat\` for each repo you touched, the host and \`pr gate --tests\` exit codes and summary lines, ${PER_SERVICE}, ${SKIPPED}, any deviation from \`spec.md\` with its reason, and the exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
       outputs: [
@@ -487,7 +490,7 @@ const bugfix: Stage[] = [
         "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
         diffCheck("repro.md"),
         TEST_STEP,
-        `Write \`output/fix.md\`: \`git diff --stat\` per repo, the failing test's name, the test exit code and summary line, and ${SKIPPED}.`,
+        `Write \`output/fix.md\`: \`git diff --stat\` per repo, the failing test's name, the test exit code and summary line, ${PER_SERVICE}, and ${SKIPPED}.`,
       ],
       outputs: [
         v.group.length
@@ -604,7 +607,7 @@ const refactor: Stage[] = [
         GATE_STEP,
         REVIEW_DELTA,
         `After the last step, reload and exercise the service: ${v.restart}. ${RELOAD_RULE} ${HOSTNAME_RULE} ${NO_SERVICE_RULE} ${PROBE_RULE} ${EXERCISE_WORKAROUND} ${TIMING_CLAIM}`,
-        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
+        `Write \`output/exercise.md\`: \`git diff --stat\` per repo, the test result after each step, the \`pr gate --tests\` exit code, ${PER_SERVICE}, ${SKIPPED}, and the final exercise checks as ${exerciseFormat("evidence")}.`,
         MANUAL_STEP,
       ],
       outputs: [
