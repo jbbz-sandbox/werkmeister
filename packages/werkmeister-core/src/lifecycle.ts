@@ -532,7 +532,23 @@ export async function admitServiceStart(
       }
       if (position === null) {
         admitted = true;
-        for (const name of released) await docker().getContainer(name).start();
+        // Through compose, not by name: a db + app pair needs depends_on order and health waits (SW-686).
+        if (
+          released.length &&
+          !(await composeUpServiceAsync(feature, [...up], path.join(workspace, COMPOSE_FILE), true))
+        ) {
+          const running = new Set(
+            (await getContainerStatus(feature))
+              .filter((c) => c.status === "running")
+              .map((c) => c.name),
+          );
+          throw new SandboxError(
+            `Could not start ${[...up].join(", ")} again after waiting for capacity; still stopped: ` +
+              `${released.filter((n) => !running.has(n)).join(", ") || "none"}. ` +
+              "`werkmeister feature up` starts the feature again.",
+            "COMPOSE_UP_FAILED",
+          );
+        }
         return;
       }
       if (waited >= waitMs) {

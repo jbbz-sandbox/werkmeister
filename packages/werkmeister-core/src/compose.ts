@@ -498,7 +498,8 @@ export async function composeUpAsync(feature: string, signal?: AbortSignal): Pro
 }
 
 /**
- * Start one service and wait until it runs (healthy, when it has a healthcheck).
+ * Start a service (or several, in compose's dependency order) and wait until each runs (healthy,
+ * when it has a healthcheck).
  *
  * Its setup service's `service_completed_successfully` holds the start until the
  * install finishes; *noDeps* skips that, for an install already current (SW-541).
@@ -506,11 +507,11 @@ export async function composeUpAsync(feature: string, signal?: AbortSignal): Pro
  */
 export async function composeUpServiceAsync(
   feature: string,
-  service: string,
+  service: string | string[],
   composePath: string,
   noDeps = false,
 ): Promise<boolean> {
-  const args = ["up", "-d", "--wait", ...(noDeps ? ["--no-deps"] : []), service];
+  const args = ["up", "-d", "--wait", ...(noDeps ? ["--no-deps"] : []), ...[service].flat()];
   const result = await runComposeAsync(feature, args, {
     capture: true,
     composePath,
