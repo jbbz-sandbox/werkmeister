@@ -1,5 +1,19 @@
 # sandbox-core
 
+## 0.93.2
+
+### Patch Changes
+
+- be37df0: Capacity queue (SW-682): a queued feature that can no longer fit the budget (queued before `budget.*` was lowered, or its compose grew) is dropped from the queue during a grant, and its session is told why with the NEVER_FITS message. The waiters behind it still start.
+- b559753: Capacity queue (SW-686): containers a `--service` or gate start stopped while it waited for capacity now come back through `docker compose up --wait`, in dependency order and with health conditions, instead of one `docker start` per container by name. If they don't all come back, the error names the containers still stopped.
+- 6db2de7: Capacity queue (SW-701): a `feature up --service` start that waits its 10 minutes without room now keeps its queue place instead of leaving it. It still exits 75, but it stays queued with its first wait time; when room frees, the grant pass starts that service, reloads the proxy and tells the session to continue. A rerun keeps its place. A parked start never holds the room against later starts, so a start that can't fit can't stall the queue. Gate starts, and starts that stopped their own containers to wait, don't park.
+- 4667dd1: Capacity hook (SW-713): a session is no longer held by "Waiting for capacity" after its feature has left the queue. The hook clears a leftover waiting file instead of denying every tool call, and `feature restart` of a queued feature takes it out of the queue, so its running containers no longer leave the session stuck.
+- 35638b3: Capacity queue (SW-737): a queued feature is started when room frees, even with no stop to trigger it. One waiter whose start failed (low memory or host load, a missing compose file) ended the whole grant pass, so every 10-minute `pr watch` tick failed on it and nothing behind it started, on an idle host too. The pass now skips that waiter and keeps it queued. A `--service` or gate start now runs a grant after it starts, and a start that gives up waiting runs one for those still queued.
+- e417971: Capacity queue (SW-738): an agent's `feature up` in a person's workspace no longer starts as the person, so it can't stop another workspace's working containers. A start whose preemption fails to stop a container now puts that feature back in the queue to come back, and waits at the head of the queue itself, instead of leaving the other feature down and its own start not started.
+- 6d6fb25: Capacity queue (SW-745): a running `pr gate` / `pr open` is never preempted. The gate marked itself busy only when it started a container or ran a row, so a test row longer than `idle_stop_minutes` read as not busy, and a queued start could stop its containers mid-run (exit 137, reported as test failures). The gate now refreshes that mark every minute while it runs. With `idle_stop_minutes: 0` a gate also counts as busy.
+- c8669ea: Capacity queue (SW-763): the "waiting for capacity" and exit-75 messages now say what the start needs against what is free in the budget (`this start needs 4 CPUs, 1.0 GiB; free 3 CPUs, 5.8 GiB of the budget's 8 CPUs, 6.8 GiB`), so a request too big for the host reads apart from a busy one and can be retried with `--service`. The wake on an idle host comes from the `pr watch` grant pass, which SW-737 made work.
+- b8d3c7b: Capacity hook (SW-768): while a workspace waits for capacity, its session is held only for commands that need containers or the CPUs (`docker`, `pnpm`/`npm`/`node` and other test runners, `with-temp-home`, `feature up`/`restart`, `pr gate`/`pr open`). Edits, reads, git on the record, `werkmeister feature stop` and prompts go through, so a person's approval can still be written and committed while queued. A paused workspace still holds everything.
+
 ## 0.93.1
 
 ### Patch Changes
