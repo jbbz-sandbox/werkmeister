@@ -8,8 +8,11 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { readWaiting, waitingPath, writeWaiting } from "../dist/agent_state.js";
+import { readNudge, readWaiting, waitingPath, writeWaiting } from "../dist/agent_state.js";
+import { loadPorts, loadServices } from "../dist/config.js";
+import { generateFeatureCompose } from "../dist/generate.js";
 import { grantWaiters, runningFeatures, runningLeases } from "../dist/lifecycle.js";
+import { workspaceServices } from "../dist/registry_sync.js";
 import { withReporter } from "../dist/reporter.js";
 import {
   enqueue,
@@ -29,10 +32,10 @@ pinWerkmeisterRoot();
 
 const G = 2 ** 30;
 
-async function withHome(fn, config = "") {
+async function withHome(fn, config = "", services = undefined) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "sched-home-"));
   try {
-    return await withSandboxHome(() => fn(home), { config });
+    return await withSandboxHome(() => fn(home), { config, services });
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }
@@ -129,6 +132,18 @@ test("no room: the feature queues and gets waiting.json; room: it leaves both", 
     assert.deepEqual(await requestAdmission("f", ws, false, [], budget), { kind: "admit" });
     assert.deepEqual(readQueue(), []);
     assert.equal(fs.existsSync(waitingPath(ws)), false);
+  });
+});
+
+// SW-682: never-fits must stay in the dequeue branch; in the wait branch it would be a dead queue head again (SW-629).
+test("a queued feature that can never fit leaves the queue and its waiting.json", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, COMPOSE);
+    await enqueue("f", ws);
+    const d = await requestAdmission("f", ws, false, [], { memory: G, cpus: 0.5, preempt: true });
+    assert.equal(d.kind, "never-fits");
+    assert.deepEqual(readQueue(), []);
+    assert.equal(readWaiting(ws), null);
   });
 });
 
@@ -346,6 +361,48 @@ test("grantWaiters starts the waiters behind a head whose up throws, and keeps t
   } finally {
     if (prev === undefined) delete process.env.WERKMEISTER_FIXTURE;
     else process.env.WERKMEISTER_FIXTURE = prev;
+  }
+});
+
+// SW-682: a head queued before the budget shrank threw NEVER_FITS out of the pass; its session was never told.
+test("grantWaiters drops a head that can never fit, tells its session, and starts the next", async () => {
+  const prev = {
+    fixture: process.env.WERKMEISTER_FIXTURE,
+    docker: process.env.WERKMEISTER_DOCKER_BIN,
+  };
+  process.env.WERKMEISTER_FIXTURE = "1";
+  try {
+    await withHome(
+      async (home) => {
+        const fake = path.join(home, "docker");
+        fs.writeFileSync(fake, "#!/bin/sh\nexit 0\n", { mode: 0o755 }); // reads as: nothing runs
+        process.env.WERKMEISTER_DOCKER_BIN = fake;
+        const k8s = workspace(home, "services: {}\n");
+        fs.writeFileSync(path.join(k8s, ".env"), "FEATURE=k8s\nSLOT=4\n");
+        const big = path.join(home, "big");
+        fs.mkdirSync(path.join(big, ".werkmeister"), { recursive: true });
+        fs.writeFileSync(path.join(big, ".env"), "FEATURE=big\nWERKMEISTER_SLOT=3\nSERVICES=big\n");
+        // Rendered as up renders it, so up finds it current and prices its 9 CPUs.
+        const config = { services: workspaceServices(loadServices(), big), ports: loadPorts() };
+        generateFeatureCompose("big", 3, ["big"], config, big, "werkmeister CLI");
+        writeLeases({ big: { slot: 3, workspace: big }, k8s: { slot: 4, workspace: k8s } });
+        await enqueue("big", big);
+        await enqueue("k8s", k8s);
+        assert.deepEqual(await grantWaiters(), ["k8s"]);
+        assert.deepEqual(readQueue(), []);
+        assert.match(readNudge(big), /'big' can never fit the budget/);
+      },
+      "budget:\n  cpus: 4\n  memory: 8G\n",
+      "services:\n  big:\n    type: api\n    repo: demo-repo\n    port_offset: 2\n    cpus: 9\n",
+    );
+  } finally {
+    for (const [k, v] of [
+      ["WERKMEISTER_FIXTURE", prev.fixture],
+      ["WERKMEISTER_DOCKER_BIN", prev.docker],
+    ]) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
   }
 });
 
