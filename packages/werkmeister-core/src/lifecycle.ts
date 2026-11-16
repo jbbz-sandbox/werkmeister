@@ -94,7 +94,7 @@ import { type RunResult, run } from "./proc.js";
 import { workspaceServices } from "./registry_sync.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { withStartRecord } from "./resources.js";
-import { type Lease, queueOrder, type Rank, STARVE_MS } from "./scheduler.js";
+import { type Cost, type Lease, queueOrder, type Rank, STARVE_MS } from "./scheduler.js";
 import { schedulerOp, waitingQueue } from "./scheduler_client.js";
 import {
   dequeue,
@@ -236,7 +236,7 @@ export async function up(
     if (waiting !== null) {
       warn(`Waiting for capacity, position ${waiting} — it starts when another feature stops`);
       return {
-        waitingNote: capacityWait(feature, waiting, true),
+        waitingNote: await capacityWait(feature, waiting, true, featureCost(workspace)),
         feature,
         slot,
         portRange: [portStart, portEnd],
@@ -542,7 +542,7 @@ export async function admitServiceStart(
             (released.length
               ? ` ${[...up].join(", ")} stayed stopped; \`werkmeister feature up\` starts the feature again.`
               : "") +
-            `\n${capacityWait(feature, position, false)}`,
+            `\n${await capacityWait(feature, position, false, featureCost(workspace, starting.services))}`,
           "NO_CAPACITY",
         );
       }
@@ -587,11 +587,29 @@ export function describeLease(l: Lease): string {
  * Who holds the budget, the head *feature* waits behind, and what happens next: the same lines for a
  * queued `up` and a timed-out service start (SW-675). *stays*: still queued, so the grant starts it.
  */
-export function capacityWait(feature: string, position: number, stays: boolean): string {
+export async function capacityWait(
+  feature: string,
+  position: number,
+  stays: boolean,
+  need: Cost,
+): Promise<string> {
   const running = runningLeases() ?? [];
   const lines = [
     `running: ${running.map(describeLease).join(", ") || "nothing werkmeister started"}`,
   ];
+  // What is asked against what is free, so a too-big request reads apart from a busy host (SW-763).
+  const budget = await loadBudget();
+  if (Number.isFinite(budget.cpus) && Number.isFinite(budget.memory)) {
+    const used = running.reduce(
+      (a, l) => ({ cpus: a.cpus + l.cost.cpus, memory: a.memory + l.cost.memory }),
+      { cpus: 0, memory: 0 },
+    );
+    lines.push(
+      `this start needs ${cpus(need.cpus)}, ${gib(need.memory)}; free ` +
+        `${cpus(Math.max(0, budget.cpus - used.cpus))}, ${gib(Math.max(0, budget.memory - used.memory))} ` +
+        `of the budget's ${cpus(budget.cpus)}, ${gib(budget.memory)}`,
+    );
+  }
   const head = position > 1 ? queueOrder(waiters(readQueue(), running))[0] : undefined;
   if (head && head.feature !== feature) {
     const ws = readLeases()[head.feature]?.workspace;
