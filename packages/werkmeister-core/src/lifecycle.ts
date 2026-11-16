@@ -104,6 +104,7 @@ import {
   readLeases,
   readQueue,
   requestAdmission,
+  requeueFirst,
   type Starting,
   serviceStarts,
   setupsCurrent,
@@ -187,7 +188,7 @@ export interface UpResult {
  * `INSIDE_OWN_CONTAINER` before any of it when run inside *feature*'s own container.
  *
  * With no room in the budget it queues the feature instead and returns with
- * `waiting` set; *byPerson* (default: the workspace is not autonomous) may stop
+ * `waiting` set; *byPerson* (default: the workspace is not autonomous and no agent session runs it) may stop
  * working autonomous features to make room (SW-181); any start that doesn't fit
  * may stop features whose session is idle or waiting on a person (SW-546).
  */
@@ -231,7 +232,7 @@ export async function up(
   if (localServices.length) {
     // Before admission: a HOST_LOAD throw must not follow a preemption or a dequeue.
     await waitForSetupLoad(workspace, undefined);
-    const waiting = await admitOrQueue(feature, workspace, byPerson ?? !readAutonomous(workspace));
+    const waiting = await admitOrQueue(feature, workspace, byPerson ?? startsAsPerson(workspace));
     if (waiting !== null) {
       warn(`Waiting for capacity, position ${waiting} — it starts when another feature stops`);
       return {
@@ -1025,6 +1026,14 @@ export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | 
     .map((x) => x.lease);
 }
 
+/**
+ * Whether a plain `up` here may stop working features: a person's workspace, not an agent in it. Claude
+ * Code sets CLAUDECODE=1 in its Bash tool, so an agent's start there admits as an agent (SW-738).
+ */
+export function startsAsPerson(workspace: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return !readAutonomous(workspace) && !env["CLAUDECODE"];
+}
+
 /** Null when *feature* may start now (after any preemption); else its queue position. */
 export function admitOrQueue(
   feature: string,
@@ -1068,9 +1077,17 @@ async function admitOrQueueHere(
   if (decision.kind === "wait") return decision.position;
   if (decision.kind === "preempt") {
     for (const victim of decision.victims) {
-      // stop, not pause: a paused container keeps its memory.
-      await stop(victim, { grant: false });
       const victimWs = readLeases()[victim]?.workspace || workspaceForFeature(victim);
+      try {
+        // stop, not pause: a paused container keeps its memory.
+        await stop(victim, { grant: false });
+      } catch (e) {
+        // A failed stop can still have killed it (SW-738): queue it to come back, and wait rather than
+        // start over budget; this start had the head's turn, so it keeps it.
+        if (victimWs) await enqueue(victim, victimWs);
+        warn(`Could not stop '${victim}' to make room (${(e as Error).message}); waiting instead`);
+        return requeueFirst(feature, workspace, starting);
+      }
       if (victimWs) await enqueue(victim, victimWs);
       const why = running.find((l) => l.feature === victim)?.rank;
       info(
