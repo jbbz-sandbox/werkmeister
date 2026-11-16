@@ -153,7 +153,13 @@ import {
 import { collectingReporter, info, warn, withReporter } from "./reporter.js";
 import { DASHBOARD, status as webStatus } from "./web_servers.js";
 import { provisionWorkspace, WorkspaceInitError } from "./workspace_init.js";
-import { computePromptSpec, isTrue, loadConfigFile, resolveInputs } from "./workspace_prompts.js";
+import {
+  computePromptSpec,
+  isTrue,
+  loadConfigFile,
+  readAutonomous,
+  resolveInputs,
+} from "./workspace_prompts.js";
 import {
   legacyAgent,
   type NeedItem,
@@ -3648,6 +3654,11 @@ export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
  * - `pause`: freezes the running containers and holds the workspace's Claude session.
  * - `resume`: brings back what `pause` froze, releases the session, and tells it to
  *   continue if it was mid-turn.
+ * @param options - `byPerson: true` says a person asked for an `up`, not an agent. In a
+ *   workspace that is not autonomous it then starts as a person's: on a full machine it may
+ *   stop agents' features instead of queueing behind them. An autonomous workspace's start
+ *   still counts as an agent's. Left out, a workspace that is not autonomous starts as a
+ *   person's unless it runs under Claude Code (`CLAUDECODE` set).
  * @returns `command`, a label for what ran (e.g. `werkmeister up (in my-workspace)`);
  * `output`, the progress transcript without ANSI colours; and `path`, the workspace folder.
  * @throws {@link WorkspaceError} when `name` is not a workspace, its `.env` has no
@@ -3671,6 +3682,7 @@ export type WorkspaceAction = (typeof WORKSPACE_ACTIONS)[number];
 export async function runWorkspaceAction(
   name: string,
   action: WorkspaceAction,
+  { byPerson }: { byPerson?: boolean } = {},
 ): Promise<{
   /** A label for what ran, e.g. `werkmeister up (in <name>)`; it ran in-process, not as a CLI. */
   command: string;
@@ -3703,7 +3715,10 @@ export async function runWorkspaceAction(
     await withReporter(collector, async () => {
       switch (action) {
         case "up": {
-          const result = await up(feature, target);
+          // A person's press in an agent's (autonomous) workspace must not stop other agents (SW-833).
+          const result = await up(feature, target, {
+            byPerson: byPerson && !readAutonomous(target),
+          });
           // The only fact the CLI's summary block carried that the transcript
           // does not: `up()` reports the slot and ports, never the hostnames.
           if (result.urls.length) {
