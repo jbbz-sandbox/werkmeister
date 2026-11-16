@@ -50,13 +50,18 @@ feature_slots:
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_MODEL_PRICING_YAML = `# Per-million-token USD rates for estimating Claude Code usage cost.
-# Add or reprice models here — no code change needed. Unknown models show
-# token counts with no dollar estimate. Rates are approximate; update when
-# published pricing changes.
+# Add or reprice models here — no code change needed. A rate here overrides
+# werkmeister's built-in one; a model missing here falls back to the built-in
+# rate. Unknown models show token counts with no dollar estimate and a warning.
+# Rates are approximate; update when published pricing changes.
 models:
-  claude-opus-4-8:  { input: 15, output: 75, cacheWrite: 18.75, cacheRead: 1.50 }
-  claude-sonnet-5:  { input: 3,  output: 15, cacheWrite: 3.75,  cacheRead: 0.30 }
-  claude-haiku-4-5: { input: 1,  output: 5,  cacheWrite: 1.25,  cacheRead: 0.10 }
+  claude-fable-5-2:  { input: 8,    output: 40,  cacheWrite: 10,    cacheRead: 0.20 }
+  claude-opus-5-5:   { input: 4,    output: 20,  cacheWrite: 5,     cacheRead: 0.20 }
+  claude-opus-4-8:   { input: 5,    output: 25,  cacheWrite: 6.25,  cacheRead: 0.50 }
+  claude-sonnet-5-5: { input: 2,    output: 10,  cacheWrite: 2.50,  cacheRead: 0.10 }
+  claude-sonnet-5:   { input: 2,    output: 10,  cacheWrite: 2.50,  cacheRead: 0.20 }
+  claude-haiku-5-5:  { input: 0.10, output: 0.50, cacheWrite: 0.125, cacheRead: 0.01 } # ≤100K-token prompts
+  claude-haiku-4-5:  { input: 1,    output: 5,   cacheWrite: 1.25,  cacheRead: 0.10 }
 `;
 
 // ---------------------------------------------------------------------------
