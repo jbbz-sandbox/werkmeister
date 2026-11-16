@@ -198,13 +198,18 @@ export function issueIdOf(data: Record<string, unknown> | null | undefined): str
   return str(data?.issue_id) || str(data?.jira_id) || str(data?.github_issue);
 }
 
+/** A workspace.yml's `group:` members, from a list or a comma-separated string (SW-500). */
+export function groupOf(data: Record<string, unknown> | null | undefined): string[] {
+  const group = data?.group;
+  const members = Array.isArray(group) ? group : String(group ?? "").split(",");
+  return members.map((m) => String(m).trim()).filter(Boolean);
+}
+
 /** The issue refs a workspace's status moves cover: its issue, then each `group:` member (SW-500). */
 export function issueRefsOf(data: Record<string, unknown> | null | undefined): string[] {
   const lead = issueIdOf(data);
   if (!lead) return [];
-  const group = data?.group;
-  const members = Array.isArray(group) ? group : String(group ?? "").split(",");
-  return [...new Set([lead, ...members.map((m) => String(m).trim()).filter(Boolean)])];
+  return [...new Set([lead, ...groupOf(data)])];
 }
 
 /** A workspace .env's issue ref: `ISSUE_ID`, else the pre-rename `JIRA_ID` / `GITHUB_ISSUE`; "" when none. */
