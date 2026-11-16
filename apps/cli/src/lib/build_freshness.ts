@@ -15,7 +15,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { gitEnv } from "werkmeister-core/proc";
 
-export type BuildStamp = { sha: string; dirty: boolean };
+/** `content`: the id of the dirty working tree the bundle was built from (esbuild.mjs), when dirty. */
+export type BuildStamp = { sha: string; dirty: boolean; content?: string };
 
 declare const __SANDBOX_BUILD__: BuildStamp | undefined;
 
@@ -42,16 +43,20 @@ export const BUNDLE_SOURCES = [
 export function staleBuildWarning(build: BuildStamp | undefined, repoRoot: string): string | null {
   if (!build?.sha || !fs.existsSync(path.join(repoRoot, ".git"))) return null;
   let head: string;
+  let tree: string | undefined;
   try {
-    head = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
+    [head = "", tree] = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD", "HEAD^{tree}"], {
       encoding: "utf8",
       env: gitEnv(),
       stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
+    })
+      .trim()
+      .split("\n");
   } catch {
     return null;
   }
-  if (head === build.sha) return null;
+  // SW-576: a dirty build whose exact tree HEAD now commits (an amend, a commit of the same files).
+  if (head === build.sha || (build.content && build.content === tree)) return null;
   // turbo keys the build cache on these sources, not HEAD, so a docs-only commit
   // replays a dist still stamped with the older SHA (SW-128).
   try {
