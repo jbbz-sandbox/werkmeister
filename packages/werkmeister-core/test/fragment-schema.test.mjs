@@ -30,6 +30,7 @@ test("repo: rejects ship: tag without release_tag, unknown keys and unknown ship
   assert.equal(validate({ ...withoutRepo, repo: { ship: "tag" } }), false);
   assert.equal(validate({ ...withoutRepo, repo: { shipp: "tag" } }), false);
   assert.equal(validate({ ...withoutRepo, repo: { ship: "deploy" } }), false);
+  assert.equal(validate({ ...withoutRepo, repo: { components: { gate: ["pr gate"] } } }), false);
 });
 
 test("repo: lint runs core's docs:links like CI's test job (SW-312)", () => {
