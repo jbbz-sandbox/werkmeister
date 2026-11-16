@@ -126,6 +126,11 @@
           "description": "Legacy: standards keys used only when `archetype` is unset."
         },
         "test": { "type": "string", "description": "Test command, run from the repo root." },
+        "test_covered_by": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Another service whose `test:` row also runs this service's tests. When both are test rows in the same pr gate, this service's container is not started and its row reads `covered by <service>`, passing or failing with that row (SW-574)."
+        },
         "validate": {
           "type": "string",
           "description": "How to exercise a change to this service when it has no URL (library, CLI, extension). Overrides the archetype's `validate:`."

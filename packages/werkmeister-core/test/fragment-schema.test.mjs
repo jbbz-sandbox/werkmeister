@@ -140,6 +140,19 @@ test("baseline_upstream must be host:port (SW-102)", () => {
   }
 });
 
+test("test_covered_by names a service as a non-empty string (SW-574)", () => {
+  const cli = {
+    path: "apps/cli",
+    type: "cli",
+    internal_port: 80,
+    port_offset: 0,
+    health_endpoint: "/",
+  };
+  const withBy = (by) => ({ services: { cli: { ...cli, test_covered_by: by } } });
+  assert.ok(validate(withBy("werkmeister-core")), JSON.stringify(validate.errors));
+  for (const bad of ["", 1, ["werkmeister-core"]]) assert.equal(validate(withBy(bad)), false);
+});
+
 // SW-580: a change under plugins/ must reach a row that runs the plugin's typecheck and tests.
 test("plugins/ maps to a service whose test runs the plugin package (SW-580)", () => {
   const owner = fragment.repo.path_mappings.plugins;
