@@ -1212,8 +1212,19 @@ async function gateChecks(
     return false;
   };
 
+  // One merge-base per gate for the diff and both base-file lookups, so a fix to it reaches all three (SW-724).
+  let mergeBase: ReturnType<Run> | undefined;
+  const mergeBaseOnce = () =>
+    (mergeBase ??= deps.run("git", ["-C", dir, "merge-base", `origin/${base}`, "HEAD"]));
+  /** *rel*'s text at the merge-base with origin/<base>, or null when it has none or git fails. */
+  const baseText = async (rel: string): Promise<string | null> => {
+    const mb = await mergeBaseOnce();
+    if (mb.code) return null;
+    const show = await deps.run("git", ["-C", dir, "show", `${mb.stdout.trim()}:${rel}`]);
+    return show.code ? null : show.stdout;
+  };
   const diff = testsOnly
-    ? await uncommittedDiff(dir, base, deps)
+    ? await uncommittedDiff(dir, await mergeBaseOnce(), deps)
     : await deps.run("git", ["-C", dir, "diff", "--name-only", `origin/${base}...HEAD`]);
   if (diff.code !== 0) {
     add("tests", false, `cannot diff against origin/${base}: ${diff.stderr.trim()}`);
@@ -1222,15 +1233,12 @@ async function gateChecks(
   // The repo's own fragment maps to what its rendered entries change, not to every service (SW-573).
   // Against the diff's own base, not the machine registry, which `registry --from` may have synced from this branch.
   const baseRegistry = async (): Promise<MergedRegistry | null> => {
-    const mb = await deps.run("git", ["-C", dir, "merge-base", `origin/${base}`, "HEAD"]);
-    const show = mb.code
-      ? mb
-      : await deps.run("git", ["-C", dir, "show", `${mb.stdout.trim()}:${FRAGMENT_REL}`]);
-    if (show.code) return null;
+    const text = await baseText(FRAGMENT_REL);
+    if (text === null) return null;
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "gate-base-"));
     try {
       fs.mkdirSync(path.dirname(path.join(tmp, FRAGMENT_REL)));
-      fs.writeFileSync(path.join(tmp, FRAGMENT_REL), show.stdout);
+      fs.writeFileSync(path.join(tmp, FRAGMENT_REL), text);
       return deps.branchRegistry(file.dir, tmp);
     } catch {
       return null;
@@ -1247,13 +1255,10 @@ async function gateChecks(
   // The lockfile maps to the importers its diff changes, not to every service (SW-696).
   // Against the worktree's copy: the gate's containers bind-mount the worktree, not HEAD.
   const lockChange = async () => {
-    const mb = await deps.run("git", ["-C", dir, "merge-base", `origin/${base}`, "HEAD"]);
-    const show = mb.code
-      ? mb
-      : await deps.run("git", ["-C", dir, "show", `${mb.stdout.trim()}:${LOCKFILE}`]);
-    if (show.code) return null;
+    const text = await baseText(LOCKFILE);
+    if (text === null) return null;
     try {
-      return lockfileTouched(show.stdout, fs.readFileSync(path.join(dir, LOCKFILE), "utf8"));
+      return lockfileTouched(text, fs.readFileSync(path.join(dir, LOCKFILE), "utf8"));
     } catch {
       return null;
     }
@@ -1640,13 +1645,12 @@ async function gateChecks(
   return done(release ? { release } : {});
 }
 
-/** Files changed since *base*, committed or not, plus untracked ones, as one `git diff --name-only`-shaped result. */
+/** Files changed since the merge-base *mb*, committed or not, plus untracked ones, as one `git diff --name-only`-shaped result. */
 async function uncommittedDiff(
   dir: string,
-  base: string,
+  mb: Awaited<ReturnType<Run>>,
   deps: Deps,
 ): Promise<Awaited<ReturnType<Run>>> {
-  const mb = await deps.run("git", ["-C", dir, "merge-base", `origin/${base}`, "HEAD"]);
   if (mb.code !== 0) return mb;
   const changed = await deps.run("git", ["-C", dir, "diff", "--name-only", mb.stdout.trim()]);
   if (changed.code !== 0) return changed;
