@@ -130,6 +130,41 @@ it("a victim whose stop fails is queued to come back, and the start waits at the
   expect(readWaiting(mine)).toMatchObject({ position: 1, reason: "waiting for capacity" });
 });
 
+// SW-831: a queued victim whose containers still ran had its agent's commands held over them.
+it("a victim whose stop fails while a container still runs is left alone; the start waits at the head", async () => {
+  const victim = workspace("victim", { autonomous: true });
+  const mine = workspace("mine", { autonomous: false });
+  writeLeases({ victim: { slot: 1, workspace: victim } });
+  vi.mocked(run).mockImplementation((cmd: string[]) =>
+    cmd[1] === "ps"
+      ? { status: 0, stdout: "id1\n", stderr: "" }
+      : {
+          status: 0,
+          stdout: `victim\t${victim}\t2026-10-30T10:00:00Z\t${1.5 * G}\t0\n`,
+          stderr: "",
+        },
+  );
+  vi.mocked(composeStop).mockResolvedValueOnce(false);
+  vi.mocked(getContainerStatus).mockResolvedValueOnce([
+    {
+      name: "victim-api-1",
+      status: "running",
+      health: "",
+      ports: "",
+      service: "api",
+      role: "",
+      exitCode: 0,
+    },
+  ]);
+
+  expect(await admitOrQueue("mine", mine, true)).toBe(1);
+
+  expect(getContainerStatus).toHaveBeenCalledWith("victim");
+  expect(readQueue()).toEqual(["mine"]);
+  expect(readWaiting(victim)).toBeNull();
+  expect(readWaiting(mine)).toMatchObject({ position: 1, reason: "waiting for capacity" });
+});
+
 // SW-713: restart skipped the queue, so a queued feature ran again while its session stayed held.
 it("a restart of a queued feature takes it out of the queue and releases its session", async () => {
   const ws = workspace("queued", { autonomous: true });
