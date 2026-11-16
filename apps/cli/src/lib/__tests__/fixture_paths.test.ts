@@ -64,6 +64,10 @@ it("--running reads five tab-separated columns a line, --queue a comma list (SW-
       },
     ]);
     expect(r.opts?.queue).toEqual(["a", "b"]);
+    // SW-809: an entry with a wait is one waiter, its commas are services; --queue repeats.
+    expect(
+      parse(["--queue", "a,b", "--queue", "head:239:api,web", "budget", "status"]).opts?.queue,
+    ).toEqual(["a", "b", "head:239:api,web"]);
     expect(r.steps).toEqual([["budget", "status"]]);
     expect(parse(["--running", "short.tsv", "budget", "status"])).toEqual({ bad: "--running" });
     expect(parse(["--running", "secret-missing", "budget", "status"])).toEqual({
