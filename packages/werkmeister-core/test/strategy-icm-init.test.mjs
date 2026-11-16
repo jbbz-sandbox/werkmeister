@@ -221,6 +221,26 @@ test("init writes the icm layer and nothing of jit's", async () => {
   });
 });
 
+// SW-837: reproduce names the rows that can prescribe a fix, only those active here, and no longer says not to load them.
+test("bugfix reproduce references only its named, active standards rows", async () => {
+  await withIcmWorkspace(
+    async (root, ctx) => {
+      icm.init(ctx);
+      const repro = fs.readFileSync(
+        path.join(root, "stages", "01_reproduce", "CONTEXT.md"),
+        "utf8",
+      );
+      assert.match(
+        repro,
+        /^- Reference \(every run\): `\.\.\/\.\.\/_shared\/standards\.md` — rows `comments`$/m,
+      );
+      assert.doesNotMatch(repro, /nothing is written here/);
+      assert.match(repro, /name any rule that already prescribes it/);
+    },
+    { inputs: { work_type: "bugfix" } },
+  );
+});
+
 test("rerunning init keeps an edited brief and a stage's output", async () => {
   await withIcmWorkspace(async (root, ctx) => {
     icm.init(ctx);

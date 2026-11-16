@@ -50,8 +50,8 @@ export interface Stage {
   enter?: string;
   /** The `output/` file whose `status: proposed` line the human check flips, when the stage has no other gate. */
   gate?: string;
-  /** Which _shared/standards.md rows the contract names. */
-  standards: "none" | "all";
+  /** Which _shared/standards.md rows the contract names; a list names rows, kept only when active. */
+  standards: "none" | "all" | string[];
   /** SW-807: `werkmeister` subcommands this stage runs, pre-approved for the whole run; init reads them from here, never from the rendered CONTEXT.md, which the agent can edit. */
   grants?: string[];
   contract(v: IcmVars): Contract;
@@ -443,7 +443,8 @@ const bugfix: Stage[] = [
     job: "reproduce and locate the root cause",
     writes: "`output/repro.md`",
     check: "agree the root cause",
-    standards: "none",
+    // SW-837: sw-744's reproduce decided "retry only"; the testing standard already named the fix.
+    standards: ["testing", "engineering", "comments"],
     contract: (v) => ({
       oneJob:
         "One job: make the failure happen on demand and name its root cause. No fix is written in this stage.",
@@ -452,8 +453,7 @@ const bugfix: Stage[] = [
         `Working (this run): the files in ${v.repos} on the failing path — follow the call chain, don't read whole trees`,
         "Reference (every run): `../../.werkmeister/werkmeister-context.md` — container names, published ports, logs, test command",
       ],
-      doNotLoad:
-        "`_shared/standards.md` (nothing is written here), other stages' contracts, `.werkmeister/*.yml`.",
+      doNotLoad: "other stages' contracts, `.werkmeister/*.yml`.",
       process: [
         // SW-392: a grep for a line the reporter never prints read "0/25 failures" for a flake nobody reproduced.
         `Reproduce the failure against the running service or with a test. Record the exact command and its output. Judge each run by its exit code, or by a check you have shown fails on a known-bad run — never by grepping the output for a line that may not be printed. ${PROBE_RULE}`,
@@ -467,7 +467,7 @@ const bugfix: Stage[] = [
         NAME_HISTORY_STEP,
         // SW-564: sw-521's root cause was a permission rule; step 4 listed the callers of one builder and missed two other sources of a matching rule.
         "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source.",
-        `Write \`output/repro.md\`: steps 1–7, and a proposed fix in one paragraph under a \`status: proposed\` line.${noCommitPlan(v.group)} ${CRITERION_REACH}`,
+        `Write \`output/repro.md\`: steps 1–7, and a proposed fix in one paragraph under a \`status: proposed\` line.${noCommitPlan(v.group)} Check the proposed fix against the standards rows above and name any rule that already prescribes it. ${CRITERION_REACH}`,
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
       humanCheck: `Read \`output/repro.md\`. Correct the root cause or the proposed fix if needed, then change \`status: proposed\` to \`status: decided\`. That is the approval — the next session starts the fix without asking again. ${CHAT_APPROVAL}`,

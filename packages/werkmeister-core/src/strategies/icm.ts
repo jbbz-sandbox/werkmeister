@@ -186,7 +186,10 @@ function renderStandards(r: Resolved): string {
 
 function standardsRef(tier: Stage["standards"], r: Resolved): string {
   if (tier === "none") return "";
-  return `- Reference (every run): \`../../_shared/standards.md\` — rows ${[...r.active, "ponytail"].map((d) => `\`${d}\``).join(", ")}`;
+  const rows =
+    tier === "all" ? [...r.active, "ponytail"] : tier.filter((d) => r.active.includes(d));
+  if (!rows.length) return "";
+  return `- Reference (every run): \`../../_shared/standards.md\` — rows ${rows.map((d) => `\`${d}\``).join(", ")}`;
 }
 
 // The first stage's start is the one point no code observes, so its contract runs the move (SW-27).
