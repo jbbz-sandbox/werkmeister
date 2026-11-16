@@ -43,6 +43,7 @@ Skills are namespaced by the plugin: `/werkmeister:diagnose`, `/werkmeister:work
 | `diagnose` | Full-stack health checks across containers, networking, Caddy routing, and connectivity. |
 | `routing-test` | Trace a single URL through the routing chain to find where it breaks. |
 | `caddy-reload` | Validate, reload, and smoke-test the Caddy proxy config safely. |
+| `fast-tests` | Make a slow or flaky test suite fast without skipping tests. |
 
 ### Workspace lifecycle
 | Skill | What it does |
