@@ -6,6 +6,9 @@
 # <dir> must be in the workspace folder (the container sees it at the same path) and outside the repo.
 # B is the worktree as it is, committed or not; A reverse-applies `git diff --binary <base>`. HEAD never moves.
 # Each run waits out load as measure-row.sh does (ROW_LOAD_LIMIT, ROW_LOAD_WAIT); a refusal stops the A/B, exit 75.
+# A run whose others_cpu_s (other workspaces' CPU mid-row) is over ROW_OTHERS_LIMIT s (default 30) is rerun, up to
+# ROW_OTHERS_TRIES attempts (default 2; 1 = never rerun): its ab.txt line gets "rerun: others <n> s", its files
+# move to <label>.try<k>, and the medians use only the accepted run. When the attempts run out the last run is kept and flagged.
 # Killing it puts the tree back on B, but docker exec passes no signal: the row in the container runs on
 # until it ends (docker restart <container> stops it sooner).
 # shellcheck source-path=SCRIPTDIR
@@ -15,7 +18,7 @@ die() {
   exit 1
 }
 usage() {
-  sed -n '2,10s/^# \{0,1\}//p' "$0" >&2
+  sed -n '2,13s/^# \{0,1\}//p' "$0" >&2
   exit 2
 }
 here=$(cd "$(dirname "$0")" && pwd)
@@ -32,6 +35,8 @@ done
 shift $((OPTIND - 1))
 [ -n "$out" ] || usage
 case $n in '' | *[!0-9]* | 0) die "-n takes a pair count, got '$n'" ;; esac
+others_limit=${ROW_OTHERS_LIMIT:-30} tries=${ROW_OTHERS_TRIES:-2}
+case $tries in '' | *[!0-9]* | 0) die "ROW_OTHERS_TRIES takes an attempt count, got '$tries'" ;; esac
 
 repo=$(git rev-parse --show-toplevel) || exit 1
 repo=$(cd "$repo" && pwd -P)
@@ -72,14 +77,27 @@ echo "ab-row: base $(git rev-parse --short "$base"), $n pairs, $container" | tee
 run() { # <label> [cmd...]
   label=$1
   shift
-  docker exec -w /app "$container" sh "$out/bin/measure-row.sh" -w "$ws" -o "$out" -l "$label" -- "$@" >/dev/null
-  rc=$?
-  [ "$rc" -ne 75 ] || { echo "ab-row: $label refused, VM busy; stopping" | tee -a "$out/ab.txt"; exit 75; }
-  [ -s "$out/$label/totals.txt" ] || die "$label wrote no totals (exit $rc)"
-  awk '{ v[$1] = $2 } END {
-    printf "%s wall %s s cpu %s s others %s s busy_before %s load %s -> %s tests %s fail %s exit %s\n",
-      v["label"], v["wall_s"], v["cpu_s"], v["others_cpu_s"], v["busy_before"], v["load_before"], v["load_after"], v["tests"], v["fail"], v["exit"] }' \
-    "$out/$label/totals.txt" | tee -a "$out/ab.txt"
+  k=1
+  while :; do
+    docker exec -w /app "$container" sh "$out/bin/measure-row.sh" -w "$ws" -o "$out" -l "$label" -- "$@" >/dev/null
+    rc=$?
+    [ "$rc" -ne 75 ] || { echo "ab-row: $label refused, VM busy; stopping" | tee -a "$out/ab.txt"; exit 75; }
+    [ -s "$out/$label/totals.txt" ] || die "$label wrote no totals (exit $rc)"
+    others=$(awk '$1 == "others_cpu_s" { print $2 }' "$out/$label/totals.txt")
+    others=${others:-0}
+    note=''
+    if gt "$others" "$others_limit"; then
+      if [ "$k" -lt "$tries" ]; then note=" rerun: others $others s"; else note=" flagged: others $others s over $others_limit s after $k tries"; fi
+    fi
+    awk -v note="$note" '{ v[$1] = $2 } END {
+      printf "%s wall %s s cpu %s s others %s s busy_before %s load %s -> %s tests %s fail %s exit %s%s\n",
+        v["label"], v["wall_s"], v["cpu_s"], v["others_cpu_s"], v["busy_before"], v["load_before"], v["load_after"], v["tests"], v["fail"], v["exit"], note }' \
+      "$out/$label/totals.txt" | tee -a "$out/ab.txt"
+    case $note in " rerun:"*) ;; *) break ;; esac
+    # Keep the rejected run's files; the label is reused so the medians read only the accepted run.
+    mv "$out/$label" "$out/$label.try$k" || die "could not keep $label's rejected run"
+    k=$((k + 1))
+  done
 }
 i=1
 while [ "$i" -le "$n" ]; do

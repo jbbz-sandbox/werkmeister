@@ -60,7 +60,11 @@ inspect) case $3 in *Mounts*) echo "$REPO" ;; *) echo true ;; esac ;;
 exec)
   while [ $# -gt 0 ]; do case $1 in -o) out=$2 ;; -l) l=$2 ;; esac; shift; done
   [ "$l" != "\${FAIL_AT:-}" ] || exit 75
-  mkdir -p "$out/$l" && printf 'label %s\\nwall_s %s\\ncpu_s 1\\n' "$l" "$(cat "$REPO/a.txt")" >"$out/$l/totals.txt" ;;
+  # HIGH_AT's first HIGH_TIMES attempts (default 1) report other workspaces' load, with a wall time the medians must not show.
+  mkdir -p "$out/$l" && n=$(cat "$out/.n-$l" 2>/dev/null || echo 0) && echo $((n + 1)) >"$out/.n-$l"
+  wall=$(cat "$REPO/a.txt") others=0
+  if [ "$l" = "\${HIGH_AT:-}" ] && [ "$n" -lt "\${HIGH_TIMES:-1}" ]; then wall=999 others=188.8; fi
+  printf 'label %s\\nwall_s %s\\ncpu_s 1\\nothers_cpu_s %s\\n' "$l" "$wall" "$others" >"$out/$l/totals.txt" ;;
 esac
 `;
 
@@ -94,7 +98,7 @@ const abRepo = async () => {
         env: { ...process.env, PATH: `${join(ws, "bin")}:${process.env.PATH}`, REPO: repo, ...env },
       },
     );
-  return { repo, ab };
+  return { repo, ab, out: join(ws, "out") };
 };
 
 test("ab-row runs A on the base and B on the branch, and leaves the tree on B", async () => {
@@ -113,4 +117,41 @@ test("ab-row stops on a refused run with 75 and puts the tree back on B", async 
     return true;
   });
   assert.equal(readFileSync(join(repo, "a.txt"), "utf8"), "20\n");
+});
+
+test("ab-row reruns a run whose others_cpu_s is over the limit and keeps it out of the medians", async () => {
+  const { repo, ab, out } = await abRepo();
+  const { stdout } = await ab({ HIGH_AT: "B1" });
+  const abTxt = readFileSync(join(out, "ab.txt"), "utf8");
+  assert.match(abTxt, /^B1 wall 999 s .*others 188\.8 s .* rerun: others 188\.8 s$/m);
+  assert.match(abTxt, /^B1 wall 20 s .*others 0 s [^\n]*exit $/m);
+  assert.match(stdout, /median B wall 20\.0 s/);
+  assert.equal(
+    readFileSync(join(out, "B1.try1", "totals.txt"), "utf8").includes("wall_s 999"),
+    true,
+  );
+  assert.equal(readFileSync(join(repo, "a.txt"), "utf8"), "20\n");
+});
+
+test("ab-row keeps and flags the last run when the tries run out, and ROW_OTHERS_TRIES=1 never reruns", async () => {
+  const { ab, out } = await abRepo();
+  const { stdout } = await ab({ HIGH_AT: "B1", HIGH_TIMES: "9" });
+  const abTxt = readFileSync(join(out, "ab.txt"), "utf8");
+  assert.equal(abTxt.match(/rerun: others/g).length, 1);
+  assert.match(abTxt, /^B1 .* flagged: others 188\.8 s over 30 s after 2 tries$/m);
+  assert.match(stdout, /median B wall 509\.5 s/); // B1 kept at 999, B2 at 20
+  const once = await abRepo();
+  await once.ab({ HIGH_AT: "B1", ROW_OTHERS_TRIES: "1" });
+  const onceTxt = readFileSync(join(once.out, "ab.txt"), "utf8");
+  assert.doesNotMatch(onceTxt, /rerun: others/);
+  assert.match(onceTxt, /flagged: others 188\.8 s over 30 s after 1 tries/);
+});
+
+test("ab-row rejects a bad ROW_OTHERS_TRIES", async () => {
+  const { ab } = await abRepo();
+  await assert.rejects(ab({ ROW_OTHERS_TRIES: "0" }), (e) => {
+    assert.equal(e.code, 1);
+    assert.match(e.stderr, /ROW_OTHERS_TRIES takes an attempt count, got '0'/);
+    return true;
+  });
 });
