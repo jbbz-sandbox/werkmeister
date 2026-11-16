@@ -1,5 +1,19 @@
 # sandbox-core
 
+## 0.93.6
+
+### Patch Changes
+
+- 4db8b7b: SW-665: `pr gate` tests every service again when a branch changes an `infrastructure:` or `caches:` entry in the repo's own `.werkmeister/services.yaml` (`every service: … infrastructure: <name>`); since SW-573 such a change touched no service and ran no tests.
+- cccc0ce: SW-721: the container test line in `werkmeister-context.md` and its allow rule escape a `'` in the test or lint command (`'\''`), so both run the registered command instead of a different word split.
+- 44c12ab: SW-809: `with-fixture-workspace --queue <feature>:<waitedMin>[:<service>,...]` (and `withFixtureWorkspace({ queue })`) seeds a waiter's workspace, compose.yml, lease and `waiting.json`, not only its name, so a starved, whole-feature or service queue head runs through the built CLI. `--queue` now repeats; a bare name still seeds only the name.
+- df3c3d0: SW-825: the generated propose-stage contract says to start the release check's container with `werkmeister feature up --service <name>` first, since an earlier `pr gate --tests` stopped the containers it started.
+- 5f85455: SW-829: `pr gate` (and so `pr open`) adds a `group` row to a grouped workspace's gate. It warns about each `group:` member whose key is in no commit subject in `origin/<base>..HEAD`, since that member would ship as Done with the PR, and prints the fix: remove it from `group:` and move it back to To Do with `werkmeister issue update <KEY> --status "To Do" --comment …`.
+- 166fb6d: SW-831: when preemption fails to stop a victim and some of its containers still run, the victim is no longer queued, so its agent's container and test commands are not held over live containers. The start that asked still waits at the head of the queue. A victim with nothing left running is queued to come back, as before.
+- 855cb69: SW-832: while a workspace waits for capacity, the hook now also holds the MCP `test` tool and `workspace-pr` with `gate` or `open`, as it holds their Bash forms. `workspace-pr` `status` still runs.
+- 6ff3082: SW-833: `runWorkspaceAction` takes an optional `{ byPerson }` that says a person, not an agent, asked for an `up`. The workspaces pane's Up passes `byPerson: true`, so a person's Up on a full machine can stop agents' features instead of queueing behind them, in a workspace that is not autonomous. An autonomous workspace's Up still queues as an agent's. Before this, the pane ran inside Claude Code and inherited `CLAUDECODE=1`, so its Up always counted as an agent's start.
+- b6108f6: SW-840: when a workspace is started from the waiting queue and some of its containers are still stopped, the message that resumes its session now names each one and the command that starts it (`werkmeister feature up --service <name>`). Before this, it said the containers were up. Preemption stops on-demand containers too, and the grant's `up` starts only the default set.
+
 ## 0.93.5
 
 ### Patch Changes

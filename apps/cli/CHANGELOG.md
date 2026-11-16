@@ -1,5 +1,13 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.93.6
+
+### Patch Changes
+
+- 6c653a4: SW-576: a CLI built from an uncommitted tree no longer prints the stale-build notice after an amend that commits exactly that tree. The build stamp also records the dirty tree's id (made in a temp index and object dir: the workspace container mounts the worktree's index read-only, and the build writes nothing to the shared git store), and the notice is silent when HEAD's tree has that id, so `bins.test.ts` stops failing after such an amend.
+- 44c12ab: SW-809: `with-fixture-workspace --queue <feature>:<waitedMin>[:<service>,...]` (and `withFixtureWorkspace({ queue })`) seeds a waiter's workspace, compose.yml, lease and `waiting.json`, not only its name, so a starved, whole-feature or service queue head runs through the built CLI. `--queue` now repeats; a bare name still seeds only the name.
+- 1e7cf60: SW-835: `werkmeister feature up --service <name>` refreshes the workspace's Claude settings first, as the whole `feature up` already does. A workspace whose `.claude/settings.json` lost rules werkmeister recorded in `.werkmeister/claude-permissions.json` (for example an `ask` block deleted by hand) gets them back on its next `up --service`, and the repaired files are committed on the record branch. It refreshes only the workspace the command runs from, and never inside the feature's own container.
+
 ## 0.93.5
 
 ## 0.93.4
