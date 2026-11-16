@@ -317,7 +317,7 @@ test("SW-521: autonomous rules never pre-approve an interpreter that runs any fi
 });
 
 test("SW-560: no route past the registered commands to scripts, readers, docker exec or git config", () => {
-  // Claude Code's matching: `:*` is a word-boundary prefix, any other `*` a wildcard (probed on 2.1.319).
+  // Claude Code's matching: `:*` is a word-boundary prefix, any other `*` a wildcard (probed on 2.1.319); never both in one rule (SW-807).
   const re = (r) => {
     const m = /^Bash\((.*?)(:\*)?\)$/.exec(r);
     if (!m) return null;
@@ -560,8 +560,8 @@ test("node --test through the temp-HOME wrapper asks, every form, never allowed 
   const w = "/ws/w/.werkmeister/bin/with-temp-home";
   const cli = "/ws/w/werkmeister/apps/cli/werkmeister";
   const forms = [
-    `Bash(${w} env WERKMEISTER_ROOT=* node --test:*)`,
-    `Bash(${w} --no-wait env WERKMEISTER_ROOT=* node --test:*)`,
+    `Bash(${w} env WERKMEISTER_ROOT=* node --test*)`,
+    `Bash(${w} --no-wait env WERKMEISTER_ROOT=* node --test*)`,
     `Bash(${w} node --test*)`,
     `Bash(${w} --no-wait node --test*)`,
     `Bash(docker exec * ${w} node --test*)`,
@@ -580,8 +580,8 @@ test("node --test through the temp-HOME wrapper asks, every form, never allowed 
 test("--exec-runs forms of the fixture wrapper and built CLI ask; only node --test without a built CLI (SW-473)", () => {
   const root = workspace();
   const nodeTest = (bin) => [
-    `Bash(${bin}/with-temp-home env WERKMEISTER_ROOT=* node --test:*)`,
-    `Bash(${bin}/with-temp-home --no-wait env WERKMEISTER_ROOT=* node --test:*)`,
+    `Bash(${bin}/with-temp-home env WERKMEISTER_ROOT=* node --test*)`,
+    `Bash(${bin}/with-temp-home --no-wait env WERKMEISTER_ROOT=* node --test*)`,
     `Bash(${bin}/with-temp-home node --test*)`,
     `Bash(${bin}/with-temp-home --no-wait node --test*)`,
     `Bash(docker exec * ${bin}/with-temp-home node --test*)`,
@@ -767,5 +767,34 @@ test("SW-649: an autonomous workspace pre-approves each repo's own frozen instal
     await installs([], { worktree: ["yarn.lock", ".yarnrc.yml"] }),
     [],
     "a lockfile only the worktree holds grants nothing",
+  );
+});
+
+test("SW-807: no generated rule puts a * before a :* suffix, which Claude Code reads literally", async () => {
+  // Claude Code: `:*` is allowed only as the suffix, and with it any other `*` is a literal (warned at start).
+  const bad = (r) => /^Bash\(.*\*.*:\*\)$/.test(r) || /:\*(?!\)$)/.test(r);
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  await withSandboxHome(
+    async () => {
+      const root = workspace();
+      const cli = path.join(root, "werkmeister", "apps", "cli");
+      fs.mkdirSync(cli, { recursive: true });
+      fs.mkdirSync(path.join(root, "werkmeister", ".git"));
+      fs.writeFileSync(path.join(cli, "werkmeister"), "");
+      fs.mkdirSync(dotDir(root), { recursive: true });
+      fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\nSERVICES=api\n");
+      for (const rules of [
+        workspaceAskRules(root),
+        workspaceAllowRules(root, true),
+        workspaceAllowRules(root, false),
+        AUTONOMOUS_DENY,
+      ])
+        assert.deepEqual(rules.filter(bad), []);
+    },
+    {
+      services:
+        "repos:\n  demo:\n    lint: pnpm lint\n" +
+        "services:\n  api:\n    type: library\n    repo: demo\n    path: api\n    test: pnpm test\n",
+    },
   );
 });

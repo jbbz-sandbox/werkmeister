@@ -387,7 +387,9 @@ test("SW-186: a stale token with no mcp-token file is not ok and the old line st
 
 // SW-510: a workspace inited before the node --test form moved from allow to ask.
 test("SW-510: migrate moves the node --test rules from allow to ask", async () => {
-  const { writeWorkspaceSettings } = await import("../dist/harness/claude/hooks_gen.js");
+  const { writeWorkspaceSettings, workspaceAskRules } = await import(
+    "../dist/harness/claude/hooks_gen.js"
+  );
   const { tempHomeWrapper } = await import("../dist/temp_home.js");
   movedHome();
   const ws = path.join(features, "demo");
@@ -419,7 +421,9 @@ test("SW-510: migrate moves the node --test rules from allow to ask", async () =
     !permissions.allow.some((r) => r.includes("node --test")),
     permissions.allow.join("\n"),
   );
-  for (const r of nodeTest) assert.ok(permissions.ask.includes(r), r);
+  // SW-807: the pre-SW-510 `:*` forms leave; the current ask rules take their place.
+  assert.deepEqual(permissions.ask, workspaceAskRules(ws));
+  for (const r of nodeTest) assert.ok(!permissions.ask.includes(r), r);
 });
 
 test("SW-487: migrate adds the agent-state events a workspace hooked before them is missing", async () => {
