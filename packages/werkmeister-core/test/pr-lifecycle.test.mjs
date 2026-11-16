@@ -5574,3 +5574,26 @@ test("runGate: a real failure beside vitest's RPC timeout fails the row with no 
     }
   }
 });
+
+test("gate: a diff touching the fragment and the lockfile runs merge-base once (SW-724)", async () => {
+  const ws = icmWorkspace();
+  try {
+    fs.mkdirSync(path.join(ws, "app"), { recursive: true });
+    fs.writeFileSync(path.join(ws, "app", LOCK), lockfile());
+    const api = { ...REGISTRY.services.api, test: "npm test -w api -- --ci" };
+    const d = deps(
+      [
+        [/diff --name-only/, { stdout: `${FRAG}\n${LOCK}\n` }],
+        [/ show \S*:pnpm-lock\.yaml$/, { stdout: lockfile() }],
+      ],
+      {
+        branchRegistry: (_repo, wt) =>
+          wt.includes("gate-base-") ? MACHINE : withApp({}, { ...REGISTRY.services, api }),
+      },
+    );
+    await gate(ws, d);
+    assert.equal(d.calls.filter((c) => / merge-base /.test(c)).length, 1, d.calls.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
