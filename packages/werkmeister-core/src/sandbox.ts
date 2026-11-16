@@ -94,7 +94,7 @@ import {
 } from "./config.js";
 import { containerRunning, type ProjectContainer, projectContainers } from "./docker.js";
 import { WorkspaceError } from "./errors.js";
-import { buildFormSchema } from "./form_schema.js";
+import { buildFormSchema, type FormBundle } from "./form_schema.js";
 import { loadGithubOrg } from "./global_config.js";
 import { infraHealth, up as infraUp } from "./infra.js";
 import {
@@ -198,8 +198,8 @@ const execFileAsync = promisify(execFile);
 
 /** The render-ready RJSF bundle {@link getFormSchema} builds for the create form. */
 export interface FormSchemaBundle {
-  /** The JSON Schema: one property per form field. */
-  schema: Record<string, unknown>;
+  /** The JSON Schema: one property per form field, so the bundle can go straight to {@link validateFormData}. */
+  schema: FormBundle["schema"] & Record<string, unknown>;
   /** RJSF widget hints per field key, plus `ui:order`. */
   uiSchema: Record<string, unknown>;
   /** Each field's starting value. */
@@ -1309,15 +1309,15 @@ export async function prepareCreate(
  *   `output` (the transcript), `workspacePath` (null when it couldn't be read from
  *   the transcript), `opened` and `openNote` (why VS Code didn't open).
  * @throws {@link WorkspaceError} when `feature` is missing, the issue can't be
- *   fetched, or the create fails. The message carries the transcript.
+ *   fetched, or the create fails. The message carries the transcript, or with
+ *   `live: true`, which already printed it, only the failure.
  *
  * @example
  * ```ts
  * import { createWorkspace, getFormSchema, validateFormData } from "werkmeister-core/sdk";
  * const bundle = await getFormSchema();
  * const answers = { ...bundle.formData, feature: "rate-limit", issue_id: "PROJ-42" };
- * type Bundle = Parameters<typeof validateFormData>[0];
- * const errors = validateFormData(bundle as unknown as Bundle, answers);
+ * const errors = validateFormData(bundle, answers);
  * if (Object.keys(errors).length) throw new Error(JSON.stringify(errors));
  * const { workspacePath, output } = await createWorkspace(answers, { open: false });
  * console.log(workspacePath, output);

@@ -224,6 +224,25 @@ test("prFileDir: propose, legacy ship, JIT notes, spike's last stage (SW-83)", (
   }
 });
 
+// SW-761: `pending` is a merge whose sync has not been tried; the same refreshPrStatus pass turns it into
+// `needed` or `synced`. Only `needed` (tried, or no auto sync) asks the person, so only it lights the card.
+test("lifecycleOf: registry_sync lights the card only when needed", () => {
+  for (const [state, want] of [
+    ["pending", false],
+    ["needed", true],
+    ["synced", false],
+  ]) {
+    const ws = icmWorkspace({
+      files: { app: prFile({ status: "merged", extra: `registry_sync: ${state}\n` }) },
+    });
+    try {
+      assert.equal(lifecycleOf(ws).prs[0].registry_sync, want, state);
+    } finally {
+      clean(ws);
+    }
+  }
+});
+
 test("lifecycleOf: every state", () => {
   const cases = [
     [{}, "working"],

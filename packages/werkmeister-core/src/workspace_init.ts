@@ -49,7 +49,7 @@ import {
   removeGeneratedDevcontainer,
   writeWorkspaceDevcontainer,
 } from "./devcontainer_gen.js";
-import { SandboxError } from "./errors.js";
+import { WorkspaceError } from "./errors.js";
 import { writeFixtureWrapper } from "./fixture_workspace.js";
 import { workspaceUnder } from "./gate.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
@@ -110,6 +110,8 @@ import {
   writeWorkspaceGitignore,
 } from "./worktrees.js";
 
+// A WorkspaceError so an SDK caller of createWorkspace({ live: true }) catches it with the rest (SW-761);
+// the adapters test for this class before WorkspaceError, so they still exit without reprinting.
 /**
  * A fatal path whose `[err] …` line has already gone through the reporter.
  *
@@ -118,9 +120,9 @@ import {
  * plain `SandboxError` would make `main.ts`'s handler print the same line
  * again. The two argv adapters catch it and exit 1 in silence.
  */
-export class WorkspaceInitError extends SandboxError {
+export class WorkspaceInitError extends WorkspaceError {
   constructor(message: string) {
-    super(message, "WORKSPACE_INIT");
+    super(message);
     this.name = "WorkspaceInitError";
   }
 }
