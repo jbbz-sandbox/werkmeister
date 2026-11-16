@@ -44,8 +44,9 @@
  * which is native here.
  */
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, readdirSync, rmSync } from "node:fs";
-import { basename } from "node:path";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import * as esbuild from "esbuild";
 import { writeLicenses } from "../../scripts/write-licenses.mjs";
 
@@ -63,7 +64,42 @@ function git(...args) {
     return "";
   }
 }
-const buildStamp = { sha: git("rev-parse", "HEAD"), dirty: git("status", "--porcelain") !== "" };
+// SW-576: the dirty tree's id, so an amend that commits exactly it reads as current. A temp index, since the
+// workspace container mounts the worktree's index read-only, and a temp object dir, so the build never
+// writes the git store every worktree shares; only the id is kept.
+function workingTree() {
+  const dir = mkdtempSync(join(tmpdir(), "werkmeister-stamp-"));
+  const env = {
+    ...process.env,
+    GIT_INDEX_FILE: join(dir, "index"),
+    GIT_OBJECT_DIRECTORY: join(dir, "objects"),
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: git(
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-path",
+      "objects",
+    ),
+  };
+  try {
+    mkdirSync(env.GIT_OBJECT_DIRECTORY);
+    copyFileSync(
+      git("rev-parse", "--path-format=absolute", "--git-path", "index"),
+      env.GIT_INDEX_FILE,
+    );
+    execFileSync("git", ["add", "-A"], { env, stdio: "ignore" });
+    return execFileSync("git", ["write-tree"], {
+      env,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    return "";
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+const dirty = git("status", "--porcelain") !== "";
+const buildStamp = { sha: git("rev-parse", "HEAD"), dirty, content: dirty ? workingTree() : "" };
 
 const pruneChunks = {
   name: "prune-chunks",

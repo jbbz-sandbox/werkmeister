@@ -37,6 +37,25 @@ function commitFile(repo: string, rel: string): string {
   return git(repo, "rev-parse", "HEAD");
 }
 
+/** The working tree as a git tree through a temp index, as esbuild.mjs stamps a dirty build (SW-576). */
+function workingTree(repo: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "stamp-index-"));
+  const env = {
+    ...process.env,
+    GIT_INDEX_FILE: path.join(dir, "index"),
+    GIT_OBJECT_DIRECTORY: path.join(dir, "objects"),
+    GIT_ALTERNATE_OBJECT_DIRECTORIES: path.join(repo, ".git", "objects"),
+  };
+  try {
+    fs.mkdirSync(env.GIT_OBJECT_DIRECTORY);
+    fs.copyFileSync(path.join(repo, ".git", "index"), env.GIT_INDEX_FILE);
+    execFileSync("git", ["-C", repo, "add", "-A"], { env });
+    return execFileSync("git", ["-C", repo, "write-tree"], { env, encoding: "utf8" }).trim();
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 describe("staleBuildWarning", () => {
   it("is silent when the build matches HEAD", () => {
     const head = commit(tmp);
@@ -65,6 +84,30 @@ describe("staleBuildWarning", () => {
     const built = commitFile(tmp, "apps/cli/src/main.ts");
     commitFile(tmp, "packages/werkmeister-core/src/lifecycle.ts");
     expect(staleBuildWarning({ sha: built, dirty: false }, tmp)).toContain("built from");
+  });
+
+  // SW-576: a build from an uncommitted tree, then an amend that commits exactly that tree.
+  it("is silent when HEAD commits the uncommitted tree the build was made from", () => {
+    const parent = commitFile(tmp, "apps/cli/src/main.ts");
+    fs.writeFileSync(path.join(tmp, "apps/cli/src/main.ts"), "changed");
+    fs.writeFileSync(path.join(tmp, "apps/cli/src/new.ts"), "untracked");
+    const objects = git(tmp, "count-objects");
+    const content = workingTree(tmp);
+    expect(git(tmp, "count-objects"), "the stamp writes no object to the repo's store").toBe(
+      objects,
+    );
+    git(tmp, "add", "-A");
+    git(tmp, "commit", "-q", "--amend", "-m", "amended");
+    expect(staleBuildWarning({ sha: parent, dirty: true, content }, tmp)).toBeNull();
+  });
+
+  it("still warns when the tree changed again after a dirty build", () => {
+    const parent = commitFile(tmp, "apps/cli/src/main.ts");
+    fs.writeFileSync(path.join(tmp, "apps/cli/src/main.ts"), "changed");
+    const content = workingTree(tmp);
+    fs.writeFileSync(path.join(tmp, "apps/cli/src/main.ts"), "changed again");
+    git(tmp, "commit", "-q", "-am", "later");
+    expect(staleBuildWarning({ sha: parent, dirty: true, content }, tmp)).toContain("built from");
   });
 
   it("is silent outside a git checkout (a published install)", () => {
