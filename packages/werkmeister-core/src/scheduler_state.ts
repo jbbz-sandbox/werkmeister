@@ -127,6 +127,28 @@ export function enqueue(feature: string, workspace: string): Promise<void> {
   );
 }
 
+/** Put *feature* back at the head as a capacity waiter; returns its position, 1. */
+export function requeueFirst(
+  feature: string,
+  workspace: string,
+  starting?: Starting,
+): Promise<number> {
+  return sandboxLock(
+    "scheduler",
+    async () => {
+      writeWaiting(workspace, {
+        position: 1,
+        reason: "waiting for capacity",
+        ...starting,
+        since: new Date().toISOString(),
+      });
+      writeQueue([feature, ...readQueue().filter((f) => f !== feature)]);
+      return 1;
+    },
+    { timeout: LOCK_TIMEOUT },
+  );
+}
+
 /**
  * The budget: `budget:` in `~/.werkmeister/config.yaml` over defaults from the
  * engine (memory minus 1G for the VM itself, every CPU). An engine that can't

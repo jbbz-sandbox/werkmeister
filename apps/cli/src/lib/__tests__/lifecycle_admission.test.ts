@@ -44,7 +44,7 @@ vi.mock("werkmeister-core/reporter", async (orig) => ({
 
 import { readWaiting } from "werkmeister-core/agent_state";
 import { composeStop, getContainerStatus } from "werkmeister-core/compose";
-import { admitOrQueue, admitServiceStart } from "werkmeister-core/lifecycle";
+import { admitOrQueue, admitServiceStart, startsAsPerson } from "werkmeister-core/lifecycle";
 import { run } from "werkmeister-core/proc";
 import { info } from "werkmeister-core/reporter";
 import { enqueue, readQueue, writeLeases } from "werkmeister-core/scheduler_state";
@@ -92,6 +92,36 @@ it("a person's up stops the autonomous feature, queues it as preempted, and is a
   expect(composeStop).toHaveBeenCalledWith("victim");
   expect(readQueue()).toEqual(["victim"]);
   expect(readWaiting(victim)).toMatchObject({ position: 1, reason: "preempted" });
+});
+
+// SW-738: the stop "failed" yet killed the victim, and our start ran neither way; the victim never came back.
+it("a victim whose stop fails is queued to come back, and the start waits at the head instead", async () => {
+  const victim = workspace("victim", { autonomous: true });
+  const mine = workspace("mine", { autonomous: false });
+  writeLeases({ victim: { slot: 1, workspace: victim } });
+  vi.mocked(run).mockImplementation((cmd: string[]) =>
+    cmd[1] === "ps"
+      ? { status: 0, stdout: "id1\n", stderr: "" }
+      : {
+          status: 0,
+          stdout: `victim\t${victim}\t2026-10-30T10:00:00Z\t${1.5 * G}\t0\n`,
+          stderr: "",
+        },
+  );
+  vi.mocked(composeStop).mockResolvedValueOnce(false);
+
+  expect(await admitOrQueue("mine", mine, true)).toBe(1);
+
+  expect(readQueue()).toEqual(["mine", "victim"]);
+  expect(readWaiting(victim)).toMatchObject({ reason: "preempted" });
+  expect(readWaiting(mine)).toMatchObject({ position: 1, reason: "waiting for capacity" });
+});
+
+it("a plain up from an agent session in a person's workspace is not a person's start", () => {
+  const ws = workspace("person", { autonomous: false });
+  expect(startsAsPerson(ws, {})).toBe(true);
+  expect(startsAsPerson(ws, { CLAUDECODE: "1" })).toBe(false);
+  expect(startsAsPerson(workspace("agent", { autonomous: true }), {})).toBe(false);
 });
 
 // SW-629: `feature up` and the gate's starts fail at once, never queue, when the cost exceeds the budget.
