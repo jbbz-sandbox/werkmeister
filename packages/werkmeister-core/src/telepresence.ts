@@ -701,7 +701,11 @@ export interface InterceptResult {
  *
  * @example
  * ```ts
- * import { readServicesFromWorkspace, resolveWorkspaceDir, startIntercept } from "werkmeister-core/sdk";
+ * import {
+ *   readServicesFromWorkspace,
+ *   resolveWorkspaceDir,
+ *   startIntercept,
+ * } from "werkmeister-core/sdk";
  *
  * const dir = await resolveWorkspaceDir("my-workspace");
  * const localServices = readServicesFromWorkspace(dir);
@@ -814,7 +818,11 @@ export interface LeaveInterceptArgs {
  *
  * @example
  * ```ts
- * import { leaveIntercept, readServicesFromWorkspace, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ * import {
+ *   leaveIntercept,
+ *   readServicesFromWorkspace,
+ *   resolveWorkspaceDir,
+ * } from "werkmeister-core/sdk";
  *
  * const localServices = readServicesFromWorkspace(await resolveWorkspaceDir("my-workspace"));
  * const left = await leaveIntercept({ feature: "my-feature", localServices });

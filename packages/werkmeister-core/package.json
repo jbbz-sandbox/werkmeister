@@ -108,7 +108,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "docs:links": "typedoc",
-    "docs:sdk": "typedoc --options typedoc.sdk.json",
+    "docs:sdk": "node ../../scripts/format-examples.mjs --check && typedoc --options typedoc.sdk.json",
     "test": "sh ./run-tests.sh",
     "test:changed": "node test-changed.mjs"
   },

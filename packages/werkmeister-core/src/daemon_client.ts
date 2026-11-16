@@ -74,7 +74,8 @@ export function daemonToken(workspaceRoot?: string): string | null {
  * try {
  *   await callTool("status");
  * } catch (e) {
- *   if (e instanceof DaemonUnavailable) console.log(e.code, e.message); // "DAEMON_DOWN"
+ *   if (e instanceof DaemonUnavailable)
+ *     console.log(e.code, e.message); // "DAEMON_DOWN"
  *   else throw e;
  * }
  * ```
@@ -216,7 +217,8 @@ function checkBuild(onDisk: string | null, res: Response): void {
  * import { daemonStatus, type DaemonStatus } from "werkmeister-core/sdk";
  *
  * const status: DaemonStatus | null = await daemonStatus();
- * if (status?.stale) console.log(`daemon ${status.pid} runs ${status.loaded}, disk has ${status.onDisk}`);
+ * if (status?.stale)
+ *   console.log(`daemon ${status.pid} runs ${status.loaded}, disk has ${status.onDisk}`);
  * ```
  */
 export interface DaemonStatus {

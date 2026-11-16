@@ -277,7 +277,12 @@ const blank = (v: unknown) => v == null || v === "" || (Array.isArray(v) && v.le
  * import { validateFormData } from "werkmeister-core/sdk";
  *
  * const errors = validateFormData(
- *   { schema: { properties: { feature: { type: "string", pattern: "^[a-z-]+$" } }, required: ["feature"] } },
+ *   {
+ *     schema: {
+ *       properties: { feature: { type: "string", pattern: "^[a-z-]+$" } },
+ *       required: ["feature"],
+ *     },
+ *   },
  *   { feature: "Login Page", services: ["api"] },
  * );
  * console.log(errors); // { feature: '"Login Page" doesn\'t match the expected format' }
