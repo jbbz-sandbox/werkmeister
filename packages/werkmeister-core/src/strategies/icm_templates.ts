@@ -106,7 +106,9 @@ const TEST_TAIL =
   "A skipped test is not a pass: name each one with its skip reason, and run it where it can run (the workspace container) or say where it will (the gate, CI). " +
   // SW-334: `cmd1 && cmd2 > log` redirects only cmd2; the group sends the whole chain to the log.
   // SW-526: a background job's notice carries the exit code; a trailing echo would make it always read 0.
-  'Redirect output to a file as one group, so every command in an `&&` chain lands there. For a background job (`run_in_background`) write background: `{ <test command>; } > <log> 2>&1` and read the exit code from the job\'s completion notice; for a foreground call write foreground: `{ <test command>; } > <log> 2>&1; echo "exit $?"`. Read back only the failing slice.';
+  'Redirect output to a file as one group, so every command in an `&&` chain lands there. For a background job (`run_in_background`) write background: `{ <test command>; } > <log> 2>&1` and read the exit code from the job\'s completion notice; for a foreground call write foreground: `{ <test command>; } > <log> 2>&1; echo "exit $?"`. Read back only the failing slice. ' +
+  // SW-764: a stalled background job sends no notice, so waiting on one never ends by itself.
+  "For a background test or gate job you wait on, check its log's last-write time: after 10 minutes with no write, stop it and rerun it once, then tell the person if it stalls again.";
 const TEST_STEP =
   HOST_TESTS +
   "Once it passes, run `werkmeister pr gate --tests` (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows) and fix what it fails; record both exit codes. " +
@@ -170,6 +172,8 @@ const reviewStep = (rerun: string, group: string[]) =>
       ? "commits in `origin/main...HEAD` (the PR's base in place of `main` when it differs), plus any uncommitted changes and untracked files"
       : "uncommitted changes, untracked files included"
   }" — not how you built it, so the review is not anchored on your reasoning. ` +
+  // SW-764: sw-753's background review wrote its transcript once and never reported; the session waited 3.5 h.
+  "Run that subagent in the foreground when nothing else is pending. When it runs in the background, check its transcript's last-write time; after 10 minutes with no write, stop it and relaunch it once, and tell the person if the relaunch stalls too. " +
   // SW-431: a diff-scoped review missed two trust-boundary holes in a newly pre-approved wrapper (sw-292).
   'If the change adds or widens an allow rule or another pre-approved command, add to the brief: "this change pre-approves a command: list every file, env var, network address or process it can reach from its arguments, and treat each that leaves the workspace or its temp HOME as Must fix". ' +
   // SW-479: an exercise script that could restart the host daemon was rated Should fix and left open (sw-439).

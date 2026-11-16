@@ -186,6 +186,25 @@ test("each template renders with no undefined and a route per stage", async () =
         // SW-126: the build stages record the gate's test result per service.
         if (/_(implement|fix)$/.test(d))
           assert.match(c, /`pr gate --tests` result for each service it tested/, `${wt}/${d}`);
+        // SW-764: a background review subagent or test job that goes quiet is stopped and relaunched once.
+        if (c.includes("Review the diff: for each code worktree")) {
+          assert.match(
+            c,
+            /review is not anchored on your reasoning\. Run that subagent in the foreground/,
+            `${wt}/${d}`,
+          );
+          assert.match(
+            c,
+            /after 10 minutes with no write, stop it and relaunch it once/,
+            `${wt}/${d}`,
+          );
+        }
+        if (/_(implement|fix)$/.test(d))
+          assert.match(
+            c,
+            /background test or gate job you wait on, check its log.s last-write time: after 10 minutes with no write, stop it and rerun it once/,
+            `${wt}/${d}`,
+          );
         // SW-534: an exercise that changes code gets the review rerun on its delta.
         if (d.endsWith("_implement"))
           assert.match(c, /rerun the review on that delta/, `${wt}/${d}`);
