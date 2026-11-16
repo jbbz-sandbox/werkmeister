@@ -227,8 +227,9 @@ const exerciseFormat = (col: string) =>
   `a \`| check | result | ${col} |\` table whose result cell is exactly \`PASS\` or \`FAIL\` — nothing else in the cell — with the captured output in the ${col} column. The rule holds for every table in \`exercise.md\`; describe a superseded run in prose, not as a \`FAIL\` row`;
 
 // SW-736: `changeset status --since` reads git history, so before the commit it failed on an entry just written (sw-699, sw-755).
+// SW-825: the gate stops what it started (SW-34), so sw-798's check hit "container … is not running".
 const RELEASE_AFTER_COMMIT =
-  "Run the repo's release check (the `Release check:` command in `werkmeister-context.md`) after the commit, not before: a check that compares the branch with its base in git history does not see an uncommitted release entry.";
+  "Run the repo's release check (the `Release check:` command in `werkmeister-context.md`) after the commit, not before: a check that compares the branch with its base in git history does not see an uncommitted release entry. When it runs in a service's container, an earlier `werkmeister pr gate --tests` stopped the containers it started: start the one it runs in with `werkmeister feature up --service <name>` first.";
 
 const LINT =
   "the repo's lint command (the `<lint> &&` head of the test command in `werkmeister-context.md`, when it has one, which the PR gate's lint row runs) and fix what it fails, release entry included.";

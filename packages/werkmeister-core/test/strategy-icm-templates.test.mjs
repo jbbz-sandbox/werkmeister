@@ -428,6 +428,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^2\. .*Before committing, run the repo's lint command.*Run the repo's release check .*after the commit, not before: a check that compares the branch with its base in git history does not see an uncommitted release entry/m,
             `${wt}/${d}`,
           );
+        // SW-825: an earlier gate stopped the container it started, and the check runs in it.
+        if (d.endsWith("_propose"))
+          assert.match(
+            c,
+            /^2\. .*Run the repo's release check .*an earlier `werkmeister pr gate --tests` stopped the containers it started: start the one it runs in with `werkmeister feature up --service <name>` first/m,
+            `${wt}/${d}`,
+          );
         if (d.endsWith("_propose"))
           assert.match(
             c,
