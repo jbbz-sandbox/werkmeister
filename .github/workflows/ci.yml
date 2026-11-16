@@ -34,7 +34,9 @@ jobs:
   test:
     needs: queued
     # !cancelled(): `queued` is skipped on pull_request and merge_group, which would skip this too.
-    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' }}
+    # The version PR's own run skips the suites: it changes versions, changelogs and
+    # the lockfile, and the merge queue tests that exact commit before it lands.
+    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' && github.head_ref != 'changeset-release/main' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -47,17 +49,6 @@ jobs:
           git config --global user.name "CI"
           git config --global user.email "ci@users.noreply.github.com"
       - uses: ./.github/actions/install
-      # Turbo's local cache, carried across runs so unchanged packages replay
-      # instead of rebuilding. Turbo doesn't hash the Node version, hence the key.
-      # Only this job saves it: the others restore and would otherwise race it
-      # for the key with a dir holding fewer builds.
-      # ponytail: the dir only grows (each save carries the last); GitHub's 10GB
-      # LRU evicts old entries. Prune or move to a remote cache if restores slow.
-      - uses: actions/cache/restore@v4
-        with:
-          path: .turbo/cache
-          key: turbo-${{ runner.os }}-node24-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-node24-
       # SW-63: a new dependency under a licence outside the allowlist fails here.
       - run: pnpm run licenses
       # Before turbo so a lint or format failure surfaces in seconds, not after the build.
@@ -74,13 +65,6 @@ jobs:
       # dependency: its licence is outside the allowlist. Bump with the plugin's types.
       - run: npm i -g @anthropic-ai/claude-code@2.1.316
       - run: pnpm turbo run typecheck build test --continue --filter='!werkmeister-core'
-      # SW-423: a merge-queue run's cache is scoped to its gh-readonly-queue ref,
-      # which nothing else can restore, so saving it only evicts main's entries.
-      - if: github.event_name != 'merge_group'
-        uses: actions/cache/save@v4
-        with:
-          path: .turbo/cache
-          key: turbo-${{ runner.os }}-node24-${{ github.sha }}
       # After the build: commands and flags come from the built CLI's `__complete`.
       # Its unit test runs with `licenses` above (scripts/*.test.mjs).
       - run: pnpm run docs:check
@@ -104,7 +88,7 @@ jobs:
   # shards on runners of their own, in parallel with `test`.
   core-test:
     needs: queued
-    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' }}
+    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' && github.head_ref != 'changeset-release/main' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -116,11 +100,6 @@ jobs:
           git config --global user.name "CI"
           git config --global user.email "ci@users.noreply.github.com"
       - uses: ./.github/actions/install
-      - uses: actions/cache/restore@v4
-        with:
-          path: .turbo/cache
-          key: turbo-${{ runner.os }}-node24-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-node24-
       - run: pnpm turbo run build --filter=werkmeister-core
       # The smoke files are a few seconds in total; the last shard takes them all.
       - run: pnpm test ${{ matrix.shard }}/2
@@ -130,7 +109,7 @@ jobs:
   # itself. Everything else stays on 24, whose bundled npm the release needs.
   node-floor:
     needs: queued
-    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' }}
+    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' && github.head_ref != 'changeset-release/main' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -187,23 +166,6 @@ jobs:
           git config --global user.name "CI"
           git config --global user.email "ci@users.noreply.github.com"
       - uses: ./.github/actions/install
-      # Restores what `test` just saved, so `pnpm run release`'s build replays
-      # from cache.
-      - uses: actions/cache/restore@v4
-        with:
-          path: .turbo/cache
-          key: turbo-${{ runner.os }}-node24-${{ github.sha }}
-          restore-keys: turbo-${{ runner.os }}-node24-
-      # With `test` skipped, nothing saves main's turbo cache, and PR runs restore
-      # from main's (a queue run's cache is unreachable, SW-423). Builds only:
-      # shortcut: test/typecheck results no longer replay on PRs; add them here if PR runs slow down.
-      - if: needs.queued.outputs.tested == 'true'
-        run: pnpm turbo run build
-      - if: needs.queued.outputs.tested == 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: .turbo/cache
-          key: turbo-${{ runner.os }}-node24-${{ github.sha }}
       # With changesets pending: opens/updates the version PR. With none pending
       # (i.e. that PR just merged): publishes and tags.
       - id: changesets
