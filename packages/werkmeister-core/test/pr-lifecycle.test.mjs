@@ -20,6 +20,7 @@ import {
   callbackMessage,
   claimCallbacks,
   closeOut,
+  coveredRows,
   defaultDeps,
   deliverHeadless,
   failedRowExcerpt,
@@ -1123,6 +1124,147 @@ test("gate: a service whose registry says test: none is skipped with its reason,
       "skipped: registry says no tests: no test script",
     );
     assert.ok(!d.calls.some((c) => /docker exec .*none/.test(c)), "never runs `none`");
+  } finally {
+    clean(ws);
+  }
+});
+
+// SW-574: the pre-bbcc1ab3 werkmeister shape, where cli's row is core's minus one --filter.
+const CLI_CMD =
+  "pnpm turbo run typecheck test --continue --filter=werkmeister --filter=werkmeister-mcp";
+const CORE_CMD = `${CLI_CMD} --filter=werkmeister-core`;
+const NESTED = {
+  services: {
+    cli: { type: "cli", port_offset: 3, test: CLI_CMD },
+    "werkmeister-core": { type: "library", port_offset: 2, test: CORE_CMD },
+  },
+  repos: {
+    app: {
+      services: ["cli", "werkmeister-core"],
+      path_mappings: { "apps/cli": "cli", "packages/werkmeister-core": "werkmeister-core" },
+    },
+  },
+};
+const BOTH = "apps/cli/x.ts\npackages/werkmeister-core/y.ts\n";
+function nestedDeps(diff, table = [], services = NESTED.services) {
+  const d = deps([], { services, repos: NESTED.repos });
+  const r = stubRun([
+    [/^docker ps/, { stdout: "feat-werkmeister-core\n" }],
+    [/diff --name-only/, { stdout: diff }],
+    ...table,
+  ]);
+  return Object.assign(d, { run: r.run, calls: r.calls });
+}
+const ranCli = (d) => d.calls.some((c) => c.endsWith(`sh -c ${CLI_CMD}`));
+
+test("coveredRows: a strict --filter subset or a declared test_covered_by, followed to a row that runs (SW-574)", () => {
+  assert.deepEqual(coveredRows({ cli: { cmd: CLI_CMD }, core: { cmd: CORE_CMD } }), {
+    cli: "core",
+  });
+  // `--filter x` spells the same filter; equal sets, no filters or another command are not covered.
+  assert.deepEqual(
+    coveredRows({
+      a: { cmd: "turbo test --filter a" },
+      b: { cmd: "turbo test --filter=a --filter=b" },
+    }),
+    { a: "b" },
+  );
+  assert.deepEqual(coveredRows({ a: { cmd: CLI_CMD }, b: { cmd: CLI_CMD } }), {});
+  // An extra `--filter=!x` excludes x, so the longer row runs less.
+  assert.deepEqual(
+    coveredRows({
+      a: { cmd: "turbo test --filter=./packages/*" },
+      b: { cmd: "turbo test --filter=./packages/* --filter=!pkg-a" },
+    }),
+    {},
+  );
+  assert.deepEqual(coveredRows({ a: { cmd: "npm test --filter=a" }, b: { cmd: CORE_CMD } }), {});
+  assert.deepEqual(coveredRows({ a: { cmd: "npm test" }, b: { cmd: "npm test --filter=b" } }), {});
+  // The widest superset wins, and a chain ends at the row that runs.
+  assert.deepEqual(
+    coveredRows({
+      a: { cmd: "t --filter=a" },
+      b: { cmd: "t --filter=a --filter=b" },
+      c: { cmd: "t --filter=a --filter=b --filter=c" },
+    }),
+    { a: "c", b: "c" },
+  );
+  assert.deepEqual(
+    coveredRows({
+      a: { cmd: "x", coveredBy: "b" },
+      b: { cmd: "y", coveredBy: "c" },
+      c: { cmd: "z" },
+    }),
+    { a: "c", b: "c" },
+  );
+  // A declared cover outside the rows, on itself, or in a cycle is ignored.
+  assert.deepEqual(coveredRows({ a: { cmd: "x", coveredBy: "gone" } }), {});
+  assert.deepEqual(coveredRows({ a: { cmd: "x", coveredBy: "a" } }), {});
+  assert.deepEqual(
+    coveredRows({ a: { cmd: "x", coveredBy: "b" }, b: { cmd: "y", coveredBy: "a" } }),
+    {},
+  );
+});
+
+test("gate: a row core's command covers starts no container and reads covered by werkmeister-core (SW-574)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = nestedDeps(BOTH);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.equal(g.checks.find((c) => c.name === "test cli").detail, "covered by werkmeister-core");
+    assert.ok(!d.started.includes("feat-cli"), `started ${d.started}`);
+    assert.ok(!ranCli(d), "cli's command never runs");
+    assert.ok(d.calls.includes(`docker exec feat-werkmeister-core sh -c ${CORE_CMD}`));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: with no covering row, a touched cli is still started and tested (SW-574)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = nestedDeps("apps/cli/x.ts\n");
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.ok(d.started.includes("feat-cli"));
+    assert.ok(d.calls.includes(`docker exec feat-cli sh -c ${CLI_CMD}`));
+    assert.match(g.checks.find((c) => c.name === "test cli").detail, /→ exit 0/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a covered row fails when its covering row fails (SW-574)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const coreFails = [/docker exec feat-werkmeister-core sh -c pnpm turbo/, { code: 1 }];
+    const d = nestedDeps(BOTH, [coreFails]);
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), ["test werkmeister-core", "test cli"]);
+    assert.equal(
+      g.checks.find((c) => c.name === "test cli").detail,
+      "covered by werkmeister-core, which failed",
+    );
+    assert.ok(!ranCli(d));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: a declared test_covered_by covers a row whose command does not nest (SW-574)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const cli = {
+      ...NESTED.services.cli,
+      test: "npm test -w cli",
+      test_covered_by: "werkmeister-core",
+    };
+    const d = nestedDeps(BOTH, [], { ...NESTED.services, cli });
+    const g = await gate(ws, d);
+    assert.deepEqual(failed(g), []);
+    assert.equal(g.checks.find((c) => c.name === "test cli").detail, "covered by werkmeister-core");
+    assert.ok(!d.calls.some((c) => c.endsWith("sh -c npm test -w cli")));
   } finally {
     clean(ws);
   }

@@ -506,6 +506,8 @@ export interface ServiceEntry {
   standards?: string[];
   /** `none` or `none: <reason>` marks a service with no tests; the gate skips it (SW-119). */
   test?: string;
+  /** Another service whose gate row runs this one's tests too; read by `coveredRows` (SW-574). */
+  test_covered_by?: string;
   validate?: string;
   internal_port?: number;
   port_offset?: number;

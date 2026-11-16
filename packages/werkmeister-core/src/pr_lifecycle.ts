@@ -876,6 +876,63 @@ async function mergeCheck(dir: string, file: PrFile, deps: Deps): Promise<string
 // Moved beside hostLoadLimit so lifecycle's container starts can use it without an import cycle (SW-630).
 export { waitForHostLoadNow };
 
+function filterSplit(cmd: string): { rest: string; filters: Set<string> } {
+  const tokens = cmd.trim().split(/\s+/);
+  const filters = new Set<string>();
+  const rest: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i] ?? "";
+    if (t.startsWith("--filter=")) filters.add(t.slice("--filter=".length));
+    else if (t === "--filter" && i + 1 < tokens.length) filters.add(tokens[++i] ?? "");
+    else rest.push(t);
+  }
+  return { rest: rest.join(" "), filters };
+}
+
+/**
+ * SW-574: covered service → the gate row that runs its tests too. A declared `test_covered_by` wins; else a
+ * row whose command is the same but for a strict superset of `--filter`s (the widest wins). Chains end at a
+ * row that runs; a cycle or a cover outside *rows* covers nothing.
+ */
+export function coveredRows(
+  rows: Record<string, { cmd: string; coveredBy?: string }>,
+): Record<string, string> {
+  const names = Object.keys(rows).sort();
+  const split = Object.fromEntries(names.map((n) => [n, filterSplit(rows[n]?.cmd ?? "")]));
+  const direct = (a: string): string | undefined => {
+    const by = rows[a]?.coveredBy;
+    if (by && by !== a && rows[by]) return by;
+    const own = split[a];
+    if (!own?.filters.size) return undefined;
+    return names
+      .filter((b) => {
+        const other = split[b];
+        return (
+          b !== a &&
+          other?.rest === own.rest &&
+          other.filters.size > own.filters.size &&
+          [...own.filters].every((f) => other.filters.has(f)) &&
+          // turbo and pnpm read `--filter=!x` as an exclusion, so an extra one narrows the run.
+          [...other.filters].every((f) => own.filters.has(f) || !f.startsWith("!"))
+        );
+      })
+      .sort((x, y) => (split[y]?.filters.size ?? 0) - (split[x]?.filters.size ?? 0))[0];
+  };
+  const out: Record<string, string> = {};
+  for (const a of names) {
+    const seen = new Set([a]);
+    let at = direct(a);
+    while (at && !seen.has(at)) {
+      const next = direct(at);
+      if (!next) break;
+      seen.add(at);
+      at = next;
+    }
+    if (at && !seen.has(at)) out[a] = at;
+  }
+  return out;
+}
+
 async function gateChecks(
   ws: string,
   file: PrFile,
@@ -1267,9 +1324,25 @@ async function gateChecks(
       earlier.detail = `started on the second attempt (first: ${earlier.detail})`;
     }
   };
-  const tested = touched.filter(
+  const withCommand = touched.filter(
     (s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes),
   );
+  const covers = coveredRows(
+    Object.fromEntries(
+      withCommand.map((s) => [
+        s,
+        {
+          cmd: serviceTestCommand(s, services[s], deps.archetypes) ?? "",
+          coveredBy: services[s]?.["test_covered_by"] as string | undefined,
+        },
+      ]),
+    ),
+  );
+  // A local api/web service's baseline row needs its own container, so covering it would save no start.
+  for (const s of Object.keys(covers))
+    if (local.has(s) && ["api", "web"].includes(services[s]?.["type"] ?? "")) delete covers[s];
+  // Out of the release pick and the starts too, so a covered service's container never starts (SW-574).
+  const tested = withCommand.filter((s) => !covers[s]);
   // A sibling can differ in image, toolchain and node_modules, so each test gets its own container (SW-336).
   const testedIds = [...new Set(tested.map(toRendered).filter((s): s is string => Boolean(s)))];
   // False when its port is taken: the ports row is written and the gate stops.
@@ -1458,6 +1531,7 @@ async function gateChecks(
   }
 
   for (const svc of touched) {
+    if (covers[svc]) continue;
     const cmd = serviceTestCommand(svc, services[svc], deps.archetypes);
     const why = reason(skips[svc]);
     const noTests = serviceNoTests(services[svc]);
@@ -1495,6 +1569,19 @@ async function gateChecks(
       continue;
     }
     await execCheck(`test ${svc}`, container, cmd, 15);
+  }
+  for (const [svc, by] of Object.entries(covers).sort()) {
+    const row = checks.find((c) => c.name === `test ${by}`);
+    checks.push({
+      name: `test ${svc}`,
+      ok: Boolean(row?.ok),
+      detail: !row
+        ? `covered by ${by}, which did not run`
+        : row.ok
+          ? `covered by ${by}`
+          : `covered by ${by}, which failed`,
+      ...(row?.retry && { retry: true as const }),
+    });
   }
 
   if (testsOnly) return done();
