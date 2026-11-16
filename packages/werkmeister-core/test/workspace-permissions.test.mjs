@@ -558,6 +558,18 @@ test("ask rules land beside allow, are recorded, and removal drops them (SW-473)
   assert.deepEqual(readSettings(root).permissions, { ask: ["mine"] });
 });
 
+// SW-835: a hand `jq 'del(.permissions.ask)'` leaves the record; the next write puts the block back.
+test("a rewrite after the ask block was deleted restores it from the record (SW-835)", () => {
+  const root = workspace({});
+  writeWorkspacePermissions(root, ["a"], [], ["q", "r"]);
+  const settings = readSettings(root);
+  delete settings.permissions.ask;
+  fs.writeFileSync(settingsPath(root), JSON.stringify(settings, null, 2));
+  writeWorkspacePermissions(root, ["a"], [], ["q", "r"]);
+  assert.deepEqual(readSettings(root).permissions, { allow: ["a"], ask: ["q", "r"] });
+  assert.deepEqual(readRecord(root), { allow: ["a"], ask: ["q", "r"] });
+});
+
 test("node --test through the temp-HOME wrapper asks, every form, never allowed (SW-510, SW-720)", () => {
   const w = "/ws/w/.werkmeister/bin/with-temp-home";
   const cli = "/ws/w/werkmeister/apps/cli/werkmeister";
