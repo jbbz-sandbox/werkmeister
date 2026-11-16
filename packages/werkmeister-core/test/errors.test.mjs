@@ -37,3 +37,11 @@ test("GraduationError folds in under the GRADUATION code", () => {
   assert.ok(e instanceof SandboxError);
   assert.equal(e.code, "GRADUATION");
 });
+
+// SW-761: createWorkspace({ live: true }) rethrows it as is, so an SDK caller catching WorkspaceError must catch it too.
+test("WorkspaceInitError is a WorkspaceError", async () => {
+  const { WorkspaceInitError } = await import("../dist/workspace_init.js");
+  const e = new WorkspaceInitError("boom");
+  assert.ok(e instanceof WorkspaceError);
+  assert.equal(e.name, "WorkspaceInitError");
+});
