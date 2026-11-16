@@ -1,5 +1,15 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.93.4
+
+### Patch Changes
+
+- bf11837: PR rules (SW-661): rule 3's background-job recipe now covers `pr gate` and `pr gate --tests` too (`werkmeister pr gate --tests > <workspace>/.werkmeister/gate-run.log 2>&1`, kept on the record branch with the other `gate-*.log`), and the ICM stage contracts and `pr` help point to it instead of saying "detached", so a full gate no longer gets cut off by a 10-minute foreground tool call.
+- c3f8ad3: `pr gate` (SW-724): the fragment and lockfile base lookups, and `--tests`' diff, share one `git merge-base` per gate run instead of running it once each.
+- 8c6679c: `pr gate` / `pr open` (SW-734): a service the PR file's `skip_tests` names is no longer started, from `compose.gate.yml` or as the lint/release container, so the gate no longer waits for capacity for it or its install. The lint/release container is another repo service when one exists. The capacity-wait line now says that stopping the command ends the wait, and that the gate starts no `skip_tests` service.
+- acd29ef: `pr gate` / `pr open` (SW-739): a test row killed with exit 137 under host load is run once more, after the host-load wait `with-temp-home` uses, and its row says it was retried. It fails only if the retry fails too.
+- c0adef6: `pr gate` / `pr open` (SW-744): a test row whose only error is vitest's worker RPC timeout (`Timeout calling "onTaskUpdate"`, a worker blocked past vitest's fixed 60 s under host load) is run once more after the host-load wait, like an exit 137, and its row says it was retried. A real failure beside it (a failed test, a type error) still fails with no retry. The CLI's own tests start the bundled CLI and scripts asynchronously, so they no longer block a worker that long.
+
 ## 0.93.3
 
 ## 0.93.2
