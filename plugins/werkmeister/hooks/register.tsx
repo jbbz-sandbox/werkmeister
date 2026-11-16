@@ -104,7 +104,8 @@ try {
     'dismiss-notice': async () => core.clearNotice(await core.resolveWorkspaceDir(args.name), args.id),
     // The plugin and the CLI whose core this loads update separately; core before SW-748 named it up.
     connect: async () => ({ ok: await (core.infraUp ?? core.up)() }),
-    'workspace-action': () => core.runWorkspaceAction(args.name, args.action),
+    // A press is a person's, but this child inherits Claude Code's CLAUDECODE=1, so say so (SW-833).
+    'workspace-action': () => core.runWorkspaceAction(args.name, args.action, { byPerson: true }),
     'workspace-path': async () => ({ path: await core.resolveWorkspaceDir(args.name) }),
     'start-args': () => core.startArgs(args.path),
     'pr-status': async () => ({ command: (await core.refreshPrStatus(args.path)).lines.join('\\n') || 'no PR files' }),
