@@ -707,7 +707,8 @@ function leftOver(root: string): boolean {
 // set, and an allowlist would hold `werkmeister feature stop`, the command that frees room (SW-768).
 const NEEDS_CAPACITY =
   /(^|[\s;&|(`/'"])(docker|pnpm|npm|npx|node|turbo|vitest|with-temp-home|with-fixture-workspace)(\s|$)|\b(werkmeister|w9r)\s+(feature\s+(up|restart)|pr\s+(gate|open))\b/;
-const NEEDS_CAPACITY_TOOL = /^mcp__.*werkmeister.*__(up|restart)$/;
+// The MCP forms of the held commands (SW-832); `workspace-pr` `status` passes like `pr status`.
+const NEEDS_CAPACITY_TOOL = /^mcp__.*werkmeister.*__(up|restart|test|workspace-pr)$/;
 
 function needsCapacity(input: Record<string, any>): boolean {
   if (input["hook_event_name"] !== "PreToolUse") return false;
@@ -719,7 +720,7 @@ function needsCapacity(input: Record<string, any>): boolean {
     "$1''",
   );
   if (tool === "Bash") return NEEDS_CAPACITY.test(command);
-  return NEEDS_CAPACITY_TOOL.test(tool);
+  return NEEDS_CAPACITY_TOOL.test(tool) && input["tool_input"]?.["action"] !== "status";
 }
 
 /**
