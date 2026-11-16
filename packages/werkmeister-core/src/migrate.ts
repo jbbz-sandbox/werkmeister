@@ -73,15 +73,25 @@ export interface RunningContainer {
   workingDir?: string;
 }
 
-/** Options for {@link migrate}. */
+/**
+ * Options for {@link migrate}.
+ *
+ * @example
+ * ```ts
+ * import { migrate, type MigrateOptions } from "werkmeister-core/sdk";
+ *
+ * const opts: MigrateOptions = { workspaces: true, checkOnly: true };
+ * for (const s of await migrate(opts)) console.log(s.ok ? "ok  " : "FAIL", s.label, s.detail);
+ * ```
+ */
 export interface MigrateOptions {
-  /** Also rename each workspace's `.sandbox/` to `.werkmeister/`. */
+  /** Also rename each workspace's `.sandbox/` folder to `.werkmeister/`. */
   workspaces?: boolean;
-  /** Report what would change; write nothing. */
+  /** Report what would change and write nothing. */
   checkOnly?: boolean;
-  /** Running containers; null when Docker is unreachable. Injected by tests. */
+  /** For tests: lists the running containers instead of asking Docker; resolve to null for "Docker unreachable". */
   running?: () => Promise<RunningContainer[] | null>;
-  /** Passed to the pr-watch schedule code; tests inject the launchctl/crontab runner. */
+  /** For tests: replaces how the scheduled PR watch is installed (launchctl or crontab). */
   prWatch?: PrWatchScheduleOptions;
 }
 
@@ -143,9 +153,32 @@ function workspacesRootBeforeMove(legacy: string): string {
   return configured ? path.resolve(expandUser(String(configured))) : workspacesRoot();
 }
 
+// The SDK side of `werkmeister machine migrate`.
 /**
- * Run every migration step in order: move `~/.sandbox` to `~/.werkmeister`, then repair old names.
- * Resolves to one Step per repair; safe to repeat, and with `checkOnly` only reports.
+ * Upgrades a machine from older werkmeister versions: moves the tool's home
+ * folder from `~/.sandbox` to `~/.werkmeister`, then rewrites config files,
+ * shell setup and workspace files that still use old paths or command names.
+ * Each step checks before it writes, so running it again (or on a machine
+ * that needs nothing) changes nothing, and a run that failed half-way can be
+ * repeated. Runs in-process, not through the werkmeister daemon.
+ *
+ * It refuses, changing nothing, while a running container uses the old home
+ * or the workspaces folder: stop those containers first.
+ *
+ * @param opts - What to migrate and whether only to report; see {@link MigrateOptions}.
+ * @returns One {@link Step} per check, in order. A refusal (both homes exist,
+ *   containers still running, a custom config path) is a single step with `ok: false`.
+ * @throws The file-system error when a move or write fails part-way; fix the
+ *   cause and run it again.
+ *
+ * @example
+ * ```ts
+ * import { migrate } from "werkmeister-core/sdk";
+ *
+ * const steps = await migrate({ workspaces: true });
+ * for (const s of steps) console.log(`${s.ok ? "✓" : "✗"} ${s.label}: ${s.detail}`);
+ * if (steps.some((s) => !s.ok && !s.optional)) process.exitCode = 1;
+ * ```
  */
 export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
   const checkOnly = Boolean(opts.checkOnly);

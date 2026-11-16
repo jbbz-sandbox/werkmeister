@@ -1391,7 +1391,24 @@ export async function pause(feature: string): Promise<PauseResult> {
   return { feature, slot, containers };
 }
 
-/** What `resume` brought back for a paused feature. */
+/**
+ * What resuming a paused workspace brought back: the containers it unpaused or
+ * restarted, and whether its agent was mid-turn when paused.
+ * {@link resumeAndNudge} returns it, plus how the session was told to continue.
+ *
+ * @example
+ * ```ts
+ * import { resumeAndNudge, type ResumeResult } from "werkmeister-core/sdk";
+ *
+ * const r: ResumeResult = await resumeAndNudge(
+ *   "my-workspace",
+ *   "/Users/me/features/my-workspace",
+ *   "my-workspace",
+ * );
+ * const missing = r.containers.filter((c) => c.did === "missing").map((c) => c.name);
+ * if (missing.length) console.warn(`Gone since the pause: ${missing.join(", ")}`);
+ * ```
+ */
 export interface ResumeResult {
   /** The feature that was resumed. */
   feature: string;
@@ -1404,7 +1421,7 @@ export interface ResumeResult {
     /** `started` when it had been stopped meanwhile; `missing` when it no longer exists. */
     did: "unpaused" | "started" | "missing";
   }[];
-  /** The agent was mid-turn at pause time, so the caller should tell the session to continue. */
+  /** True when the agent was mid-turn at pause time, so its session should be told to continue. */
   wasWorking: boolean;
 }
 
@@ -1521,7 +1538,19 @@ export async function down(
   return { feature, slot };
 }
 
-/** A service dropped back to k8s, and what the feature still runs locally. */
+/**
+ * What {@link removeService} did: the service that now routes to Kubernetes,
+ * what the feature still runs locally, and what happened to its containers and
+ * the proxy.
+ *
+ * @example
+ * ```ts
+ * import { removeService, type RemoveResult } from "werkmeister-core/sdk";
+ *
+ * const r: RemoveResult = await removeService("my-feature", "api");
+ * console.log(r.containersStopped ? "nothing local left" : `still local: ${r.remaining.join(", ")}`);
+ * ```
+ */
 export interface RemoveResult {
   /** The feature the service was dropped from. */
   feature: string;
@@ -1535,15 +1564,34 @@ export interface RemoveResult {
   proxyReloaded: boolean;
 }
 
+// `NOT_LOCAL` replaces an early return, so the CLI catches it to print the same
+// warning and local-services line it always did; that is why the message
+// carries no list.
 /**
- * Drop *service* from *feature*'s local services so it falls back to k8s:
- * regenerate the three generated workspace files, restart (or stop) the
- * containers, and re-point the proxy.
+ * Stops running one service locally in a running feature, so its traffic goes
+ * to the Kubernetes cluster instead. Regenerates the feature's compose, env and
+ * supergraph files, restarts its containers (or stops them when nothing local
+ * is left), and re-points the Caddy proxy. Runs in-process and talks to Docker
+ * directly.
  *
- * Throws `NOT_RUNNING` when the feature holds no slot, and `NOT_LOCAL` when
- * *service* is not one it runs locally. The second replaces an early return, so
- * the CLI catches it to print the same warning and local-services line it
- * always did — which is why the message carries no list: that line is layout.
+ * @param feature - The feature name (a running workspace's stack).
+ * @param service - A service the feature runs locally.
+ * @returns What changed: see {@link RemoveResult}.
+ * @throws {@link SandboxError} with code `NOT_RUNNING` when the feature is not
+ *   up, or `NOT_LOCAL` when it does not run *service* locally.
+ *
+ * @example
+ * ```ts
+ * import { removeService, SandboxError } from "werkmeister-core/sdk";
+ *
+ * try {
+ *   const { remaining } = await removeService("my-feature", "api");
+ *   console.log(`api now routes to k8s; local: ${remaining.join(", ") || "none"}`);
+ * } catch (e) {
+ *   if (e instanceof SandboxError && e.code === "NOT_LOCAL") console.log("api was not local");
+ *   else throw e;
+ * }
+ * ```
  */
 export async function removeService(feature: string, service: string): Promise<RemoveResult> {
   // shortcut: renders the registry's view, not the branch fragment's (SW-337), because no
@@ -1600,7 +1648,20 @@ export async function removeService(feature: string, service: string): Promise<R
   };
 }
 
-/** What the regenerated Caddyfile now routes, and whether Caddy took it. */
+/**
+ * What {@link reloadProxy} wrote into the regenerated Caddyfile, and whether
+ * Caddy accepted it.
+ *
+ * @example
+ * ```ts
+ * import { reloadProxy, type ProxyReloadResult } from "werkmeister-core/sdk";
+ *
+ * const r: ProxyReloadResult = await reloadProxy();
+ * for (const f of r.features)
+ *   console.log(`${f.feature} (slot ${f.slot}): ${f.services.join(", ") || "all k8s"}`);
+ * if (!r.ok) console.error("Caddy rejected the new config");
+ * ```
+ */
 export interface ProxyReloadResult {
   /** The features written into the Caddyfile, sorted by name. */
   features: {
@@ -1611,24 +1672,39 @@ export interface ProxyReloadResult {
     /** Services it runs locally; empty when everything routes to k8s. */
     services: string[];
   }[];
-  /** Caddy was down and `start` was asked for, so it was started rather than reloaded. */
+  /** True when Caddy was down and `start` was set, so it was started rather than reloaded. */
   started: boolean;
   /** False when Caddy rejected the config, or failed to start. */
   ok: boolean;
 }
 
+// Same shape and reason as `telepresence.ts`'s `Runner`: a trailing parameter
+// defaulted to the real thing. It is deliberately the *whole* boundary rather
+// than a caddy runner alone: `getAllSlots` reads Docker container labels, so
+// faking the proxy half and not the slot half would still need a real daemon.
 /**
- * The four side effects `reloadProxy` performs, injectable so a test can assert
- * the sequence without writing a real Caddyfile or bouncing a live Caddy.
+ * The side effects {@link reloadProxy} performs: writing the Caddyfile, reading
+ * which features are up, and checking, reloading or starting Caddy. Leave it
+ * out to use the real ones; pass your own to run `reloadProxy` without Docker
+ * or a live Caddy, for example in a test.
  *
- * Same shape and reason as `telepresence.ts`'s `Runner`: a trailing parameter
- * defaulted to the real thing, so no caller passes it and none has to know it
- * exists. It is deliberately the *whole* boundary rather than a caddy runner
- * alone — `getAllSlots` reads Docker container labels, so faking the proxy half
- * and not the slot half would leave the test needing a real daemon anyway.
+ * @example
+ * ```ts
+ * import { type ProxyOps, reloadProxy } from "werkmeister-core/sdk";
+ *
+ * const ops: ProxyOps = {
+ *   generate: async () => undefined,
+ *   slots: async () => ({ "my-feature": { slot: 1, services: ["api"] } }),
+ *   running: async () => true,
+ *   reload: async () => true,
+ *   start: () => true,
+ *   hosts: () => [],
+ * };
+ * console.log(await reloadProxy({}, ops));
+ * ```
  */
 export interface ProxyOps {
-  /** Returns the written path; `reloadProxy` ignores it. */
+  /** Writes the Caddyfile; its result is ignored. */
   generate: () => Promise<unknown>;
   /** Every feature holding a slot, keyed by feature name. */
   slots: () => Promise<
@@ -1650,7 +1726,7 @@ export interface ProxyOps {
   start: () => boolean;
   /** Every host the Caddyfile just written routes. */
   hosts: () => string[];
-  /** Omitted: the platform resolver. */
+  /** Resolves a host name, to warn about hosts that don't resolve. Omitted: the system resolver. */
   lookup?: HostLookup;
 }
 
@@ -1667,19 +1743,32 @@ const REAL_PROXY_OPS: ProxyOps = {
   hosts: () => ingressHostnames(),
 };
 
+// Separate from `down` so a multi-feature teardown pays for one reload rather
+// than one per feature. `start` selects the whole `werkmeister infra
+// proxy-reload` spelling (its progress wording and feature list), not just the
+// start-if-down fallback; teardown's callers print neither, and defaulting it to
+// false stops a teardown starting a proxy nobody asked for.
 /**
- * Regenerate the Caddyfile from the active features and hand it to Caddy.
+ * Regenerates the Caddy proxy config from the features that are up and hands
+ * it to Caddy, so every workspace URL points at the right containers. Call it
+ * after tearing down features. Runs in-process and talks to Docker directly.
  *
- * Separate from `down` so a multi-feature teardown pays for one reload rather
- * than one per feature. `up` reloads inline instead because it may also have to
- * *start* Caddy, which is part of bringing a feature up.
+ * @param options - `start`: when Caddy is not running, start it (and list the
+ *   features written) instead of skipping the reload. Defaults to false.
+ * @param ops - The side effects to use. Leave it out for the real Caddyfile,
+ *   Docker and Caddy; see {@link ProxyOps}.
+ * @returns The features written and whether Caddy took the config; see
+ *   {@link ProxyReloadResult}. A rejected config gives `ok: false` rather than
+ *   throwing.
  *
- * `start` selects the whole `werkmeister infra proxy-reload` spelling, not just the
- * start-if-down fallback: that command has always used different progress
- * wording and listed the features it wrote, and teardown's three callers
- * (`commands/down.ts` twice, `sandbox.ts` twice) print neither. Defaulting it
- * to false is what keeps their output where it was — and stops a teardown
- * starting a proxy nobody asked for.
+ * @example
+ * ```ts
+ * import { reloadProxy } from "werkmeister-core/sdk";
+ *
+ * const { ok, started } = await reloadProxy({ start: true });
+ * if (!ok) console.error("Caddy did not accept the new config");
+ * else if (started) console.log("Caddy was down, so it was started");
+ * ```
  */
 export async function reloadProxy(
   { start = false }: { start?: boolean } = {},
@@ -1800,7 +1889,22 @@ export function featureFromVolume(volName: string, baseNames: string[]): string 
   return null;
 }
 
-/** What a sweep found: the state it read, before anything it did about it. */
+/**
+ * What a cleanup sweep found, before it removed anything: the features that
+ * are up, their per-feature Docker volumes, volumes left behind by features
+ * that are gone, and slot entries with nothing behind them.
+ * {@link planClean} returns it.
+ *
+ * @example
+ * ```ts
+ * import { type CleanPlan, planClean } from "werkmeister-core/sdk";
+ *
+ * const plan: CleanPlan = await planClean();
+ * console.log(
+ *   `${plan.orphanedVolumes.length} orphaned volume(s), ${plan.staleSlots.length} stale slot(s)`,
+ * );
+ * ```
+ */
 export interface CleanPlan {
   /** Features holding a slot when the sweep started, sorted. */
   activeFeatures: string[];
@@ -1812,7 +1916,19 @@ export interface CleanPlan {
   staleSlots: string[];
 }
 
-/** What a sweep found, and what it then actually removed. */
+/**
+ * What a cleanup sweep found (the {@link CleanPlan} fields) and what it then
+ * actually removed. {@link runClean} returns it.
+ *
+ * @example
+ * ```ts
+ * import { type CleanResult, runClean } from "werkmeister-core/sdk";
+ *
+ * const r: CleanResult = await runClean();
+ * const failed = r.orphanedVolumes.filter((v) => !r.removedVolumes.includes(v));
+ * if (failed.length) console.warn(`Could not remove (in use?): ${failed.join(", ")}`);
+ * ```
+ */
 export interface CleanResult extends CleanPlan {
   /** Orphaned volumes actually deleted; empty on a dry run, and short of `orphanedVolumes` when a removal failed. */
   removedVolumes: string[];
@@ -1845,29 +1961,56 @@ export function classifyVolumes(
   return { activeVolumes, orphanedVolumes };
 }
 
+// A dry run *is* the plan: the two share one traversal because the ordering of
+// the progress they report is the CLI's output contract.
 /**
- * What `runClean` would remove, without removing it.
+ * Reports what {@link runClean} would remove, without removing anything: it is
+ * `runClean` with `dryRun` set. Runs in-process and reads Docker directly.
  *
- * A dry run *is* the plan — the two share one traversal because the ordering of
- * the progress they report is the CLI's output contract — so this is the safe
- * spelling of {@link runClean}, not a second implementation of it.
+ * @param opts - `all`: plan as if every running feature were torn down first,
+ *   so all per-feature volumes count as orphaned. Defaults to false.
+ * @returns What the sweep found; see {@link CleanPlan}. Its progress is also
+ *   printed as it goes.
+ *
+ * @example
+ * ```ts
+ * import { planClean, runClean } from "werkmeister-core/sdk";
+ *
+ * const plan = await planClean();
+ * if (plan.orphanedVolumes.length || plan.staleSlots.length) await runClean();
+ * ```
  */
 export async function planClean(opts: { all?: boolean } = {}): Promise<CleanPlan> {
   return runClean({ ...opts, dryRun: true });
 }
 
+// The layout this emits (the volume lists, the `[dry-run] Would …` lines)
+// would normally be the CLI's, but it interleaves with the work itself: the
+// stale-slot scan runs `docker compose ps` *after* the volumes are removed.
+// Returning it all to render at the end would reorder the output, so it goes
+// out through `raw` as it happens.
 /**
- * Sweep orphaned per-feature Docker volumes and stale slot entries.
+ * Cleans up after features that are gone: removes their leftover per-feature
+ * Docker volumes and releases slot entries that have neither a running
+ * container nor a workspace behind them. Volumes of features that are still
+ * up are kept. Runs in-process and talks to Docker directly, printing its
+ * progress as it goes.
  *
- * With *all*, active features are torn down first (volumes included) and the
- * proxy re-pointed, after which every per-feature volume is orphaned.
+ * @param options - `all`: first tear down every running feature (volumes
+ *   included) and re-point the proxy, so every per-feature volume is removed.
+ *   `dryRun`: report only, remove nothing (same as {@link planClean}). Both
+ *   default to false.
+ * @returns What it found and what it removed; see {@link CleanResult}. A
+ *   volume that could not be removed (usually still in use) is left out of
+ *   `removedVolumes` rather than throwing.
  *
- * The layout this emits — the volume lists, the `[dry-run] Would …` lines —
- * would normally be the CLI's, but it interleaves with the progress of the work
- * itself: the stale-slot scan shells out to `docker compose ps` *after* the
- * volumes are removed. Returning it all to be rendered at the end would reorder
- * the output, so it goes out through `raw` as it happens, as `up`'s
- * "Local services" line does.
+ * @example
+ * ```ts
+ * import { runClean } from "werkmeister-core/sdk";
+ *
+ * const { removedVolumes, releasedSlots } = await runClean();
+ * console.log(`Removed ${removedVolumes.length} volume(s), released ${releasedSlots.length} slot(s)`);
+ * ```
  */
 export async function runClean({
   all = false,

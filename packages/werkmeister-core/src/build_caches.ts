@@ -201,11 +201,22 @@ function snapshotOf(
   };
 }
 
-/** What `pruneCaches` did, or would do, to one cache. */
+/**
+ * What {@link pruneCaches} did, or would do, to one cache. It returns one per
+ * cache it looked at.
+ *
+ * @example
+ * ```ts
+ * import { pruneCaches, type PruneResult } from "werkmeister-core/sdk";
+ *
+ * const results: PruneResult[] = await pruneCaches();
+ * for (const r of results.filter((r) => !r.ok)) console.error(`${r.name}: ${r.detail}`);
+ * ```
+ */
 export interface PruneResult {
   /** The cache name; a leftover volume under the old `sandbox-<key>` name reads `<name> (<volume>)`. */ // name-check: ignore
   name: string;
-  /** The rule applied: `max_age` and `prune` from the registry, `reset` when asked to empty it. */
+  /** The rule applied: `max_age` (delete files older than the cache's age limit), `prune` (run the cache's own prune command), `reset` (empty it), or `skipped`. */
   action: "max_age" | "prune" | "reset" | "skipped";
   /** What happened or would happen, the command's output, or why it was skipped or failed. */
   detail: string;
@@ -213,7 +224,18 @@ export interface PruneResult {
   ok: boolean;
 }
 
-/** Which caches `pruneCaches` touches, and how. */
+/**
+ * Which caches {@link pruneCaches} touches, and how. Every field is optional;
+ * an empty object prunes every cache by its own rule.
+ *
+ * @example
+ * ```ts
+ * import { pruneCaches, type PruneOptions } from "werkmeister-core/sdk";
+ *
+ * const opts: PruneOptions = { name: "pnpm", reset: true, dryRun: true };
+ * console.log(await pruneCaches(opts));
+ * ```
+ */
 export interface PruneOptions {
   /** One registry cache; absent for every cache. */
   name?: string;
@@ -225,11 +247,37 @@ export interface PruneOptions {
   dryRun?: boolean;
 }
 
-/** Docker reads `pruneCaches` needs; tests swap these for fakes. */
+/**
+ * What {@link pruneCaches} reads and runs: the cache list, Docker's view of
+ * each cache, and the command runner. Leave it out to use the real ones;
+ * pass your own to run `pruneCaches` against fakes, for example in a test.
+ *
+ * @example
+ * ```ts
+ * import { pruneCaches, type PruneDeps } from "werkmeister-core/sdk";
+ *
+ * const deps: PruneDeps = {
+ *   caches: { pnpm: { path: "/pnpm-store", prune: "pnpm store prune" } },
+ *   snapshots: async () => [
+ *     {
+ *       name: "pnpm",
+ *       kind: "volume",
+ *       source: "werkmeister-pnpm",
+ *       exists: true,
+ *       size_bytes: 0,
+ *       created_at: null,
+ *     },
+ *   ],
+ *   busy: async () => [],
+ *   run: (argv) => ({ status: 0, stdout: argv.join(" "), stderr: "" }),
+ * };
+ * console.log(await pruneCaches({}, deps));
+ * ```
+ */
 export interface PruneDeps {
-  /** The registry's caches, keyed by name. */
+  /** The registry's caches (the `caches:` section of `services.yaml`), keyed by name. */
   caches: CacheRegistry;
-  /** One row per cache, as `cacheSnapshots` reads it. */
+  /** One row per cache: where it lives, whether it exists, its size and creation time. */
   snapshots: (caches: CacheRegistry) => Promise<CacheSnapshot[]>;
   /** Names of the running containers mounting *source*; null when Docker is unreachable. */
   busy: (source: string) => Promise<string[] | null>;
@@ -245,10 +293,30 @@ const defaultDeps = (): PruneDeps => ({
 });
 
 /**
- * Apply each cache's prune rule (`max_age`, else `prune`), or empty it with
- * *reset*. Everything runs in a throwaway container with the cache mounted, so
- * a host dir and a volume prune the same way. Never removes a volume: Docker
- * refuses while any stopped workspace container still references it.
+ * Frees disk in the shared build and package caches (the `caches:` section of
+ * `services.yaml`). Each cache gets its own rule: `max_age` deletes files older
+ * than its age limit, else `prune` runs its prune command; `reset` empties it
+ * instead. Runs in-process: each prune is a throwaway `docker run` with the
+ * cache mounted, so a host folder and a Docker volume prune the same way. It
+ * never removes a volume. A cache a running container mounts is skipped
+ * unless `force` is set.
+ *
+ * @param opts - Which cache (default: all), and whether to reset, force or
+ *   only report (`dryRun`).
+ * @param deps - Where the caches, their state and the command runner come
+ *   from. Leave it out to use `services.yaml` and Docker.
+ * @returns One {@link PruneResult} per cache looked at. An unknown `name`
+ *   returns a single `skipped` row with `ok: false` rather than throwing, as
+ *   does a cache whose state Docker can't report.
+ *
+ * @example
+ * ```ts
+ * import { pruneCaches } from "werkmeister-core/sdk";
+ *
+ * for (const r of await pruneCaches({ dryRun: true })) {
+ *   console.log(`${r.name} [${r.action}] ${r.detail}`);
+ * }
+ * ```
  */
 export async function pruneCaches(
   opts: PruneOptions = {},

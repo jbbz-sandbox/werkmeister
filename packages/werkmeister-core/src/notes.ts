@@ -30,7 +30,20 @@ const _FILENAME_RE = new RegExp(
   "^(?<number>\\d{3})-(?<type>" + NOTE_TYPES.join("|") + ")-(?<slug>[a-z0-9][a-z0-9-]*)\\.md$",
 );
 
-/** One parsed `NNN-<type>-<slug>.md` note file. */
+/**
+ * One workspace note: a Markdown file named `NNN-<type>-<slug>.md` in the
+ * workspace's `.werkmeister/notes/` folder, with YAML frontmatter such as
+ * `status`. The types are `finding`, `decision`, `attempt`, `handoff` and `contract`.
+ *
+ * @example
+ * ```ts
+ * import { listNotes, type Note } from "werkmeister-core/sdk";
+ *
+ * const handoffs: Note[] = listNotes("/work/my-workspace").filter((n) => n.type === "handoff");
+ * const latest = handoffs.at(-1);
+ * if (latest) console.log(`${latest.number} ${latest.slug}\n${latest.body}`);
+ * ```
+ */
 export interface Note {
   /** The note file's path. */
   path: string;
@@ -89,12 +102,23 @@ function _split3(text: string, sep: string): string[] {
   ];
 }
 
+// Null instead of throwing so readers skip bad notes: printing them must never block
+// teardown (docs/jit-context-system.md §5.7).
 /**
- * Parse one note file into `{path, number, type, slug, frontmatter, body}`.
+ * Reads one note file. Runs in-process and only reads the file.
  *
- * Returns null for files that don't match the naming convention or whose
- * frontmatter fails to parse — readers skip malformed notes rather than crash
- * (docs/jit-context-system.md §5.7: printing failures never block teardown).
+ * @param notePath - The note file's path. Its name must be `NNN-<type>-<slug>.md`.
+ * @returns The parsed {@link Note}, or null when the name does not fit that
+ *   pattern or the file cannot be read. Frontmatter that is not valid YAML does
+ *   not make it fail: `frontmatter` is then empty and `body` is the whole file.
+ *
+ * @example
+ * ```ts
+ * import { parseNote } from "werkmeister-core/sdk";
+ *
+ * const note = parseNote("/work/my-workspace/.werkmeister/notes/003-decision-use-postgres.md");
+ * if (note) console.log(note.type, note.frontmatter["status"], note.body.split("\n")[0]);
+ * ```
  */
 export function parseNote(notePath: string): Note | null {
   const match = _FILENAME_RE.exec(path.basename(notePath));
@@ -136,11 +160,23 @@ export function parseNote(notePath: string): Note | null {
   };
 }
 
+// Skipping superseded/graduated by default is the reader rule in docs/notes-conventions.md.
 /**
- * List parsed notes in sequence order, skipping malformed files.
+ * Lists a workspace's notes in number order. Files whose names do not fit
+ * `NNN-<type>-<slug>.md` are skipped. Runs in-process and only reads files.
  *
- * `status: superseded` and `status: graduated` notes are skipped by default
- * (the reader rule in docs/notes-conventions.md).
+ * @param workspaceRoot - The workspace folder's path.
+ * @param includeSuperseded - True to include notes whose frontmatter `status`
+ *   is `superseded` or `graduated`. Defaults to false.
+ * @returns The notes, oldest first; empty when the workspace has no notes folder.
+ *
+ * @example
+ * ```ts
+ * import { listNotes } from "werkmeister-core/sdk";
+ *
+ * const decisions = listNotes("/work/my-workspace").filter((n) => n.type === "decision");
+ * for (const n of decisions) console.log(n.number, n.slug, n.frontmatter["status"]);
+ * ```
  */
 export function listNotes(workspaceRoot: string, includeSuperseded = false): Note[] {
   const directory = notesDir(workspaceRoot);

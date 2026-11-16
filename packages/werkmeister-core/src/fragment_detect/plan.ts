@@ -37,7 +37,24 @@ export interface SetupPlan {
   fields: Record<string, FieldValue>;
 }
 
-/** Everything `werkmeister machine detect` would write for one repo, before rendering. */
+/**
+ * Everything detection found for one repo's `.werkmeister/services.yaml` fragment,
+ * before it is rendered to text. {@link planFragment} returns it; {@link applyAnswers}
+ * returns an updated copy; {@link renderFragment} turns it into YAML.
+ *
+ * @example
+ * ```ts
+ * import { type Plan, planFragment } from "werkmeister-core/sdk";
+ *
+ * const plan: Plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * console.log(plan.services.map((s) => `${s.name} (${s.dir})`));
+ * ```
+ */
 export interface Plan {
   /** The repo's directory name, as the registry keys it. */
   repo: string;
@@ -47,29 +64,49 @@ export interface Plan {
   fragmentPath: string;
   /** The existing fragment's text, or null when the repo has none. */
   existing: string | null;
-  /** Detected services, sorted by name; a service already in the fragment keeps its name there. */
+  /** Detected services, sorted by name, each with its `name`, repo-relative `dir`, planned `fields` and `conflicts` (keys where two files disagree). A service already in the fragment keeps its name there. */
   services: ResolvedService[];
-  /** Detected datastores and other in-cluster dependencies, sorted by name. */
+  /** Detected datastores and other in-cluster dependencies, sorted by name, each with its `name` and planned `fields`. */
   infrastructure: ResolvedInfra[];
   /** The shared install service, or null when the repo has no root package.json or no Node service. */
   setup: SetupPlan | null;
-  /** Keys listed in .env.example-style files, per service name. */
+  /** Keys listed in `.env.example`-style files that the service doesn't declare yet, per service name. */
   envExample: Record<string, string[]>;
-  /** Findings (k8s, compose, Helm) that no source directory matched; the Claude pass can assign them. */
+  /** Findings (k8s, compose, Helm) that no source directory matched. A question from {@link collectQuestions} can assign each to a service. */
   unmatched: Finding[];
   /** Files and detectors left out, each with why. */
   skipped: Skipped[];
 }
 
-/** Inputs to {@link planFragment} beyond the repo itself. */
+/**
+ * Inputs to {@link planFragment} beyond the repo itself.
+ *
+ * @example
+ * ```ts
+ * import { type PlanOptions, planFragment } from "werkmeister-core/sdk";
+ *
+ * const opts: PlanOptions = {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""], // no git: planFragment walks the folder instead
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * };
+ * const plan = planFragment("/home/me/repos/my-app", opts);
+ * console.log(`${plan.services.length} services found`);
+ * ```
+ */
 export interface PlanOptions {
-  /** Directory holding every registered repo; their fragments' ports count as taken. */
+  /** Directory holding every registered repo. Ports their fragments use count as taken. */
   reposRoot: string;
-  /** Runs `git` to list the repo's files. */
+  /**
+   * Runs a command, given as an argv array, and returns `[exitCode, stdout]`. Used for
+   * `git ls-files` to list the repo's files; a non-zero exit code makes
+   * {@link planFragment} walk the folder instead.
+   */
   runner: Runner;
-  /** Path of `services.local.yaml`; its ports count as taken. Need not exist. */
+  /** Path of the machine's `services.local.yaml`. Ports it uses count as taken. The file need not exist. */
   localPath: string;
-  /** Port offsets available in one feature slot, the ceiling for a new `port_offset`. */
+  /** Port offsets available in one feature slot: the ceiling for a new `port_offset`. werkmeister's default is 20. */
   portsPerSlot: number;
 }
 
@@ -101,8 +138,29 @@ function envExampleKeys(ctx: DetectContext, dir: string): string[] {
 }
 
 /**
- * Scan *root* and work out its fragment: detected services and infrastructure, with free ports
- * allocated for any entry the existing fragment doesn't already set. Throws if that fragment doesn't parse.
+ * Scans a repo and works out its `.werkmeister/services.yaml` fragment: the services and
+ * infrastructure it finds in package manifests, Dockerfiles, compose files, Kubernetes
+ * manifests, Helm charts and kustomize overlays, with free ports allocated for any entry
+ * the existing fragment doesn't already set. Runs in-process, reads files only, and writes
+ * nothing. A detector that fails is listed in `skipped` instead of throwing.
+ *
+ * @param root - The repo's root folder.
+ * @param opts - Where the other repos live, how to run `git`, and the port limits.
+ * @returns The {@link Plan}: pass it to {@link renderFragment}, or first to {@link collectQuestions}.
+ * @throws `Error` from the YAML parser when the repo's existing fragment doesn't parse.
+ *
+ * @example
+ * ```ts
+ * import { planFragment, planSummary } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * console.log(JSON.stringify(planSummary(plan), null, 2));
+ * ```
  */
 export function planFragment(root: string, opts: PlanOptions): Plan {
   const abs = path.resolve(root);
@@ -277,7 +335,29 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
   };
 }
 
-/** The plan as plain JSON for reports (no raw findings). */
+/**
+ * The plan as plain JSON for a report or a UI, without the raw per-file findings. Runs
+ * in-process.
+ *
+ * @param plan - A plan from {@link planFragment} or {@link applyAnswers}.
+ * @returns The repo name, the fragment path, whether it `existed`, the planned services,
+ *   infrastructure and setup service (each field as `{ value, source, confidence }`),
+ *   unused `.env.example` keys, and what was `skipped`.
+ *
+ * @example
+ * ```ts
+ * import { planFragment, planSummary } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: () => [1, ""],
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: 20,
+ * });
+ * const summary = planSummary(plan);
+ * for (const s of summary.services) console.log(s.name, Object.keys(s.fields));
+ * ```
+ */
 export function planSummary(plan: Plan) {
   const fields = (f: Record<string, FieldValue>) =>
     Object.fromEntries(

@@ -222,25 +222,67 @@ export function reconcileGraduating(
   return closed;
 }
 
-/** Where `graduateNote` scaffolds a decision, and as what. */
+// `decisions` is a `DecisionSource` (strategies/types.ts), which the SDK does not export.
+/**
+ * Where {@link graduateNote} writes a decision into the coding standards, and
+ * in what form.
+ *
+ * @example
+ * ```ts
+ * import { graduateNote, type GraduateNoteOptions, parseNote } from "werkmeister-core/sdk";
+ *
+ * const opts: GraduateNoteOptions = {
+ *   domain: "testing",
+ *   kind: "anti-pattern",
+ *   slug: "sleep-in-tests",
+ * };
+ * const note = parseNote("/work/my-workspace/.werkmeister/notes/004-decision-no-sleeps.md");
+ * if (note) graduateNote("/work/my-workspace", note, opts);
+ * ```
+ */
 export interface GraduateNoteOptions {
-  /** The standards module to write into; it must exist and use the Rules/Don't/Going-deeper shape. */
+  /** The standards module to write into, by name. It must exist and have `## Rules`, `## Don't` and `## Going deeper` sections. */
   domain: string;
-  /** `rule` adds a bullet to the module's Rules; `example` or `anti-pattern` writes a references file. */
+  /** `"rule"` adds a bullet to the module's Rules; `"example"` or `"anti-pattern"` writes a new file in its `references/` folder. */
   kind: string;
-  /** The references file's name; the note's slug when null. */
+  /** The new references file's name, without `.md`. Defaults to the note's slug. */
   slug?: string | null;
-  /** The standards tree to write into; the configured one when null. */
+  /** The standards folder to write into. Defaults to the one in the werkmeister config. */
   standardsDir?: string | null;
-  /** The workspace strategy's `decisions`; jit's notes when omitted. */
+  /** Where the note's new status is recorded. Defaults to the note file's own frontmatter; most callers leave it out. */
   decisions?: DecisionSource;
 }
 
 /**
- * Scaffold *note* (a `lib/notes.parseNote()` dict) into *domain*.
+ * Turns a decision note into a starting point in the coding standards: a
+ * placeholder bullet in a module's Rules, or a new example or anti-pattern
+ * file linked from the module. The placeholders are marked `TODO(graduate)`
+ * for a person to fill in. Runs in-process and writes files; it never prompts.
  *
- * `domain` and `kind` must already be resolved by the caller — this
- * function only validates and writes; it never prompts.
+ * The note is marked `graduating`, not `graduated`: the standards folder is
+ * its own git repo, and the note counts as graduated only once the new file is
+ * committed there.
+ *
+ * @param workspaceRoot - The workspace folder the note belongs to.
+ * @param note - The decision note, as {@link parseNote} or {@link listNotes} returns it.
+ * @param options - Where to write and in what form; see {@link GraduateNoteOptions}.
+ * @returns The paths written: `standard_path` (the module's `STANDARD.md`),
+ *   `scaffold_path` (the file that got the placeholder), `note_path`, and
+ *   `graduated_to` (the scaffold's path inside the standards folder).
+ * @throws `GraduationError` (a {@link SandboxError} with code `GRADUATION`)
+ *   when the note is not an open decision, `kind` is unknown, the module does
+ *   not exist or lacks those sections, the standards folder is not writable,
+ *   or the references file already exists.
+ *
+ * @example
+ * ```ts
+ * import { graduateNote, listNotes } from "werkmeister-core/sdk";
+ *
+ * const ws = "/work/my-workspace";
+ * const decision = listNotes(ws).find((n) => n.type === "decision");
+ * if (decision)
+ *   console.log(graduateNote(ws, decision, { domain: "testing", kind: "rule" }).scaffold_path);
+ * ```
  */
 export function graduateNote(
   workspaceRoot: string,

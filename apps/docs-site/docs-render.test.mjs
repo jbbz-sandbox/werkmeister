@@ -83,7 +83,7 @@ test("no internal reference in an SDK symbol page's prose", () => {
   const pages = sdkPages("apps/docs-site/sdk/*/*.md");
   // The lookbehind lets "Defined in: packages/werkmeister-core/src/…" through.
   const internal =
-    /\bnote \d+\b|(?<![\w/])#\d+\b|(?<![\w/])werkmeister-core\/(?!sdk\b)\w|\bmain\.ts\b|proposal §/;
+    /\b[Nn]ote \d+\b|(?<![\w/])#\d+\b|(?<![\w/])werkmeister-core\/(?!sdk\b)\w|\bmain\.ts\b|proposal §/;
   const hits = pages
     .flatMap(proseLines)
     .filter(([, , l]) => internal.test(l))

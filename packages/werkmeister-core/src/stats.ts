@@ -264,11 +264,18 @@ export function saveReport(
 }
 
 /**
- * What one `--collect` run produced.
+ * What one {@link runCollection} run produced: the per-container stats and
+ * suggested limits, plus how the run itself went. After an abort,
+ * `durationMinutes` is what elapsed, not what was asked for.
  *
- * `stats` and `recommendations` are the data the caller renders; the other four
- * describe the run itself, which is the part an aborted collection has to be
- * honest about — `durationMinutes` is what elapsed, not what was asked for.
+ * @example
+ * ```ts
+ * import { type CollectionRun, runCollection } from "werkmeister-core/sdk";
+ *
+ * const run: CollectionRun = await runCollection(5, 10, true);
+ * console.log(`${run.samples} samples over ${run.durationMinutes.toFixed(1)} min`);
+ * if (run.reportPath) console.log(`Report: ${run.reportPath}`);
+ * ```
  */
 export interface CollectionRun {
   /** Aggregated stats keyed by container name; empty when nothing was sampled. */
@@ -285,17 +292,33 @@ export interface CollectionRun {
   reportPath: string | null;
 }
 
+// The CLI passes no signal yet: its Ctrl-C still ends the process outright
+// (`apps/cli/src/lib/interrupt.ts`). The report path is returned rather than
+// announced here because the CLI prints "Report saved to: …" after its tables.
 /**
- * Collect over a period, recommend limits from it, and optionally write a report.
+ * Samples the CPU and memory of every running Docker container for a while,
+ * then suggests limits from the peaks seen (plus 50% headroom), and can save a
+ * report. Runs in-process and reads Docker directly; it takes as long as
+ * *durationMinutes* unless aborted.
  *
- * *signal* aborts the sampling loop and returns the partial aggregate. The CLI
- * has no signal to give yet — its Ctrl-C still ends the process outright (see
- * `apps/cli/src/lib/interrupt.ts`) — so it passes none and behaves exactly as
- * before; a remote caller can already abort.
+ * @param durationMinutes - How long to sample, in minutes.
+ * @param intervalSeconds - Seconds between samples.
+ * @param save - Also write a CSV of the samples and a text summary to
+ *   werkmeister's `stats` folder.
+ * @param signal - Stops sampling early; what was collected so far is still
+ *   returned.
+ * @returns The stats, suggested limits and how the run went; see
+ *   {@link CollectionRun}. With no running containers, the stats are empty and
+ *   nothing is saved.
  *
- * The report path comes back rather than being announced here: the CLI prints
- * "Report saved to: …" *after* its tables, and a `success()` from in here would
- * jump the queue.
+ * @example
+ * ```ts
+ * import { runCollection } from "werkmeister-core/sdk";
+ *
+ * const { recommendations } = await runCollection(2, 10, false, AbortSignal.timeout(60_000));
+ * for (const r of recommendations)
+ *   console.log(`${r.name}: cpus ${r.recommended_cpus}, memory ${r.recommended_memory}`);
+ * ```
  */
 export async function runCollection(
   durationMinutes: number,
@@ -438,9 +461,23 @@ export interface ServiceUsage {
   status: UsageStatus;
 }
 
-/** What `optimizeReport` found: each container's peak against its limit, and suggested limits. */
+/**
+ * What {@link optimizeReport} found: each container's memory peak against its
+ * configured limit, and suggested limits. Both lists are empty when no
+ * container was running.
+ *
+ * @example
+ * ```ts
+ * import { type OptimizeReport, optimizeReport } from "werkmeister-core/sdk";
+ *
+ * const report: OptimizeReport = await optimizeReport();
+ * for (const u of report.usage.filter((u) => u.status === "risk")) {
+ *   console.log(`${u.container}: ${u.usagePct.toFixed(0)}% of ${u.limit}`);
+ * }
+ * ```
+ */
 export interface OptimizeReport {
-  /** One row per sampled container. */
+  /** One row per sampled container: its peak memory, its configured limit, and a status (`risk` above 85% of the limit, `moderate` above 60%, `over_provisioned` below 20% of a limit over 256M, `ok`, or `no_limit`). */
   usage: ServiceUsage[];
   /** Suggested limits per container, from the observed peaks plus 50% headroom. */
   recommendations: Recommendation[];
@@ -458,14 +495,26 @@ function classifyUsage(limitMib: number, usagePct: number): UsageStatus {
 }
 
 /**
- * Sample running containers and compare each one's peak against its configured
- * memory limit.
+ * Samples the running containers and compares each one's memory peak against
+ * the `memory_limit` set for its service in `services.yaml`, so you can see
+ * which limits are too tight or too generous. Also suggests limits from the
+ * peaks. Runs in-process and reads Docker directly; it changes nothing.
  *
- * *collectMinutes* of 0 takes a quick 15-second snapshot instead, which is what
- * `werkmeister machine optimize` does with no `--collect`.
+ * @param collectMinutes - How long to sample, in minutes. 0 (the default)
+ *   takes a quick 15-second snapshot instead.
+ * @param intervalSeconds - Seconds between samples when *collectMinutes* is
+ *   above 0. Defaults to 10.
+ * @returns Each container's usage and the suggested limits; see
+ *   {@link OptimizeReport}.
+ * @throws Error when `services.yaml` is missing or can't be read.
  *
- * Only `memory_limit` is read from services.yaml: `memory_reservation` sits
- * beside it in the config but no comparison here uses it.
+ * @example
+ * ```ts
+ * import { optimizeReport } from "werkmeister-core/sdk";
+ *
+ * const { usage } = await optimizeReport();
+ * for (const u of usage) console.log(`${u.container}: ${u.status}`);
+ * ```
  */
 export async function optimizeReport(
   collectMinutes = 0,

@@ -414,13 +414,33 @@ export interface ServiceEndpoint {
   type: string;
 }
 
-/** Where each registered service answers for one running feature, from {@link featureServices}. */
+/**
+ * Where each registered service answers for one running feature, as
+ * {@link featureServices} returns it.
+ *
+ * @example
+ * ```ts
+ * import { featureServices, type FeatureServices } from "werkmeister-core/sdk";
+ *
+ * const fs: FeatureServices = await featureServices("my-feature");
+ * const local = fs.endpoints.filter((e) => e.source === "local");
+ * console.log(`slot ${fs.slot}: ${local.map((e) => `${e.service}=${e.endpoint}`).join(", ")}`);
+ * ```
+ */
 export interface FeatureServices {
   /** The feature asked about. */
   feature: string;
-  /** The port slot the feature holds; its services' host ports are this slot's base plus their offset. */
+  /** The port slot the feature holds; its services' host ports are this slot's base port plus their offset. */
   slot: number;
-  /** One per registered service, sorted by name, including those with nowhere to answer. */
+  /**
+   * One entry per registered service, sorted by name, including services with
+   * nowhere to answer. Each has `service`, `type` (the registry's service type,
+   * or `unknown`), `source` and `endpoint`. `source` is `local` (a container in
+   * this workspace, `endpoint` is `localhost:<port>`), `baseline` (a shared
+   * baseline container, `endpoint` is a Docker-network `host:port`), `k8s` (a
+   * port forwarded from the cluster to `localhost`), or `none` (`endpoint` is
+   * null: the registry says nothing about how to reach it).
+   */
   endpoints: ServiceEndpoint[];
 }
 
@@ -465,10 +485,25 @@ export function classifyEndpoint(
 }
 
 /**
- * Every registered service and where it answers for *feature*, sorted by name.
+ * Lists every service in the registry (`~/.werkmeister/services.yaml`) and
+ * where it answers for a running feature: its own local container, a shared
+ * baseline, a port forwarded from Kubernetes, or nowhere. Runs in-process; it
+ * reads container labels from docker and does not call the werkmeister daemon.
  *
- * Throws `SandboxError(…, "NOT_RUNNING")` when the feature holds no slot —
- * there are no endpoints to report, only advice the caller renders.
+ * @param feature - The feature name; its containers must be up.
+ * @returns The feature's port `slot` and one `endpoints` entry per registered
+ *   service, sorted by name. See {@link FeatureServices}.
+ * @throws {@link SandboxError} with code `NOT_RUNNING` when the feature holds
+ *   no slot (its containers are not up, or docker is unreachable).
+ *
+ * @example
+ * ```ts
+ * import { featureServices } from "werkmeister-core/sdk";
+ *
+ * const { endpoints } = await featureServices("my-feature");
+ * for (const e of endpoints)
+ *   console.log(`${e.service} (${e.source}): ${e.endpoint ?? "not configured"}`);
+ * ```
  */
 export async function featureServices(feature: string): Promise<FeatureServices> {
   const slot = await getSlot(feature);

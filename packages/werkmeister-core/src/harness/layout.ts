@@ -49,7 +49,24 @@ export function parseHarnessId(value: unknown): HarnessId {
   );
 }
 
-/** The layout of the harness that reads *workspaceRoot*. */
+/**
+ * Says where the agent harness of a workspace (Claude Code, Codex, OpenCode or a generic
+ * MCP client) reads werkmeister's context from. The harness is the `harness:` field of
+ * the workspace's `workspace.yml`; a missing or blank field means Claude Code. Runs
+ * in-process.
+ *
+ * @param workspaceRoot - The workspace folder.
+ * @returns The harness's {@link HarnessLayout}.
+ * @throws {@link SandboxError} (code `UNKNOWN_HARNESS`) when `harness:` names no known harness.
+ *
+ * @example
+ * ```ts
+ * import { harnessLayoutFor, resolveWorkspaceDir } from "werkmeister-core/sdk";
+ *
+ * const layout = harnessLayoutFor(await resolveWorkspaceDir("my-workspace"));
+ * console.log(`${layout.id} reads ${layout.instructionsFile} and skills from ${layout.skillsDir}`);
+ * ```
+ */
 export function harnessLayoutFor(workspaceRoot: string): HarnessLayout {
   return REGISTRY[parseHarnessId(readWorkspaceField(workspaceRoot, "harness"))];
 }

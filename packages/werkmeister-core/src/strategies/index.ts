@@ -40,7 +40,26 @@ export function readContextStrategy(workspaceRoot: string): StrategyId {
   return parseStrategyId(readWorkspaceField(workspaceRoot, "context_strategy"));
 }
 
-/** The strategy that owns *workspaceRoot*'s context layer. */
+/**
+ * Returns the context strategy that owns a workspace's context layer, chosen
+ * by `context_strategy` in its `.werkmeister/workspace.yml`. Runs in-process
+ * and only reads that file.
+ *
+ * @param workspaceRoot - The workspace folder, e.g. from {@link resolveWorkspaceDir}.
+ * @returns The workspace's {@link ContextStrategy}. A missing, blank or
+ *   unreadable `context_strategy` gives the `jit` strategy.
+ * @throws {@link SandboxError} with code `UNKNOWN_CONTEXT_STRATEGY` when
+ *   `context_strategy` names a strategy that doesn't exist.
+ *
+ * @example
+ * ```ts
+ * import { resolveWorkspaceDir, strategyFor } from "werkmeister-core/sdk";
+ *
+ * const dir = await resolveWorkspaceDir("my-workspace");
+ * const strategy = strategyFor(dir);
+ * console.log(`${strategy.id}: ${strategy.check(dir).length} stale item(s)`);
+ * ```
+ */
 export function strategyFor(workspaceRoot: string): ContextStrategy {
   return REGISTRY[readContextStrategy(workspaceRoot)];
 }

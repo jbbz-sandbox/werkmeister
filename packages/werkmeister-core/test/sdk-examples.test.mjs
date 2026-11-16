@@ -13,14 +13,14 @@ import { promisify } from "node:util";
 const core = fileURLToPath(new URL("..", import.meta.url));
 const src = join(core, "src");
 
-/** Each `@example`'s ```ts fence in src/*.ts, as [label, code]. */
+/** Each `@example`'s ```ts fence in src/ and its subfolders, as [label, code]. */
 function examples() {
   const out = [];
-  for (const f of readdirSync(src).filter((n) => n.endsWith(".ts"))) {
+  for (const f of readdirSync(src, { recursive: true }).filter((n) => n.endsWith(".ts"))) {
     for (const [, body] of readFileSync(join(src, f), "utf8").matchAll(/\/\*\*([\s\S]*?)\*\//g)) {
       const text = body.replace(/^[ \t]*\* ?/gm, "");
       for (const [, code] of text.matchAll(/@example[^\n]*\n```ts\n([\s\S]*?)```/g)) {
-        out.push([`${f.replace(/\.ts$/, "")}-${out.length}`, code]);
+        out.push([`${f.replace(/\.ts$/, "").replaceAll("/", "_")}-${out.length}`, code]);
       }
     }
   }

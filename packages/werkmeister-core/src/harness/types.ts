@@ -26,35 +26,89 @@ export type HooksSupport =
     };
 
 // The projection rows of proposal § 4.3.
-/** Where one harness reads werkmeister's context layer: its instructions file and skills folder, and whether it takes hooks and subagents. */
+/**
+ * Where one agent harness reads werkmeister's context in a workspace: its instructions
+ * file and skills folder, and whether it takes hooks and subagents. Get one with
+ * {@link harnessLayoutFor}.
+ *
+ * @example
+ * ```ts
+ * import { type HarnessLayout, harnessLayoutFor } from "werkmeister-core/sdk";
+ *
+ * const layout: HarnessLayout = harnessLayoutFor("/home/me/features/my-workspace");
+ * if (layout.hooks.available === false)
+ *   console.warn(`no hooks on ${layout.id}: ${layout.hooks.reason}`);
+ * ```
+ */
 export interface HarnessLayout {
-  /** The harness this layout belongs to. */
+  /** The harness: `claude`, `mcp`, `codex` or `opencode`. */
   readonly id: HarnessId;
-  /** The file the harness reads first. */
+  /** The instructions file the harness reads first, such as `CLAUDE.md`. */
   readonly instructionsFile: string;
-  /** Workspace-relative dir the harness loads project skills from. */
+  /** Workspace-relative folder the harness loads project skills from. */
   readonly skillsDir: string;
-  /** Whether werkmeister's hooks can be written for this harness, and how. */
+  /**
+   * Whether werkmeister's hooks run on this harness: `available: true` (Claude-shaped hook
+   * files), `false` with a `reason`, or `"own"` when the harness has its own hook files and
+   * some hooks (`missing`) don't run.
+   */
   readonly hooks: HooksSupport;
-  /** Whether `.claude/agents`-style subagent definitions are projected. */
+  /** Whether subagent definitions (like `.claude/agents`) are written for this harness. */
   readonly agents: boolean;
-  /** The tool a human check asks its questions with; absent → a plain-text block. */
+  /** The tool a human check asks its questions with. Absent means the questions are a plain-text block. */
   readonly questionTool?: string;
-  /** Appended to the instructions file; "" when the harness needs no note. */
+  /** A note appended to the instructions file; "" when the harness needs none. */
   notice(): string;
 }
 
-/** How `sendTurn` runs one turn. */
+/**
+ * How {@link sendToClaudeSession} runs one turn.
+ *
+ * @example
+ * ```ts
+ * import { sendToClaudeSession, type TurnOptions } from "werkmeister-core/sdk";
+ *
+ * const opts: TurnOptions = { wait: true, unattended: "/home/me/features/my-workspace" };
+ * const sent = await sendToClaudeSession(
+ *   "my-workspace",
+ *   "Run the tests.",
+ *   undefined,
+ *   undefined,
+ *   opts,
+ * );
+ * console.log(sent.result?.denied);
+ * ```
+ */
 export interface TurnOptions {
-  /** Workspace root whose autonomous rules the turn gets, `autonomous` or not: nobody is there to approve. */
+  /**
+   * A workspace root whose autonomous-mode permission rules the turn runs under, whether
+   * or not the workspace is set `autonomous`. Set it when nobody is there to approve tool calls.
+   */
   unattended?: string;
-  /** Wait for the turn to end and return a {@link TurnResult}. */
+  /** Wait for the turn to end and return a {@link TurnResult}. Without it, the call returns once the turn starts. */
   wait?: boolean;
 }
 
-/** What a waited-for turn reports once it ends. */
+/**
+ * What a turn sent with `wait: true` reports once it ends.
+ *
+ * @example
+ * ```ts
+ * import { sendToClaudeSession, type TurnResult } from "werkmeister-core/sdk";
+ *
+ * const { result } = await sendToClaudeSession(
+ *   "my-workspace",
+ *   "Run the tests.",
+ *   undefined,
+ *   undefined,
+ *   { wait: true },
+ * );
+ * const done: TurnResult | null = result;
+ * for (const call of done?.denied ?? []) console.warn(`needs approval: ${call}`);
+ * ```
+ */
 export interface TurnResult {
-  /** The calls refused for lack of approval, as `tool: command`. */
+  /** The tool calls refused for lack of approval, as `tool: command`. */
   denied: string[];
 }
 
@@ -67,9 +121,21 @@ export interface TurnState {
   error: string | null;
 }
 
-/** `TurnState` for callers; `idle` means this process started no turn (also after a restart). */
+/**
+ * The state of the last turn this process sent to a session. `idle` means this process
+ * started none, which is also the case after a restart.
+ *
+ * @example
+ * ```ts
+ * import { getClaudeTurnStatus, type TurnStatus } from "werkmeister-core/sdk";
+ *
+ * const status: TurnStatus = await getClaudeTurnStatus("my-workspace");
+ * if (status.state === "failed") console.error(status.error);
+ * else console.log(status.state, status.startedAt);
+ * ```
+ */
 export interface TurnStatus {
-  /** `failed` covers a non-zero exit and a harness binary that would not spawn. */
+  /** `idle`, `running`, `done` or `failed`. `failed` covers a non-zero exit and a harness binary that would not start. */
   state: "idle" | "running" | "done" | "failed";
   /** When the turn was started (ISO); null when `idle`. */
   startedAt: string | null;
@@ -79,9 +145,20 @@ export interface TurnStatus {
   error: string | null;
 }
 
-/** One entry of a session transcript. */
+/**
+ * One entry of a session transcript.
+ *
+ * @example
+ * ```ts
+ * import { getClaudeTranscript, type SessionMessage } from "werkmeister-core/sdk";
+ *
+ * const { messages } = await getClaudeTranscript("my-workspace");
+ * const replies: SessionMessage[] = messages.filter((m) => m.role === "assistant");
+ * console.log(replies.at(-1)?.text);
+ * ```
+ */
 export interface SessionMessage {
-  /** "tool" entries are compact activity rows ("Bash: npm test") from tool_use blocks. */
+  /** Who wrote it. `tool` entries are short activity rows, such as "Bash: npm test", one per tool call. */
   role: "user" | "assistant" | "tool";
   /** The message text, or the activity row for a tool entry. */
   text: string;
@@ -89,13 +166,24 @@ export interface SessionMessage {
   timestamp: string | null;
 }
 
-/** The recent messages of a folder's newest session. */
+/**
+ * The recent messages of a workspace's newest session (or of the session asked for).
+ *
+ * @example
+ * ```ts
+ * import { getClaudeTranscript, type SessionTranscript } from "werkmeister-core/sdk";
+ *
+ * const t: SessionTranscript = await getClaudeTranscript("my-workspace", 10);
+ * console.log(`${t.sessionId ?? "no session"}, ${t.sessionCount} sessions, updated ${t.updatedAt}`);
+ * for (const m of t.messages) console.log(`${m.role}: ${m.text}`);
+ * ```
+ */
 export interface SessionTranscript {
-  /** Session ID of the newest session, or null if none. */
+  /** Session ID of the session read, or null if there is none. */
   sessionId: string | null;
   /** The folder whose sessions were read. */
   workspacePath: string;
-  /** Last N user/assistant text messages, oldest first. */
+  /** The last N messages, oldest first. */
   messages: SessionMessage[];
   /** Total sessions found for this workspace. */
   sessionCount: number;
@@ -148,11 +236,22 @@ export interface SessionUsage {
   totals: UsageTotals;
   estUsd: number | null;
 }
-/** A workspace's token usage and estimated cost, summed across its sessions. */
+/**
+ * A workspace's token usage and estimated cost, summed across its sessions.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceUsage, type WorkspaceUsage } from "werkmeister-core/sdk";
+ *
+ * const usage: WorkspaceUsage = await getWorkspaceUsage("my-workspace");
+ * console.log(`${usage.sessions.length} sessions, ~$${usage.estUsd?.toFixed(2) ?? "?"}`);
+ * for (const m of usage.byModel) console.log(m.model, m.totals.output);
+ * ```
+ */
 export interface WorkspaceUsage {
   /** The workspace name the caller asked about. */
   name: string;
-  /** Token counts summed over every session and model. */
+  /** Token counts (`input`, `output`, `cacheCreation`, `cacheRead`) summed over every session and model. */
   totals: UsageTotals;
   /** Estimated cost in USD over the models with a known price; null when none has one. */
   estUsd: number | null;

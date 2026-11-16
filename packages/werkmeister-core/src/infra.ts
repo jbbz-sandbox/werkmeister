@@ -312,13 +312,31 @@ export async function up({ signal }: { signal?: AbortSignal } = {}): Promise<boo
   return infraOk;
 }
 
+// Polls rather than snapshotting once: `docker compose up -d --build` recreates
+// containers whose image rebuilt (k8s-forwards rebuilds each run), so an
+// immediate snapshot catches them mid-`start_period` and misreports them as down.
 /**
- * Poll until every infrastructure service is healthy or *timeoutSec* elapses.
+ * Waits for the shared infrastructure containers to become healthy and
+ * reports each one. Call it after `infraUp`, which does not wait. Runs
+ * in-process and talks to Docker directly, checking every 3 seconds.
  *
- * `docker compose up -d --build` recreates containers whose image rebuilt
- * (k8s-forwards rebuilds each run), so a single immediate snapshot catches them
- * mid-`start_period` and misreports them as down. Polling lets the summary
- * reflect the converged state instead.
+ * @param timeoutSec - How long to keep checking, in seconds. It stops
+ *   earlier once every service is healthy.
+ * @returns Each shared service's name mapped to whether it is healthy (or
+ *   running, for a container without a health check). When Docker lists no
+ *   shared containers, it probes the `redis`, `postgres` and `caddy` ports
+ *   on localhost instead and reports those.
+ *
+ * @example
+ * ```ts
+ * import { infraHealth, infraUp } from "werkmeister-core/sdk";
+ *
+ * if (await infraUp()) {
+ *   const health = await infraHealth(60);
+ *   const down = Object.keys(health).filter((name) => !health[name]);
+ *   if (down.length) console.error(`Not healthy: ${down.join(", ")}`);
+ * }
+ * ```
  */
 export async function infraHealth(timeoutSec: number): Promise<Record<string, boolean>> {
   info("Waiting for services to become healthy...");
@@ -335,11 +353,25 @@ export async function infraHealth(timeoutSec: number): Promise<Record<string, bo
   return health;
 }
 
+// What `werkmeister infra connect --k8s` runs. The CLI turns a false return
+// into its recovery hint.
 /**
- * Start or restart the k8s port-forwards container only (`werkmeister infra connect --k8s`).
+ * Starts the Kubernetes port-forwards container on its own, without the rest
+ * of the shared infrastructure. Does nothing when it is already healthy;
+ * otherwise refreshes the kubeconfig and restarts it. Runs in-process and talks
+ * to Docker directly.
  *
- * Returns whether the forwards are up; the caller turns a false into the
- * recovery hint, which is a next-step and so stays CLI-side.
+ * @returns True when the port-forwards are healthy; false when there is no
+ *   kubeconfig, no reachable cluster, or the container did not come up.
+ *
+ * @example
+ * ```ts
+ * import { connectK8s } from "werkmeister-core/sdk";
+ *
+ * if (!(await connectK8s())) {
+ *   console.error("k8s port-forwards are down: check your kubeconfig and cluster.");
+ * }
+ * ```
  */
 export async function connectK8s(): Promise<boolean> {
   if ((await checkPortForwardHealth())["k8s-forwards"] ?? false) {
@@ -354,7 +386,24 @@ export async function connectK8s(): Promise<boolean> {
   return ok;
 }
 
-/** Stop and remove shared infrastructure containers. */
+/**
+ * Stops the host web servers, then stops and removes the shared
+ * infrastructure containers (exported from the SDK as `infraDown`). Workspace
+ * containers are not touched. Runs in-process with `docker compose down`.
+ *
+ * @param volumes - Also remove the shared stack's volumes. Defaults to false.
+ * @returns Nothing. A failed or timed-out `docker compose` is logged, not thrown.
+ * @throws Error when the compose process fails to spawn for a reason other
+ *   than docker being missing or timing out.
+ *
+ * @example
+ * ```ts
+ * import { infraDown } from "werkmeister-core/sdk";
+ *
+ * // Tear down the proxy and port-forwards, keeping their volumes.
+ * await infraDown();
+ * ```
+ */
 export async function down(volumes = false): Promise<void> {
   await stopAll();
   takeDownProject(LEGACY_INFRA_PROJECT, "the pre-rename shared infra", { removeVolumes: volumes });
@@ -373,7 +422,21 @@ export async function down(volumes = false): Promise<void> {
   }
 }
 
-/** Stop shared infrastructure containers without removing them. */
+/**
+ * Stops the host web servers and the shared infrastructure containers, but
+ * keeps the containers so `infraUp` or `infraRestart` can bring them back
+ * (exported from the SDK as `infraStop`). Runs in-process and talks to Docker
+ * directly.
+ *
+ * @returns Nothing. A Docker failure is logged, not thrown.
+ *
+ * @example
+ * ```ts
+ * import { infraStop } from "werkmeister-core/sdk";
+ *
+ * await infraStop();
+ * ```
+ */
 export async function stop(): Promise<void> {
   await stopAll();
   const err = await stopOrRestart("stop", INFRA_PROJECT);
@@ -386,7 +449,22 @@ export async function stop(): Promise<void> {
   );
 }
 
-/** Restart shared infrastructure containers. */
+/**
+ * Restarts the shared infrastructure containers, including stopped ones, then
+ * restarts the host web servers (exported from the SDK as `infraRestart`). Runs
+ * in-process and talks to Docker directly.
+ *
+ * @returns Nothing. A Docker failure is logged, not thrown, and the web servers
+ *   are still restarted.
+ *
+ * @example
+ * ```ts
+ * import { infraHealth, infraRestart } from "werkmeister-core/sdk";
+ *
+ * await infraRestart();
+ * console.log(await infraHealth(30));
+ * ```
+ */
 export async function restart(): Promise<void> {
   const err = await stopOrRestart("restart", INFRA_PROJECT);
   if (err) error(err);

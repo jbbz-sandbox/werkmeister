@@ -127,14 +127,21 @@ export interface PluginSpec {
   note?: string;
 }
 
+// `optional` exists because Telepresence, Jira and the companion workspace checkout are
+// all things you can simply not have: a broken Homebrew or a typo'd token is not a
+// reason to call machine setup a failure, so `werkmeister machine setup` still exits 0.
 /**
- * One line of the setup report.
+ * One line of a setup or migration report: what was checked, whether it is
+ * fine, and what happened. {@link migrate} returns a list of them.
  *
- * `ok` means converged/healthy. `optional` means a not-ok result must NOT fail
- * the run: werkmeister works without this, so the step renders as a warning and
- * `werkmeister machine setup` still exits 0. Telepresence, Jira and the companion workspace
- * checkout are all things you can simply not have — a broken Homebrew or a
- * typo'd token is not a reason to call machine setup a failure.
+ * @example
+ * ```ts
+ * import { migrate, type Step } from "werkmeister-core/sdk";
+ *
+ * const steps: Step[] = await migrate({ checkOnly: true });
+ * const failed = steps.filter((s) => !s.ok && !s.optional);
+ * for (const s of failed) console.error(`${s.label}: ${s.detail}`);
+ * ```
  */
 export interface Step {
   /** What was checked or converged, shown as the line's name (e.g. `config services.yaml`). */
@@ -143,9 +150,9 @@ export interface Step {
   ok: boolean;
   /** One-line outcome: what changed, or why it failed and how to fix it. */
   detail: string;
-  /** A failure here renders as a warning and does not fail the run. */
+  /** True when a failure here is only a warning: werkmeister works without it. */
   optional?: boolean;
-  /** Required but left undone on purpose (e.g. sudo skipped without a TTY): ⚠, exit 0, setup is not "set up". */
+  /** True when the step is needed but was skipped on purpose (e.g. it needs sudo and there was no terminal to ask in); run setup again from a terminal. */
   pending?: boolean;
 }
 
