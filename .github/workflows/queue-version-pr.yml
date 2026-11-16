@@ -5,7 +5,8 @@ name: Queue version PR
 # still tests the version commit on merge_group, and release still runs only
 # from the push it lands. A later merge to main force-pushes the PR out of the
 # queue; its next green run queues it again. workflow_run always runs main's
-# copy of this file, never the PR's.
+# copy of this file, never the PR's. CI skips its suites on the version PR (the
+# queue is the gate), so a run with every job skipped counts as green too.
 on:
   workflow_run:
     workflows: [CI]
@@ -18,7 +19,7 @@ jobs:
   enqueue:
     if: >-
       vars.RELEASE_APP_ID != '' &&
-      github.event.workflow_run.conclusion == 'success' &&
+      contains(fromJSON('["success", "skipped"]'), github.event.workflow_run.conclusion) &&
       github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
     steps:

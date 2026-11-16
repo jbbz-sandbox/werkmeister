@@ -1,5 +1,5 @@
 name: Install
-description: pnpm, Node and node_modules, restored from cache when the lockfile is unchanged.
+description: pnpm, Node and node_modules, installed from the cached pnpm store.
 inputs:
   node-version:
     description: Node major to install. 24 for everything but the node-floor job.
@@ -11,31 +11,9 @@ runs:
     # version comes from package.json `packageManager`.
     - uses: pnpm/action-setup@v6
     - uses: actions/setup-node@v7
-      id: setup-node
       with:
         node-version: ${{ inputs.node-version }}
         cache: pnpm
-    # node_modules itself, not just the pnpm store: a hit skips the install
-    # entirely. The lockfile changes on every version PR, so those runs still
-    # pay for the install, from the cached store.
-    # Skipped when the store missed (evicted): a restored node_modules makes the
-    # install a no-op, and `pnpm licenses` reads the store, not node_modules.
-    - if: steps.setup-node.outputs.cache-hit == 'true'
-      uses: actions/cache@v4
-      id: node-modules
-      with:
-        path: |
-          node_modules
-          apps/*/node_modules
-          packages/*/node_modules
-          plugins/*/node_modules
-        key: node-modules-${{ runner.os }}-node${{ inputs.node-version }}-${{ hashFiles('pnpm-lock.yaml') }}
-    - if: steps.node-modules.outputs.cache-hit != 'true'
-      run: pnpm install --frozen-lockfile
-      shell: bash
-    # node_modules hit but the store was evicted: install would say "up to date"
-    # and leave the store empty, which breaks `pnpm licenses` and setup-node's
-    # post-job save. fetch fills the store from the lockfile alone.
-    - if: steps.node-modules.outputs.cache-hit == 'true' && steps.setup-node.outputs.cache-hit != 'true'
-      run: pnpm fetch
+    # From the cached store this takes as long as restoring a node_modules cache did.
+    - run: pnpm install --frozen-lockfile
       shell: bash
