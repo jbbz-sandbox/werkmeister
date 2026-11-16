@@ -46,6 +46,8 @@ export interface Waiter {
   gate: boolean;
   /** A whole-feature waiter's cost; unset for a services start, whose own poll admits it. */
   cost?: Cost;
+  /** A `--service` start that gave up polling and waits for a grant (SW-701): it never holds the room. */
+  parked?: boolean;
 }
 
 /** How long the queue head waits before backfill stops passing it and a plain `up` head may preempt (SW-675). */
@@ -120,8 +122,13 @@ export function admit(budget: Budget, running: Lease[], queue: Waiter[], req: Re
     !!headCost &&
     used.memory + headCost.memory <= budget.memory &&
     used.cpus + headCost.cpus <= budget.cpus;
+  // A parked head never holds: it may wait without end, and a hold would then hold for good (SW-701).
   const headHolds =
-    !isHead && !endsGate && !headAwaitsGrant && (order[0].gate || order[0].waitedMs >= STARVE_MS);
+    !isHead &&
+    !endsGate &&
+    !headAwaitsGrant &&
+    !order[0].parked &&
+    (order[0].gate || order[0].waitedMs >= STARVE_MS);
   if (fits({ memory: 0, cpus: 0 }) && (req.byPerson || !headHolds)) return { kind: "admit" };
 
   // An idle or human-check lease (a session parked on a question) has nobody in it, so the queue head

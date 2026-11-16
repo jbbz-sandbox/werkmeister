@@ -115,6 +115,26 @@ test("backfill: a starved whole-feature head that fits now does not hold a start
   assert.equal(running.length, 4);
 });
 
+// SW-701: a parked --service start waits without end, so as a starving head it would hold the room
+// for good. Worst case on real costs: core is 3 CPUs, 8-CPU budget, two working gates hold 3 + 3.
+test("backfill: a parked head that cannot fit never holds the room, however long it waited", () => {
+  const eight = { memory: 16 * G, cpus: 8, preempt: true };
+  const running = [lease("gate-a", 1, 3, "working", true), lease("gate-b", 1, 3, "working", true)];
+  const parked = { ...w("parked-core", 120), parked: true, cost: { memory: 1 * G, cpus: 3 } };
+  const docs = { ...req("docs", 1, 1), services: ["docs-site"] };
+  assert.deepEqual(admit(eight, running, [parked], docs), { kind: "admit" });
+  // The same head unparked (a starved whole-feature up) still holds, as SW-675 has it.
+  const { parked: _, ...starved } = parked;
+  assert.deepEqual(admit(eight, running, [starved], docs), { kind: "wait", position: 2 });
+  // 1-CPU starts keep passing it until the room is full; none waits behind it.
+  const live = [...running];
+  for (let i = 0; i < 4; i++) {
+    const start = { ...req(`s${i}`, 1, 1), services: ["cli"] };
+    if (admit(eight, live, [parked], start).kind === "admit") live.push(lease(`s${i}`, 1, 1));
+  }
+  assert.equal(live.length, 4);
+});
+
 // T1: the wave's shape. Core holds 3 of 6; a whole-feature up needing 5 heads the queue.
 test("backfill: a 1-CPU service start passes a whole-feature head that cannot fit", () => {
   const six = { memory: 4 * G, cpus: 6, preempt: true };
