@@ -2183,6 +2183,34 @@ test("openPrs: hold: opens a draft whose body starts with the hold line; without
   }
 });
 
+// SW-745: the marker was touched only before each start or exec, so a row longer than idle_stop_minutes
+// read as not busy and a queue head preempted the gate's containers mid-run.
+test("runGate: keeps the exec marker fresh while a row runs, and stops after", async (t) => {
+  const ws = icmWorkspace();
+  const marker = path.join(dotDir(ws), "last-exec");
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  try {
+    const d = deps([DIFF_API]);
+    let beats = 0;
+    const run = d.run;
+    d.run = async (cmd, args, ...rest) => {
+      if (cmd === "docker" && args[0] === "exec" && !beats++) {
+        fs.rmSync(marker, { force: true });
+        t.mock.timers.tick(60_000);
+        assert.ok(fs.existsSync(marker), "touched by the heartbeat mid-row");
+      }
+      return run(cmd, args, ...rest);
+    };
+    await gate(ws, d);
+    assert.ok(beats > 0, d.calls.join("\n"));
+    fs.rmSync(marker, { force: true });
+    t.mock.timers.tick(60_000);
+    assert.equal(fs.existsSync(marker), false, "no heartbeat once the gate is done");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("openPrs: nothing approved is refused and stops nothing (SW-39)", async () => {
   const ws = icmWorkspace({ files: { app: prFile({ status: "draft" }) } });
   try {

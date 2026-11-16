@@ -995,7 +995,8 @@ const GRANTED_NUDGE =
 export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | null {
   const found = runningFeatures(runCmd);
   if (!found) return null;
-  const gateCutoff = Date.now() - idleStopMinutes() * 60_000;
+  // At least two of the gate's 60 s heartbeats: idle_stop_minutes 0 (reaper off) made every gate preemptable (SW-745).
+  const gateCutoff = Date.now() - Math.max(idleStopMinutes(), 2) * 60_000;
   return found
     .map((f) => {
       const state = agentOf(readSessions(f.workspace));

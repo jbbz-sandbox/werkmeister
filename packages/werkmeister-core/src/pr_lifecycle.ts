@@ -351,6 +351,9 @@ async function stopWorkspace(ws: string): Promise<string> {
   }
 }
 
+/** Well inside the shortest sane idle_stop_minutes, so a running gate always reads as busy. */
+const EXEC_BEAT_MS = 60_000;
+
 /** Record that the gate is about to `docker exec`, so the idle reaper keeps the containers. */
 function touchExecMarker(ws: string): void {
   try {
@@ -767,9 +770,14 @@ export async function runGate(
   const started: string[] = [];
   const recreated: string[] = [];
   let result!: GateResult;
+  // A row can outlast idle_stop_minutes; the scheduler then read the gate as not busy and a queue
+  // head preempted its containers mid-run (SW-745, SW-738).
+  const beat = setInterval(() => touchExecMarker(ws), EXEC_BEAT_MS);
+  beat.unref();
   try {
     result = await gateChecks(ws, file, deps, started, recreated, testsOnly);
   } finally {
+    clearInterval(beat);
     fs.rmSync(path.join(ws, GATE_COMPOSE_FILE), { force: true });
     const feature = String(loadConfigFile(ws, null)["feature"] ?? readEnv(ws, "FEATURE")).trim();
     for (const svc of recreated) {
