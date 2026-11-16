@@ -23,10 +23,20 @@ case "${1:-}" in
     smokes=$(echo test/*.smoke.mjs)
     ;;
 esac
+# Listed files share one process, loading dist once instead of once per file (SW-802); the rest get a process each.
+isolated=
+shared=
+for f in $tests; do
+  if [ -f test/shared-process.list ] && grep -qxF "$f" test/shared-process.list; then shared="$shared $f"; else isolated="$isolated $f"; fi
+done
+rc=0
 # The container's CPU limit (cgroup-aware), at most 4 so a dev host isn't flooded; SW-101's fixed 2 fit a 1-CPU container (SW-406).
 # Guarded: `node --test` with no file runs its own default glob.
 # shellcheck disable=SC2086 # test file names have no spaces
-[ -z "$tests" ] || node --test --test-concurrency="$(node -p 'Math.min(os.availableParallelism(), 4)')" ${shard:+--test-shard="$shard"} $tests
+[ -z "$isolated" ] || node --test --test-concurrency="$(node -p 'Math.min(os.availableParallelism(), 4)')" ${shard:+--test-shard="$shard"} $isolated || rc=$?
+# shellcheck disable=SC2086
+[ -z "$shared" ] || node --test --experimental-test-isolation=none ${shard:+--test-shard="$shard"} $shared || rc=$?
+[ "$rc" = 0 ] || exit "$rc"
 if [ -z "$shard" ] || [ "${shard%/*}" = "${shard#*/}" ]; then
   for f in $smokes; do node "$f"; done
 fi
