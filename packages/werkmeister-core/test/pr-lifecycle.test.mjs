@@ -925,6 +925,42 @@ test("gate: a grouped workspace's merge row reads the base's rules and warns unl
   }
 });
 
+// SW-829: a group: member with no commit on the branch would ship as Done with the lead.
+test("gate: a grouped workspace warns about a group: member no commit subject names (SW-829)", async () => {
+  const log = (subjects) => [
+    /^git -C \S+ log --format=%s origin\/main\.\.HEAD$/,
+    { stdout: subjects },
+  ];
+  const run = async (subjects, { lead = true } = {}) => {
+    const ws = icmWorkspace();
+    const yml = path.join(dotDir(ws), "workspace.yml");
+    if (!lead) fs.writeFileSync(yml, fs.readFileSync(yml, "utf8").replace(/^issue_id:.*\n/m, ""));
+    fs.appendFileSync(yml, "group:\n  - SW-2\n  - SW-3\n");
+    try {
+      const g = await gate(ws, deps([log(subjects), DIFF_API]));
+      assert.deepEqual(failed(g), []);
+      return g.checks.find((c) => c.name === "group")?.detail;
+    } finally {
+      clean(ws);
+    }
+  };
+  // SW-30 names SW-3 only as a prefix: it is not SW-3's commit.
+  const missing = await run("o/app#7 lead change\nSW-2 member change\nSW-30 other\n");
+  assert.match(missing, /^warning: SW-3 has no commit in origin\/main\.\.HEAD/);
+  assert.match(missing, /remove it from group: in \.werkmeister\/workspace\.yml/);
+  assert.match(missing, /werkmeister issue update SW-3 --status "To Do" --comment /);
+  assert.doesNotMatch(missing, /SW-2 has no commit/);
+  assert.equal(
+    await run("o/app#7 lead change\nsw-2 member change\nfix(core): SW-3 member\n"),
+    "every group: member has a commit: SW-2, SW-3",
+  );
+  // The members come from group: itself, not from the lead's status-move refs.
+  assert.match(
+    await run("SW-2 member change\n", { lead: false }),
+    /^warning: SW-3 has no commit .*"Dropped from the grouped PR/,
+  );
+});
+
 /** Exercise evidence missing from a stage that has other output, so the stages check passes. */
 function noExercise(opts = {}) {
   const ws = icmWorkspace({ exercise: null, ...opts });

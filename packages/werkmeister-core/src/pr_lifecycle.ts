@@ -35,7 +35,7 @@ import {
 import { GATE_COMPOSE_FILE, renderGateCompose } from "./generate.js";
 import { updateNoteStatus } from "./graduate.js";
 import { eachIssue, type IssueStatuses, issueStatuses, moveIssue } from "./issue_status.js";
-import { issueRefsOf, issueTracker, projectOf } from "./issue_tracker.js";
+import { groupOf, issueIdOf, issueRefsOf, issueTracker, projectOf } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
 import {
   grantWaiters,
@@ -910,6 +910,51 @@ async function mergeCheck(dir: string, file: PrFile, deps: Deps): Promise<string
   return `rebase allowed on ${base}`;
 }
 
+/**
+ * SW-829: `pr open` and the ship move every `group:` member with the lead, so a member no commit
+ * subject on the branch names would ship as Done. A warning like SW-457's: dropping it is the
+ * person's call. Reads every PR file's worktree, since a member's commit may sit in another repo.
+ */
+async function groupCheck(
+  ws: string,
+  cfg: Record<string, unknown>,
+  file: PrFile,
+  deps: Deps,
+): Promise<string> {
+  const lead = issueIdOf(cfg);
+  const members = groupOf(cfg).filter((m) => m !== lead);
+  const ranges = new Map<string, string>();
+  for (const f of readPrFiles(ws))
+    ranges.set(f.dir, `origin/${String(f.fm["base"] ?? "main")}..HEAD`);
+  const subjects: string[] = [];
+  for (const [d, range] of ranges) {
+    const r = await deps.run("git", ["-C", path.join(ws, d), "log", "--format=%s", range]);
+    if (r.code !== 0)
+      return `warning: could not read ${d}'s commits in ${range} — ${(r.stderr || r.stdout).trim() || `exit ${r.code}`}`;
+    subjects.push(...r.stdout.split("\n"));
+  }
+  // A whole key, any case: SW-3 is not named by SW-30 or XSW-3; sw-3 is.
+  const named = (key: string) => {
+    const re = new RegExp(
+      `(^|[^A-Za-z0-9-])${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![0-9])`,
+      "i",
+    );
+    return subjects.some((s) => re.test(s));
+  };
+  const missing = members.filter((m) => !named(m));
+  if (!missing.length) return `every group: member has a commit: ${members.join(", ")}`;
+  const where = [...ranges].map(([d, range]) => `${range} (${d})`).join(", ");
+  const branch = String(file.fm["branch"] ?? "");
+  const comment = `Dropped from ${lead ? `${lead}'s` : "the"} grouped PR${branch ? ` (branch ${branch})` : ""}: no commit for it`;
+  // shortcut: "To Do" is Jira's default; a GitHub tracker or a renamed status needs its own name, add a todo point if that bites.
+  return missing
+    .map(
+      (m) =>
+        `warning: ${m} has no commit in ${where}, so it would ship as Done with this PR — remove it from group: in .werkmeister/workspace.yml, then put it back: werkmeister issue update ${m} --status "To Do" --comment ${JSON.stringify(comment)}`,
+    )
+    .join("\n");
+}
+
 // Moved beside hostLoadLimit so lifecycle's container starts can use it without an import cycle (SW-630).
 export { waitForHostLoadNow };
 
@@ -1084,9 +1129,11 @@ async function gateChecks(
     );
     add("approved", statusOf(file) === "approved", `status: ${statusOf(file)}`);
     add("repo", ...(await repoCheck(path.join(ws, file.dir), file, deps)));
-    const group = loadConfigFile(ws, null)["group"];
-    if (Array.isArray(group) ? group.length : String(group ?? "").trim())
+    const wsCfg = loadConfigFile(ws, null);
+    if (groupOf(wsCfg).length) {
       add("merge", true, await mergeCheck(dir, file, deps));
+      add("group", true, await groupCheck(ws, wsCfg, file, deps));
+    }
     // exercise.md is a file read too, so a malformed table fails before the tests (SW-286).
     const skipExercise = reason(file.fm["skip_exercise"]);
     if (skipExercise) add("exercise", true, `skipped: ${skipExercise}`);
