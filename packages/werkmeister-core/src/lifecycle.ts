@@ -455,10 +455,17 @@ export async function startService(
   // Before admission, as in `up`: a HOST_LOAD throw must not follow a preemption.
   await waitForSetupLoad(workspace, noDeps ? [service] : serviceStarts(workspace, service));
   await admitServiceStart(feature, workspace, service, { noDeps });
-  requireSharedNetwork();
-  const started = await withStartRecord(workspace, "gate", () =>
-    composeUpServiceAsync(feature, service, path.join(workspace, composeName), noDeps),
-  );
+  let started: boolean;
+  try {
+    requireSharedNetwork();
+    started = await withStartRecord(workspace, "gate", () =>
+      composeUpServiceAsync(feature, service, path.join(workspace, composeName), noDeps),
+    );
+  } finally {
+    // After the start, not at admission: admission prices only running containers, so a grant before
+    // it would hand a waiter the room this start is about to take (SW-737).
+    await grantIfQueued();
+  }
   if (!started) {
     // A timed-out or cancelled up leaves the container Created, never started (SW-86).
     const state = (await getContainerStatus(feature)).find((c) => c.service === service)?.status;
@@ -525,7 +532,6 @@ export async function admitServiceStart(
       if (position === null) {
         admitted = true;
         for (const name of released) await docker().getContainer(name).start();
-        if (waited) await grantWaitersQuietly(); // room left over may fit the next waiter
         return;
       }
       if (waited >= waitMs) {
@@ -550,8 +556,15 @@ export async function admitServiceStart(
     if (!admitted) {
       await dequeue(feature);
       clearWaiting(workspace);
+      // Room it released, or held as the queue head, is free now and no stop will grant it (SW-737).
+      await grantIfQueued();
     }
   }
+}
+
+/** A grant pass when anyone waits: room can free without a release, and only a grant starts a whole-feature waiter (SW-737). */
+async function grantIfQueued(): Promise<void> {
+  if (readQueue().length) await grantWaitersQuietly();
 }
 
 const gib = (b: number) => `${(b / 2 ** 30).toFixed(1)} GiB`;
@@ -1102,7 +1115,14 @@ async function grantWaitersNow(): Promise<string[]> {
     }
     // A service start's own poll admits it; `up` would start the wrong set and dequeue it.
     if (readWaiting(workspace)?.services) continue;
-    const r = await up(feature, workspace, { byPerson: false });
+    let r: UpResult;
+    try {
+      r = await up(feature, workspace, { byPerson: false });
+    } catch (e) {
+      // One waiter's failed re-up (HOST_LOAD, NO_COMPOSE, ...) must not end the pass for the rest (SW-737).
+      warn(`Could not start '${feature}' from the waiting queue: ${(e as Error).message}`);
+      continue;
+    }
     // Backfill (SW-675): a later waiter may fit; admission itself holds the room for a starved head.
     if (r.waiting !== undefined) continue;
     started.push(feature);
