@@ -1,5 +1,14 @@
 # sandbox-core
 
+## 0.93.5
+
+### Patch Changes
+
+- 38cc8e9: SW-761: two SDK contract fixes. `getFormSchema()`'s `schema` is now typed as the form's JSON Schema (`properties`, `required`), so `validateFormData(await getFormSchema(), data)` type-checks without a cast; every old read still compiles. A provisioning failure from `createWorkspace({ live: true })` is now a `WorkspaceError` (its class stays `WorkspaceInitError`, its `code` becomes `WORKSPACE`), so catching `WorkspaceError` catches it.
+- bae9fc9: SW-762: every page of the SDK reference now has SDK-user docs and a type-checked example: the 127 exports SDK parity added (functions, interfaces, type aliases and `WORKSPACE_ACTIONS`) are rewritten for SDK users (what each does, returns and throws, in-process or daemon) with a `werkmeister-core/sdk` example. Several docs now match their code where they did not: `parseNote` returns the note with empty frontmatter on a bad header, `fetchIssueCard` returns `{ ref, url }` on a failed fetch, `infraDown`/`infraStop`/`infraRestart` log a failure instead of throwing, and `InfraStatus` reports unhealthy services separately.
+- aa8f406: SW-770: SDK docs link `SandboxError` and `WorkspaceError` in `@throws` again instead of showing them as plain code. `docs:links` now resolves a `{@link Name}` the SDK exports, so `@throws {@link SandboxError}` passes both `docs:links` and `docs:sdk` in any source file.
+- 454dbe9: SW-794: the SDK docs' `@example` code is formatted like the rest of the repo (biome: 2 spaces, 100 columns). `pnpm run format:examples` formats every `@example` block in werkmeister-core's sources, and `docs:sdk` fails on one it would change; a block biome cannot parse is left as written.
+
 ## 0.93.4
 
 ### Patch Changes
