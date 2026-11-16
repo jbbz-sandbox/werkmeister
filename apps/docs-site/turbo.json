@@ -17,7 +17,8 @@
         // TypeDoc reads core's tsconfig too, so a change to it alone must rebuild.
         "$TURBO_ROOT$/packages/werkmeister-core/tsconfig.json"
       ],
-      "outputs": ["dist/**"]
+      // sdk/ is typedoc's output, read by docs-render.test.mjs: a replayed build must restore it (SW-740).
+      "outputs": ["dist/**", "sdk/**"]
     }
   }
 }
