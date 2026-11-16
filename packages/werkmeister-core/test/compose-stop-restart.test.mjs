@@ -69,7 +69,11 @@ process.env.HOME = dir;
 
 const { stopOrRestart } = await import("../dist/compose.js");
 
-after(() => rmSync(dir, { recursive: true, force: true }));
+// SW-797: the last test closes it too; this covers a run where --test-name-pattern filters every test out.
+after(() => {
+  server.close();
+  rmSync(dir, { recursive: true, force: true });
+});
 beforeEach(() => {
   calls = [];
   failing = null;
