@@ -15,6 +15,7 @@
     "licenses": "unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR && node --test 'scripts/*.test.mjs' && node scripts/check-licenses.mjs",
     "docs:gen": "node scripts/gen-docs.mjs",
     "docs:check": "node scripts/check-docs.mjs",
+    "format:examples": "node scripts/format-examples.mjs",
     "name:check": "node scripts/check-name.mjs",
     "lint": "biome check .",
     "lint:fix": "biome check --write ."

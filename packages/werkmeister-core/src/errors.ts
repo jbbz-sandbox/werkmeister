@@ -21,7 +21,8 @@ export const WORKSPACE_ERROR_CODE = "WORKSPACE";
  * try {
  *   await callTool("status");
  * } catch (e) {
- *   if (e instanceof SandboxError && e.code === "DAEMON_TIMEOUT") console.log("still running: don't retry");
+ *   if (e instanceof SandboxError && e.code === "DAEMON_TIMEOUT")
+ *     console.log("still running: don't retry");
  *   else throw e;
  * }
  * ```
@@ -57,7 +58,8 @@ export class SandboxError extends Error {
  * try {
  *   console.log(await resolveWorkspaceDir("no-such-workspace"));
  * } catch (e) {
- *   if (e instanceof WorkspaceError) console.log(e.code, e.message); // "WORKSPACE"
+ *   if (e instanceof WorkspaceError)
+ *     console.log(e.code, e.message); // "WORKSPACE"
  *   else throw e;
  * }
  * ```
