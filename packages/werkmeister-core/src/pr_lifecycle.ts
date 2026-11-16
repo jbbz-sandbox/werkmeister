@@ -687,12 +687,15 @@ type Rendered = {
   services: ServicesConfig;
   repos: Record<string, RepoEntry>;
   setup_services: ServicesConfig;
+  infrastructure?: Record<string, unknown>;
+  caches?: Record<string, unknown>;
 };
 
 /**
  * What the repo's own fragment changes for its gate (SW-573): its services whose rendered
  * entries differ from the base's (*before*), or `all` naming the change that reaches every
- * service (a `repo:` key, its own `setup_services`). A mapping change counts only when it
+ * service (a `repo:` key, its own `setup_services`, an `infrastructure:` or `caches:` entry,
+ * SW-665). A mapping change counts only when it
  * moves a file of this diff: otherwise it changes no test.
  */
 export function fragmentTouched(
@@ -717,6 +720,13 @@ export function fragmentTouched(
   for (const n of setup.sort())
     if (!isDeepStrictEqual(branch.setup_services[n], before.setup_services[n]))
       reasons.push(`setup_services: ${n}`);
+  // Entries carry no repo:, but both sides hold the same other fragments, so a difference is this repo's (SW-665).
+  for (const section of ["infrastructure", "caches"] as const) {
+    const b = branch[section] ?? {};
+    const m = before[section] ?? {};
+    for (const n of [...new Set([...Object.keys(b), ...Object.keys(m)])].sort())
+      if (!isDeepStrictEqual(b[n], m[n])) reasons.push(`${section}: ${n}`);
+  }
   const services = ((br["services"] ?? []) as string[])
     .filter((s) => !isDeepStrictEqual(branch.services[s], before.services[s]))
     .sort();
