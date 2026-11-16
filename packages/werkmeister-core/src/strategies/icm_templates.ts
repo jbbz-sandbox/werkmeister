@@ -109,12 +109,12 @@ const TEST_TAIL =
   'Redirect output to a file as one group, so every command in an `&&` chain lands there. For a background job (`run_in_background`) write background: `{ <test command>; } > <log> 2>&1` and read the exit code from the job\'s completion notice; for a foreground call write foreground: `{ <test command>; } > <log> 2>&1; echo "exit $?"`. Read back only the failing slice.';
 const TEST_STEP =
   HOST_TESTS +
-  "Once it passes, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record both exit codes. " +
+  "Once it passes, run `werkmeister pr gate --tests` (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows) and fix what it fails; record both exit codes. " +
   TEST_TAIL;
 const HOST_TEST_STEP = `${HOST_TESTS}Record its exit code. ${TEST_TAIL}`;
 // SW-430: the gate runs once, on reviewed code; a Must fix found after it forced a rerun (SW-344).
 const GATE_STEP =
-  "Once the review's fixes are in, run `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes) and fix what it fails; record its exit code. A fix here reruns the host test step first.";
+  "Once the review's fixes are in, run `werkmeister pr gate --tests` (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows) and fix what it fails; record its exit code. A fix here reruns the host test step first.";
 
 // SW-534: sw-385's exercise on the real harness fixed ~40 lines after the review; they shipped unreviewed.
 // SW-678: a docs fix rerun with one service's tests skipped docs-site's, and the first `pr open` failed on it.
@@ -519,7 +519,7 @@ const bugfix: Stage[] = [
         MANUAL_STEP,
         // SW-678: these edits come after the fix stage's gate; one service's test command missed docs-site's (sw-631, sw-669).
         reviewStep(
-          "rerun `werkmeister pr gate --tests` (from the workspace, detached when it may pass 10 minutes), not one service's test command: it retests every service the diff touches, and these edits come after the fix stage's gate. Then rerun steps 2–3 and update `exercise.md`",
+          "rerun `werkmeister pr gate --tests` (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows), not one service's test command: it retests every service the diff touches, and these edits come after the fix stage's gate. Then rerun steps 2–3 and update `exercise.md`",
           v.group,
         ),
       ],
