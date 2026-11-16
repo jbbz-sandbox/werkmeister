@@ -690,6 +690,19 @@ test("SW-660: a ' in a non-plain test command survives the sh -c quoting", async
   assert.equal(out.stdout, "a");
 });
 
+// SW-721: the container form quotes like wrappedTestCommand, so the line and its allow rule run the registered command.
+test("SW-721: a ' in a test command survives the docker exec sh -c quoting", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { containerTestCommand } = await import("../dist/archetypes.js");
+  const printed = containerTestCommand("feat", "api", "printf '%s' 'a b'");
+  assert.equal(printed, `docker exec feat-api sh -c 'printf '\\''%s'\\'' '\\''a b'\\'''`);
+  // The part after `docker exec feat-api` is what the container's sh gets.
+  const out = spawnSync("sh", ["-c", printed.replace(/^docker exec feat-api /, "")], {
+    encoding: "utf8",
+  });
+  assert.equal(out.stdout, "a b");
+});
+
 test("SW-660: only services.yaml's commands run through the wrapper; validate: adds nothing", () => {
   const services = {
     svc: { repo: "r", test: "pnpm test" },
