@@ -36,6 +36,22 @@ repo:
     apps/werkmeister-mcp: werkmeister-core # ships inside the CLI (dist/mcp.js)
     docs: docs-site # SW-644: the site builds from docs/, so a docs change runs its build and dead-link check
     plugins: werkmeister-core # plugin tests live in core; core's row also runs the plugin's typecheck + test (SW-580)
+  # Tracker components: one per ticket, the subsystem its fix lands in. Backlog triage sets them and groups tickets
+  # by them (one workspace and PR per group). Each project lists its own here; werkmeister has no built-in list.
+  # A new component is a change to this map, never a name made up in the tracker.
+  components:
+    gate: pr gate, pr open checks, test rows, gate speed
+    scheduler: capacity queue, host-load waits, feature up admission, preemption
+    test-harness: with-temp-home, with-fixture-workspace, run-tests.sh, fixtures
+    metrics: event log, usage and cost numbers, Flow tab data
+    docs: docs-site, SDK docs, screenshots
+    setup: machine setup, install, certs, demo apps, config location
+    release: changesets, publish, pr status shipped checks
+    permissions: autonomous run limits, ask rules, hooks
+    contracts: generated ICM stage-contract and pr-rules text, generated skills
+    workspace: workspace create/init/close, issue commands, PR lifecycle
+    ui: VS Code extension, dashboard, workspaces pane
+    infra: containers, Caddy, shared infra, daemon, MCP proxy
 
 services:
   # --- The werkmeister repo's own workspaces (self-hosting) -----------------------
