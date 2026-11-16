@@ -26,7 +26,9 @@ vi.mock("werkmeister-core/proc", async (orig) => ({
 vi.mock("werkmeister-core/compose", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/compose")>()),
   composeStop: vi.fn(async () => true),
+  composeRestart: vi.fn(async () => true),
   getContainerStatus: vi.fn(async () => []),
+  workspaceForFeature: vi.fn(() => null),
 }));
 vi.mock("werkmeister-core/slots", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/slots")>()),
@@ -43,8 +45,13 @@ vi.mock("werkmeister-core/reporter", async (orig) => ({
 }));
 
 import { readWaiting } from "werkmeister-core/agent_state";
-import { composeStop, getContainerStatus } from "werkmeister-core/compose";
-import { admitOrQueue, admitServiceStart, startsAsPerson } from "werkmeister-core/lifecycle";
+import { composeStop, getContainerStatus, workspaceForFeature } from "werkmeister-core/compose";
+import {
+  admitOrQueue,
+  admitServiceStart,
+  restart,
+  startsAsPerson,
+} from "werkmeister-core/lifecycle";
 import { run } from "werkmeister-core/proc";
 import { info } from "werkmeister-core/reporter";
 import { enqueue, readQueue, writeLeases } from "werkmeister-core/scheduler_state";
@@ -115,6 +122,18 @@ it("a victim whose stop fails is queued to come back, and the start waits at the
   expect(readQueue()).toEqual(["mine", "victim"]);
   expect(readWaiting(victim)).toMatchObject({ reason: "preempted" });
   expect(readWaiting(mine)).toMatchObject({ position: 1, reason: "waiting for capacity" });
+});
+
+// SW-713: restart skipped the queue, so a queued feature ran again while its session stayed held.
+it("a restart of a queued feature takes it out of the queue and releases its session", async () => {
+  const ws = workspace("queued", { autonomous: true });
+  await enqueue("queued", ws);
+  vi.mocked(workspaceForFeature).mockReturnValueOnce(ws);
+
+  await restart("queued");
+
+  expect(readQueue()).toEqual([]);
+  expect(readWaiting(ws)).toBeNull();
 });
 
 it("a plain up from an agent session in a person's workspace is not a person's start", () => {

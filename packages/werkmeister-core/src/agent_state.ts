@@ -10,6 +10,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { sandboxHome } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { WRAP_UP } from "./harness/claude/desktop.js";
 import { findRecordRoot } from "./pr_guard.js";
@@ -673,6 +674,32 @@ export function deliverWake(input: Record<string, any>, root: string): object | 
 }
 
 /**
+ * A whole-feature waiting.json whose feature the queue no longer holds: a start or grant that dropped it
+ * without clearing the file, which held the session with a stale position (SW-713). Five seconds old at
+ * least, since admission writes this file before the queue (SW-246). Unsure (no FEATURE): not left over.
+ */
+// scheduler_state's queuePath; not imported, since that module loads Docker and this hook runs on every tool call.
+const queuePath = () => path.join(sandboxHome(), "scheduler", "queue.json");
+
+function leftOver(root: string): boolean {
+  const at = fs.statSync(waitingPath(root), { throwIfNoEntry: false })?.mtimeMs ?? Date.now();
+  if (Date.now() - at < 5_000) return false;
+  let feature: string | undefined;
+  try {
+    feature = /^FEATURE=(.+)$/m.exec(fs.readFileSync(path.join(root, ".env"), "utf8"))?.[1]?.trim();
+  } catch {
+    return false;
+  }
+  if (!feature) return false;
+  try {
+    const queue: unknown = JSON.parse(fs.readFileSync(queuePath(), "utf8"));
+    return !(Array.isArray(queue) && queue.includes(feature));
+  } catch {
+    return true; // no queue file: nothing waits
+  }
+}
+
+/**
  * The hook's stdout while the workspace is paused or waiting for capacity, or null. `continue: false` ends
  * the turn with the transcript intact; the deny also holds where a host ignores it.
  */
@@ -684,6 +711,10 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
   // A service start's wait (SW-540) is this session's own job: the person must be able to prompt it
   // and it must be able to run the tool that stops the wait (SW-545). Only a whole-feature queue holds it.
   if (waiting?.services) return null;
+  if (waiting && leftOver(root)) {
+    clearWaiting(root);
+    return null;
+  }
   const reason = waiting
     ? `Waiting for capacity (position ${waiting.position}). End your turn now; it starts when another feature stops.`
     : PAUSED_REASON;

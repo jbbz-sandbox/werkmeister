@@ -1214,6 +1214,9 @@ export async function restart(feature: string): Promise<RestartResult> {
       "COMPOSE_RESTART_FAILED",
     );
   }
+  // Running again, so no longer waiting: a queue entry left here held its session over live containers (SW-713).
+  await dequeue(feature);
+  if (workspace) clearWaiting(workspace);
 
   return { feature, slot };
 }
