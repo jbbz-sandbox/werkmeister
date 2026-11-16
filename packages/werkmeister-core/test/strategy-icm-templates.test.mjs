@@ -142,6 +142,19 @@ test("each template renders with no undefined and a route per stage", async () =
             /^3\. .*`usage_usec` every 5 s.*cores in use per phase.*only a CPU cut shortens it/m,
             `${wt}/${d}`,
           );
+        // SW-810: copied markdown meets the repo's lint (its docs checks) before the spec fixes the text.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^3\. .*adds or moves markdown into a repo.*run the repo's lint command on it.*record each failure in `inventory\.md`/m,
+            `${wt}/${d}`,
+          );
+        if (d.endsWith("_spec"))
+          assert.match(
+            c,
+            /byte-for-byte\) copy of markdown only when `inventory\.md` records the repo's lint passing on it/,
+            `${wt}/${d}`,
+          );
         // SW-796: a timing number behind a decision or criterion comes from a paired A/B under the load wait.
         const timing =
           /paired, alternating A\/B runs \(A1 B1 A2 B2 A3 B3, at least 3 each\).*load wait on, in a Linux container .*never from a single run or `--no-wait`; record every run's numbers and the host load/;
