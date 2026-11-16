@@ -5489,3 +5489,48 @@ test("gate: a lockfile change maps per importer; root, shared and unreadable cha
     ),
   );
 });
+
+// ---- gate test rows the host killed or starved (SW-739, SW-744) ----
+
+/** Answer the calls matching *re* with *results* in turn (the last repeats), before *d*'s own table. */
+function answer(d, re, results) {
+  const run = d.run;
+  let i = 0;
+  d.run = async (bin, args) => {
+    const line = [bin, ...bare(args)].join(" ");
+    if (!re.test(line)) return run(bin, args);
+    d.calls.push(line);
+    return { stdout: "", stderr: "", code: 0, ...results[Math.min(i++, results.length - 1)] };
+  };
+  return d;
+}
+const API_EXEC = /^docker exec feat-api sh -c npm test -w api$/;
+const execs = (d) => d.calls.filter((c) => API_EXEC.test(c)).length;
+
+test("runGate: a test row killed with exit 137 is retried once after the host-load wait (SW-739)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const host = loaded([90, 90, 1]);
+    const d = answer(deps([DIFF_API], host), API_EXEC, [{ code: 137, stdout: "ok 181 x\n" }, {}]);
+    const g = await gate(ws, d);
+    assert.equal(execs(d), 2);
+    assert.equal(testRow(g).ok, true, testRow(g).detail);
+    assert.match(testRow(g).detail, /retried/);
+    assert.notDeepEqual(host.slept, [], "waited on host load before the retry");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("runGate: a test row killed twice with exit 137 fails, saying it was retried (SW-739)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = answer(deps([DIFF_API]), API_EXEC, [{ code: 137 }]);
+    const g = await gate(ws, d);
+    assert.equal(execs(d), 2);
+    assert.equal(testRow(g).ok, false);
+    assert.match(testRow(g).detail, /retried/);
+  } finally {
+    clean(ws);
+  }
+});
