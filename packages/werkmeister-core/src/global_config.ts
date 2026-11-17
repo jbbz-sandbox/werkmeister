@@ -530,29 +530,30 @@ const _HEADER =
   "`werkmeister machine config --check`.\n";
 
 /**
- * True inside any workspace container: compose exports `WERKMEISTER_FEATURE`
- * (`SANDBOX_FEATURE` before SW-106) and Docker writes `/.dockerenv`. The
- * feature-agnostic twin of `lifecycle.ts` `insideOwnContainer`, kept here so the
- * config layer does not import compose, docker and k8s.
+ * True inside any container: Docker writes `/.dockerenv`. Not the feature env
+ * (`WERKMEISTER_FEATURE`): a caller can unset it, and another workspace's
+ * container or a devcontainer lacks it (SW-554, SW-572).
  */
-export function insideContainer(
-  env: NodeJS.ProcessEnv = process.env,
-  dockerenv = "/.dockerenv",
-): boolean {
-  return Boolean(env.WERKMEISTER_FEATURE ?? env.SANDBOX_FEATURE) && fs.existsSync(dockerenv);
+export function insideContainer(dockerenv = "/.dockerenv"): boolean {
+  return fs.existsSync(dockerenv);
 }
 
 /**
- * SW-354: a workspace container runs with HOME set to the host home and the
- * host's `~/.werkmeister` bind-mounted read-write, so writing the default config
- * from inside pins the host's werkmeister_root to the container's /app. A
- * relocated config (`WERKMEISTER_CONFIG_FILE`, what every test sets) is still written.
+ * Refuse to write a host file from inside a container. A workspace container
+ * runs with HOME set to the host home and the host's `~/.werkmeister`
+ * bind-mounted read-write, and its werkmeister root is the container's /app: a
+ * machine config written there pins the host to /app (SW-354), and a compose.yml
+ * names /app paths the host's Docker lacks (SW-554). A relocated config
+ * (`WERKMEISTER_CONFIG_FILE`) is a scratch run and writes, and so is a file
+ * under the container's own temp dir (a temp-HOME test, e.g. `machine migrate`).
  */
-function refuseInsideContainer(file: string): void {
-  if (insideContainer() && !envVar("CONFIG_FILE")) {
+export function refuseInsideContainer(file: string, dockerenv = "/.dockerenv"): void {
+  // Absolute only: compose callers pass the bare name, which must not resolve against a /tmp cwd.
+  const scratch = path.isAbsolute(file) && file.startsWith(os.tmpdir() + path.sep);
+  if (insideContainer(dockerenv) && !envVar("CONFIG_FILE") && !scratch) {
     throw new SandboxError(
-      `Refusing to write ${file} from inside a workspace container: it is the host's ` +
-        "machine config, bind-mounted here, and the running checkout is the container's /app.\n" +
+      `Refusing to write ${file} from inside a container: the host's werkmeister reads it, ` +
+        "and the werkmeister root here is the container's /app.\n" +
         "       Run it from the host, or set WERKMEISTER_CONFIG_FILE to a scratch file.",
       "INSIDE_CONTAINER",
     );

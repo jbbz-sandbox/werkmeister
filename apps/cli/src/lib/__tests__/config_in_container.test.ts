@@ -24,12 +24,15 @@ const saved = {
   HOME: process.env.HOME,
   WERKMEISTER_FEATURE: process.env.WERKMEISTER_FEATURE,
   WERKMEISTER_CONFIG_FILE: process.env.WERKMEISTER_CONFIG_FILE,
+  TMPDIR: process.env.TMPDIR,
 };
 let home: string;
 
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), "cfg-container-"));
   process.env.HOME = home;
+  // The guard lets the container's own temp dir through (SW-572); this home stands for the host's.
+  process.env.TMPDIR = path.join(home, "scratch");
   process.env.WERKMEISTER_FEATURE = "demo";
   delete process.env.WERKMEISTER_CONFIG_FILE;
 });
@@ -43,6 +46,15 @@ afterEach(() => {
 
 describe("machine config writes inside a workspace container", () => {
   it("refuse to touch the host's ~/.werkmeister", () => {
+    const cfg = { version: 1, paths: { werkmeister_root: "/app/apps/cli" } };
+    expect(() => gc.save(cfg)).toThrow(expect.objectContaining({ code: "INSIDE_CONTAINER" }));
+    expect(() => gc.writeEnvSh(cfg)).toThrow(expect.objectContaining({ code: "INSIDE_CONTAINER" }));
+    expect(fs.existsSync(path.join(home, ".werkmeister"))).toBe(false);
+  });
+
+  it("refuse even with the feature env unset (SW-572)", () => {
+    delete process.env.WERKMEISTER_FEATURE;
+    delete process.env.SANDBOX_FEATURE;
     const cfg = { version: 1, paths: { werkmeister_root: "/app/apps/cli" } };
     expect(() => gc.save(cfg)).toThrow(expect.objectContaining({ code: "INSIDE_CONTAINER" }));
     expect(() => gc.writeEnvSh(cfg)).toThrow(expect.objectContaining({ code: "INSIDE_CONTAINER" }));
