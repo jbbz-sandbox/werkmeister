@@ -91,6 +91,16 @@ describe("config command", () => {
     expect(saved.overrides.services_yaml).toBe("/custom/services.yaml");
   });
 
+  // SW-842: the hand-set ask-rules opt-out is one of those sections.
+  it("keeps a hand-set workspace_ask_rules: false", async () => {
+    gc.save({ paths: { repos_root: tmp, workspaces_root: tmp }, workspace_ask_rules: false });
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await run(args({ repos_root: tmp, workspaces_root: tmp }));
+
+    expect(YAML.parse(fs.readFileSync(cfgFile, "utf8")).workspace_ask_rules).toBe(false);
+  });
+
   it("no arguments prints the config and writes nothing", async () => {
     // Regression (SW-136): the bare form used to rebuild config.yaml, env.sh,
     // ~/.zshenv and the Desktop config from defaults.

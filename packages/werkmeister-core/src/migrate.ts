@@ -415,15 +415,19 @@ function workspaceStale(dir: string): boolean {
     AGENT_STATE_EVENTS.some((e) => !agentState(e));
   const wanted = workspaceAllowRules(dir);
   // SW-521: a rule werkmeister recorded but no longer generates (`Bash(node:*)`) stays allowed until a refresh.
-  const recorded: string[] =
-    readJson(path.join(dotDir(dir), "claude-permissions.json"))?.["allow"] ?? [];
+  const record = readJson(path.join(dotDir(dir), "claude-permissions.json"));
+  const recorded: string[] = record?.["allow"] ?? [];
+  const askWanted = workspaceAskRules(dir);
+  // SW-842: an ask the machine opt-out no longer wants is stale too, so migrate removes it.
+  const recordedAsk: string[] = record?.["ask"] ?? [];
   return (
     missingEvents ||
     PRE_SW186_HOOK.test(fs.readFileSync(settingsFile, "utf8")) ||
     wanted.some((r) => !allow.has(r)) ||
     recorded.some((r) => !wanted.includes(r)) ||
     workspaceDenyRules(dir).some((r) => !deny.has(r)) ||
-    workspaceAskRules(dir).some((r) => !ask.has(r)) ||
+    askWanted.some((r) => !ask.has(r)) ||
+    recordedAsk.some((r) => !askWanted.includes(r)) ||
     (fs.existsSync(wrapper) && fs.readFileSync(wrapper, "utf8").includes(PRE_SW186_WAIT))
   );
 }

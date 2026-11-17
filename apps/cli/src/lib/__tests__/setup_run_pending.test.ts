@@ -6,6 +6,7 @@
 import { expect, it, vi } from "vitest";
 
 const said: string[] = [];
+const saved: Record<string, unknown>[] = [];
 vi.mock("werkmeister-core/reporter", async (orig) => ({
   ...(await orig<object>()),
   success: (m: string) => said.push(`[ok] ${m}`),
@@ -14,7 +15,10 @@ vi.mock("werkmeister-core/reporter", async (orig) => ({
 }));
 vi.mock("werkmeister-core/global_config", async (orig) => ({
   ...(await orig<object>()),
-  save: () => "",
+  save: (cfg: Record<string, unknown>) => {
+    saved.push(cfg);
+    return "";
+  },
   writeEnvSh: () => "",
   ensureZshenvSources: () => false,
   ensureZshrcCompletion: () => false,
@@ -38,4 +42,26 @@ it("a pending step warns 'Setup incomplete', never 'Machine is set up', and does
   expect(exit).not.toHaveBeenCalled();
   expect(said.join("\n")).toContain("Setup incomplete");
   expect(said.join("\n")).not.toContain("Machine is set up");
+});
+
+// SW-842: setup rebuilds config.yaml from a fixed key list; the hand-set ask-rules opt-out must survive it.
+it("keeps a hand-set workspace_ask_rules: false", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "setup-cfg-")), "config.yaml");
+  fs.writeFileSync(file, "workspace_ask_rules: false\n");
+  vi.stubEnv("WERKMEISTER_CONFIG_FILE", file);
+  vi.spyOn(process, "exit").mockImplementation((() => {
+    throw new Error("exit");
+  }) as never);
+  vi.spyOn(console, "log").mockImplementation(() => {});
+  saved.length = 0;
+  try {
+    await run({ yes: true });
+  } finally {
+    vi.unstubAllEnvs();
+    fs.rmSync(path.dirname(file), { recursive: true, force: true });
+  }
+  expect(saved.at(-1)?.workspace_ask_rules).toBe(false);
 });

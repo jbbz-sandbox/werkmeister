@@ -69,6 +69,7 @@ import {
   sandboxRoot,
 } from "../../config.js";
 import { frozenInstalls } from "../../fragment_detect/workspace.js";
+import { load as loadGlobalConfig } from "../../global_config.js";
 import { workspaceServices } from "../../registry_sync.js";
 import { info } from "../../reporter.js";
 import { repoDirs } from "../../standards.js";
@@ -698,19 +699,24 @@ function builtCliWrappers(workspaceRoot: string): string[] {
  * SW-473: `--exec-runs` runs the registry's rows on the host, so its forms of the pre-approved fixture
  * wrapper and built CLI ask first. The CLI takes it only as the first fixture option, so a prefix catches it.
  * SW-510: `node --test <file>` through the temp-HOME wrapper runs any file, one the agent just wrote too.
+ * SW-842: config.yaml `workspace_ask_rules: false` drops the node --test asks; the --exec-runs ones always stay.
  */
 export function workspaceAskRules(workspaceRoot: string): string[] {
   const tempHome = tempHomeWrapper(workspaceRoot);
-  const nodeTest = [
-    `Bash(${tempHome} env WERKMEISTER_ROOT=* node --test*)`,
-    `Bash(${tempHome} --no-wait env WERKMEISTER_ROOT=* node --test*)`,
-    // SW-720: the probe form werkmeister-context.md names; an ask, so auto mode prompts instead of denying it.
-    `Bash(${tempHome} node --test*)`,
-    `Bash(${tempHome} --no-wait node --test*)`,
-    // The same form in the service's container, where a host without node_modules runs it.
-    `Bash(docker exec * ${tempHome} node --test*)`,
-    `Bash(docker exec * ${tempHome} --no-wait node --test*)`,
-  ];
+  // Only the boolean turns them off: a typo or string keeps the asks. Every settings writer and migrate read them here.
+  const nodeTestOff = loadGlobalConfig()["workspace_ask_rules"] === false;
+  const nodeTest = nodeTestOff
+    ? []
+    : [
+        `Bash(${tempHome} env WERKMEISTER_ROOT=* node --test*)`,
+        `Bash(${tempHome} --no-wait env WERKMEISTER_ROOT=* node --test*)`,
+        // SW-720: the probe form werkmeister-context.md names; an ask, so auto mode prompts instead of denying it.
+        `Bash(${tempHome} node --test*)`,
+        `Bash(${tempHome} --no-wait node --test*)`,
+        // The same form in the service's container, where a host without node_modules runs it.
+        `Bash(docker exec * ${tempHome} node --test*)`,
+        `Bash(docker exec * ${tempHome} --no-wait node --test*)`,
+      ];
   const builtClis = builtCliWrappers(workspaceRoot);
   if (!builtClis.length) return nodeTest;
   const fixture = path.join(path.dirname(tempHome), "with-fixture-workspace");

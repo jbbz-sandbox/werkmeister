@@ -455,6 +455,18 @@ Built-ins, used for every tier the block leaves out:
 
 A tier with no model for the workspace's harness fails create, and init of a workspace that records no model yet, with the key to set (`models.codex.frontier`). The generic `mcp` harness takes no model, so its workspaces are not resolved. `werkmeister machine config` prints the merged tiers, each set value marked `(YAML)`. Workspaces created before this record no model: `werkmeister machine migrate` (or each one's next `workspace init`) writes the default tier's model and names it.
 
+### ~/.werkmeister/config.yaml: workspace_ask_rules
+
+Every Claude workspace's `.claude/settings.json` gets `permissions.ask` rules (`workspaceAskRules` in `hooks_gen.ts`), so these commands stop for the person even in auto mode: `with-temp-home … node --test*` and its `docker exec *` form (they run any file, one the agent just wrote too), and, in a repo with a built CLI, the `--exec-runs` forms of `with-fixture-workspace` and `internal fixture`, which run the registry's rows on the host. That is 10 rules in the werkmeister repo, 6 elsewhere. A workspace missing them while they are on is repaired by its next `feature up`, `feature up --service` or `machine migrate`.
+
+To turn the six `node --test` asks off on this machine:
+
+```yaml
+workspace_ask_rules: false     # default true
+```
+
+The `--exec-runs` asks always stay: with no ask, the pre-approved `with-fixture-workspace:*` and built-CLI allow rules would run the registry's rows on the host with no prompt at all. Only the YAML boolean `false` turns the `node --test` asks off. A missing key, `true`, a string such as `"false"` or `off`, or an unparseable file keeps them on. Each workspace's next `workspace init`, `feature up`, `feature up --service` or `machine migrate` then removes the `node --test` asks werkmeister recorded writing (`.werkmeister/claude-permissions.json`) and keeps any you added by hand, and none of those commands writes them back. With them off, `node --test` through the wrapper is no longer forced to prompt: auto mode decides, under the threat model in [context-strategies.md](context-strategies.md). `machine setup` and `machine config` keep the key when they rewrite config.yaml. There is no per-workspace override: `.werkmeister/workspace.yml` is in the agent-editable record folder, so the agent could turn its own asks off.
+
 ### Optional integrations
 
 None of these are required; each turns on only when configured.

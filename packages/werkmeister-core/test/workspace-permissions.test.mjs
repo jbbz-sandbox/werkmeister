@@ -968,3 +968,71 @@ test("SW-845: a socket added by the branch's fragment or a dev_link also drops t
     { services: registry },
   );
 });
+
+// SW-842: the machine opt-out. Only the YAML boolean turns the asks off.
+function withConfig(yaml, fn) {
+  const saved = process.env.WERKMEISTER_CONFIG_FILE;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-cfg-"));
+  const file = path.join(dir, "config.yaml");
+  if (yaml !== null) fs.writeFileSync(file, yaml);
+  process.env.WERKMEISTER_CONFIG_FILE = file;
+  try {
+    return fn();
+  } finally {
+    if (saved === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+    else process.env.WERKMEISTER_CONFIG_FILE = saved;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+test("workspace_ask_rules: false drops the node --test asks, never --exec-runs; absent, true or a string keeps all (SW-842)", () => {
+  const root = workspace();
+  const asks = withConfig(null, () => workspaceAskRules(root));
+  assert.equal(asks.length, 6);
+  assert.deepEqual(
+    withConfig("workspace_ask_rules: false\n", () => workspaceAskRules(root)),
+    [],
+  );
+  for (const yaml of ["workspace_ask_rules: true\n", 'workspace_ask_rules: "false"\n', "{{bad"]) {
+    assert.deepEqual(
+      withConfig(yaml, () => workspaceAskRules(root)),
+      asks,
+      yaml,
+    );
+  }
+  const cli = path.join(root, "werkmeister", "apps", "cli");
+  fs.mkdirSync(cli, { recursive: true });
+  fs.mkdirSync(path.join(root, "werkmeister", ".git"));
+  fs.writeFileSync(path.join(cli, "werkmeister"), "");
+  const off = withConfig("workspace_ask_rules: false\n", () => workspaceAskRules(root));
+  assert.equal(off.length, 4);
+  assert.ok(
+    off.every((r) => r.includes("--exec-runs")),
+    off.join("\n"),
+  );
+});
+
+test("turning the asks off drops the ones werkmeister wrote and keeps the person's (SW-842)", () => {
+  const root = workspace({});
+  withConfig(null, () => writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)));
+  const settings = readSettings(root);
+  settings.permissions.ask.push("mine");
+  fs.writeFileSync(settingsPath(root), JSON.stringify(settings, null, 2));
+  withConfig("workspace_ask_rules: false\n", () =>
+    writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)),
+  );
+  assert.deepEqual(readSettings(root).permissions, { allow: ["a"], ask: ["mine"] });
+  assert.deepEqual(readRecord(root), { allow: ["a"] });
+});
+
+test("off, a rewrite after the ask block was deleted does not restore it (SW-842, SW-835)", () => {
+  const root = workspace({});
+  withConfig(null, () => writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)));
+  const settings = readSettings(root);
+  delete settings.permissions.ask;
+  fs.writeFileSync(settingsPath(root), JSON.stringify(settings, null, 2));
+  withConfig("workspace_ask_rules: false\n", () =>
+    writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)),
+  );
+  assert.deepEqual(readSettings(root).permissions, { allow: ["a"] });
+});

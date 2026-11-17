@@ -161,6 +161,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     ...(cfg.ingress ? { ingress: cfg.ingress } : {}),
     ...(cfg.jira ? { jira: cfg.jira } : {}),
     ...(cfg.projects ? { projects: cfg.projects } : {}),
+    // SW-842: the machine opt-out for workspace ask rules; dropping it would bring the asks back.
+    ...(cfg.workspace_ask_rules !== undefined
+      ? { workspace_ask_rules: cfg.workspace_ask_rules }
+      : {}),
   };
 
   const saved = gc.save(newCfg);

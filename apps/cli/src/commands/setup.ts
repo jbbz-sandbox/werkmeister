@@ -489,6 +489,10 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     ...(jira.base_url || jira.email || jira.api_token ? { jira } : {}),
     // Hand-written like `jira:`; setup never asks about projects (SW-104).
     ...(cfg.projects ? { projects: cfg.projects } : {}),
+    // SW-842: the machine opt-out for workspace ask rules; dropping it would bring the asks back.
+    ...(cfg.workspace_ask_rules !== undefined
+      ? { workspace_ask_rules: cfg.workspace_ask_rules }
+      : {}),
   };
 
   const saved = gc.save(newCfg);
