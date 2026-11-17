@@ -12,9 +12,10 @@ export default {
   Layout: () =>
     h(DefaultTheme.Layout, null, {
       "home-hero-info": () => h(DictHero),
-      "home-hero-after": () =>
+      // The hero's image slot: beside the entry on a wide screen, under it below (custom.css).
+      "home-hero-image": () =>
         h("img", {
-          class: "home-dashboard",
+          class: "home-hero-shot",
           src: hero,
           alt: "The werkmeister VS Code extension beside the Claude terminal: the workspace in the terminal is outlined, another asks a question",
         }),
