@@ -20,12 +20,11 @@
  */
 
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
 // biome-ignore lint/suspicious/noImportCycles: compose↔slots; SW-411
 import { workspaceForFeature } from "./compose.js";
-import { baselineUpstream, dotDir, loadPorts, loadServices, slotPortRange } from "./config.js";
+import { baselineUpstream, loadPorts, loadServices, sandboxHome, slotPortRange } from "./config.js";
 import { docker } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { sandboxLock } from "./locks.js";
@@ -543,7 +542,7 @@ export async function featureServices(feature: string): Promise<FeatureServices>
  * as forgotten -- they have no live state to migrate.
  */
 export async function migrateSlotsJson(): Promise<void> {
-  const legacy = path.join(dotDir(os.homedir()), "slots.json");
+  const legacy = path.join(sandboxHome(), "slots.json");
   if (!fs.existsSync(legacy)) {
     return;
   }

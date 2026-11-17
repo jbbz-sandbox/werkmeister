@@ -9,14 +9,13 @@
 
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
-import { dotDir } from "werkmeister-core/config";
+import { sandboxHome } from "werkmeister-core/config";
 import { tokensDir } from "werkmeister-core/workspace_token";
 
 export function tokenPath(): string {
-  return path.join(dotDir(os.homedir()), "mcp-token");
+  return path.join(sandboxHome(), "mcp-token");
 }
 
 /** Read the token, creating it on first start. */

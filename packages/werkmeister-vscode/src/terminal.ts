@@ -10,11 +10,10 @@
  * `werkmeister`, which would depend on the integrated terminal's PATH.
  */
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { resolveSandboxBin } from "werkmeister-core";
-import { dotDir } from "werkmeister-core/dot_dir";
+import { sandboxHome } from "werkmeister-core/config";
 import { shellQuote } from "./harness/claude/uri.js";
 import { claim, forget, release, type Slot, takeGone } from "./terminal-pool.js";
 
@@ -29,7 +28,8 @@ const sessionTerminals: Slot<vscode.Terminal>[] = [];
  * the cue to close the terminal, since close-out often runs inside it (SW-421).
  * shortcut: a VS Code crash leaves stale files, and a reused pid could hide one `/exit it` line; sweep dead pids on activate if that is ever seen.
  */
-const PID_DIR = path.join(dotDir(os.homedir()), "vscode-terminals");
+// A function, not a const: WERKMEISTER_CONFIG_FILE moves it, read per call (SW-622).
+const pidDir = () => path.join(sandboxHome(), "vscode-terminals");
 const pidFiles = new Map<vscode.Terminal, string>();
 
 /** A missing file only means close-out lists the session as before, so errors are dropped. */
@@ -38,9 +38,9 @@ export function trackSessionTerminal(term: vscode.Terminal, cwd: string): void {
   void term.processId.then((pid) => {
     // Closed before its pid arrived: the close listener has already run.
     if (!pid || !sessionTerminals.some((s) => s.term === term)) return;
-    const file = path.join(PID_DIR, String(pid));
+    const file = path.join(pidDir(), String(pid));
     try {
-      fs.mkdirSync(PID_DIR, { recursive: true });
+      fs.mkdirSync(pidDir(), { recursive: true });
       fs.writeFileSync(file, cwd);
       pidFiles.set(term, file);
     } catch {}

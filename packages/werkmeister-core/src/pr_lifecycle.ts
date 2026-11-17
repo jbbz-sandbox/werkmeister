@@ -3471,7 +3471,7 @@ export function abandonWorkspace(ws: string, why: string): void {
 }
 
 /** The VS Code extension's terminal.ts writes one file per session shell pid here, holding its cwd (SW-421). */
-const vscodeTerminalsDir = (): string => path.join(dotDir(os.homedir()), "vscode-terminals");
+const vscodeTerminalsDir = (): string => path.join(sandboxHome(), "vscode-terminals");
 
 const isIn = (ws: string, dir: string): boolean => dir === ws || dir.startsWith(ws + path.sep);
 

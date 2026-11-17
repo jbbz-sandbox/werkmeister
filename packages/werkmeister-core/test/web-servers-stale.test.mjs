@@ -37,7 +37,10 @@ async function startOverStub(code) {
 
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "web-servers-stale-"));
   const prev = process.env.HOME;
+  const prevConfig = process.env.WERKMEISTER_CONFIG_FILE;
   process.env.HOME = home;
+  // The default home of *home*, pinned: a caller's own CONFIG_FILE must not move the PID file (SW-622).
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(dotDir(home), "config.yaml");
   const pidFile = path.join(dotDir(home), `${MCP.stem}.pid`);
   fs.mkdirSync(path.dirname(pidFile), { recursive: true });
   fs.writeFileSync(pidFile, String(stub.pid));
@@ -54,6 +57,8 @@ async function startOverStub(code) {
     } catch {}
     if (prev === undefined) delete process.env.HOME;
     else process.env.HOME = prev;
+    if (prevConfig === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+    else process.env.WERKMEISTER_CONFIG_FILE = prevConfig;
     fs.rmSync(home, { recursive: true, force: true });
   }
 }

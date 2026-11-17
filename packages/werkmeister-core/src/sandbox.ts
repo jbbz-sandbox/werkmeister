@@ -1487,7 +1487,7 @@ export async function resolveWorkspaceDir(name: string): Promise<string> {
 }
 
 /** Root for throwaway PR-reconcile session dirs (one per `<repo>-<number>`). */
-const reconcileRoot = () => path.join(dotDir(os.homedir()), "reconcile");
+const reconcileRoot = () => path.join(sandboxHome(), "reconcile");
 /** A chat-session key that names a PR-reconcile dir instead of a workspace. */
 const RECONCILE_PREFIX = "reconcile:";
 

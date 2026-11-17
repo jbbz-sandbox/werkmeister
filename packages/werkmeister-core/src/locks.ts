@@ -28,13 +28,12 @@
  */
 
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { dotDir } from "./config.js";
+import { sandboxHome } from "./config.js";
 
-const lockDir = () => path.join(dotDir(os.homedir()), "locks");
+const lockDir = () => path.join(sandboxHome(), "locks");
 
 // Poll interval (seconds) for the retry loop.
 const _RETRY_INTERVAL = 0.1;

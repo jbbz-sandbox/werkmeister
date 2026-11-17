@@ -6,12 +6,10 @@
  */
 
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
 import type { LogTail } from "./compose.js";
-import { envVar } from "./config.js";
-import { dotDir } from "./dot_dir.js";
+import { envVar, sandboxHome } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { load } from "./global_config.js";
 import { warn } from "./reporter.js";
@@ -58,7 +56,7 @@ export function daemonToken(workspaceRoot?: string): string | null {
   return (
     envVar("MCP_TOKEN") ||
     (workspaceRoot ? readToken(workspaceTokenFile(workspaceRoot)) : null) ||
-    readToken(path.join(dotDir(os.homedir()), "mcp-token"))
+    readToken(path.join(sandboxHome(), "mcp-token"))
   );
 }
 

@@ -19,6 +19,7 @@ import {
   configPath,
   envVar,
   expandUser,
+  sandboxHome,
   servicesLocalYamlPath,
   servicesYamlPath,
   workspacesRoot,
@@ -442,7 +443,7 @@ function secretsStep(checkOnly: boolean): Step {
   if (!/^\s*SANDBOX_MCP_TOKEN=/m.test(text)) {
     return { label, ok: true, detail: "no pre-rename keys" };
   }
-  const tokenFile = path.join(dotDir(os.homedir()), "mcp-token");
+  const tokenFile = path.join(sandboxHome(), "mcp-token");
   const token = fs.existsSync(tokenFile) ? fs.readFileSync(tokenFile, "utf8").trim() : "";
   if (!token) {
     return {
