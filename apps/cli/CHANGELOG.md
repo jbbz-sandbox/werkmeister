@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.93.9
+
+### Patch Changes
+
+- c547067: Before a run files a bug about a generated file (`.claude/settings.json`, `.werkmeister/*`, `compose.yml`, `.env`) that changed outside its own edits, the review step of every ICM code stage and the issues guide's "Bugs: new or existing?" tell it to compare the file with its record (`claude-permissions.json`), compare its mtime with the session's own activity, and ask the person through the question tool whether they edited it (SW-844).
+- e11eb24: The ICM fix and implement stages now run the repo's format command where the service's tests run (its container when its validate text says so), and its registered lint command there before `werkmeister pr gate --tests`, so a one-file fast route no longer leaves a format error for the gate's lint row (SW-846).
+
 ## 0.93.8
 
 ## 0.93.7
