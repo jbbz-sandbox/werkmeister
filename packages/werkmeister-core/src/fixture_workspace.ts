@@ -91,7 +91,7 @@ const QUEUE_ENTRY =
   /^([a-z0-9][a-z0-9-]*)(?::(\d+)(?::([a-z0-9][a-z0-9-]*(?:,[a-z0-9][a-z0-9-]*)*))?)?$/;
 
 // The only config.yaml keys --config may add: others (jira, github_ingest, paths…) reach real services or repos from a pre-approved run.
-const CONFIG_KEYS = ["budget"];
+const CONFIG_KEYS = ["budget", "workspace_ask_rules"];
 
 export interface FixturePresets {
   /** An approved PR for a one-file change in packages/lib, with `demo-lib` running, for `pr gate`. */

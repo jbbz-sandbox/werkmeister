@@ -566,3 +566,46 @@ test("SW-660: migrate adds the test-command rules an older init is missing", asy
   assert.ok(permissions.allow.includes(chain), permissions.allow.join("\n"));
   for (const r of workspaceAllowRules(ws)) assert.ok(permissions.allow.includes(r), r);
 });
+
+// SW-842: with the machine opt-out, a workspace with no ask block is current, so migrate adds none back.
+test("SW-842: workspace_ask_rules: false leaves a workspace without asks as it is", async () => {
+  const { writeWorkspaceSettings } = await import("../dist/harness/claude/hooks_gen.js");
+  movedHome();
+  fs.appendFileSync(path.join(target, "config.yaml"), "workspace_ask_rules: false\n");
+  const ws = path.join(features, "demo");
+  write(path.join(ws, ".werkmeister", "workspace.yml"), "feature: demo\n");
+  write(path.join(ws, ".env"), "FEATURE=demo\n");
+  writeWorkspaceSettings(ws);
+  const settingsFile = path.join(ws, ".claude", "settings.json");
+  const perms = () => JSON.parse(fs.readFileSync(settingsFile, "utf8")).permissions;
+  const before = perms();
+  assert.equal(before.ask, undefined);
+
+  const steps = await run();
+  assert.ok(
+    steps.every((s) => s.ok),
+    JSON.stringify(steps, null, 2),
+  );
+  // SW-577 adds the default model too; only the permissions must be untouched.
+  assert.deepEqual(perms(), before);
+});
+
+// SW-842: asks werkmeister recorded before the opt-out was set are stale; migrate removes them.
+test("SW-842: after workspace_ask_rules: false, migrate removes the node --test asks it wrote", async () => {
+  const { writeWorkspaceSettings } = await import("../dist/harness/claude/hooks_gen.js");
+  movedHome();
+  const ws = path.join(features, "demo");
+  write(path.join(ws, ".werkmeister", "workspace.yml"), "feature: demo\n");
+  write(path.join(ws, ".env"), "FEATURE=demo\n");
+  writeWorkspaceSettings(ws);
+  const settingsFile = path.join(ws, ".claude", "settings.json");
+  assert.equal(JSON.parse(fs.readFileSync(settingsFile, "utf8")).permissions.ask.length, 6);
+  fs.appendFileSync(path.join(target, "config.yaml"), "workspace_ask_rules: false\n");
+
+  const steps = await run();
+  assert.ok(
+    steps.every((s) => s.ok),
+    JSON.stringify(steps, null, 2),
+  );
+  assert.equal(JSON.parse(fs.readFileSync(settingsFile, "utf8")).permissions.ask, undefined);
+});
