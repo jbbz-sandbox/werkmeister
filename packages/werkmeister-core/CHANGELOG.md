@@ -1,5 +1,11 @@
 # sandbox-core
 
+## 0.93.11
+
+### Patch Changes
+
+- cbf52b7: The waiting queue no longer drops a queued feature without telling its session. When the grant's start fails after admission (a failed `compose up`, for example), the session's waiting state is cleared and it is told to rerun `werkmeister feature up`. A waiter whose slot lease is gone is started from its workspace instead of being dequeued (SW-848).
+
 ## 0.93.10
 
 ### Patch Changes
