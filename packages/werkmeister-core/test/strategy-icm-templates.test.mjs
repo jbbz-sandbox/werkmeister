@@ -378,6 +378,20 @@ test("each template renders with no undefined and a route per stage", async () =
             c.indexOf("format command") < c.indexOf("Run the test command"),
             `${wt}/${d}: format before tests`,
           );
+          // SW-846: format and lint run where the service's tests run, and lint runs before the gate.
+          assert.match(
+            c,
+            /first run it on the files you touched \(never a folder\), where the service's tests run \(its container when its How-to-validate text says so\)/,
+            `${wt}/${d}`,
+          );
+          const lint = c.indexOf(
+            "Before `werkmeister pr gate --tests`, run the repo's whole lint chain there too (every command the test command in `werkmeister-context.md` runs ahead of the service's own tests",
+          );
+          assert.ok(lint > 0, `${wt}/${d}: lint step`);
+          assert.ok(
+            lint < c.indexOf("run `werkmeister pr gate --tests`"),
+            `${wt}/${d}: lint before gate`,
+          );
           // SW-125: skips are named in the test step and in the file that records the run.
           assert.match(c, /A skipped test is not a pass: name each one/, `${wt}/${d}`);
           assert.match(

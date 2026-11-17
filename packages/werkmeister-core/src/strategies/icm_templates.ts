@@ -96,11 +96,13 @@ const baseCheck = (doc: string) =>
 // SW-547: sw-526's over-width test lines surfaced only at the lint chain, after 7 commits.
 const HOST_TESTS =
   // SW-646: the command is the repo's `format:` (registry `repo:`), so no toolchain is named here.
-  "If `../../.werkmeister/werkmeister-context.md` gives the repo a format command (`Format:` under its repo commands), first run it on the files you touched (never a folder), so formatting lands in the ticket's own commit. " +
+  "If `../../.werkmeister/werkmeister-context.md` gives the repo a format command (`Format:` under its repo commands), first run it on the files you touched (never a folder), where the service's tests run (its container when its How-to-validate text says so), so formatting lands in the ticket's own commit. " +
   "Run the test command exactly as `../../.werkmeister/werkmeister-context.md` states it: through `.werkmeister/bin/with-temp-home`, which gives it a fresh temporary HOME — never hand-roll `HOME=…`. " +
   "That run is on the host, without the container's env (`HOST`, `WERKMEISTER_SLOT`, `NODE_ENV`, `<SVC>_URL`, …), and the PR gate runs the same commands in the workspace container. " +
   // SW-506: werkmeister's host checkout has no node_modules; the recipe is its services.yaml text (SW-190), not this generic step.
-  "When a service's How-to-validate text in `werkmeister-context.md` says to run in its container (`docker exec`), follow that text instead: starting this workspace's own container with `werkmeister feature up --service <name>` is expected for it and allowed. ";
+  "When a service's How-to-validate text in `werkmeister-context.md` says to run in its container (`docker exec`), follow that text instead: starting this workspace's own container with `werkmeister feature up --service <name>` is expected for it and allowed. " +
+  // SW-846: sw-829 ran only a one-file fast route in the container; the gate's lint row then failed on formatting.
+  "Before `werkmeister pr gate --tests`, run the repo's whole lint chain there too (every command the test command in `werkmeister-context.md` runs ahead of the service's own tests, when it has any; one `&&` segment alone is not it) and fix what it fails: a fast route that runs one test file skips it, and the gate's lint row then fails on it. ";
 const TEST_TAIL =
   "A subagent you brief to run tests or the CLI gets that wrapped command verbatim in its brief. " +
   // SW-125: a host-skipped test still asserted removed behaviour; only the gate's container run found it.
