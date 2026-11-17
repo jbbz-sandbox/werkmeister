@@ -448,6 +448,28 @@ test("SW-487: migrate adds the agent-state events a workspace hooked before them
     assert.ok(JSON.stringify(hooks[e] ?? []).includes("agent-state"), e);
 });
 
+test("SW-416: migrate rewrites a wrapper that differs from the current one when every rule is current", async () => {
+  const { writeWorkspaceSettings } = await import("../dist/harness/claude/hooks_gen.js");
+  const { tempHomeWrapper, TEMP_HOME_SCRIPT } = await import("../dist/temp_home.js");
+  movedHome();
+  const ws = path.join(features, "demo");
+  write(path.join(ws, ".werkmeister", "workspace.yml"), "feature: demo\n");
+  write(path.join(ws, ".env"), "FEATURE=demo\n");
+  writeWorkspaceSettings(ws);
+  const wrapper = tempHomeWrapper(ws);
+  write(wrapper, "#!/bin/sh\n# an older with-temp-home\n");
+
+  const checked = await run({ checkOnly: true });
+  assert.match(JSON.stringify(checked), /would rewrite 1: demo/);
+
+  const steps = await run();
+  assert.ok(
+    steps.every((s) => s.ok),
+    JSON.stringify(steps, null, 2),
+  );
+  assert.equal(fs.readFileSync(wrapper, "utf8"), TEMP_HOME_SCRIPT);
+});
+
 // SW-521: an autonomous workspace inited while the interpreter rules were generated has nothing missing.
 test("SW-521: migrate drops the interpreter rules an older autonomous init recorded", async () => {
   const { writeWorkspaceSettings } = await import("../dist/harness/claude/hooks_gen.js");
