@@ -98,8 +98,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.service) {
     const service = args.service as string;
     // As the whole `up` does: every run starts here, so a deleted ask block comes back from the record (SW-835).
-    // Only from the host and only for the cwd's own workspace: the unpinned autonomous rule lets
-    // `--service x <other>` through, and that must not rewrite another workspace's settings.
+    // Only from the host and only for the cwd's own workspace: a person's `--service x <other>` or
+    // `-w <path>` must not rewrite another workspace's settings.
     const own = findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots());
     if (
       own !== null &&

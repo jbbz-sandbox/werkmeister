@@ -419,10 +419,10 @@ test("SW-186: each pre-rename spelling keeps its rule through the window, beside
     for (const verb of ["workspace new", "ws new"])
       assert.ok(AUTONOMOUS_DENY.includes(`Bash(${name} ${verb}:*)`), verb);
   }
-  // The own feature's one-service start (SW-132) is the only new prefix rule on `feature up`.
+  // SW-843: no prefix rule on `feature up`; the one-service start (SW-132) is exact per service.
   const featureUp = autonomousRules("feat", ["api"]).filter((r) => r.includes(" feature up"));
   assert.ok(
-    featureUp.every((r) => !r.endsWith(":*)") || r.includes("--service:*")),
+    featureUp.every((r) => !r.endsWith(":*)")),
     featureUp.join(),
   );
 });
@@ -855,4 +855,46 @@ test("SW-807: an ICM run pre-approves only its own issue's start and view, exact
     assert.ok(!interactive.some((r) => r.includes(cmd)), cmd);
   const autonomous = workspaceAllowRules(root, true);
   for (const r of grants) assert.ok(autonomous.includes(r), r);
+});
+
+// Claude Code's matching: `:*` is a word-boundary prefix, any other rule exact (SW-560's probe).
+const claudeAllows = (rules, cmd) =>
+  rules.some((r) => {
+    const m = /^Bash\((.*?)(:\*)?\)$/.exec(r);
+    return m && (m[2] ? cmd === m[1] || cmd.startsWith(`${m[1]} `) : cmd === m[1]);
+  });
+
+test("SW-843: `feature up --service` is pre-approved only for this workspace's own feature", async () => {
+  // *core* is an on-demand service of the workspace's repos, not in SERVICES.
+  const allow = autonomousRules("feat", ["api"], ["core"]);
+  for (const name of ["werkmeister", "w9r"]) {
+    for (const cmd of [
+      "feature up --service api",
+      "feature up --service core",
+      "feature up feat --service core",
+      "feature up feat --service api",
+    ])
+      assert.ok(claudeAllows(allow, `${name} ${cmd}`), `${name} ${cmd}`);
+    for (const cmd of [
+      "feature up --service api other",
+      "feature up --service core other",
+      "feature up --service api -w /Users/x/features/other",
+      "feature up other --service api",
+      "feature up --service lib",
+      "feature up feat --service lib",
+      "feature up feat --service api -w /Users/x/features/other",
+      "feature up feat --service api other",
+    ])
+      assert.ok(!claudeAllows(allow, `${name} ${cmd}`), `${name} ${cmd}`);
+  }
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  await withSandboxHome(async () => {
+    const root = workspace();
+    fs.mkdirSync(dotDir(root), { recursive: true });
+    fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\nSERVICES=api\n");
+    const rules = workspaceAllowRules(root, true);
+    assert.ok(!rules.includes("Bash(werkmeister feature up --service:*)"), "no unpinned rule");
+    assert.ok(claudeAllows(rules, "werkmeister feature up --service api"));
+    assert.ok(!claudeAllows(rules, "werkmeister feature up --service api other"));
+  });
 });
