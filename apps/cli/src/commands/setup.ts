@@ -405,7 +405,8 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   let grantStandardsDir = false;
   if (!standards.present) {
     info("Claude Code settings dir not found — skipping.");
-  } else if (standards.dirMissing) {
+  } else if (standards.dirMissing && gc.load()["overrides"]?.["standards_dir"]) {
+    // The default tree is still missing here only because setup seeds it below (SW-640).
     info(`Standards dir ${gc.standardsDirPath()} not found — skipping.`);
   } else if (standards.error) {
     warn(`${claudeUserSettingsPath()}: ${standards.error} — skipping.`);

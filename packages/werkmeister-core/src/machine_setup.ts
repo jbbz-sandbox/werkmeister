@@ -69,6 +69,7 @@ import {
   configPath,
   type IngressSettings,
   type JiraSettings,
+  load,
   loadIngress,
   loadJira,
   loadPaths as loadPathsSection,
@@ -88,6 +89,7 @@ import {
   renderSecretsEnv,
   renderServicesLocalYaml,
   type SeedResult,
+  STANDARDS_README,
   seedFile,
 } from "./scaffold.js";
 import {
@@ -889,7 +891,33 @@ export function syncRegistryConfigs(checkOnly: boolean, options: RegistryOptions
     }
   }
 
+  steps.push(seedStandardsDir(checkOnly));
   return steps;
+}
+
+/**
+ * SW-640: seed the default standards tree, so a fresh install has one. A
+ * configured `overrides.standards_dir` is the person's to provide: `machine
+ * config --check` names it when missing, and this never creates it.
+ */
+function seedStandardsDir(checkOnly: boolean): Step {
+  const label = "config standards/";
+  const dir = standardsDirPath();
+  if (load()["overrides"]?.["standards_dir"]) {
+    return { label, ok: true, detail: `overrides.standards_dir → ${dir}` };
+  }
+  if (fs.existsSync(dir)) return { label, ok: true, detail: `present at ${dir}` };
+  if (checkOnly) return { label, ok: true, detail: `absent — would create ${dir}` };
+  try {
+    seedFile(path.join(dir, "README.md"), STANDARDS_README);
+    return {
+      label,
+      ok: true,
+      detail: `created ${dir} — add standard modules, or point overrides.standards_dir at a shared tree`,
+    };
+  } catch (e) {
+    return { label, ok: false, detail: `could not write ${dir}: ${e}` };
+  }
 }
 
 // --- TLS certificates for the ingress hostnames -----------------------------

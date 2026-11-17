@@ -1,10 +1,8 @@
 /**
  * A missing standards tree must be loud everywhere a human is watching.
  *
- * The fallback in `standardsDirPath()` is a convention (a tree bundled beside
- * the CLI), not a promise — this repo stopped shipping one when the standards
- * moved to their own repo, so an unconfigured install resolves a directory that
- * does not exist. `loadStandardsModules` treats that as "no modules" and
+ * The default `~/.werkmeister/standards` exists only once `machine setup` has
+ * seeded it (SW-640), and a configured tree can be gone. `loadStandardsModules` treats that as "no modules" and
  * carries on, which is correct for a hook that must never block a launch, and
  * is exactly why nothing else can afford to stay quiet about it.
  */
@@ -14,6 +12,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as gc from "werkmeister-core/global_config";
+import { syncRegistryConfigs } from "werkmeister-core/machine_setup";
 import { loadStandardsModules } from "werkmeister-core/standards";
 
 let tmp: string;
@@ -41,6 +40,19 @@ describe("standardsDirProblem", () => {
     expect(problem).toContain("not found");
     expect(problem).toContain(path.join(tmp, "gone"));
     expect(problem).not.toContain("unset");
+  });
+
+  it("is empty once machine setup has run on an unconfigured install (SW-640)", () => {
+    gc.save({});
+    expect(syncRegistryConfigs(true, { legacyDir: null }).at(-1)?.detail).toContain("would create");
+    expect(fs.existsSync(path.join(tmp, "standards"))).toBe(false);
+    syncRegistryConfigs(false, { legacyDir: null });
+    expect(gc.standardsDirProblem()).toBe("");
+    expect(fs.existsSync(path.join(tmp, "standards", "README.md"))).toBe(true);
+    // A configured tree is the person's: setup names it and creates nothing.
+    gc.save({ overrides: { standards_dir: path.join(tmp, "gone") } });
+    syncRegistryConfigs(false, { legacyDir: null });
+    expect(fs.existsSync(path.join(tmp, "gone"))).toBe(false);
   });
 
   it("is empty once the tree exists", () => {
