@@ -337,6 +337,8 @@ const feature: Stage[] = [
           "When a decision rests on how an external tool behaves (a CLI command or flag, a plugin API, an event name), check it against the installed tool, not only its docs: record `<bin> --version`, and confirm each fact with `<bin> <cmd> --help` or a real run or plugin load. `decisions.md` names the version and, beside each fact, the command that confirmed it; a fact only the docs support is marked `unverified: docs only`, and no decision rests on it. If the tool cannot be installed, say so and mark every such fact `unverified`. " +
           // SW-605: sw-583 recommended a GitHub API call as `unverified` only in the file; the person approved it and a read-only call later returned 403.
           "A recommended answer that rests on an external API, permission or platform behaviour (a token scope, a hosted API's response, a cloud permission) is checked live, read-only (a list, get, `--help` or dry run, never a write), before it goes into `decisions.md`, with the command and its result beside it. When it cannot be checked read-only, write `unverified` in the option text itself, so the question the person is asked carries the word, not only the file. " +
+          // SW-765: sw-753's host scratch probe got npm's .gitignore handling and the turbo cache dir wrong for the real repo.
+          "A probe of tool behaviour runs in the service's container, with the repo's own layout; starting it with `werkmeister feature up --service <svc>` is allowed for that. A probe in a host scratch project is marked `host scratch` beside the fact, and re-checked in the container before a decision rests on it. " +
           PREAPPROVED_INPUT +
           " " +
           CPU_PROFILE +
