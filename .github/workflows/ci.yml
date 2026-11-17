@@ -88,21 +88,29 @@ jobs:
   # shards on runners of their own, in parallel with `test`.
   core-test:
     needs: queued
-    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' && github.head_ref != 'changeset-release/main' }}
+    # SW-847: the version-PR skip sits on the steps, not here: a matrix job skipped at
+    # job level never expands, so the required `core-test (1)`/`(2)` never report.
+    # test/ci-required-checks.test.mjs fails if a required name goes missing.
+    if: ${{ !cancelled() && needs.queued.outputs.tested != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
         shard: [1, 2]
     steps:
       - uses: actions/checkout@v7
+        if: github.head_ref != 'changeset-release/main'
       - name: Configure a git identity for the smoke tests
+        if: github.head_ref != 'changeset-release/main'
         run: |
           git config --global user.name "CI"
           git config --global user.email "ci@users.noreply.github.com"
       - uses: ./.github/actions/install
+        if: github.head_ref != 'changeset-release/main'
       - run: pnpm turbo run build --filter=werkmeister-core
+        if: github.head_ref != 'changeset-release/main'
       # The smoke files are a few seconds in total; the last shard takes them all.
       - run: pnpm test ${{ matrix.shard }}/2
+        if: github.head_ref != 'changeset-release/main'
         working-directory: packages/werkmeister-core
 
   # SW-77: engines promises Node >=22, so the suites the gate names run on 22

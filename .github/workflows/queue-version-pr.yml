@@ -6,7 +6,7 @@ name: Queue version PR
 # from the push it lands. A later merge to main force-pushes the PR out of the
 # queue; its next green run queues it again. workflow_run always runs main's
 # copy of this file, never the PR's. CI skips its suites on the version PR (the
-# queue is the gate), so a run with every job skipped counts as green too.
+# queue is the gate), so a run whose jobs or steps were all skipped counts as green too.
 on:
   workflow_run:
     workflows: [CI]
