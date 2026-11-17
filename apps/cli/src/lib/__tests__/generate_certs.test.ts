@@ -30,10 +30,10 @@ afterEach(() => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-async function run(args: string[]) {
+async function run(args: string[], env: Record<string, string> = {}, certsDir = dir) {
   const domains = args.flatMap((a) => (a.startsWith("-") ? [a] : ["--domain", a]));
-  const r = await execAsync("bash", [SCRIPT, "--certs-dir", dir, "--no-trust", ...domains], {
-    env: { ...process.env, WERKMEISTER_INGRESS_HOSTS: "", WERKMEISTER_HOSTS_FILE: hosts },
+  const r = await execAsync("bash", [SCRIPT, "--certs-dir", certsDir, "--no-trust", ...domains], {
+    env: { ...process.env, WERKMEISTER_INGRESS_HOSTS: "", WERKMEISTER_HOSTS_FILE: hosts, ...env },
   });
   return { rc: r.status, out: r.stdout + r.stderr };
 }
@@ -96,5 +96,26 @@ describe("generate-certs.sh hosts reconcile", CERT_TIMEOUT, () => {
         "",
       ].join("\n"),
     );
+  });
+});
+
+// SW-642: a fresh Ubuntu VM (LANG=en_US.UTF-8, locale not generated) reported a failure that
+// passed under LC_ALL=C. Not reproduced on ubuntu:24.04; the script now pins C itself.
+describe("generate-certs.sh under the caller's locale", CERT_TIMEOUT, () => {
+  const hostsList = ["a-b.local.test", "ab.local.test", "A.local.test", "z.local.test"];
+
+  it("generates, re-runs and checks with LANG=en_US.UTF-8 and LC_CTYPE=UTF-8", async () => {
+    const env = { LANG: "en_US.UTF-8", LC_CTYPE: "UTF-8", LC_ALL: "" };
+    expect((await run(hostsList, env)).rc).toBe(0);
+    expect((await run(hostsList, env)).rc).toBe(0);
+    expect((await run([...hostsList, "--check"], env)).rc).toBe(0);
+  });
+
+  it("names the line that failed, which setup's step does not show", async () => {
+    const blocked = path.join(dir, "file");
+    fs.writeFileSync(blocked, "");
+    const r = await run(["keep.local.test"], {}, path.join(blocked, "certs"));
+    expect(r.rc).not.toBe(0);
+    expect(r.out).toMatch(/generate-certs\.sh: line \d+ failed \(exit \d+\): mkdir -p/);
   });
 });
