@@ -52,6 +52,8 @@ pnpm --filter werkmeister-plugin check
 
 It regenerates the gitignored `.claude-plugin/types/` that `tsc` reads, then runs `tsc -p . --noEmit`, `claude plugin validate .` and `claude plugin test .`. The types are Claude Code's, so `plugins/werkmeister/scripts/gen-types.mjs` has the `claude` on your PATH write them, by loading the folder as a plugin under a throwaway HOME with no login: no API call, and the types always match your installed Claude Code. CI runs the same `typecheck` and `test` scripts through turbo, against the Claude Code version pinned in `.github/workflows/ci.yml`.
 
+A plugin test that needs longer than the engine's 5 s default sets it per test: `test(name, { timeoutMs: 30_000 }, body)`, imported from `claude-code/testing`. The option is `timeoutMs`; a `timeout` key is silently ignored and the 5 s default stays. `plugins/werkmeister/hooks/register.test.ts` wraps `test` to give every case 30 s.
+
 ### How the mods work
 
 All three mods are registered in [`plugins/werkmeister/hooks/register.tsx`](../plugins/werkmeister/hooks/register.tsx).
