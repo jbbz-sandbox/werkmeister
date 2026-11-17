@@ -5,6 +5,7 @@
 # its buttons cannot reach the real daemon. Capture only: click nothing.
 #   sh scripts/docs-demo-home.sh [features root]
 # A short features root (SW-628) keeps /var/folders/... out of the dashboard header.
+# How to capture (headless Chrome, 1280 px, under 400 KB): docs/uis.md § Retaking the screenshots.
 set -e
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 FIX="$REPO/apps/cli/src/lib/__tests__/fixtures"
