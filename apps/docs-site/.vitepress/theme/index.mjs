@@ -1,6 +1,6 @@
 import DefaultTheme from "vitepress/theme";
 import { h } from "vue";
-import dashboard from "../../../../docs/images/uis/dashboard-hero.png";
+import hero from "../../../../docs/images/uis/vscode-hero.png";
 import DictHero from "./DictHero.vue";
 import FlowDiagram from "./FlowDiagram.vue";
 import "./custom.css";
@@ -15,8 +15,8 @@ export default {
       "home-hero-after": () =>
         h("img", {
           class: "home-dashboard",
-          src: dashboard,
-          alt: "The workspaces dashboard: two workspaces, one working and one asking a question",
+          src: hero,
+          alt: "The werkmeister VS Code extension beside the Claude terminal: the workspace in the terminal is outlined, another asks a question",
         }),
     }),
   enhanceApp({ app }) {
