@@ -428,6 +428,7 @@ function render(ctx: InitContext): Record<string, string> {
       ctx.workspaceName,
       issueIdOfMeta(ctx.meta),
       issueTracker({ project: ctx.inputs["project"], text: issueIdOfMeta(ctx.meta) }),
+      base.questionTool,
     ),
   };
   files["_shared/pr-rules.md"] = buildPrRulesMd(`stages/${prDir(stages)}/output/`, base.autonomous);

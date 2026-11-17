@@ -10,6 +10,7 @@
  */
 
 import { COMPOSE_FILE } from "./compose_file.js";
+import { generatedFileCheck } from "./generated_file_check.js";
 import { type IssueTrackerStrategy, issueTracker } from "./issue_tracker.js";
 import type { IssueKind } from "./issue_trackers/types.js";
 
@@ -19,6 +20,7 @@ export function buildIssuesReportMd(
   workspaceName: string,
   issueId = "",
   tracker: IssueTrackerStrategy = issueTracker(),
+  questionTool?: string,
 ): string {
   const {
     row: appRow,
@@ -56,6 +58,8 @@ Decide this first.
 - **Existing — it was already there** (it happens on the base branch, or it is in code this workspace has not touched, including the \`werkmeister\` tool itself): file it as an issue where it belongs (table below), then carry on. Fix it here only if the current task depends on it, and say so in the issue.
 
 Not sure? Check whether it happens on the base branch. If you still can't tell, ask the person — don't guess.
+
+${generatedFileCheck(questionTool)}
 
 ## Features and tasks
 

@@ -260,6 +260,7 @@ function init(ctx: InitContext): void {
       workspaceName,
       issueIdOfMeta(meta),
       issueTracker({ project: inputs["project"], text: issueIdOfMeta(meta) }),
+      layout.questionTool,
     ),
   );
   success(`Wrote ${issuesReportPath}`);

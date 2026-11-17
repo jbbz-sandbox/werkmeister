@@ -8,6 +8,7 @@
  */
 
 import { COMPOSE_FILE } from "../compose_file.js";
+import { generatedFileCheck } from "../generated_file_check.js";
 import { APPROVAL_NOTE, CHAT_APPROVAL, HOST_SCRIPT_RULE } from "../pr_rules.js";
 
 export interface IcmVars {
@@ -166,7 +167,7 @@ const groupStep = (v: IcmVars) =>
 const REVIEW_FORMAT =
   "a `| criterion | result | evidence |` table whose result cell is exactly `PASS` or `FAIL` — nothing else in the cell — with the proof in the evidence column";
 
-const reviewStep = (rerun: string, group: string[]) =>
+const reviewStep = (rerun: string, { group, questionTool }: IcmVars) =>
   "Review the diff: for each code worktree you touched, start a fresh subagent and brief it with only the worktree path and " +
   `"run the \`ponytail:ponytail-review\` skill over this worktree's ${
     group.length
@@ -182,10 +183,11 @@ const reviewStep = (rerun: string, group: string[]) =>
   // SW-449: a left Should fix shipped a false "every key is checked" in a changeset (sw-412).
   "Fix every **Must fix** finding in place, and any **Should fix** finding that shows the change's own docs, comments, help text or release entry state something false (fix the code, or reword that text so it is true), " +
   `${group.length ? `fold each fix into the commit of the ticket it belongs to (${FOLD}), ` : ""}then ${rerun}. Leave the other **Should fix** and **Nice to have** findings as they are. ` +
+  `${generatedFileCheck(questionTool)} ` +
   "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
   `${REVIEW_FORMAT}, with one row per worktree (\`PASS\` means no Must fix left open). ` +
   "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`; a file of prose alone fails with `has no PASS row`.";
-const implementReview = (v: IcmVars) => reviewStep("rerun the host test step above", v.group);
+const implementReview = (v: IcmVars) => reviewStep("rerun the host test step above", v);
 
 // SW-687: sw-634 decided a blocklist for a pre-approved wrapper's input; one key it let through sent auth to any host.
 const PREAPPROVED_INPUT =
@@ -542,7 +544,7 @@ const bugfix: Stage[] = [
         // SW-678: these edits come after the fix stage's gate; one service's test command missed docs-site's (sw-631, sw-669).
         reviewStep(
           "rerun `werkmeister pr gate --tests` (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows), not one service's test command: it retests every service the diff touches, and these edits come after the fix stage's gate. Then rerun steps 2–3 and update `exercise.md`",
-          v.group,
+          v,
         ),
       ],
       outputs: [
