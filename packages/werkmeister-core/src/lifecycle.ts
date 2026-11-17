@@ -1212,7 +1212,8 @@ export function grantInBackground(): number {
 async function grantWaitersNow(): Promise<string[]> {
   const started: string[] = [];
   for (const feature of readQueue()) {
-    const workspace = readLeases()[feature]?.workspace;
+    // A lease pruned by a process that can't see the folder must not cost the waiter its start (SW-848).
+    const workspace = readLeases()[feature]?.workspace || workspaceForFeature(feature);
     if (!workspace) {
       await dequeue(feature);
       continue;
@@ -1232,9 +1233,20 @@ async function grantWaitersNow(): Promise<string[]> {
       r = await up(feature, workspace, { byPerson: false });
     } catch (e) {
       // One waiter's failed re-up (HOST_LOAD, NO_COMPOSE, ...) must not end the pass for the rest (SW-737).
-      warn(`Could not start '${feature}' from the waiting queue: ${(e as Error).message}`);
-      // Admission already dropped it from the queue; its session is the only one that can act (SW-682).
-      if (e instanceof SandboxError && e.code === "NEVER_FITS") writeNudge(workspace, e.message);
+      const message = `Could not start '${feature}' from the waiting queue: ${(e as Error).message}`;
+      warn(message);
+      // Admission already dropped it (never fits, or a start that failed after admit): only its session can act (SW-682, SW-848).
+      if (!readQueue().includes(feature)) {
+        clearWaiting(workspace);
+        // A never-fits rerun would fail the same way; its message already says what to change.
+        const neverFits = e instanceof SandboxError && e.code === "NEVER_FITS";
+        writeNudge(
+          workspace,
+          neverFits
+            ? message
+            : `${message}\nIt left the queue: run \`werkmeister feature up\` to queue it again.`,
+        );
+      }
       continue;
     }
     // Backfill (SW-675): a later waiter may fit; admission itself holds the room for a starved head.
