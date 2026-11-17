@@ -25,7 +25,12 @@
 #
 # Exit codes: 0 ok / already current, 1 missing-or-stale (--check) or failure.
 
-set -euo pipefail
+set -Eeuo pipefail
+# SW-642: every value here is an ASCII hostname, so C collation is right, and it keeps
+# `sort` and `comm` agreeing whatever locale the caller has (or lacks).
+export LC_ALL=C
+# setup shows only the exit code; name the line that failed (-E: inside functions too).
+trap 'rc=$?; echo "generate-certs.sh: line $LINENO failed (exit $rc): $BASH_COMMAND" >&2' ERR
 
 CERTS_DIR="${WERKMEISTER_CERTS_DIR:-$HOME/.docker/certs}"
 HOSTS_FILE="${WERKMEISTER_HOSTS_FILE:-/etc/hosts}"

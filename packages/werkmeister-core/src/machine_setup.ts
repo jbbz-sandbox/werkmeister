@@ -1022,7 +1022,13 @@ export function syncIngressCerts(
   }
   const rc = (interactive ?? defaultInteractiveRunner)(cmd);
   if (rc !== 0) {
-    return [{ label, ok: false, detail: `generate-certs.sh failed (exit ${rc})` }];
+    return [
+      {
+        label,
+        ok: false,
+        detail: `generate-certs.sh failed (exit ${rc}); its failing line is printed above`,
+      },
+    ];
   }
   const detail = `${ingress.certs_dir} covers ${hostnames.join(", ")}`;
   if (options.skipSudo) {
