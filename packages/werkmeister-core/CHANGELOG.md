@@ -1,5 +1,12 @@
 # sandbox-core
 
+## 0.93.10
+
+### Patch Changes
+
+- 5db8d8a: Autonomous workspaces no longer pre-approve `werkmeister feature up --service:*` or `feature up <feature> --service:*`, which let an agent start another workspace's service (`feature up --service x <other>`, or `-w <path>`). Both forms are now allowed exactly, once for each of the workspace's own services (SW-843).
+- 2e91d10: A service whose volumes mount the docker socket or the werkmeister home (or a parent of either) no longer gets a pre-approved `docker exec <feature>-<svc> sh -c '<test>'` rule: its test code would run with the host's docker and the real `~/.werkmeister`. Those runs ask; `werkmeister pr gate` still runs them (SW-845).
+
 ## 0.93.9
 
 ## 0.93.8
