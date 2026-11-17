@@ -17,14 +17,19 @@ import {
   listWorkspaces,
   type WorkspaceStatus,
 } from "werkmeister-core";
+import { workspacesRoot } from "werkmeister-core/config";
 import { callTool, DaemonUnavailable } from "werkmeister-core/daemon_client";
+import { loadJira } from "werkmeister-core/global_config";
+import { loadProjects } from "werkmeister-core/projects";
 import type { WorkspaceResources } from "werkmeister-core/resources";
 import type { InterceptsSnapshot } from "werkmeister-core/status";
 import type { PrInput } from "werkmeister-ui";
 import {
+  boardUrl,
   buildTree,
   cliNotFoundNode,
   daemonDownNode,
+  inTerminal,
   LEGEND_NODE,
   type WsNode,
 } from "./build-tree.js";
@@ -37,10 +42,14 @@ const RESOURCE_POLL_MS = 30000;
 
 /** Theme variables only, so the cards follow whatever theme is active, live. */
 const CSS = `
-body{padding:0;color:var(--vscode-foreground);font-family:var(--vscode-font-family);font-size:var(--vscode-font-size)}
-.top,.card{padding:10px 12px}
-/* Mixed from the text colour: a theme's own panel border is often too faint to part the cards. */
-.card{border-top:1px solid color-mix(in srgb,var(--vscode-foreground) 30%,transparent);display:flex;flex-direction:column;gap:3px}
+body{padding:4px 0;color:var(--vscode-foreground);font-family:var(--vscode-font-family);font-size:var(--vscode-font-size)}
+/* Tiles, bordered in a mix of the text colour: a theme's own panel border is often too faint to part them. */
+.card{margin:0 8px 8px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--vscode-foreground) 18%,transparent);border-radius:6px;display:flex;flex-direction:column;gap:3px}
+/* SW-864: the tile whose session is in the active terminal. */
+.card.in-terminal{border-color:var(--vscode-focusBorder);background:color-mix(in srgb,var(--vscode-focusBorder) 10%,transparent)}
+.chip{margin-left:auto;padding:0 8px;border-radius:10px;background:var(--vscode-badge-background);color:var(--vscode-badge-foreground);font-size:11px;font-weight:600;white-space:nowrap}
+.card .row:has(.chip){flex-wrap:nowrap}
+.card .row:has(.chip) .name{min-width:0}
 .row{display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline}
 .name{font-weight:600}
 .card,.name,blockquote{overflow-wrap:anywhere}
@@ -52,6 +61,10 @@ a{color:var(--vscode-textLink-foreground);text-decoration:none}
 a:hover{color:var(--vscode-textLink-activeForeground);text-decoration:underline}
 button{margin-top:2px;padding:3px 10px;border:1px solid var(--vscode-button-border,transparent);border-radius:2px;background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);font:inherit;cursor:pointer}
 button:hover{background:var(--vscode-button-secondaryHoverBackground)}
+button.primary{background:var(--vscode-button-background);color:var(--vscode-button-foreground)}
+button.primary:hover{background:var(--vscode-button-hoverBackground)}
+a.name{color:inherit}
+a.name:hover{color:var(--vscode-textLink-activeForeground)}
 a:focus-visible,button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:2px}
 ${CARD_CSS}`;
 
@@ -140,9 +153,12 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
       pollWhileVisible(visibility, () => void this.sweep(), RESOURCE_POLL_MS),
     ];
     const messages = view.webview.onDidReceiveMessage((m) => this.onMessage(m));
+    // The cue moves on a tab switch at once, from the cached cards: no fetch (SW-864).
+    const terminal = vscode.window.onDidChangeActiveTerminal(() => this.post());
     view.onDidDispose(() => {
       for (const stop of stops) stop();
       messages.dispose();
+      terminal.dispose();
       this.view = undefined;
     });
   }
@@ -161,7 +177,16 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
 
   private post(): void {
     const nodes = this.legend ? [LEGEND_NODE, ...this.roots] : this.roots;
-    void this.view?.webview.postMessage({ html: renderCards(nodes) });
+    const workspaces = this.roots.flatMap((n) => (n.workspace ? [n.workspace] : []));
+    const html = renderCards(nodes, {
+      inTerminal: inTerminal(
+        workspaces,
+        terminalCwd(vscode.window.activeTerminal),
+        workspacesRoot(),
+      ),
+      board: currentBoardUrl(),
+    });
+    void this.view?.webview.postMessage({ html });
   }
 
   /** Kept apart from load(): a slow sweep must never hold up the rows. */
@@ -216,6 +241,25 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
       this.loading = false;
       this.post();
     }
+  }
+}
+
+/**
+ * Where a terminal started, else where its shell is now. A `werkmeister …` command terminal
+ * (`feature logs`, `up`) also sits in a workspace folder but is not its session, so it has none.
+ */
+function terminalCwd(t: vscode.Terminal | undefined): string | undefined {
+  if (!t || t.name.startsWith("werkmeister ")) return undefined;
+  const cwd = (t.creationOptions as vscode.TerminalOptions).cwd ?? t.shellIntegration?.cwd;
+  return typeof cwd === "string" ? cwd : cwd?.fsPath;
+}
+
+/** The default Jira project's board (`projects:` in ~/.werkmeister/config.yaml), or null. File reads only. */
+export function currentBoardUrl(): string | null {
+  try {
+    return boardUrl(loadJira().base_url, loadProjects());
+  } catch {
+    return null;
   }
 }
 

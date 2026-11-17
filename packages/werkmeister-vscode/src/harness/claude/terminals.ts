@@ -4,7 +4,13 @@ import * as vscode from "vscode";
 import { CODEX_LAUNCH, listWorkspaces, reconcileLaunch, startArgs } from "werkmeister-core";
 import { harnessIdOf } from "werkmeister-core/harness_layout";
 import { trackSessionTerminal } from "../../terminal.js";
-import { parseLaunchUri, type SessionMode, sessionCommand, shellQuote } from "./uri.js";
+import {
+  parseLaunchUri,
+  type SessionMode,
+  sessionCommand,
+  sessionTabName,
+  shellQuote,
+} from "./uri.js";
 
 /**
  * A Claude session never exits, so it gets its own terminal rather than a
@@ -15,7 +21,12 @@ export function openClaudeTerminal(
   command: string,
   harness = "claude",
 ): void {
-  const term = vscode.window.createTerminal({ name: `${harness} ${ws.name}`, cwd: ws.path });
+  const term = vscode.window.createTerminal({
+    name: sessionTabName(ws.name),
+    cwd: ws.path,
+    // Codex keeps a different icon so the two harnesses tell apart at a glance.
+    iconPath: new vscode.ThemeIcon(harness === "claude" ? "terminal" : "terminal-bash"),
+  });
   trackSessionTerminal(term, ws.path);
   term.sendText(command, true);
   term.show();
@@ -59,8 +70,9 @@ export function registerClaudeUriHandler(): vscode.Disposable {
  * has exited to a shell, is not told apart; track pids if that is ever seen.
  */
 export function focusSessionTerminal(ws: { name: string; path: string }): void {
-  const name = `${harnessIdOf(ws.path)} ${ws.name}`;
-  const open = vscode.window.terminals.find((t) => t.name === name);
+  // The second name is the one tabs had before SW-864, for terminals still open across the upgrade.
+  const names = [sessionTabName(ws.name), `${harnessIdOf(ws.path)} ${ws.name}`];
+  const open = vscode.window.terminals.find((t) => names.includes(t.name));
   if (open) open.show();
   else openSessionTerminal(ws, "continue");
 }
@@ -100,7 +112,11 @@ export function focusMasterControl(root: string): void {
     open.show();
     return;
   }
-  const term = vscode.window.createTerminal({ name: MASTER_CONTROL, cwd: root });
+  const term = vscode.window.createTerminal({
+    name: MASTER_CONTROL,
+    cwd: root,
+    iconPath: new vscode.ThemeIcon("circuit-board"),
+  });
   term.sendText(sessionCommand("claude", "continue"), true);
   term.show();
 }

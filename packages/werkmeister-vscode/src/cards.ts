@@ -6,7 +6,7 @@
  * No inline styles, since the view's CSP allows only the nonce'd stylesheet;
  * a colour is the class `colorClass` names.
  */
-import { RELEASED_COLOR, TONE_COLORS, type WsNode } from "./build-tree.js";
+import { type InTerminal, RELEASED_COLOR, TONE_COLORS, type WsNode } from "./build-tree.js";
 
 /** The only commands a click in the view may run; view.ts trusts exactly these. */
 export const CARD_COMMANDS = [
@@ -18,6 +18,7 @@ export const CARD_COMMANDS = [
   "sandbox.resume",
   "sandbox.masterControl",
   "sandbox.dashboard",
+  "sandbox.openBoard",
   "sandbox.configure",
 ];
 
@@ -51,11 +52,32 @@ function context(n: WsNode): string {
   return ` data-vscode-context="${esc(JSON.stringify(data))}"`;
 }
 
-function action(tag: "a" | "button", command: string, id: string, label: string): string {
-  const attrs = `data-cmd="${command}" data-id="${esc(id)}"`;
+function action(
+  tag: "a" | "button",
+  command: string,
+  id: string,
+  label: string,
+  extra = "",
+): string {
+  const attrs = `data-cmd="${command}" data-id="${esc(id)}"${extra}`;
   return tag === "a"
     ? `<a href="#" ${attrs}>${esc(label)}</a>`
     : `<button type="button" ${attrs}>${esc(label)}</button>`;
+}
+
+/** The pill on whichever tile the active terminal is showing (SW-864). */
+const CHIP = `<span class="chip">In terminal</span>`;
+
+/** The hover names where the link goes: Jira, GitHub, else the host. */
+function trackerName(url: string): string {
+  try {
+    const host = new URL(url).hostname;
+    if (host.endsWith("atlassian.net")) return "Jira";
+    if (host === "github.com") return "GitHub";
+    return host;
+  } catch {
+    return "the tracker";
+  }
 }
 
 function line(cls: string, text: string | null | undefined): string {
@@ -69,33 +91,39 @@ const SESSION_BUTTON = {
   resume: ["sandbox.resume", "▶ Resume"],
 } as const;
 
-function workspaceCard(n: WsNode): string {
+function workspaceCard(n: WsNode, active: boolean): string {
   const card = n.card;
   if (!card) return "";
   const services = n.children.filter((c) => c.kind === "service");
   const prs = n.children.filter((c) => c.kind === "pr");
-  const issue = card.issueId
-    ? n.workspace?.issueUrl
-      ? action("a", "sandbox.openIssue", n.id, `${card.issueId} ↗`)
-      : `<span>${esc(card.issueId)}</span>`
-    : "";
-  // One line each: the issue, then every PR with its state and CI in their own colours.
-  const links = [
-    issue,
-    ...prs.map((p) => {
-      const status = (p.pr?.status ?? [])
-        .map((s) => `<span class="${colorClass(s.color)}">${esc(s.text)}</span>`)
-        .join(" · ");
-      return `${action("a", "sandbox.openPr", p.id, `${p.label} ↗`)} ${status}`;
-    }),
-  ].filter(Boolean);
+  const url = n.workspace?.issueUrl;
+  // The name is the issue link (SW-864); its hover says where it goes.
+  const name = url
+    ? action(
+        "a",
+        "sandbox.openIssue",
+        n.id,
+        n.label,
+        ` class="name" title="Open ${esc(card.issueId ?? n.label)} in ${esc(trackerName(url))}"`,
+      )
+    : `<span class="name">${esc(n.label)}</span>`;
+  // One line each: every PR with its state and CI in their own colours.
+  const links = prs.map((p) => {
+    const status = (p.pr?.status ?? [])
+      .map((s) => `<span class="${colorClass(s.color)}">${esc(s.text)}</span>`)
+      .join(" · ");
+    return `${action("a", "sandbox.openPr", p.id, `${p.label} ↗`)} ${status}`;
+  });
+  const open = card.needsYou
+    ? action("button", "sandbox.openTerminal", n.id, "Answer in terminal", ` class="primary"`)
+    : action("button", "sandbox.openTerminal", n.id, "Open terminal");
   return [
-    `<article class="card"${context(n)}>`,
-    `<div class="row"><span class="name">${esc(n.label)}</span><span class="${colorClass(n.icon.color)}">${esc(card.state)}</span></div>`,
+    `<article class="card${active ? " in-terminal" : ""}" id="ws-${esc(n.id)}"${context(n)}>`,
+    `<div class="row">${name}<span class="${colorClass(n.icon.color)}">${esc(card.state)}</span>${active ? CHIP : ""}</div>`,
+    line("dim", card.meta),
     line(colorClass(card.activity?.color), card.activity?.text),
     card.question ? `<blockquote>“${esc(card.question)}”</blockquote>` : "",
     line(colorClass(TONE_COLORS.err), card.crash),
-    line("dim", card.meta),
     links.map((l) => `<div>${l}</div>`).join(""),
     services.length
       ? `<div class="row">${services
@@ -105,7 +133,7 @@ function workspaceCard(n: WsNode): string {
           )
           .join("")}</div>`
       : "",
-    `<div class="row">${action("button", "sandbox.openTerminal", n.id, "Open terminal")}${card.action ? action("button", SESSION_BUTTON[card.action][0], n.id, SESSION_BUTTON[card.action][1]) : ""}</div>`,
+    `<div class="row">${open}${card.action ? action("button", SESSION_BUTTON[card.action][0], n.id, SESSION_BUTTON[card.action][1]) : ""}</div>`,
     "</article>",
   ].join("");
 }
@@ -130,10 +158,56 @@ function plainCard(n: WsNode): string {
   ].join("");
 }
 
-export function renderCards(nodes: WsNode[]): string {
+export interface RenderOptions {
+  /** The tile the active terminal is showing; it alone gets the cue. */
+  inTerminal?: InTerminal;
+  /** The Jira board link; no button without one. */
+  board?: string | null;
+}
+
+/** `● 2 need you · 1 PR to review`, each linking to the first card it counts. */
+function summary(nodes: WsNode[]): string {
+  const ws = nodes.filter((n) => n.kind === "workspace");
+  const needs = ws.filter((n) => n.card?.needsYou);
+  const review = ws.filter((n) => n.children.some((c) => c.pr?.open));
+  const count = (list: WsNode[], one: string, many: string, cls: string) =>
+    list.length
+      ? `<a href="#ws-${esc(list[0].id)}"${cls}>${list.length} ${list.length === 1 ? one : many}</a>`
+      : "";
+  const parts = [
+    count(needs, "needs you", "need you", ` class="${colorClass(TONE_COLORS.needs)}"`),
+    count(review, "PR to review", "PRs to review", ""),
+  ].filter(Boolean);
+  return parts.length ? `<div>${parts.join(`<span class="dim"> · </span>`)}</div>` : "";
+}
+
+function masterControl(nodes: WsNode[], o: RenderOptions): string {
+  const active = o.inTerminal?.kind === "root";
   return [
-    `<div class="top row">${action("button", "sandbox.masterControl", "", "Master control")}${action("button", "sandbox.dashboard", "", "Dashboard ↗")}</div>`,
-    ...nodes.map((n) => (n.kind === "workspace" ? workspaceCard(n) : plainCard(n))),
+    `<section class="card master${active ? " in-terminal" : ""}" aria-label="Master control">`,
+    `<div class="row"><span class="name">Master control</span>${active ? CHIP : ""}</div>`,
+    `<div class="dim">Triage, backlog and close-out</div>`,
+    summary(nodes),
+    `<div class="row">`,
+    action("button", "sandbox.masterControl", "", "Master control", ` class="primary"`),
+    action("button", "sandbox.dashboard", "", "Dashboard ↗"),
+    o.board
+      ? action("button", "sandbox.openBoard", "", "Jira board ↗", ` title="${esc(o.board)}"`)
+      : "",
+    `</div>`,
+    `</section>`,
+  ].join("");
+}
+
+export function renderCards(nodes: WsNode[], o: RenderOptions = {}): string {
+  const t = o.inTerminal;
+  return [
+    masterControl(nodes, o),
+    ...nodes.map((n) =>
+      n.kind === "workspace"
+        ? workspaceCard(n, t?.kind === "workspace" && t.name === n.workspace?.name)
+        : plainCard(n),
+    ),
   ].join("");
 }
 

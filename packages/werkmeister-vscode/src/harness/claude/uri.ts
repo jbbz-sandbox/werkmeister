@@ -6,6 +6,15 @@
  * The Remote Control name is the matched workspace's, never the query's (SW-499).
  */
 
+/**
+ * A session terminal's tab (SW-864): `SW-864 · vscode-ui-revamp` from `sw-864-vscode-ui-revamp`,
+ * so tab and card share the issue key. A name with no `<key>-<n>-` prefix stays as it is.
+ */
+export function sessionTabName(workspace: string): string {
+  const m = workspace.match(/^([a-z][a-z0-9]*)-(\d+)-(.+)$/i);
+  return m ? `${m[1].toUpperCase()}-${m[2]} · ${m[3]}` : workspace;
+}
+
 /** POSIX single-quote escaping — the integrated terminal is a shell, not execFile. */
 export function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;

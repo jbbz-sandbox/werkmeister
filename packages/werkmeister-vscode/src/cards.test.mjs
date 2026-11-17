@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildTree, cliNotFoundNode } from "../out/build-tree.js";
+import { boardUrl, buildTree, cliNotFoundNode, inTerminal } from "../out/build-tree.js";
 import { CARD_COMMANDS, findNode, renderCards } from "../out/cards.js";
 
 const ws = (name, over = {}) => ({
@@ -51,11 +51,19 @@ const tree = () =>
 
 test("a card carries the stage name, the model, the issue, each PR and each container", () => {
   const html = renderCards(tree());
-  assert.match(html, /opus · stage 2\/4 implement/);
-  assert.match(html, /data-cmd="sandbox.openIssue" data-id="a">SW-1 ↗/);
+  // Line 2, straight after the name and state (SW-864).
+  assert.match(html, /<\/span><\/div><div class="dim">opus · stage 2\/4 implement<\/div>/);
+  assert.match(
+    html,
+    /data-cmd="sandbox.openIssue" data-id="a" class="name" title="Open SW-1 in jira.example">a<\/a>/,
+  );
   assert.match(html, /data-cmd="sandbox.openPr" data-id="a\/pr\/[^"]+">r#1 ↗/);
   assert.match(html, /●<\/span> frontend <span class="dim">healthy/);
-  assert.match(html, /<button type="button" data-cmd="sandbox.openTerminal" data-id="a">/);
+  // Needs you: the terminal button is the primary one and says why.
+  assert.match(
+    html,
+    /<button type="button" data-cmd="sandbox.openTerminal" data-id="a" class="primary">Answer in terminal/,
+  );
   assert.match(html, /<button type="button" data-cmd="sandbox.masterControl"/);
   assert.match(html, /<button type="button" data-cmd="sandbox.dashboard"/);
 });
@@ -81,7 +89,7 @@ test("the card's one button acts on the run: start it, hold it, or pick it back 
   assert.doesNotMatch(card({ state: "up", running: 1, total: 1 }), /sandbox\.up"/);
 });
 
-test("the issue and each PR get a line of their own, the PR's status in its own colour", () => {
+test("each PR gets a line of its own, its status in its own colour; the issue is the name", () => {
   const pr = (over) => ({ url: PR, state: "OPEN", ci: null, failingChecks: 0, ...over });
   const card = (prs) =>
     renderCards(
@@ -90,7 +98,10 @@ test("the issue and each PR get a line of their own, the PR's status in its own 
       }),
     );
   const open = card([pr(), pr({ url: "https://github.com/o/r/pull/2" })]);
-  assert.match(open, /<div><span>SW-1<\/span><\/div><div><a [^>]+>r#1 ↗<\/a> /);
+  // No issue URL: the name is plain text and there is no separate issue line.
+  assert.match(open, /<span class="name">a<\/span>/);
+  assert.doesNotMatch(open, /SW-1/);
+  assert.match(open, /<div><a [^>]+>r#1 ↗<\/a> /);
   assert.equal(open.match(/<div><a [^>]+>r#\d ↗/g).length, 2);
   assert.match(open, /<span class="c-charts-green">Open<\/span>/);
   assert.match(
@@ -111,7 +122,9 @@ test("nothing a workspace supplies reaches the page as markup", () => {
 });
 
 test("a right-click gets the node's contextValue and the fields the commands read", () => {
-  const [, raw] = renderCards(tree()).match(/<article class="card" data-vscode-context="([^"]+)"/);
+  const [, raw] = renderCards(tree()).match(
+    /<article class="card" id="ws-a" data-vscode-context="([^"]+)"/,
+  );
   const ctx = JSON.parse(raw.replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n)));
   assert.equal(ctx.webviewSection, "workspace:up");
   assert.deepEqual([ctx.workspace.name, ctx.workspace.path], ["a", "/ws/a"]);
@@ -125,4 +138,86 @@ test("every click names an allowed command and a node the host can find", () => 
     assert.ok(CARD_COMMANDS.includes(cmd), cmd);
     if (id) assert.ok(findNode(nodes, id), id);
   }
+});
+
+// --- SW-864: the cue on whichever tile the active terminal shows -------------
+
+test("a terminal's cwd names a workspace, Master control, or nothing", () => {
+  const list = [
+    { name: "a", path: "/ws/a" },
+    { name: "a-inner", path: "/ws/a/inner" },
+  ];
+  assert.deepEqual(inTerminal(list, "/ws/a", "/ws"), { kind: "workspace", name: "a" });
+  assert.deepEqual(inTerminal(list, "/ws/a/src", "/ws"), { kind: "workspace", name: "a" });
+  assert.deepEqual(inTerminal(list, "/ws/a/inner/x", "/ws"), {
+    kind: "workspace",
+    name: "a-inner",
+  });
+  assert.deepEqual(inTerminal(list, "/ws/", "/ws"), { kind: "root" });
+  assert.equal(inTerminal(list, "/ws/other", "/ws"), null);
+  assert.equal(inTerminal(list, "/home/me", "/ws"), null);
+  assert.equal(inTerminal(list, undefined, "/ws"), null);
+});
+
+test("exactly one tile gets the cue: the card, or Master control, or none", () => {
+  const nodes = buildTree([ws("a"), ws("b")], [st("a"), st("b")], null, []);
+  const cued = (t) =>
+    [
+      ...renderCards(nodes, { inTerminal: t }).matchAll(
+        /<(article|section) class="card[^"]*in-terminal[^"]*"( id="([^"]+)")?/g,
+      ),
+    ].map((m) => m[3] ?? "master");
+  assert.deepEqual(cued({ kind: "workspace", name: "b" }), ["ws-b"]);
+  assert.deepEqual(cued({ kind: "root" }), ["master"]);
+  assert.deepEqual(cued(null), []);
+  assert.deepEqual(cued({ kind: "workspace", name: "gone" }), []);
+  assert.equal(
+    renderCards(nodes, { inTerminal: { kind: "root" } }).match(/In terminal/g).length,
+    1,
+  );
+});
+
+test("Master control counts what needs you and links each count to its first card", () => {
+  const needs = { state: null, agent: "needs-you", at: null, question: "?" };
+  const html = renderCards(
+    buildTree(
+      [ws("a"), ws("b"), ws("c")],
+      [st("a"), st("b", { claude: needs }), st("c", { claude: needs })],
+      null,
+      [],
+      { prs: new Map([["a", [{ url: PR, state: "OPEN", ci: null, failingChecks: 0 }]]]) },
+    ),
+  );
+  assert.match(html, /<a href="#ws-b" class="c-charts-yellow">2 need you<\/a>/);
+  assert.match(html, /<a href="#ws-a">1 PR to review<\/a>/);
+  // Nothing to count: no line at all.
+  assert.doesNotMatch(renderCards(buildTree([ws("a")], [st("a")], null, [])), /to review|need/);
+});
+
+test("the Jira board button shows only with a board, and links to it", () => {
+  const nodes = tree();
+  assert.doesNotMatch(renderCards(nodes), /sandbox\.openBoard/);
+  assert.match(
+    renderCards(nodes, { board: "https://x.atlassian.net/jira/software/projects/SW/boards/1" }),
+    /data-cmd="sandbox.openBoard" data-id="" title="https:\/\/x.atlassian.net\/[^"]+">Jira board ↗/,
+  );
+  const jira = (over) => ({
+    tracker: "jira",
+    scope: { project: "SW" },
+    board: { id: "1" },
+    default: true,
+    ...over,
+  });
+  assert.equal(
+    boardUrl("https://x.atlassian.net/", [jira()]),
+    "https://x.atlassian.net/jira/software/projects/SW/boards/1",
+  );
+  assert.equal(boardUrl("https://x.atlassian.net", [jira({ board: undefined })]), null);
+  assert.equal(boardUrl(undefined, [jira()]), null);
+  assert.equal(boardUrl("https://x.atlassian.net", [jira({ tracker: "github" })]), null);
+  // Several projects and none marked default: no guess.
+  assert.equal(
+    boardUrl("https://x.atlassian.net", [jira({ default: false }), jira({ default: false })]),
+    null,
+  );
 });
