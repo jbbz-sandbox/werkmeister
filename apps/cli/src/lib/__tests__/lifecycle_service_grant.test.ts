@@ -81,6 +81,8 @@ beforeEach(() => {
   writeLeases({ mine: { slot: 2, workspace: mine } });
 });
 afterEach(() => {
+  // Here, not on a case's last line: a failed expect before it would leak the mock into later cases (SW-850).
+  vi.mocked(getContainerStatus).mockReset().mockResolvedValue([]);
   vi.unstubAllEnvs();
   fs.rmSync(tmp, { recursive: true, force: true });
 });
@@ -158,7 +160,6 @@ it("a granted whole-feature waiter is told which containers stayed stopped and h
   expect(nudge).not.toContain("containers are up");
   expect(nudge).not.toContain("db-setup");
   expect(nudge).not.toContain("--service web");
-  vi.mocked(getContainerStatus).mockResolvedValue([]);
 });
 
 it("a granted waiter whose containers all run hears they are up", async () => {
