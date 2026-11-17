@@ -76,6 +76,36 @@ test("How to validate says a host-only check is a logged script run with one ! s
   );
 });
 
+// SW-765: a spec planned to delete turbo cache entries, not knowing every workspace shares the volume.
+test("Test commands names each registry cache as a shared volume never to delete from", async () => {
+  await withSandboxHome(
+    async () => {
+      const caches = { turbo: { path: "/turbo-cache", env: { TURBO_CACHE_DIR: "/turbo-cache" } } };
+      const args = [
+        "test",
+        1,
+        11100,
+        11119,
+        ["frontend"],
+        loadServices(),
+        "",
+        null,
+        ["frontend"],
+        false,
+        "",
+        {},
+      ];
+      const out = buildSandboxContextMd(...args, caches);
+      assert.match(
+        out,
+        /^Shared caches, mounted by every workspace on this machine: never delete from them .*`turbo` at `\/turbo-cache` \(`TURBO_CACHE_DIR=\/turbo-cache`, volume `werkmeister-turbo`\)\.$/m,
+      );
+      assert.doesNotMatch(buildSandboxContextMd(...args, {}), /Shared caches/);
+    },
+    { services: SERVICES },
+  );
+});
+
 test("no test path means the feature URL is the host root", async () => {
   await withSandboxHome(
     async () => {

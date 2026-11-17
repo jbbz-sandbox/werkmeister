@@ -142,6 +142,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^3\. .*`usage_usec` every 5 s.*cores in use per phase.*only a CPU cut shortens it/m,
             `${wt}/${d}`,
           );
+        // SW-765: research probes tool behaviour in the container; a host scratch probe is marked and re-checked.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^3\. .*probe of tool behaviour runs in the service's container.*marked `host scratch`.*re-checked in the container/m,
+            `${wt}/${d}`,
+          );
         // SW-810: copied markdown meets the repo's lint (its docs checks) before the spec fixes the text.
         if (d.endsWith("_research"))
           assert.match(

@@ -20,10 +20,13 @@ import {
   validationRows,
   wrappedTestCommand,
 } from "../../archetypes.js";
+import { cacheSource } from "../../build_caches.js";
 import {
   type ArchetypeRegistry,
   baselineUpstream,
+  type CacheRegistry,
   loadArchetypes,
+  loadCaches,
   type ReposConfig,
   type ServicesConfig,
 } from "../../config.js";
@@ -339,6 +342,19 @@ function testCommandLine(
 const PROBE_FORM = (tempHome: string) =>
   `A one-off probe is a \`node --test\` file, run as \`${tempHome} --no-wait node --test <file>\` (in the service's container, after its \`docker exec -w <dir> <container>\`, when the host has no node_modules); never host \`node <script>\`, a compound shell line or \`docker exec … node <script>\`. That form asks each time and is never pre-approved, since it runs any file (SW-510).`;
 
+// SW-765: sw-753's spec planned to delete turbo cache entries, not knowing the cache is one volume every workspace shares.
+function sharedCachesLine(caches: CacheRegistry): string {
+  const entries = Object.entries(caches);
+  if (!entries.length) return "";
+  const list = entries.map(([key, cache]) => {
+    const src = cacheSource(key, cache);
+    const where = src.kind === "volume" ? `volume \`${src.name}\`` : `host dir \`${src.name}\``;
+    const env = Object.entries(cache.env ?? {}).map(([k, v]) => `\`${k}=${v}\``);
+    return `\`${key}\` at \`${cache.path}\` (${[...env, where].join(", ")})`;
+  });
+  return `\nShared caches, mounted by every workspace on this machine: never delete from them (\`werkmeister cache prune\` evicts for every workspace, so it is the person's call). ${list.join("; ")}.\n`;
+}
+
 /**
  * Render .werkmeister/werkmeister-context.md — how to validate, then (when they apply)
  * ports, service topology, lifecycle commands, health checks.
@@ -359,6 +375,7 @@ export function buildSandboxContextMd(
   autoStop = false,
   tempHome = "",
   reposConfig: ReposConfig = {},
+  caches: CacheRegistry = loadCaches(),
 ): string {
   // Routed hosts come from the ingress config + `feature_router:` blocks — the
   // same source Caddy's site blocks are generated from — so this file can never
@@ -560,7 +577,7 @@ The registry's \`test:\` for each service (or its archetype's), run in its conta
     }
 
 ${svcs.map((s, i) => testCommandLine(feature, s, servicesConfig, archetypes ?? loadArchetypes(), svcLint[i])).join("\n")}
-
+${sharedCachesLine(caches)}
 `;
   } else {
     containerCommandsBlock = "";
