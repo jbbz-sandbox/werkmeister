@@ -421,8 +421,6 @@ export const AUTONOMOUS_RULES = [
   // No-arg forms act on the cwd's FEATURE; `autonomousRules` adds the named ones.
   // Each pre-SW-186 spelling keeps its rule until the CLI drops it, beside its new one.
   ...["up", "restart", "feature up", "feature restart"].flatMap(cli),
-  // SW-132: one of its own services, on-demand ones included, the way the PR gate starts them.
-  ...cli("feature up --service:*"),
   ...[
     "status",
     "feature status",
@@ -459,8 +457,15 @@ export const AUTONOMOUS_RULES = [
   ].flatMap(pluginTool),
 ];
 
-/** AUTONOMOUS_RULES plus the `werkmeister` and `docker` commands that name this feature or its containers. */
-export function autonomousRules(feature: string, services: string[]): string[] {
+/**
+ * AUTONOMOUS_RULES plus the `werkmeister` and `docker` commands that name this feature or its containers.
+ * *repoServices*: the workspace's repos' other services (on-demand ones), which only `feature up --service` starts.
+ */
+export function autonomousRules(
+  feature: string,
+  services: string[],
+  repoServices: string[] = [],
+): string[] {
   if (!feature) return AUTONOMOUS_RULES;
   return [
     ...AUTONOMOUS_RULES,
@@ -468,7 +473,11 @@ export function autonomousRules(feature: string, services: string[]): string[] {
     ...["up", "restart", "feature up", "feature restart"].flatMap((cmd) =>
       cli(`${cmd} ${feature}`),
     ),
-    ...cli(`feature up ${feature} --service:*`),
+    // SW-132: one of its own services, the way the PR gate starts them. SW-843: exact, since a
+    // trailing `<other>` or `-w <path>` would start another workspace's container.
+    ...[...services, ...repoServices].flatMap((svc) =>
+      [`feature up --service ${svc}`, `feature up ${feature} --service ${svc}`].flatMap(cli),
+    ),
     ...["logs", "test", "services", "feature logs", "feature test", "feature services"].flatMap(
       (cmd) => cli(`${cmd} ${feature}:*`),
     ),
@@ -611,7 +620,7 @@ export function workspaceAllowRules(
   const installs = repoNames.flatMap((name) =>
     frozenInstalls((f) => fs.existsSync(path.join(reposRoot, name, f))).map((c) => `Bash(${c})`),
   );
-  return [...new Set([...rules, ...autonomousRules(feature, services), ...installs])];
+  return [...new Set([...rules, ...autonomousRules(feature, services, extra), ...installs])];
 }
 
 function builtCliWrappers(workspaceRoot: string): string[] {
