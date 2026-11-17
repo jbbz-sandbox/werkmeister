@@ -148,6 +148,27 @@ export function seedFile(target: string, content: string, mode = 0o644): SeedRes
   return { path: target, status: "created" };
 }
 
+/** The README `machine setup` seeds into the default standards tree (SW-640). */
+export const STANDARDS_README = `# Coding standards
+
+werkmeister reads this folder's standard modules into each workspace. Each
+workspace gets a routing table, the \`w9r-*-standard\` skills and the
+\`_shared/standards.md\` rows. \`werkmeister standards check\` validates the folder.
+
+A module is \`<domain>.md\` or \`<domain>/STANDARD.md\`, with frontmatter:
+
+    ---
+    domain: testing
+    applies_to: ["**/*.test.ts"]
+    phase: [implement, review]
+    summary: One line on what the module covers.
+    ---
+
+To share one tree across a team, clone it and set \`overrides.standards_dir\`
+to its path in \`~/.werkmeister/config.yaml\`. \`machine setup\` writes this
+file only when it is missing and never overwrites it.
+`;
+
 // ---------------------------------------------------------------------------
 // Registry defaults (werkmeister-owned; merged under every repo's fragment)
 // ---------------------------------------------------------------------------

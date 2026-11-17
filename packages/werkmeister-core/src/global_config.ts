@@ -37,7 +37,6 @@ import {
   modelPricingYamlPath,
   portsYamlPath,
   sandboxHome,
-  sandboxRoot,
   servicesLocalYamlPath,
   servicesYamlPath,
 } from "./config.js";
@@ -108,33 +107,31 @@ export function envShPath(): string {
 
 /**
  * Root of the code-standards source tree (`overrides.standards_dir` →
- * `<werkmeister root>/docs/standards`).
+ * `~/.werkmeister/standards`).
  *
  * The standards are one organization's *content*; the CLI is a reusable tool.
  * This is the seam between them — point it at any directory laid out the way
  * `loadStandardsModules` expects and `werkmeister standards check` gates it there
- * too. Unlike the registry files above it has no `~/.werkmeister` default: the
- * bundled tree ships with the checkout, so an unconfigured install keeps
- * working.
+ * too. The default sits beside the registry files, outside the package: the
+ * tree must stay writable (`notes graduate` commits into it) and survive an
+ * upgrade, and `machine setup` seeds it (SW-640).
  */
 export function standardsDirPath(): string {
   const override = load()["overrides"]?.["standards_dir"];
   if (override) {
     return path.resolve(expandUser(String(override)));
   }
-  return path.join(sandboxRoot(), "docs", "standards");
+  return path.join(sandboxHome(), "standards");
 }
 
 /**
  * Describe why the standards tree is unusable, or "" when it is fine.
  *
- * The fallback above is a convention (a tree bundled beside the CLI), not a
- * promise — this repo no longer ships one, so an unconfigured install resolves
- * a directory that does not exist. The loader treats that as "no modules" and
- * carries on, which is right for a hook that must never block a launch and
- * wrong for anything a human is watching: a workspace inits with an empty
- * routing table and no standards skills, and nothing says so. Every
- * human-facing entry point reports this; the fail-open paths still don't.
+ * A missing tree reads as "no modules" to the loader, which carries on: right
+ * for a hook that must never block a launch, wrong for anything a human is
+ * watching (a workspace inits with an empty routing table and no standards
+ * skills, and nothing says so). Every human-facing entry point reports this;
+ * the fail-open paths still don't.
  */
 export function standardsDirProblem(): string {
   const dir = standardsDirPath();

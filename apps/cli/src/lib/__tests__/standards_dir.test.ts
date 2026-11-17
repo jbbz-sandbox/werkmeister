@@ -27,8 +27,8 @@ afterEach(() => {
 });
 
 describe("standardsDirPath", () => {
-  it("falls back to the bundled tree, so an unconfigured install still works", () => {
-    expect(gc.standardsDirPath().endsWith(path.join("docs", "standards"))).toBe(true);
+  it("defaults to standards/ beside config.yaml, the folder machine setup seeds (SW-640)", () => {
+    expect(gc.standardsDirPath()).toBe(path.join(tmp, "standards"));
   });
 
   it("reads overrides.standards_dir", () => {
