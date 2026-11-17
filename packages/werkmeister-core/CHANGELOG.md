@@ -1,5 +1,17 @@
 # sandbox-core
 
+## 0.93.7
+
+### Patch Changes
+
+- 9acbfa4: ICM implement and fix contracts: `exercise.md` and `fix.md` record the `pr gate --tests` result for each service it tested, not only its exit code (SW-126).
+- c021238: ICM exercise steps and `werkmeister-context.md` § How to validate: a check only the person can run on the host goes in a script that logs beside itself, run with one `! sh <absolute path>` line; never commands copied out of the transcript (SW-746).
+- a4dca52: ICM contracts: the review subagent runs in the foreground when nothing else is pending; a background review, test or gate job quiet for 10 minutes is stopped and relaunched once, then the person is told (SW-764).
+- 7e12dc2: ICM research contract: tool-behaviour probes run in the service's container (a host scratch probe is marked and re-checked there). `werkmeister-context.md` § Test commands names each registry cache as a volume every workspace shares, never to delete from (SW-765).
+- c5fc023: ICM propose and spike findings contracts: before filing 3 or more follow-up tickets, ask the person which epic or label they go under, then file each with it (SW-793).
+- a513328: ICM research contract: markdown a change adds or moves into a repo goes through the repo's lint command (its docs checks) before the spec fixes its text, and the spec promises a byte-for-byte copy only when that run passed (SW-810).
+- 8a42a42: ICM bugfix reproduce contract: loads the active `testing`, `engineering` and `comments` standards rows and names any rule that already prescribes the proposed fix (SW-837). A stage's `standards` can now name rows.
+
 ## 0.93.6
 
 ### Patch Changes
