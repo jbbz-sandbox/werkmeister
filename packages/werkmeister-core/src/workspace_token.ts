@@ -11,15 +11,15 @@
 
 import { randomBytes } from "node:crypto";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
+import { sandboxHome } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 
 export const WORKSPACE_TOKEN_FILE = "token";
 
 export function tokensDir(): string {
-  return path.join(dotDir(os.homedir()), "tokens");
+  return path.join(sandboxHome(), "tokens");
 }
 
 /** The token a container in this workspace sends, git-ignored (worktrees.ts). */

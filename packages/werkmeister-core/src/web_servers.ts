@@ -26,7 +26,7 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { dotDir, monorepoRoot, sandboxRoot } from "./config.js";
+import { monorepoRoot, sandboxHome, sandboxRoot, sharedProxySkipReason } from "./config.js";
 import { daemonPort } from "./daemon_client.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
@@ -179,7 +179,7 @@ async function freePort(port: number): Promise<void> {
 }
 
 function stateDir(): string {
-  const d = dotDir(os.homedir());
+  const d = sandboxHome();
   fs.mkdirSync(d, { recursive: true });
   return d;
 }
@@ -406,6 +406,13 @@ export async function start(
   build = true,
   force = false,
 ): Promise<boolean> {
+  // The servers own fixed machine ports; a relocated home can't see their PID files,
+  // so it would free the port out from under the host's (SW-622, as for Caddy in SW-279).
+  const skip = sharedProxySkipReason();
+  if (skip) {
+    info(`${app.label}: ${skip}; leaving the machine's server on port ${app.port} alone`);
+    return serves(app.port);
+  }
   const [running, pid] = isRunning(app);
 
   // Never bounce ourselves. `werkmeister infra connect` is a tool on apps/werkmeister-mcp, and it
@@ -545,6 +552,11 @@ export async function start(
 export async function stop(app: WebApp = DASHBOARD): Promise<boolean> {
   if (launchdOwns(app)) {
     info(`${app.label} is kept up by launchd (${DAEMON_LABEL}); leaving it running`);
+    return false;
+  }
+  const skip = sharedProxySkipReason();
+  if (skip) {
+    info(`${app.label}: ${skip}; leaving the machine's server on port ${app.port} alone`);
     return false;
   }
   const [running, pid] = isRunning(app);

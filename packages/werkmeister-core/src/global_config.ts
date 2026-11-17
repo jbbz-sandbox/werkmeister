@@ -29,7 +29,7 @@ import * as YAML from "yaml";
 
 import {
   configPath,
-  dotDir,
+  DOT_DIR,
   envVar,
   expandUser,
   type GlobalConfig,
@@ -655,7 +655,8 @@ export function writeEnvSh(cfg: GlobalConfig): string {
 // ---------------------------------------------------------------------------
 
 function managedBlock(): string {
-  const home = path.basename(dotDir(os.homedir()));
+  // The shell reads it at login, before any WERKMEISTER_CONFIG_FILE: the default home's name.
+  const home = DOT_DIR;
   return (
     `${_ZSH_BEGIN}\n` +
     "# Managed by `werkmeister machine config` — do not edit; regenerated on `werkmeister machine config`.\n" +

@@ -112,7 +112,7 @@ test("two concurrent `up` calls through the HTTP MCP server both complete", asyn
     await sleep(100);
   }
 
-  const token = fs.readFileSync(path.join(home, ".werkmeister", "mcp-token"), "utf8").trim();
+  const token = fs.readFileSync(path.join(reg, "mcp-token"), "utf8").trim();
   const callUp = async (ws) => {
     const client = new Client({ name: "up-concurrency.test", version: "0" });
     await client.connect(

@@ -30,7 +30,8 @@ it("lists the stale tokens, removes only them with --remove, and refuses a root 
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "tokens-cli-"));
   try {
     const root = path.join(home, "features");
-    const tokens = path.join(home, ".werkmeister", "tokens");
+    // State sits beside WERKMEISTER_CONFIG_FILE (SW-622).
+    const tokens = path.join(home, "tokens");
     fs.mkdirSync(path.join(root, "live-ws"), { recursive: true });
     fs.mkdirSync(tokens, { recursive: true });
     for (const name of [...LEAKED, "live-ws"]) fs.writeFileSync(path.join(tokens, name), "t\n");

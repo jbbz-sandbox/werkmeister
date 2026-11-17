@@ -130,11 +130,12 @@ before(async () => {
     fs.mkdirSync(path.join(root, name), { recursive: true });
     fs.writeFileSync(path.join(root, name, ".env"), `FEATURE=${name}\n`);
   }
-  // os.homedir() honours HOME: mint into the temp home the server will read.
-  const prevHome = process.env.HOME;
-  process.env.HOME = home;
+  // State follows WERKMEISTER_CONFIG_FILE (SW-622): mint beside the config the server reads.
+  const prevConfig = process.env.WERKMEISTER_CONFIG_FILE;
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(reg, "config.yaml");
   tokenA = mintWorkspaceToken("a", path.join(root, "a"));
-  process.env.HOME = prevHome;
+  if (prevConfig === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+  else process.env.WERKMEISTER_CONFIG_FILE = prevConfig;
 
   const socket = path.join(tmp, "docker.sock");
   docker = await fakeDocker(socket);
@@ -158,7 +159,7 @@ before(async () => {
     await sleep(100);
   }
   base = `http://127.0.0.1:${port}`;
-  machineToken = fs.readFileSync(path.join(home, ".werkmeister", "mcp-token"), "utf8").trim();
+  machineToken = fs.readFileSync(path.join(reg, "mcp-token"), "utf8").trim();
 });
 
 after(() => {
@@ -393,6 +394,8 @@ test("the scheduler tool leases, reads and releases a slot, on /api/tool only", 
 
 /** allocateSlot in a fresh client process whose own registry home is *clientHome*. */
 function clientAllocate(feature, workspace, { host, clientHome }) {
+  // The client reads the daemon token from its own state home (SW-622): same machine, same token.
+  fs.copyFileSync(path.join(tmp, "registry", "mcp-token"), path.join(clientHome, "mcp-token"));
   const script = `
     import { ttyReporter, withReporter } from "werkmeister-core/reporter";
     import { allocateSlot } from "werkmeister-core/slots";

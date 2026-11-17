@@ -17,7 +17,7 @@ import { test } from "node:test";
 
 import { dotDir } from "../dist/dot_dir.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
-import { ALL, DASHBOARD, MCP, start } from "../dist/web_servers.js";
+import { ALL, DASHBOARD, MCP, start, stop } from "../dist/web_servers.js";
 
 test("MCP is one of the servers `sandbox connect` brings up, on its own stem", () => {
   assert.ok(ALL.includes(MCP));
@@ -39,7 +39,10 @@ test("only MCP binds wide -- DASHBOARD stays loopback-only", () => {
 test("start() leaves a server alone when the PID file is this very process", async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "web-servers-self-"));
   const prev = process.env.HOME;
+  const prevConfig = process.env.WERKMEISTER_CONFIG_FILE;
   process.env.HOME = home;
+  // The default home of *home*, pinned: a caller's own CONFIG_FILE must not move the PID file (SW-622).
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(dotDir(home), "config.yaml");
   const pidFile = path.join(dotDir(home), `${MCP.stem}.pid`);
   fs.mkdirSync(path.dirname(pidFile), { recursive: true });
   fs.writeFileSync(pidFile, String(process.pid));
@@ -64,6 +67,34 @@ test("start() leaves a server alone when the PID file is this very process", asy
     } catch {}
     if (prev === undefined) delete process.env.HOME;
     else process.env.HOME = prev;
+    if (prevConfig === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+    else process.env.WERKMEISTER_CONFIG_FILE = prevConfig;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("with a relocated config, start() and stop() leave the machine's server alone (SW-622)", async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "web-servers-moved-"));
+  const prev = process.env.HOME;
+  const prevConfig = process.env.WERKMEISTER_CONFIG_FILE;
+  process.env.HOME = home;
+  process.env.WERKMEISTER_CONFIG_FILE = path.join(home, "scratch", "config.yaml");
+  // Stands for the host's server: a listener this test owns, with no PID file the moved home can see.
+  const held = net.createServer().listen(0, "127.0.0.1");
+  await new Promise((resolve) => held.once("listening", resolve));
+  const { port } = held.address();
+  try {
+    const reporter = collectingReporter();
+    await withReporter(reporter, () => start({ ...MCP, port }, false));
+    assert.equal(await withReporter(reporter, () => stop({ ...MCP, port })), false);
+    assert.match(reporter.text(), /WERKMEISTER_CONFIG_FILE is not the default home/);
+    assert.equal(held.listening, true);
+  } finally {
+    held.close();
+    if (prev === undefined) delete process.env.HOME;
+    else process.env.HOME = prev;
+    if (prevConfig === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
+    else process.env.WERKMEISTER_CONFIG_FILE = prevConfig;
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
