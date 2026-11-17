@@ -11,9 +11,9 @@ import { test } from "node:test";
 import { readNudge, readWaiting, waitingPath, writeWaiting } from "../dist/agent_state.js";
 import { loadPorts, loadServices } from "../dist/config.js";
 import { generateFeatureCompose } from "../dist/generate.js";
-import { grantWaiters, runningFeatures, runningLeases } from "../dist/lifecycle.js";
+import { grantWaiters, runningFeatures, runningLeases, up } from "../dist/lifecycle.js";
 import { workspaceServices } from "../dist/registry_sync.js";
-import { withReporter } from "../dist/reporter.js";
+import { collectingReporter, withReporter } from "../dist/reporter.js";
 import {
   enqueue,
   featureCost,
@@ -26,7 +26,12 @@ import {
   waitForSetupLoad,
   writeLeases,
 } from "../dist/scheduler_state.js";
-import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
+import {
+  pinWerkmeisterRoot,
+  withFixtureWorkspace,
+  withSandboxHome,
+  writeSessionState,
+} from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
 
@@ -419,6 +424,7 @@ test("grantWaiters drops a head that can never fit, tells its session, and start
         assert.deepEqual(await grantWaiters(), ["k8s"]);
         assert.deepEqual(readQueue(), []);
         assert.match(readNudge(big), /'big' can never fit the budget/);
+        assert.doesNotMatch(readNudge(big), /queue it again/); // a rerun would fail the same way (SW-848)
       },
       "budget:\n  cpus: 4\n  memory: 8G\n",
       "services:\n  big:\n    type: api\n    repo: demo-repo\n    port_offset: 2\n    cpus: 9\n",
@@ -433,6 +439,80 @@ test("grantWaiters drops a head that can never fit, tells its session, and start
     }
   }
 });
+
+// SW-848: two 3-CPU holders fill an 8-CPU budget, a 5-CPU `up` queues at position 1, the holders stop and
+// the grant runs. *between* runs after the stop, before the grant.
+async function queuedBehindHolders(between, check) {
+  const holder = (n) => ({
+    feature: `holder-${n}`,
+    workspace: `holder-${n}`,
+    startedAt: "2026-11-16T00:00:00Z",
+    memory: G,
+    nanoCpus: 3e9,
+  });
+  await withFixtureWorkspace(
+    async (fx) => {
+      const ws = path.join(fx.root, "ws", "big");
+      fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+      fs.writeFileSync(path.join(ws, ".env"), "FEATURE=big\nWERKMEISTER_SLOT=3\nSERVICES=big\n");
+      const config = { services: workspaceServices(loadServices(), ws), ports: loadPorts() };
+      generateFeatureCompose("big", 3, ["big"], config, ws, "werkmeister CLI");
+      writeSessionState(ws, "done");
+      const r = await withReporter(collectingReporter().reporter, () =>
+        up("big", ws, { byPerson: false }),
+      );
+      assert.equal(r.waiting, 1);
+      assert.deepEqual(readQueue(), ["big"]);
+      fs.writeFileSync(path.join(fx.root, "bin", "containers"), ""); // the holders stop
+      between?.(fx);
+      await check(await withReporter(collectingReporter().reporter, grantWaiters), ws);
+    },
+    {
+      containers: [holder(1), holder(2)],
+      config: { budget: { cpus: 8, memory: "16G" } },
+      services:
+        "services:\n  big:\n    type: api\n    repo: app\n    port_offset: 2\n    cpus: 5\n",
+    },
+  );
+}
+
+test("a feature queued behind two holders starts when they stop, and its session is told (SW-848)", () =>
+  queuedBehindHolders(undefined, (started, ws) => {
+    assert.deepEqual(started, ["big"]);
+    assert.deepEqual(readQueue(), []);
+    assert.equal(fs.existsSync(waitingPath(ws)), false);
+    assert.match(readNudge(ws), /Capacity freed/);
+  }));
+
+test("a waiter whose start fails after admission dropped it is told to rerun up (SW-848)", () =>
+  queuedBehindHolders(
+    (fx) => {
+      const docker = path.join(fx.root, "bin", "docker");
+      const sh = fs
+        .readFileSync(docker, "utf8")
+        .replace(
+          "stop|compose|network) ;;",
+          'compose) case "$*" in *" up "*) exit 1 ;; esac ;;\n    stop|network) ;;',
+        );
+      fs.writeFileSync(docker, sh);
+    },
+    (started, ws) => {
+      assert.deepEqual(started, []);
+      assert.deepEqual(readQueue(), []);
+      assert.equal(fs.existsSync(waitingPath(ws)), false);
+      assert.match(readNudge(ws) ?? "", /Could not start 'big'.*werkmeister feature up/s);
+    },
+  ));
+
+test("a waiter whose lease is gone is started from its workspace, not dropped (SW-848)", () =>
+  queuedBehindHolders(
+    () => writeLeases({}),
+    (started, ws) => {
+      assert.deepEqual(started, ["big"]);
+      assert.deepEqual(readQueue(), []);
+      assert.equal(fs.existsSync(waitingPath(ws)), false);
+    },
+  ));
 
 // SW-630: a setup service's install ran 78 min at load ~413 and compose's --wait gave up at 20 min.
 const SETUP_COMPOSE = `services:
