@@ -61,6 +61,8 @@ export interface WsCard {
   /** Model, autonomy, `stage 2/4 implement`, CPU and memory. */
   meta: string;
   issueId: string | null;
+  /** The agent asked something: Master control counts it and the card's button reads Answer in terminal. */
+  needsYou: boolean;
   /** The one session button the card shows, if any (`sessionAction`). */
   action: "start" | "pause" | "resume" | null;
 }
@@ -104,7 +106,7 @@ export interface WsNode {
   };
   service?: { name: string; workspacePath: string; feature: string | null; leave: boolean };
   /** `status`: the state word and the CI word, each with its theme colour id, for the card. */
-  pr?: { url: string; status?: { text: string; color: string }[] };
+  pr?: { url: string; open?: boolean; status?: { text: string; color: string }[] };
   /** Command id to run when the node is clicked, if any. */
   command?: string;
   children: WsNode[];
@@ -215,11 +217,11 @@ function contains(parent: string, child: string): boolean {
  * Within one folder, the deepest match wins (one workspace nested in another).
  */
 function currentWorkspaceName(
-  workspaces: WorkspaceEntryLike[],
+  workspaces: Pick<WorkspaceEntryLike, "name" | "path">[],
   currentPaths: string[],
 ): string | null {
   for (const p of currentPaths) {
-    let best: WorkspaceEntryLike | null = null;
+    let best: Pick<WorkspaceEntryLike, "name" | "path"> | null = null;
     for (const w of workspaces) {
       if (!contains(w.path, p)) continue;
       if (!best || w.path.length > best.path.length) best = w;
@@ -227,6 +229,44 @@ function currentWorkspaceName(
     if (best) return best.name;
   }
   return null;
+}
+
+/** Which tile the active terminal is showing (SW-864): a workspace's card, Master control, or neither. */
+export type InTerminal = { kind: "workspace"; name: string } | { kind: "root" } | null;
+
+/**
+ * Map the active terminal's cwd to a tile. A session terminal starts in its workspace's
+ * folder and Master control at the workspaces root; any other cwd, or none, shows no cue.
+ */
+export function inTerminal(
+  workspaces: Pick<WorkspaceEntryLike, "name" | "path">[],
+  cwd: string | undefined,
+  root: string,
+): InTerminal {
+  if (!cwd) return null;
+  const name = currentWorkspaceName(workspaces, [cwd]);
+  if (name) return { kind: "workspace", name };
+  const trim = (p: string) => p.replace(/\/+$/, "");
+  return trim(cwd) === trim(root) ? { kind: "root" } : null;
+}
+
+/**
+ * The Jira board link for Master control: the default project's board, else nothing.
+ * Only a Jira project with a board id gets one; the button hides rather than guess.
+ */
+export function boardUrl(
+  base: string | undefined,
+  projects: {
+    tracker: string;
+    scope: { project?: string };
+    board?: { id: string };
+    default: boolean;
+  }[],
+): string | null {
+  const p = projects.find((x) => x.default) ?? (projects.length === 1 ? projects[0] : undefined);
+  if (!base || p?.tracker !== "jira" || !p.scope.project || !p.board) return null;
+  const key = encodeURIComponent(p.scope.project);
+  return `${base.replace(/\/+$/, "")}/jira/software/projects/${key}/boards/${encodeURIComponent(p.board.id)}`;
 }
 
 /**
@@ -338,6 +378,8 @@ function prNode(ws: WorkspaceEntryLike, pr: WorkspaceDisplay["prs"][number]): Ws
     expanded: false,
     pr: {
       url: pr.url,
+      // The display model's word for an open, non-draft PR: one waiting on review.
+      open: pr.state.text === "Open",
       status: [
         { text: pr.state.text, color: prStateColor(pr.state) },
         ...(pr.ci ? [{ text: pr.ci.text, color: TONE_COLORS[pr.ci.tone] }] : []),
@@ -484,6 +526,7 @@ function workspaceNode(
         .filter(Boolean)
         .join(" · "),
       issueId: ws.issueId,
+      needsYou: status?.claude.agent === "needs-you",
       action: status ? sessionAction(status) : null,
     },
     // The `:current` suffix is how the menus hide "switch to workspace" on the

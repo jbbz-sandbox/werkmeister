@@ -3,7 +3,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { claudeLaunchUri, reconcileLaunchUri } from "werkmeister-core/launcher";
-import { parseLaunchUri, sessionCommand, shellQuote } from "../out/harness/claude/uri.js";
+import {
+  parseLaunchUri,
+  sessionCommand,
+  sessionTabName,
+  shellQuote,
+} from "../out/harness/claude/uri.js";
 
 const parts = (uri) => {
   const u = new URL(uri);
@@ -100,4 +105,11 @@ test("SW-499: remote_control=1 names the matched workspace, never the query", ()
   assert.doesNotMatch(named, /evil/);
   assert.throws(() => rc("workspace=ws&mode=new&remote_control=yes", "ws"), /Bad remote_control/);
   assert.equal(rc("workspace=ws&mode=new&remote_control=1", "ws", "codex"), "codex");
+});
+
+test("a session tab leads with the issue key so it matches the card (SW-864)", () => {
+  assert.equal(sessionTabName("sw-864-vscode-ui-revamp"), "SW-864 · vscode-ui-revamp");
+  assert.equal(sessionTabName("sandbox-110-repo-dir-drift"), "SANDBOX-110 · repo-dir-drift");
+  assert.equal(sessionTabName("bwell"), "bwell");
+  assert.equal(sessionTabName("jit-ws1"), "jit-ws1");
 });

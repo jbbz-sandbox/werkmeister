@@ -215,18 +215,34 @@ a card always shows its services and PRs.
 
 - **Wrapping.** Drag the side bar to its narrowest: every line wraps, nothing ends in `…`.
 - **Theme.** Switch between a dark, a light and a high-contrast theme: the cards follow at once.
-- **Links.** The issue key and each PR sit on their own line; click one: it opens in the browser. A PR's
-  state is green when open, purple when merged, blue when released, and failing checks read red.
+- **Links.** The workspace name is the issue link: hover it and the tooltip reads `Open SW-… in Jira`
+  (GitHub for a GitHub issue); click it and the issue opens. There is no separate issue line. Each PR sits
+  on its own line and opens on click. A PR's state is green when open, purple when merged, blue when
+  released, and failing checks read red.
+- **Line order (SW-864).** Line 1 is the name and state, line 2 the model and stage
+  (`opus · spike · stage 1/2 questions`), then the activity.
 - **Right-click.** On a card: Open in New Window, the container commands, Open feature, Logs, Close out
   and Abandon, with ▶ Up / ■ Stop only
   where they apply. On a service: Logs, and Toggle Intercept where it is interceptable or yours.
-- **Open terminal.** Click it on a workspace with no `claude <workspace>` terminal: one opens running
-  `claude --continue`. Click it again: the same terminal takes focus, no second one opens.
+- **Open terminal.** Click it on a workspace with no session terminal: one opens running
+  `claude --continue`, its tab named `SW-864 · vscode-ui-revamp` (issue key first). Click it again: the
+  same terminal takes focus, no second one opens. A `claude <workspace>` tab left open from before
+  SW-864 is focused too. A Needs-you card's button is the primary-coloured **Answer in terminal**.
 - **Start work / Pause / Resume.** These act on the run, not on containers. A workspace nobody has
   started has ▶ Start work beside Open terminal: click it and a `claude <workspace>` terminal opens
   with the starting prompt already sent. A live run has ⏸ Pause, which holds the session and freezes
   its containers, and becomes ▶ Resume once the workspace reads Paused.
 - **Master control.** With a chat already running in a terminal at the workspaces root, click it: that
-  terminal takes focus. Close it and click again: a `Master control` terminal opens there.
+  terminal takes focus. Close it and click again: a `Master control` terminal opens there with the
+  circuit-board icon. Under its title: `● N need you · N PR to review` when there are any; click a count
+  and the view scrolls to the first card it counts.
+- **Jira board ↗.** With no `board:` under the default project in `~/.werkmeister/config.yaml`, there is no
+  button. Add `board: { id: 1, ready: … }` and refresh: the button shows, and clicking it opens the SW board.
+- **In-terminal cue (SW-864).** Open two workspaces' terminals and Master control. Click each terminal tab
+  in turn: the card for that tab, or the Master control tile, gets the blue border and the `In terminal`
+  pill at once, with no 5 s wait, and no other tile has it. Open a plain shell outside the workspaces
+  (Terminal → New Terminal from `~`) or click a `werkmeister …` command terminal: no tile has the cue.
+  Close the active terminal: the cue follows whichever terminal VS Code shows next. Repeat in a light and
+  a high-contrast theme: the border and pill stay visible.
 - **Dashboard ↗.** With the dashboard running, click it: the dashboard opens in the browser. With it
   stopped: a notice offers ⚡ Connect infra.

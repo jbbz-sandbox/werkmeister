@@ -17,7 +17,7 @@ import {
 } from "./harness/claude/terminals.js";
 import { showLogs } from "./logs.js";
 import { runInTerminal } from "./terminal.js";
-import type { WorkspacesView } from "./view.js";
+import { currentBoardUrl, type WorkspacesView } from "./view.js";
 
 export { ALL_ARGV, ARGV } from "./argv.js";
 
@@ -391,6 +391,16 @@ export function registerCommands(provider: WorkspacesView): vscode.Disposable[] 
         "⚡ Connect infra",
       );
       if (pick) await vscode.commands.executeCommand("sandbox.connect");
+    }),
+    vscode.commands.registerCommand("sandbox.openBoard", async () => {
+      const url = currentBoardUrl();
+      if (url) {
+        await vscode.env.openExternal(vscode.Uri.parse(url));
+        return;
+      }
+      void vscode.window.showInformationMessage(
+        "No Jira board set: add `board: { id, ready }` to your project under `projects:` in ~/.werkmeister/config.yaml.",
+      );
     }),
     vscode.commands.registerCommand("sandbox.masterControl", () => {
       const root = workspacesRoot();

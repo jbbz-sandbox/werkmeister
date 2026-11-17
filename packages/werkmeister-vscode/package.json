@@ -190,6 +190,12 @@
         "icon": "$(dashboard)"
       },
       {
+        "command": "sandbox.openBoard",
+        "title": "Jira board ↗",
+        "category": "Werkmeister",
+        "icon": "$(project)"
+      },
+      {
         "command": "sandbox.refreshPrs",
         "title": "↻ Refresh PRs",
         "category": "Werkmeister",
