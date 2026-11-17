@@ -414,7 +414,7 @@ function parsePrFile(p: string): PrFile {
   try {
     fm = m ? YAML.parse(m[1]) : null;
   } catch (e) {
-    yamlError = ` YAML error: ${(e as Error).message}`;
+    yamlError = ` YAML error: ${(e as Error).message}\nQuote values that contain a colon, e.g. skip_release: "no changeset: docs only".`;
   }
   if (!m || typeof fm !== "object" || fm === null || Array.isArray(fm)) {
     throw new WorkspaceError(
