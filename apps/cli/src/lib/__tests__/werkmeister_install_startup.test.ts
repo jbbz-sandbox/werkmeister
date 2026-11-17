@@ -27,6 +27,19 @@ const SCRIPT = path.resolve(
 );
 const hasFlock = spawnSync("sh", ["-c", "command -v flock && command -v sha256sum"]).status === 0;
 
+const CI_YML = path.resolve(
+  fileURLToPath(import.meta.url),
+  "../../../../../..",
+  ".github/workflows/ci.yml",
+);
+
+/** The Claude Code version the script installs (`CLAUDE_CODE_VERSION=`). */
+function scriptPin(): string {
+  const m = fs.readFileSync(SCRIPT, "utf8").match(/^CLAUDE_CODE_VERSION=(\S+)$/m);
+  if (!m) throw new Error(`no CLAUDE_CODE_VERSION in ${SCRIPT}`);
+  return m[1];
+}
+
 let tmp: string;
 
 function writeExec(file: string, body: string): void {
@@ -86,6 +99,11 @@ beforeEach(() => {
       '  ls "$INFLIGHT" | wc -l >> "$PEAKS"',
       '  sleep "${CI_SECONDS:-0}"',
       '  rmdir "$INFLIGHT/$$"',
+      "fi",
+      // `npm install --prefix <dir> <pkg>` (the claude branch, SW-667): leave a bin for the script's symlink.
+      'if [ "$1" = install ]; then',
+      '  mkdir -p "$3/node_modules/.bin" && printf "#!/bin/sh\\nexit 0\\n" > "$3/node_modules/.bin/claude"',
+      '  chmod +x "$3/node_modules/.bin/claude"',
       "fi",
       'if [ "$1" = run ]; then',
       '  mkdir -p "$BUILD_INFLIGHT/$$"',
@@ -222,6 +240,19 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     expect(npmCalls()).toEqual([]);
   });
 
+  it("installs Claude Code into the tools volume once, at the script's pin (SW-667)", async () => {
+    const app = makeApp("app");
+    const tools = path.join(tmp, "tools");
+    fs.rmSync(path.join(tools, "bin", "claude"));
+    expect((await run(app, {}, [])).status).toBe(0);
+    expect(npmCalls()).toEqual([
+      `install --prefix ${tools}/claude-code @anthropic-ai/claude-code@${scriptPin()}`,
+    ]);
+    expect(fs.lstatSync(path.join(tools, "bin", "claude")).isSymbolicLink()).toBe(true);
+    expect((await run(app, {}, [])).status).toBe(0);
+    expect(npmCalls()).toEqual([]);
+  });
+
   it("does not install without the `install` argument (the pre-SW-33 command)", async () => {
     const app = makeApp("app");
     expect((await run(app, {}, [])).status).toBe(0);
@@ -266,4 +297,12 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     expect(peaks).toHaveLength(3);
     expect(Math.max(...peaks.map(Number))).toBe(1);
   });
+});
+
+// SW-667: the script's comment calls its version "CI's pin"; this keeps the two equal. Runs on any host.
+it("installs the same Claude Code version CI pins", () => {
+  const ci = [
+    ...fs.readFileSync(CI_YML, "utf8").matchAll(/@anthropic-ai\/claude-code@(\d+\.\d+\.\d+)/g),
+  ];
+  expect(ci.map((m) => m[1])).toEqual([scriptPin()]);
 });
