@@ -14,11 +14,9 @@
  *     this repo serves at `.claude-plugin/marketplace.json`) — carries the
  *     ops skills. An install of its old name (`sandbox-tools@sandbox`) is // name-check: ignore
  *     swapped out once the new one is in;
- *   * the **ponytail plugin** (user scope) — the w9r-* entry skills reference
- *     it, with graceful fallback, so absence degrades rather than breaks;
- *   * the **superpowers plugin** (user scope, OPTIONAL) — installed only when
- *     the wizard asks and the answer is yes. Nothing references it, so a
- *     decline is reported ok rather than as drift;
+ *   * the **optional plugins** (user scope: superpowers, ponytail) — each
+ *     installed only when the wizard asks and the answer is yes, then kept
+ *     current. A decline is reported ok rather than as drift;
  *   * the **companion sandbox-workspace checkout** under the repos root —
  *     `werkmeister workspace new` creates each workspace root as a worktree of it
  *     (plain-directory fallback with a warning when it is missing). Which repo
@@ -177,11 +175,6 @@ export const REQUIRED_PLUGINS: readonly PluginSpec[] = [
     marketplace: "werkmeister",
     source: "jbbz-sandbox/werkmeister@main",
   },
-  {
-    name: "ponytail",
-    marketplace: "ponytail",
-    source: "DietrichGebert/ponytail",
-  },
 ];
 
 /**
@@ -270,6 +263,13 @@ export const OPTIONAL_PLUGINS: readonly PluginSpec[] = [
     marketplace: "claude-plugins-official",
     source: "anthropics/claude-plugins-official",
     note: "brainstorming/planning skills; writes plans under docs/superpowers/",
+  },
+  {
+    // A coding-style plugin: opt-in, not required (SW-643). A machine that has it keeps it current.
+    name: "ponytail",
+    marketplace: "ponytail",
+    source: "DietrichGebert/ponytail",
+    note: "smallest-change coding style; the ICM contracts use it when loaded",
   },
 ];
 
@@ -2234,8 +2234,8 @@ export interface RunSetupOptions {
   skipSudo?: boolean;
   /** Install Telepresence via Homebrew when it is missing or stale. */
   installTelepresence?: boolean;
-  /** Install the optional plugins (superpowers) when they are missing. */
-  installOptionalPlugins?: boolean;
+  /** Names from OPTIONAL_PLUGINS to install when missing (the wizard asks for each). */
+  optionalPlugins?: readonly string[];
   /** Map the werkmeister YAML schemas in VS Code's user settings (the wizard asks first). */
   mapEditorSchemas?: boolean;
   /** Install the bundled Werkmeister Workspaces VS Code extension (the wizard asks first). */
@@ -2285,7 +2285,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
       label: "claude CLI",
       ok: false,
       detail:
-        `not found on PATH — the ${PLUGIN_NAME} and ponytail plugins cannot be ` +
+        "not found on PATH — the Claude Code plugins cannot be " +
         "installed without it. Install Claude Code from " +
         "https://claude.com/claude-code (the VS Code extension alone does not " +
         "put `claude` on PATH), then re-run `werkmeister machine setup`.",
@@ -2309,7 +2309,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
           claudePluginsDir,
           runner,
           checkOnly,
-          options.installOptionalPlugins ?? false,
+          options.optionalPlugins?.includes(spec.name) ?? false,
         ),
       );
     }

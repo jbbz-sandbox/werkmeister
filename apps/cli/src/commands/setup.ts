@@ -18,7 +18,7 @@
  *                     for the dashboard fast path, or the registry repos under
  *                     `github_org` for GitHub)
  *   6. telepresence — OPTIONAL OSS client, via Homebrew
- *   7. superpowers  — OPTIONAL plugin, installed alongside ponytail
+ *   7. plugins      — OPTIONAL Claude Code plugins (superpowers, ponytail), asked one by one
  *   8. editor       — OPTIONAL `yaml.schemas` entries in VS Code's user settings,
  *                     and the Werkmeister Workspaces extension the package ships
  *   9. standards    — OPTIONAL Claude Code read access to the standards dir
@@ -27,7 +27,7 @@
  * then writes the config (including `werkmeister` tab completion in ~/.zshrc) and
  * converges the machine (werkmeister-core/machine_setup):
  * seeding the `~/.werkmeister` registry files (or migrating them up from a legacy
- * `infra/config/` checkout), the werkmeister and ponytail plugins, the
+ * `infra/config/` checkout), the werkmeister plugin, the
  * companion sandbox-workspace checkout, the TLS certificate covering every
  * routed hostname, and the four optional prerequisites above.
  *
@@ -58,6 +58,7 @@ import {
   claudeUserSettingsPath,
   editorSchemaState,
   githubOwners,
+  OPTIONAL_PLUGINS,
   originMismatch,
   prWatchScheduleState,
   runSetup,
@@ -86,7 +87,7 @@ interface Answers {
   demo: boolean;
   k8sContext: string;
   installTelepresence: boolean;
-  installOptionalPlugins: boolean;
+  optionalPlugins: string[];
   mapEditorSchemas: boolean;
   installVscodeExtension: boolean;
   grantStandardsDir: boolean;
@@ -346,17 +347,16 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   );
 
   // --- 7. optional plugins -------------------------------------------------
-  heading("7. Superpowers plugin (optional)");
+  heading("7. Claude Code plugins (optional)");
   info(
-    "Brainstorming/planning skills, installed alongside ponytail. Writes its " +
-      "plans and specs under docs/superpowers/. Nothing in werkmeister depends " +
-      "on it, so declining is a first-class answer and `--check` stays green.",
+    "Nothing in werkmeister depends on these, so declining is a first-class answer " +
+      "and `--check` stays green. One you already have is kept current either way.",
   );
-  const installOptionalPlugins = await confirm(
-    "  Install the superpowers plugin?",
-    false,
-    interactive,
-  );
+  const optionalPlugins: string[] = [];
+  for (const spec of OPTIONAL_PLUGINS) {
+    if (await confirm(`  Install the ${spec.name} plugin (${spec.note})?`, false, interactive))
+      optionalPlugins.push(spec.name);
+  }
 
   // --- 8. editor schemas (optional) ----------------------------------------
   heading("8. VS Code (optional)");
@@ -523,7 +523,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
     demo,
     k8sContext,
     installTelepresence,
-    installOptionalPlugins,
+    optionalPlugins,
     mapEditorSchemas,
     installVscodeExtension,
     grantStandardsDir,
@@ -610,7 +610,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     hostnames: resolveHostnames,
     skipSudo: answers.skipSudo,
     installTelepresence: answers.installTelepresence,
-    installOptionalPlugins: answers.installOptionalPlugins,
+    optionalPlugins: answers.optionalPlugins,
     mapEditorSchemas: answers.mapEditorSchemas,
     installVscodeExtension: answers.installVscodeExtension,
     grantStandardsDir: answers.grantStandardsDir,

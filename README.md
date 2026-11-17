@@ -190,8 +190,8 @@ apps/cli/werkmeister machine setup            # guided wizard
 
 The wizard walks through your repo/workspace paths, the ingress base domains,
 and the service registry (generated from each repo's `.werkmeister/services.yaml`),
-then converges the rest: the `werkmeister` and
-`ponytail` plugins, the companion `sandbox-workspace` checkout, a TLS <!-- name-check: ignore -->
+then converges the rest: the `werkmeister` plugin (plus the optional
+`superpowers` and `ponytail` plugins, if you say yes), the companion `sandbox-workspace` checkout, a TLS <!-- name-check: ignore -->
 certificate covering every routed hostname, and the issue-tracker and
 Telepresence prerequisites. It is safe to re-run — nothing already configured
 is overwritten.
