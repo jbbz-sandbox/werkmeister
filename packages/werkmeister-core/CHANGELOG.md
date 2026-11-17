@@ -1,5 +1,16 @@
 # sandbox-core
 
+## 0.93.12
+
+### Patch Changes
+
+- 034f5e5: `machine migrate` now rewrites a workspace's `with-temp-home` wrapper whenever it differs from the one this CLI writes, even when the workspace's hooks and permission rules are already current. `machine migrate --check` reports such a workspace as stale (SW-416).
+- d8d8593: `machine config --write`, `machine setup` and `machine migrate` now refuse to write the machine config or `env.sh` from inside any container, even with `WERKMEISTER_FEATURE` unset, the same way compose generation has refused since SW-554. The two guards are now one, `refuseInsideContainer`, and `WERKMEISTER_CONFIG_FILE` still lets a scratch run write (SW-572).
+- 28242eb: `WERKMEISTER_CONFIG_FILE` now moves all of werkmeister's state with the config: locks, reconcile state, the issue cache, the daemon's `mcp-token`, its pid and log files, workspace tokens, VS Code terminal pid files and the legacy `slots.json`. Before, these stayed in the real `~/.werkmeister`. A process with a relocated config therefore no longer touches the real home. With the variable unset, every path is the same as before (SW-622).
+- 23a4c40: Once `machine setup` has run on a fresh install, `machine setup --check` no longer fails with "no standards tree". When `overrides.standards_dir` is unset, the standards tree now defaults to `~/.werkmeister/standards`, which `machine setup` creates with a README describing the module layout and never overwrites; before that first run, `--check` names the folder it would create. The old default pointed inside the package, at a folder it never shipped. The "Claude Code standards access" step now offers that folder on the first run too, instead of skipping. A configured `overrides.standards_dir` is unchanged, and setup never creates it (SW-640).
+- 15e1b2a: `generate-certs.sh` now pins its own locale (`LC_ALL=C`; every value it handles is an ASCII hostname), so the certificate step of `machine setup` no longer depends on the caller's locale. When the script fails, it prints the line that failed and its exit code, and setup's step points at that line instead of reporting only the exit code (SW-642).
+- a962638: `machine setup` no longer installs the ponytail plugin on every machine. Like superpowers, it is now an optional plugin, and the wizard asks about each optional plugin separately. A machine that already has ponytail keeps it, setup keeps it current, and `machine setup --check` does not report it either way (SW-643).
+
 ## 0.93.11
 
 ### Patch Changes

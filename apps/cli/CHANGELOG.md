@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.93.12
+
+### Patch Changes
+
+- 15e1b2a: `generate-certs.sh` now pins its own locale (`LC_ALL=C`; every value it handles is an ASCII hostname), so the certificate step of `machine setup` no longer depends on the caller's locale. When the script fails, it prints the line that failed and its exit code, and setup's step points at that line instead of reporting only the exit code (SW-642).
+- a962638: `machine setup` no longer installs the ponytail plugin on every machine. Like superpowers, it is now an optional plugin, and the wizard asks about each optional plugin separately. A machine that already has ponytail keeps it, setup keeps it current, and `machine setup --check` does not report it either way (SW-643).
+
 ## 0.93.11
 
 ### Patch Changes
