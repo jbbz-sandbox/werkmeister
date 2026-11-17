@@ -3730,6 +3730,19 @@ test("PR file: invalid YAML names the parser's error", () => {
   }
 });
 
+test("PR file: an unquoted colon in a free-text value says to quote it (SW-731)", () => {
+  const bad = (extra) => icmWorkspace({ files: { app: prFile({ extra }) } });
+  const ws = bad("skip_release: no changeset: test-only change\n");
+  const ok = bad('skip_release: "no changeset: test-only change"\n');
+  try {
+    assert.throws(() => readPrFiles(ws), /app\.md.*Quote values that contain a colon/s);
+    assert.equal(readPrFiles(ok)[0].fm.skip_release, "no changeset: test-only change");
+  } finally {
+    clean(ws);
+    clean(ok);
+  }
+});
+
 test("adoptPr: a merged PR from outside is written, shipped by its release tag, and close-out keeps its branch", async () => {
   const ws = icmWorkspace({ files: {} });
   fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });

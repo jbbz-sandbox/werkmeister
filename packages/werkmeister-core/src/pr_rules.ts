@@ -53,16 +53,18 @@ status: draft            # draft | approved | open | merged | shipped | closed |
 url:                     # written by werkmeister pr open
 merge_sha:               # written by werkmeister pr status
 release:                 # release tag that shipped it, written by werkmeister pr status; \`none\` for a merged skip_release PR with no changeset (changesets repos), else set it yourself for a change that ships nothing
-reason:                  # required for closed / abandoned
+reason: ""              # required for closed / abandoned
 skip_tests: {}           # <service>: <reason> — for a service with no test command or no running container (a service that has no tests says \`test: none: <reason>\` in its registry entry instead); tests: <reason> when no service maps to the changed files
-skip_release:            # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag unless release: none, or the merged PR has no changeset
-skip_exercise:           # <reason> — skips the gate's exercise check, e.g. a doc deliverable with nothing to run
-skip_review:             # <reason> — skips the gate's review check, e.g. a doc deliverable with no code to review
-hold:                    # <reason> — pr open opens the PR as a draft, body starting "Don't merge until: <reason>"; when the step is done, gh pr ready <url> and empty this (rule 6)
+skip_release: ""        # <reason> — skips the gate's release check; a ship: tag repo still waits for its release tag unless release: none, or the merged PR has no changeset
+skip_exercise: ""       # <reason> — skips the gate's exercise check, e.g. a doc deliverable with nothing to run
+skip_review: ""         # <reason> — skips the gate's review check, e.g. a doc deliverable with no code to review
+hold: ""                # <reason> — pr open opens the PR as a draft, body starting "Don't merge until: <reason>"; when the step is done, gh pr ready <url> and empty this (rule 6)
 ---
 # <PR title>
 <PR body: summary, test and exercise results, acceptance table, Fixes <issue>>
 \`\`\`
+
+**Quote free-text values.** \`reason\`, \`skip_*\` (each \`skip_tests\` entry too) and \`hold\` take a double-quoted string, e.g. \`skip_release: "no changeset: docs only"\`. An unquoted value that contains \`: \` is invalid YAML and \`werkmeister pr open\` fails on it.
 
 **Acceptance table.** One row per criterion. The result cell holds exactly \`PASS\` or \`FAIL\` and nothing else; evidence goes in its own column. A criterion only the reviewer can check (it needs a real PR, the desktop app or the real machine) reads \`MANUAL\`, with why in the evidence: the gate passes it and lists it, and never \`PASS\` for a check nobody ran. Only this table takes \`MANUAL\`; exercise and review rows are PASS or FAIL. \`| criterion | PASS: repro.md §1 |\` fails the gate.
 
