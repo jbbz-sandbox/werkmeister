@@ -482,11 +482,14 @@ describe("syncPlugin with the plugin loaded from a checkout (SW-237)", () => {
   });
 });
 
-describe("syncOptionalPlugin", () => {
-  const SPEC = OPTIONAL_PLUGINS.find(
-    (p) => p.name === "superpowers",
-  ) as (typeof OPTIONAL_PLUGINS)[number];
-  const LABEL = "plugin superpowers (optional)";
+// SW-643: ponytail is opt-in like superpowers, so a machine without it passes --check.
+describe.each(["superpowers", "ponytail"])("syncOptionalPlugin %s", (name) => {
+  it("is not a required plugin", () => {
+    expect(REQUIRED_PLUGINS.some((p) => p.name === name)).toBe(false);
+  });
+
+  const SPEC = OPTIONAL_PLUGINS.find((p) => p.name === name) as (typeof OPTIONAL_PLUGINS)[number];
+  const LABEL = `plugin ${name} (optional)`;
 
   /** A plugins dir where *spec* is registered as installed at *version*. */
   function pluginsDir(installed: boolean): string {

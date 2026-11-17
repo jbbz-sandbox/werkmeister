@@ -46,8 +46,9 @@ import { renderIssueRef } from "./issue_section.js";
 import type { ContextStrategy, InitContext } from "./types.js";
 
 const PONYTAIL_ROW =
-  "| ponytail | already loaded: the ponytail plugin's SessionStart hook prints `PONYTAIL MODE ACTIVE` " +
-  "in every session. Invoke the `ponytail` skill only if that line is missing from your session context " +
+  "| ponytail | optional plugin (SW-643): when installed, its SessionStart hook prints `PONYTAIL MODE ACTIVE` " +
+  "in every session. Invoke the `ponytail` skill only if that line is missing and the skill is listed; " +
+  "without the plugin, make the smallest change that fully solves the task " +
   "| any code edit |";
 
 interface Resolved {

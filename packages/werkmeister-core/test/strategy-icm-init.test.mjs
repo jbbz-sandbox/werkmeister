@@ -135,7 +135,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
       /^`<standards_dir>` is this machine's standards tree: `werkmeister standards check` prints its path/m,
     );
     assert.ok(!standards.includes(os.tmpdir()) && !standards.includes(os.homedir()), standards);
-    assert.match(standards, /^\| ponytail \| already loaded/m);
+    assert.match(standards, /^\| ponytail \| optional plugin/m);
     assert.match(standards, /do not load\): ui\./);
 
     const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
