@@ -8,7 +8,7 @@
 set -e
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 FIX="$REPO/apps/cli/src/lib/__tests__/fixtures"
-DEMO=$(mktemp -d -t w9r-demo)
+DEMO=$(mktemp -d -t w9r-demo.XXXXXX)
 DOT="$DEMO/.werkmeister"
 ROOT=${1:-$DEMO/features}
 mkdir -p "$DOT" "$ROOT"
