@@ -58,7 +58,7 @@ import {
 } from "./machine_setup.js";
 import { resolveModel } from "./model_tiers.js";
 import { syncRegistry } from "./registry_sync.js";
-import { tempHomeWrapper, writeTempHomeWrapper } from "./temp_home.js";
+import { TEMP_HOME_SCRIPT, tempHomeWrapper, writeTempHomeWrapper } from "./temp_home.js";
 import { writeWorkspaceConfig } from "./workspace_init.js";
 import { readModel, readWorkspaceField } from "./workspace_prompts.js";
 
@@ -382,9 +382,8 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
   return steps;
 }
 
-// What the CLI wrote with a pre-SW-186 spelling: hook commands and with-temp-home's load wait.
+// What the CLI wrote with a pre-SW-186 spelling: hook commands.
 const PRE_SW186_HOOK = /werkmeister (?:hooks (?:gate|pr-guard|agent-state)|stop --if-idle)/;
-const PRE_SW186_WAIT = "werkmeister wait-load";
 
 function readJson(file: string): Record<string, any> | null {
   try {
@@ -394,7 +393,7 @@ function readJson(file: string): Record<string, any> | null {
   }
 }
 
-/** True when *dir*'s hooks, permission rules or with-temp-home predate SW-186's spellings. */
+/** True when *dir*'s hooks or permission rules are out of date, or its with-temp-home differs from this CLI's (SW-416). */
 function workspaceStale(dir: string): boolean {
   const settingsFile = path.join(dir, ".claude", "settings.json");
   // Never inited by this CLI: `workspace init` writes it, not migrate.
@@ -428,7 +427,7 @@ function workspaceStale(dir: string): boolean {
     workspaceDenyRules(dir).some((r) => !deny.has(r)) ||
     askWanted.some((r) => !ask.has(r)) ||
     recordedAsk.some((r) => !askWanted.includes(r)) ||
-    (fs.existsSync(wrapper) && fs.readFileSync(wrapper, "utf8").includes(PRE_SW186_WAIT))
+    (fs.existsSync(wrapper) && fs.readFileSync(wrapper, "utf8") !== TEMP_HOME_SCRIPT)
   );
 }
 
