@@ -195,6 +195,12 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(c, /`pr gate --tests` result for each service it tested/, `${wt}/${d}`);
         // SW-764: a background review subagent or test job that goes quiet is stopped and relaunched once.
         if (c.includes("Review the diff: for each code worktree")) {
+          // SW-844: the review checks a dirty generated file's record, mtime and the person before blaming werkmeister.
+          assert.match(
+            c,
+            /Before filing a bug about a generated file [^\n]*\(1\) compare it with its record [^\n]*\(2\) compare the file's mtime with this session's own activity[^\n]*\(3\) Ask the person[^\n]* whether they edited it, before naming a werkmeister writer/,
+            `${wt}/${d}`,
+          );
           assert.match(
             c,
             /review is not anchored on your reasoning\. Run that subagent in the foreground/,

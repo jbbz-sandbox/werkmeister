@@ -7,6 +7,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
+import { generatedFileCheck } from "../dist/generated_file_check.js";
 import {
   buildPrGuardEntry,
   workspaceAllowRules,
@@ -199,12 +200,22 @@ test("init writes the icm layer and nothing of jit's", async () => {
     const guide = fs.readFileSync(path.join(root, "_shared", "issues-report.md"), "utf8");
     assert.match(guide, /^# Filing an issue$/m);
     assert.match(guide, /gh issue create -R jbbz-sandbox\/werkmeister --label <label>/);
+    // SW-844: § Bugs: new or existing? carries the three generated-file checks, naming the harness's question tool.
+    const bugs = guide.slice(
+      guide.indexOf("## Bugs: new or existing?"),
+      guide.indexOf("## Features"),
+    );
+    assert.match(
+      bugs,
+      /\(1\) compare it with its record where one exists \(`\.werkmeister\/claude-permissions\.json`[^\n]*\(2\) compare the file's mtime with this session's own activity[^\n]*\(3\) Ask the person through `AskUserQuestion` whether they edited it, before naming a werkmeister writer\./,
+    );
 
     const implement = fs.readFileSync(
       path.join(root, "stages", "03_implement", "CONTEXT.md"),
       "utf8",
     );
     assert.match(implement, /rows `comments`, `ponytail`/);
+    assert.ok(implement.includes(generatedFileCheck("AskUserQuestion")), "SW-844");
     assert.doesNotMatch(implement, /`ui`/);
     // SW-135: a never-started container has no pnpm until `werkmeister feature up` bootstraps it.
     assert.match(implement, /not running, run `werkmeister feature up` once first/);
