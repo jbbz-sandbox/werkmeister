@@ -11,7 +11,8 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { COMPOSE_FILE } from "../dist/compose_file.js";
-import { generateFeatureCompose, refuseComposeInsideContainer } from "../dist/generate.js";
+import { generateFeatureCompose } from "../dist/generate.js";
+import { refuseInsideContainer } from "../dist/global_config.js";
 import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
@@ -32,17 +33,29 @@ setup_services:
     startup_script: true
 `;
 
-test("refuseComposeInsideContainer reads Docker's marker, let through by a relocated config", () => {
+test("refuseInsideContainer reads Docker's marker, let through by a relocated config", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-dockerenv-"));
   const marker = path.join(dir, ".dockerenv");
   const saved = process.env.WERKMEISTER_CONFIG_FILE;
   delete process.env.WERKMEISTER_CONFIG_FILE;
   try {
-    assert.doesNotThrow(() => refuseComposeInsideContainer(marker));
+    assert.doesNotThrow(() => refuseInsideContainer(COMPOSE_FILE, marker));
     fs.writeFileSync(marker, "");
-    assert.throws(() => refuseComposeInsideContainer(marker), { code: "INSIDE_CONTAINER" });
+    assert.throws(() => refuseInsideContainer(COMPOSE_FILE, marker), { code: "INSIDE_CONTAINER" });
+    // The container's own temp dir is scratch: a temp-HOME test writes there (SW-572).
+    assert.doesNotThrow(() => refuseInsideContainer(path.join(dir, "env.sh"), marker));
+    // A bare compose.yml is the workspace's host file, even from a cwd under the temp dir.
+    const cwd = process.cwd();
+    process.chdir(dir);
+    try {
+      assert.throws(() => refuseInsideContainer(COMPOSE_FILE, marker), {
+        code: "INSIDE_CONTAINER",
+      });
+    } finally {
+      process.chdir(cwd);
+    }
     process.env.WERKMEISTER_CONFIG_FILE = path.join(dir, "config.yaml");
-    assert.doesNotThrow(() => refuseComposeInsideContainer(marker));
+    assert.doesNotThrow(() => refuseInsideContainer(COMPOSE_FILE, marker));
   } finally {
     if (saved === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
     else process.env.WERKMEISTER_CONFIG_FILE = saved;

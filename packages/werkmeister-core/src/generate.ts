@@ -29,7 +29,6 @@ import {
   DEFAULT_CPUS,
   DEFAULT_SETUP_CPUS,
   dotDir,
-  envVar,
   IDLE_SERVICE_TYPES,
   infraRoot,
   loadArchetypes,
@@ -45,8 +44,8 @@ import {
   sandboxRoot,
   stateInfraRoot,
 } from "./config.js";
-import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
+import { refuseInsideContainer } from "./global_config.js";
 import { buildSandboxContextMd } from "./harness/claude/claude_md.js";
 import { sandboxLock } from "./locks.js";
 import { workspaceServices } from "./registry_sync.js";
@@ -914,24 +913,6 @@ function renderFeatureCompose(
 }
 
 /**
- * SW-554: the host's Docker reads the compose file, but inside a container `sandboxRoot()`
- * is the container's /app, so the install's script mount would name a path the host lacks
- * and the install would run an empty script and exit 0. `WERKMEISTER_FEATURE` cannot be the
- * test (a caller may unset it); Docker's marker is. A relocated config is a scratch run, as
- * for the machine config (SW-354).
- */
-export function refuseComposeInsideContainer(dockerenv = "/.dockerenv"): void {
-  if (fs.existsSync(dockerenv) && !envVar("CONFIG_FILE")) {
-    throw new SandboxError(
-      `Refusing to write ${COMPOSE_FILE} from inside a container: the host's Docker reads it, ` +
-        `and the werkmeister root here is the container's (${sandboxRoot()}).\n` +
-        "       Run it from the host, or set WERKMEISTER_CONFIG_FILE to a scratch file.",
-      "INSIDE_CONTAINER",
-    );
-  }
-}
-
-/**
  * Generate `<workspace>/compose.yml` for *feature*.
  *
  * Returns the path to the generated workspace compose file.
@@ -944,7 +925,7 @@ export function generateFeatureCompose(
   workspaceOverride: string | null = null,
   source = "werkmeister CLI",
 ): string {
-  refuseComposeInsideContainer();
+  refuseInsideContainer(COMPOSE_FILE);
   const [outPath, content, kind] = renderFeatureCompose(
     feature,
     slot,
@@ -1007,7 +988,7 @@ export function renderGateCompose(
   services: ServicesConfig,
   workspace: string,
 ): string[] {
-  refuseComposeInsideContainer();
+  refuseInsideContainer(COMPOSE_FILE);
   const [outPath, content] = renderFeatureCompose(
     feature,
     slot,
