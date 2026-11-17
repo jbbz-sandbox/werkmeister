@@ -3,10 +3,72 @@
   filter: invert(0.88) hue-rotate(180deg);
 }
 
-.home-dashboard {
+/*
+ * The landing screenshot sits in VPHero's image slot, whose own styles are for a small round logo.
+ * Below 1440px it goes under the entry and its buttons at full width; from 1440px the two share the
+ * row. `.VPHome` outranks VPHero's scoped rules, which carry an extra attribute selector.
+ */
+.home-hero-shot {
   display: block;
-  max-width: min(640px, 100% - 48px);
-  margin: 0 auto 48px;
+  width: 100%;
+  height: auto;
   border: 1px solid var(--vp-c-divider);
   border-radius: 12px;
+}
+
+.VPHome .VPHero.has-image .container {
+  flex-direction: column;
+  text-align: left;
+}
+
+.VPHome .VPHero.has-image .container .actions {
+  justify-content: flex-start;
+}
+
+.VPHome .VPHero.has-image .container .main {
+  order: 1;
+  width: auto;
+  max-width: none;
+}
+
+.VPHome .VPHero.has-image .image {
+  order: 2;
+  margin: 40px 0 0;
+  min-height: 0;
+}
+
+.VPHome .VPHero.has-image .image-container {
+  display: block;
+  margin: 0;
+  width: 100%;
+  height: auto;
+  transform: none;
+}
+
+.VPHome .VPHero.has-image .image-bg {
+  display: none;
+}
+
+/*
+ * Side by side only where the screenshot stays legible: from 1440px the entry is a narrow column
+ * and the image takes the rest of a hero widened to 1600px (about 900px of image at 1440, the
+ * width it already gets stacked at 1024). Narrower, a side-by-side image would be smaller than stacked.
+ */
+@media (min-width: 1440px) {
+  .VPHome .VPHero.has-image .container {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 48px;
+    max-width: 1600px;
+  }
+
+  .VPHome .VPHero.has-image .container .main {
+    flex: 0 0 360px;
+    min-width: 0;
+  }
+
+  .VPHome .VPHero.has-image .image {
+    flex: 1 1 0;
+    margin: 0;
+  }
 }
