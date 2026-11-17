@@ -898,3 +898,73 @@ test("SW-843: `feature up --service` is pre-approved only for this workspace's o
     assert.ok(!claudeAllows(rules, "werkmeister feature up --service api other"));
   });
 });
+
+test("SW-845: no pre-approved container test for a service that mounts the docker socket or the werkmeister home", async () => {
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  await withSandboxHome(async (home) => {
+    const svc = (test, ...extra_volumes) => ({ test, extra_volumes });
+    const cfg = {
+      plain: svc(
+        "pnpm test:plain",
+        "tools:/opt/werkmeister-tools",
+        "/Users/x/repos:/Users/x/repos",
+      ),
+      sock: svc("pnpm test:sock", "/var/run/docker.sock:/var/run/docker.sock"),
+      run: svc("pnpm test:run", "/var/run:/host-run"),
+      wmhome: svc("pnpm test:wmhome", `${home}:${home}`),
+      parent: svc("pnpm test:parent", `${path.dirname(home)}:/h:ro`),
+    };
+    const rules = buildAllowRules("feat", Object.keys(cfg), cfg, {});
+    assert.deepEqual(
+      rules.filter((r) => r.startsWith("Bash(docker exec")),
+      ["Bash(docker exec feat-plain sh -c 'pnpm test:plain')"],
+    );
+    for (const name of ["sock", "run", "wmhome", "parent"])
+      assert.ok(!rules.includes(`Bash(pnpm test:${name}:*)`), name);
+    // Other spellings of a socket: OrbStack's, and /var/run through a symlinked parent.
+    const link = fs.mkdtempSync(path.join(os.tmpdir(), "sock-link-"));
+    fs.symlinkSync("/var/run", path.join(link, "run"));
+    const aliases = {
+      orb: svc("pnpm test:orb", "/Users/x/.orbstack/run/docker.sock:/var/run/docker.sock"),
+      linked: svc("pnpm test:linked", `${link}/run:/host-run`),
+    };
+    assert.deepEqual(
+      buildAllowRules("feat", Object.keys(aliases), aliases, {}).filter((r) =>
+        r.startsWith("Bash(docker exec"),
+      ),
+      [],
+    );
+  });
+});
+
+test("SW-845: a socket added by the branch's fragment or a dev_link also drops the container rule", async () => {
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  const registry =
+    "services:\n  api:\n    type: library\n    repo: demo\n    path: api\n    test: pnpm test\n  web:\n    type: library\n    repo: demo\n    path: web\n    test: pnpm test:web\n";
+  await withSandboxHome(
+    async () => {
+      const root = workspace();
+      fs.mkdirSync(dotDir(root), { recursive: true });
+      fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\nSERVICES=api,web\n");
+      const execRules = () =>
+        workspaceAllowRules(root, true).filter((r) => r.startsWith("Bash(docker exec"));
+      assert.equal(execRules().length, 2, "both pre-approved before any edit");
+      // dev_links in workspace.yml, with a variable generate.ts substitutes.
+      fs.writeFileSync(
+        path.join(dotDir(root), "workspace.yml"),
+        "dev_links:\n  web:\n    - ${WORKSPACE}/../../../../../../../../var/run/docker.sock:/var/run/docker.sock\n",
+      );
+      assert.deepEqual(execRules(), ["Bash(docker exec feat-api sh -c 'pnpm test')"]);
+      // The worktree's own fragment, which compose merges over the registry.
+      const wt = path.join(root, "demo");
+      fs.mkdirSync(path.join(wt, ".git"), { recursive: true });
+      fs.mkdirSync(path.join(wt, ".werkmeister"));
+      fs.writeFileSync(
+        path.join(wt, ".werkmeister", "services.yaml"),
+        "services:\n  api:\n    type: library\n    path: api\n    test: pnpm test\n    extra_volumes:\n      - /var/run/docker.sock:/var/run/docker.sock\n",
+      );
+      assert.deepEqual(execRules(), []);
+    },
+    { services: registry },
+  );
+});

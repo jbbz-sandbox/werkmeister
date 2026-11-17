@@ -45,6 +45,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { parse as parseYaml } from "yaml";
+
 import {
   candidateServiceNames,
   containerTestCommand,
@@ -55,14 +57,19 @@ import {
 import {
   type ArchetypeRegistry,
   dotDir,
+  expandUser,
   getReposRoot,
   loadArchetypes,
   loadReposConfig,
   loadServices,
   type ReposConfig,
+  type ServiceEntry,
   type ServicesConfig,
+  sandboxHome,
+  sandboxRoot,
 } from "../../config.js";
 import { frozenInstalls } from "../../fragment_detect/workspace.js";
+import { workspaceServices } from "../../registry_sync.js";
 import { info } from "../../reporter.js";
 import { repoDirs } from "../../standards.js";
 import { tempHomeWrapper } from "../../temp_home.js";
@@ -523,7 +530,8 @@ export function buildAllowRules(
   for (const svc of [...services, ...hostServices]) {
     const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
     if (!cmd) continue;
-    if (services.includes(svc)) {
+    // SW-845: a container holding the docker socket or the real werkmeister home asks each run.
+    if (services.includes(svc) && !hostAccess(servicesConfig[svc])) {
       rules.push(`Bash(${containerTestCommand(feature, svc, cmd)})`);
       // Splitting a `{ …; }` group or `||` on `&&` gives rules no shell command matches.
       if (isPlainChain(cmd)) rules.push(...segments(cmd).map((c) => `Bash(${c}:*)`));
@@ -551,6 +559,63 @@ export function buildAllowRules(
         .map((r) => `${wrapped}--no-wait ${r.slice(wrapped.length)}`),
     );
   return [...new Set([...rules, ...READ_ONLY_GIT_RULES])];
+}
+
+/**
+ * True when one of *entry*'s host binds is a docker socket (any path ending `docker.sock`, e.g. OrbStack's)
+ * or the werkmeister home, or a parent of either; symlinks resolved (`/var` → `/private/var` on macOS).
+ */
+function hostAccess(entry: ServiceEntry | undefined): boolean {
+  const real = (p: string) => {
+    try {
+      return fs.realpathSync(p);
+    } catch {
+      return path.resolve(p);
+    }
+  };
+  const targets = ["/var/run/docker.sock", sandboxHome()].map(real);
+  return (entry?.extra_volumes ?? []).some((spec) => {
+    const src = spec.split(":")[0];
+    if (!src.includes("/")) return false; // a named volume
+    const host = real(expandUser(src));
+    if (path.basename(host) === "docker.sock") return true;
+    return targets.some((t) => t === host || t.startsWith(`${host}${path.sep}`) || host === "/");
+  });
+}
+
+/**
+ * SW-845: *registry* with each entry's `extra_volumes` widened to every bind compose mounts: the
+ * branch's own fragment and the workspace's `dev_links` too (both agent-editable), variables
+ * substituted as generate.ts does. Only the mounts: test commands stay the registry's.
+ */
+function withComposeMounts(registry: ServicesConfig, workspaceRoot: string): ServicesConfig {
+  const branch = workspaceServices(registry, workspaceRoot);
+  // generate.ts's loadDevLinks reads the same field; importing it closes a cycle (generate → claude_md → jira → here).
+  let devLinks: Record<string, string[]> = {};
+  try {
+    const yml = parseYaml(
+      fs.readFileSync(path.join(dotDir(workspaceRoot), "workspace.yml"), "utf8"),
+    );
+    devLinks = yml?.["dev_links"] ?? {};
+  } catch {
+    // No workspace.yml (or unreadable): no dev_links, as generate.ts reads it.
+  }
+  return Object.fromEntries(
+    Object.entries(registry).map(([id, entry]) => {
+      const repo = path.join(workspaceRoot, String(branch[id]?.["repo"] ?? entry["repo"] ?? ""));
+      const specs = [
+        ...(entry.extra_volumes ?? []),
+        ...(branch[id]?.extra_volumes ?? []),
+        ...(devLinks[id] ?? []),
+      ].map((s) => {
+        const out = s.split("${WORKSPACE}").join(workspaceRoot).split("${REPO}").join(repo);
+        return out.includes("${WERKMEISTER_ROOT}")
+          ? out.split("${WERKMEISTER_ROOT}").join(sandboxRoot())
+          : out;
+      });
+      return [id, { ...entry, extra_volumes: specs }];
+    }),
+  );
 }
 
 function _readEnv(workspaceRoot: string): Record<string, string> {
@@ -604,7 +669,7 @@ export function workspaceAllowRules(
   const rules = buildAllowRules(
     any ? feature : "",
     services,
-    any ? loadServices() : {},
+    any ? withComposeMounts(loadServices(), workspaceRoot) : {},
     any ? loadArchetypes() : {},
     wrapper,
     builtClis,
