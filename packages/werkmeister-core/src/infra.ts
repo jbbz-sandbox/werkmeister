@@ -23,15 +23,18 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { baselineSpecs, generateBaselineOverride } from "./baseline.js";
+import { CADDY_CONTAINER } from "./caddy.js";
 import { stopOrRestart, takeDownProject } from "./compose.js";
 import {
   composeInvocation,
   INFRA_PROJECT,
   infraProfiles,
   LEGACY_INFRA_PROJECT,
+  recreatePlan,
+  staleInfraContainers,
 } from "./compose_infra.js";
 import { isFixture, sandboxHome } from "./config.js";
-import { projectContainers } from "./docker.js";
+import { execCapture, projectContainers } from "./docker.js";
 import { generateCaddyfile } from "./generate.js";
 import { configureGitHooksPath } from "./git_hooks.js";
 import { checkPortForwardHealth, ensurePortForwardsHealthy, refreshKubeconfig } from "./k8s.js";
@@ -162,13 +165,13 @@ export async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
   }
 
   takeDownProject(LEGACY_INFRA_PROJECT, "the pre-rename shared infra");
-  const services = [
+  const started = [
     "k8s-forwards",
     "caddy",
     ...infraProfiles(),
     ...baselineSpecs().map((s) => `baseline-${s.service}`),
-  ].join(", ");
-  info(`Starting shared infrastructure (${services})...`);
+  ];
+  info(`Starting shared infrastructure (${started.join(", ")})...`);
   try {
     const result = await runAsync([...argv, "up", "-d", "--build"], {
       capture: true,
@@ -179,6 +182,25 @@ export async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
     if (result.status !== 0) {
       error(`docker compose failed:\n${result.stderr.trim()}`);
       return false;
+    }
+    // `up` recreates a container whose resolved binds changed, not one whose only drift is
+    // the compose files it was made from (w9r-k8s-forwards after a checkout move, SW-610).
+    const { recreate, leftover } = recreatePlan(await staleInfraContainers(), started);
+    for (const s of leftover) {
+      warn(
+        `${s.name} was ${s.reason}, and this checkout has no such service: remove it with \`docker rm -f ${s.name}\``,
+      );
+    }
+    if (recreate.length) {
+      info(`Recreating ${recreate.join(", ")} from this checkout...`);
+      const again = await runAsync(
+        [...argv, "up", "-d", "--no-deps", "--force-recreate", ...recreate],
+        { capture: true, signal, env, cwd },
+      );
+      if (again.status !== 0) {
+        error(`docker compose failed:\n${again.stderr.trim()}`);
+        return false;
+      }
     }
     success("Shared infrastructure started");
     return true;
@@ -194,6 +216,9 @@ export async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
     throw e;
   }
 }
+
+/** The page Caddy serves for `/__werkmeister` (generate.ts's `root * /werkmeister/proxy/ui`). */
+const PICKER_PAGE = "/werkmeister/proxy/ui/index.html";
 
 function checkPort(host: string, port: number, timeoutSec: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -226,6 +251,13 @@ async function checkInfraHealth(): Promise<Record<string, boolean>> {
   const services: Record<string, boolean> = {};
   for (const c of (await projectContainers(INFRA_PROJECT, undefined, { all: false })) ?? []) {
     services[c.service || c.name] = c.health === "healthy" || (c.state === "running" && !c.health);
+  }
+  // Running is not serving: an empty picker mount 404s /__werkmeister on every host (SW-610).
+  if (services["caddy"]) {
+    const picker = await execCapture(CADDY_CONTAINER, ["test", "-s", PICKER_PAGE]).catch(
+      () => null,
+    );
+    services["caddy"] = picker?.exitCode === 0;
   }
 
   // Fallback: check key ports if the daemon listed nothing

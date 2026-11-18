@@ -6,7 +6,7 @@
 
 import { type CacheSnapshot, cacheSnapshots } from "werkmeister-core/build_caches";
 import { getContainerStatus, liveProject } from "werkmeister-core/compose";
-import { K8S_FORWARDS_CONTAINER } from "werkmeister-core/compose_infra";
+import { K8S_FORWARDS_CONTAINER, warnStaleInfra } from "werkmeister-core/compose_infra";
 import { type ForwardStatus, getPerServiceStatus } from "werkmeister-core/k8s";
 import type { HostSummary, ProjectHealth, Usage } from "werkmeister-core/resources";
 import { waitingQueue } from "werkmeister-core/scheduler_client";
@@ -397,6 +397,7 @@ function runK8sOnly(k8s: ForwardStatus[], asJson: boolean): void {
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.k8s) {
     runK8sOnly(await getPerServiceStatus(), Boolean(args.json));
+    if (!args.json) await warnStaleInfra();
     return;
   }
 
@@ -422,6 +423,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(`\n${Colors.BOLD}=== Werkmeister Status ===${Colors.RESET}\n`);
 
   printInfraSection(infra, mcp);
+  await warnStaleInfra();
   await printFeaturesSection(
     allSlots,
     Boolean(args.verbose),
