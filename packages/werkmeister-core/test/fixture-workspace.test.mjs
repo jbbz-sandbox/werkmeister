@@ -210,6 +210,29 @@ test("a gate fixture with fragmentChange gates a fragment-only diff and runs onl
   );
 });
 
+// SW-817: compose.yml inited before the branch's fragment lands, so the gate sees the branch settings as changed.
+test("staleCompose holds the fragment back until applyFragmentChange, so the gate starts from compose.gate.yml", async () => {
+  const branch = `services:\n  lib:\n    type: cli\n    path: packages/lib\n    test: echo changed\n    environment:\n      FIXTURE_FLAG: "1"\nrepo:\n  path_mappings:\n    packages/lib: lib\n`;
+  await withFixtureWorkspace(
+    async (fx) => {
+      assert.equal(git(fx.repo, "diff", "--name-only", "origin/main...HEAD"), "");
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      fx.applyFragmentChange();
+      assert.equal(
+        git(fx.repo, "diff", "--name-only", "origin/main...HEAD"),
+        ".werkmeister/services.yaml",
+      );
+      const { lines } = await gatePrs(fx.workspace);
+      const calls = fs.readFileSync(fx.dockerLog, "utf8");
+      assert.match(calls, /compose -f \S*compose\.gate\.yml .*up .*lib/, lines.join("\n"));
+      assert.match(calls, /^exec demo-lib echo changed$/m, lines.join("\n"));
+    },
+    { gate: true, fragmentChange: branch, staleCompose: true },
+  );
+});
+
 // SW-581: the config sits at the temp HOME's default path, so `machine migrate` runs against the fixture.
 test("the fixture's config is the temp HOME's ~/.werkmeister/config.yaml", async () => {
   await withFixtureWorkspace(async (fx) => {
