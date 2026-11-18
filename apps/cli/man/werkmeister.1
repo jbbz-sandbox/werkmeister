@@ -64,7 +64,7 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 End a workspace after every PR shipped: close the issue, write closeout.md, remove the workspace, delete merged branches. Refuses without postmortem.md (run the post\-mortem first) unless \-\-skip\-postmortem gives a reason
 .TP
 \fBworkspace abandon\fR <reason> [name]
-End a workspace without shipping: record the reason in closeout.md and the PR files, push every branch and keep them, remove the workspace
+End a workspace without shipping: record the reason in closeout.md and the PR files, move the issue to Done with the reason, push every branch and keep them, remove the workspace
 .SS PRs and issues
 .TP
 \fBpr\fR [command]

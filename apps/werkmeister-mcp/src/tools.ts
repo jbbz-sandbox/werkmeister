@@ -468,8 +468,9 @@ function registerAuthoringTools(server: McpServer): void {
       description:
         "The one way to end a workspace. After every PR shipped: close the issue, write closeout.md, " +
         "commit and push every branch, tear the feature down, delete the workspace directory and the " +
-        "merged code branches. With `abandon` (a reason) when work is unshipped: record the reason, leave " +
-        "the issue, push and keep every branch with commits of its own, then remove. Without `abandon` it refuses while a PR is " +
+        "merged code branches. With `abandon` (a reason) when work is unshipped: record the reason, move " +
+        "the issue to Done (GitHub: closed as not planned; `keep_open`: back to To Do) with a comment holding the reason, " +
+        "the post-mortem's branch and 'not shipped', push and keep every branch with commits of its own, then remove. Without `abandon` it refuses while a PR is " +
         "unshipped, unless `no_pr` gives a reason the work needed no PR (no PR files, clean worktrees, no commits ahead). Destructive — confirm with the person first. Nothing is deleted if any branch " +
         "cannot be pushed. Refuses without postmortem.md in the workspace: run the werkmeister " +
         "`postmortem` skill first.",
@@ -493,6 +494,12 @@ function registerAuthoringTools(server: McpServer): void {
           .describe(
             "Close out as done with no PR files: why no PR was needed (the work changed no repo). Needs postmortem.md; recorded in closeout.md and on the issue.",
           ),
+        keep_open: z
+          .boolean()
+          .optional()
+          .describe(
+            "With `abandon`: put the issue back as To Do (GitHub: left open, comment only) instead of Done, for work parked to retry later.",
+          ),
       },
     },
     async (args, extra): Promise<CallToolResult> =>
@@ -501,6 +508,7 @@ function registerAuthoringTools(server: McpServer): void {
           ...(args.abandon !== undefined ? { abandon: args.abandon } : {}),
           ...(args.skip_postmortem !== undefined ? { skipPostmortem: args.skip_postmortem } : {}),
           ...(args.no_pr !== undefined ? { noPr: args.no_pr } : {}),
+          ...(args.keep_open ? { keepOpen: true } : {}),
         });
         // closeOut installs its own collecting reporter for the teardown, and
         // that AsyncLocalStorage scope shadows adapt()'s — re-emit what it

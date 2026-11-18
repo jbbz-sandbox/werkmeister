@@ -37,7 +37,7 @@ test("defaults fit Jira's standard workflow and GitHub status: labels", () => {
     in_review: "In Review",
     merged: null,
     done: "Done",
-    abandoned: null,
+    abandoned: "Done",
   });
   assert.deepEqual(GITHUB, {
     in_progress: "status: in progress",
@@ -164,7 +164,13 @@ test("moveIssue: an unreadable issue is not moved; a null status does nothing un
   assert.deepEqual(unread.updates, []);
   const t = tracker({ ref: "X-1", status: "In Review", statusCategory: "indeterminate" });
   assert.equal(await moveIssue(t, "X-1", "merged", JIRA, { comment: "c" }), "");
-  await moveIssue(t, "X-1", "abandoned", JIRA, { comment: "Abandoned: why", alwaysComment: true });
+  await moveIssue(
+    t,
+    "X-1",
+    "abandoned",
+    { ...JIRA, abandoned: null },
+    { comment: "Abandoned: why", alwaysComment: true },
+  );
   assert.deepEqual(t.updates, [["X-1", { comment: "Abandoned: why" }]]);
 });
 

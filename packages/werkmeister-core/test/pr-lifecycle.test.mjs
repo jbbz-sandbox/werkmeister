@@ -3295,7 +3295,12 @@ test("closeOut --abandon: records why, comments it and closes the issue as not p
     assert.match(closeout, /Issue: o\/app#7 → not planned/);
     assert.deepEqual(updated, [
       "o/app#7",
-      { status: "not planned", comment: "Abandoned: superseded by #170" },
+      {
+        status: "not planned",
+        comment:
+          "Abandoned, not shipped: superseded by #170\n" +
+          "Post-mortem: postmortem.md on the workspace's record branch, pushed at removal.",
+      },
     ]);
     assert.ok(
       !d.calls.some((c) => c.includes("branch -D") || c.includes("--delete")),
@@ -3305,6 +3310,147 @@ test("closeOut --abandon: records why, comments it and closes the issue as not p
     assert.deepEqual(r.terminals, [`terminal session: pid 9 on ttys001 in ${ws} — /exit it`]);
     assert.equal(r.path, ws);
     assert.match(r.command, /^werkmeister workspace abandon <reason> /);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --abandon on Jira: moves the issue to Done with the reason, the post-mortem and a not-shipped line (SW-795)", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }) } });
+  try {
+    let updated = null;
+    const d = deps(
+      [[/rev-parse --abbrev-ref HEAD$/, { stdout: "jayboyer/sw-751-cold-builds\n" }]],
+      {
+        tracker: {
+          fetchIssue: async () => ({
+            ref: "SW-751",
+            status: "In Progress",
+            statusCategory: "indeterminate",
+          }),
+          updateIssue: async (ref, u) => (updated = [ref, u]),
+        },
+        statuses: resolveIssueStatuses({}, "jira"),
+        remove: async (_name, abandoned) => ({ output: `removed abandoned=${abandoned}` }),
+      },
+    );
+    const r = await inWorkspacesRoot(ws, (name) =>
+      closeOut(name, { abandon: "no gain: A/B medians 155.5 s vs 156.7 s" }, d),
+    );
+    assert.equal(updated?.[1].status, "Done");
+    const comment = updated[1].comment;
+    assert.match(comment, /no gain: A\/B medians 155\.5 s vs 156\.7 s/, "the reason, verbatim");
+    assert.match(
+      comment,
+      /Post-mortem: postmortem\.md on branch jayboyer\/sw-751-cold-builds/,
+      "where the post-mortem is",
+    );
+    assert.match(comment, /abandoned, not shipped/i);
+    assert.match(r.output, /Issue: .*→ Done/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --abandon --keep-open: the issue goes back to To Do; --keep-open alone refuses (SW-795)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: u\n" }) },
+    postmortem: null,
+  });
+  try {
+    let updated = null;
+    const d = deps([], {
+      tracker: {
+        id: "jira",
+        fetchIssue: async () => ({ ref: "SW-9", status: "In Progress" }),
+        updateIssue: async (ref, u) => (updated = [ref, u]),
+      },
+      statuses: resolveIssueStatuses({}, "jira"),
+    });
+    await assert.rejects(
+      inWorkspacesRoot(ws, (name) => closeOut(name, { keepOpen: true }, d)),
+      /--keep-open .* needs abandon/,
+    );
+    const r = await inWorkspacesRoot(ws, (name) =>
+      closeOut(name, { abandon: "retry after SW-10", keepOpen: true, skipPostmortem: "test" }, d),
+    );
+    assert.deepEqual(updated?.[1], {
+      status: "To Do",
+      comment: "Abandoned, not shipped: retry after SW-10",
+    });
+    assert.match(r.output, /→ To Do/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --abandon --keep-open on GitHub: the issue is still open, so it only gets the comment (SW-795)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: u\n" }) },
+    postmortem: null,
+  });
+  try {
+    let updated = null;
+    const d = deps([], {
+      tracker: {
+        id: "github",
+        fetchIssue: async () => ({ ref: "o/app#7", status: "OPEN" }),
+        updateIssue: async (ref, u) => (updated = [ref, u]),
+      },
+    });
+    const r = await inWorkspacesRoot(ws, (name) =>
+      closeOut(name, { abandon: "parked", keepOpen: true, skipPostmortem: "test" }, d),
+    );
+    assert.deepEqual(updated, ["o/app#7", { comment: "Abandoned, not shipped: parked" }]);
+    assert.match(r.output, /o\/app#7 commented, left open/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --abandon retried after a failed removal does not move or comment on the issue again (SW-795 review)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: u\n" }) },
+    postmortem: null,
+  });
+  try {
+    // The first run wrote closeout.md and moved the issue, then removal failed.
+    fs.writeFileSync(path.join(ws, "closeout.md"), "# Close-out\n");
+    const updates = [];
+    const d = deps([], {
+      tracker: {
+        id: "github",
+        fetchIssue: async () => ({ ref: "o/app#7", status: "CLOSED" }),
+        updateIssue: async (ref, u) => updates.push([ref, u]),
+      },
+    });
+    const r = await inWorkspacesRoot(ws, (name) =>
+      closeOut(name, { abandon: "parked", skipPostmortem: "test" }, d),
+    );
+    assert.deepEqual(updates, []);
+    assert.match(r.output, /o\/app#7 left CLOSED \(abandoned\)/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("closeOut --abandon with an unreachable tracker: still removes, keeps every branch, reports the failed update (SW-795)", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }) } });
+  try {
+    const d = deps([], {
+      tracker: {
+        fetchIssue: async (_ref, why) => (why?.push("HTTP 503"), null),
+        updateIssue: async () => {
+          throw new Error("unreachable");
+        },
+      },
+      statuses: resolveIssueStatuses({}, "jira"),
+      remove: async (_name, abandoned) => ({ output: `removed abandoned=${abandoned}` }),
+    });
+    const r = await inWorkspacesRoot(ws, (name) => closeOut(name, { abandon: "superseded" }, d));
+    assert.match(r.output, /not moved to "Done".*HTTP 503/);
+    assert.match(r.output, /removed abandoned=true/);
+    assert.ok(!d.calls.some((c) => c.includes("branch -D") || c.includes("--delete")));
   } finally {
     clean(ws);
   }

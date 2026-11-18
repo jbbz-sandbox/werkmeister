@@ -313,7 +313,8 @@ The workspace's issue (`issue_id` in `workspace.yml`) moves by itself as the wor
 | `werkmeister pr open` for a follow-up after the issue is Done | — | no change | no change | `Follow-up PR opened: <url>` |
 | `werkmeister workspace close` | `done` if not already | `Done` | close if still open | `Shipped: …` |
 | `werkmeister workspace close --no-pr "<reason>"` | `done` if not already | `Done` | close if still open | `No PR needed: <reason>` (posted even when already Done) |
-| `werkmeister workspace abandon "<reason>"` | `abandoned` | no status, comment only | close as not planned | `Abandoned: <reason>` |
+| `werkmeister workspace abandon "<reason>"` | `abandoned` | `Done` | close as not planned | `Abandoned, not shipped: <reason>`, then `Post-mortem: postmortem.md on branch <record branch>` when it exists |
+| `werkmeister workspace abandon "<reason>" --keep-open` | — | `To Do` | left open, comment only | the same |
 | Spike | `done` at close-out | `Done` | closed | `Shipped: no PRs` |
 
 `pr status` runs by hand and in every PR watch pass, so the ship move needs no person.
@@ -405,7 +406,7 @@ Without `postmortem.md`, close-out refuses before it changes anything: an unship
 **Abandoned.** `werkmeister workspace abandon "<reason>" <name>` ends a workspace whose work won't ship. The reason is required.
 
 1. Every unsettled PR file becomes `abandoned` with the reason.
-2. The issue gets a comment with the reason and moves to `abandoned` when one is configured (GitHub: closed as not planned). A refusal is a warning.
+2. The issue gets a comment, `Abandoned, not shipped: <reason>` and, when `postmortem.md` exists, the record branch it is pushed on, then moves to `abandoned` (Jira: Done, since its default workflow has no Won't Do; GitHub: closed as not planned; `null` comments only). `--keep-open` (MCP `keep_open`) moves it to To Do instead (GitHub: left open with the comment), for work parked to retry later. An issue already Done gets the comment and stays. A refusal, or a tracker it can't reach, is a warning line: the close-out carries on and keeps every branch.
 3. `closeout.md` records the reason and the post-mortem line.
 4. Remove, as above, except that a code branch with no commits of its own is not pushed (it would hold only the handoff commit). Its handoff commit is saved as `handoff/<workspace>/<repo>.patch` instead, so no work is lost.
 5. Every branch is kept.

@@ -1444,7 +1444,7 @@ const SPECS: CommandSpec[] = [
       cmd
         .description(
           "End a workspace without shipping: record the reason in closeout.md and the PR files, " +
-            "push every branch and keep them, remove the workspace",
+            "move the issue to Done with the reason, push every branch and keep them, remove the workspace",
         )
         .argument("<reason>", "Why the work is abandoned")
         .argument("[name]", "Workspace directory name; defaults to the workspace you are in")
@@ -1452,12 +1452,17 @@ const SPECS: CommandSpec[] = [
         .option(
           "--skip-postmortem <reason>",
           "Close out without a post-mortem; the reason goes in closeout.md",
+        )
+        .option(
+          "--keep-open",
+          "Put the issue back as To Do instead of Done (park it, retry later)",
         );
     },
     namespace: ([reason, name], o) => ({
       name: name ?? null,
       yes: Boolean(o.yes),
       abandon: reason,
+      keepOpen: Boolean(o.keepOpen),
       skipPostmortem: o.skipPostmortem ?? null,
       noPr: null,
     }),
