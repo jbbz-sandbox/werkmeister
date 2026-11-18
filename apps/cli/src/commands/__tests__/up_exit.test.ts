@@ -47,6 +47,8 @@ exit 0
     { mode: 0o755 },
   );
   const env: NodeJS.ProcessEnv = { ...process.env, ...fx.env, WERKMEISTER_DOCKER_BIN: docker };
+  // A shell-exported root renders templates from that checkout, not this build (SW-671; bdd/steps.ts does the same).
+  delete env.WERKMEISTER_ROOT;
   const init = spawn(process.execPath, [MAIN, "workspace", "init"], {
     cwd: fx.workspace,
     env,

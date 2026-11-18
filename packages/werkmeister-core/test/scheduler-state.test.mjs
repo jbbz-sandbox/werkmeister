@@ -523,6 +523,19 @@ const SETUP_COMPOSE = `services:
   db: {}
 `;
 
+// Saved and restored, so a failing assert leaves WERKMEISTER_NO_WAIT as it was for later tests (SW-671).
+async function withNoWait(value, fn) {
+  const prev = process.env.WERKMEISTER_NO_WAIT;
+  if (value === undefined) delete process.env.WERKMEISTER_NO_WAIT;
+  else process.env.WERKMEISTER_NO_WAIT = value;
+  try {
+    return await fn();
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_NO_WAIT;
+    else process.env.WERKMEISTER_NO_WAIT = prev;
+  }
+}
+
 /** A fake host load reading *loads* in turn (the last repeats) on 4 cores: limit 8. */
 function hostLoads(...loads) {
   const slept = [];
@@ -539,55 +552,58 @@ function hostLoads(...loads) {
 }
 
 test("waitForSetupLoad: load still over budget after the wait fails with the load, not a compose timeout (SW-630)", async () => {
-  delete process.env.WERKMEISTER_NO_WAIT;
-  await withHome(async (home) => {
-    const ws = workspace(home, SETUP_COMPOSE);
-    const lines = [];
-    const stuck = hostLoads(90);
-    await assert.rejects(
-      withReporter({ emit: (e) => lines.push(e.msg) }, () =>
-        waitForSetupLoad(ws, serviceStarts(ws, "api"), stuck, "linux"),
-      ),
-      (e) =>
-        e.code === "HOST_LOAD" &&
-        /host load 90\.0 is over 8 \(budget\.host_load\)/.test(e.message) &&
-        /install/.test(e.message),
-    );
-    assert.equal(stuck.slept.length, 6);
-    assert.match(
-      lines[0],
-      /waiting up to 1\.5 min for host load 90\.0 to fall to 8 \(budget\.host_load\) before starting install/,
-    );
-  });
+  await withNoWait(undefined, () =>
+    withHome(async (home) => {
+      const ws = workspace(home, SETUP_COMPOSE);
+      const lines = [];
+      const stuck = hostLoads(90);
+      await assert.rejects(
+        withReporter({ emit: (e) => lines.push(e.msg) }, () =>
+          waitForSetupLoad(ws, serviceStarts(ws, "api"), stuck, "linux"),
+        ),
+        (e) =>
+          e.code === "HOST_LOAD" &&
+          /host load 90\.0 is over 8 \(budget\.host_load\)/.test(e.message) &&
+          /install/.test(e.message),
+      );
+      assert.equal(stuck.slept.length, 6);
+      assert.match(
+        lines[0],
+        /waiting up to 1\.5 min for host load 90\.0 to fall to 8 \(budget\.host_load\) before starting install/,
+      );
+    }),
+  );
 });
 
 // SW-620: on macOS, where load is no signal, low free memory still holds the install back.
 test("waitForSetupLoad: low free memory after the wait fails with the memory, on macOS too (SW-620)", async () => {
-  delete process.env.WERKMEISTER_NO_WAIT;
-  await withHome(async (home) => {
-    const ws = workspace(home, SETUP_COMPOSE);
-    const short = { ...hostLoads(500), hostMemory: () => ({ free: 1, total: 16 }) };
-    await assert.rejects(
-      waitForSetupLoad(ws, serviceStarts(ws, "api"), short, "darwin"),
-      (e) =>
-        e.code === "HOST_LOAD" &&
-        /^memory is low \(6% free, under budget\.free_memory 15%\)/.test(e.message) &&
-        !/host load/.test(e.message),
-    );
-  });
+  await withNoWait(undefined, () =>
+    withHome(async (home) => {
+      const ws = workspace(home, SETUP_COMPOSE);
+      const short = { ...hostLoads(500), hostMemory: () => ({ free: 1, total: 16 }) };
+      await assert.rejects(
+        waitForSetupLoad(ws, serviceStarts(ws, "api"), short, "darwin"),
+        (e) =>
+          e.code === "HOST_LOAD" &&
+          /^memory is low \(6% free, under budget\.free_memory 15%\)/.test(e.message) &&
+          !/host load/.test(e.message),
+      );
+    }),
+  );
 });
 
 test("waitForSetupLoad: starts once load falls, and at once when under budget (SW-630)", async () => {
-  delete process.env.WERKMEISTER_NO_WAIT;
-  await withHome(async (home) => {
-    const ws = workspace(home, SETUP_COMPOSE);
-    const falls = hostLoads(90, 1);
-    await waitForSetupLoad(ws, serviceStarts(ws, "api"), falls, "linux");
-    assert.deepEqual(falls.slept, [15000]);
-    const calm = hostLoads(1);
-    await waitForSetupLoad(ws, undefined, calm, "linux"); // a whole `up` starts the install too
-    assert.deepEqual(calm.slept, []);
-  });
+  await withNoWait(undefined, () =>
+    withHome(async (home) => {
+      const ws = workspace(home, SETUP_COMPOSE);
+      const falls = hostLoads(90, 1);
+      await waitForSetupLoad(ws, serviceStarts(ws, "api"), falls, "linux");
+      assert.deepEqual(falls.slept, [15000]);
+      const calm = hostLoads(1);
+      await waitForSetupLoad(ws, undefined, calm, "linux"); // a whole `up` starts the install too
+      assert.deepEqual(calm.slept, []);
+    }),
+  );
 });
 
 test("waitForSetupLoad: no setup among the starts, macOS, or WERKMEISTER_NO_WAIT: no wait (SW-630, SW-556)", async () => {
@@ -599,13 +615,12 @@ test("waitForSetupLoad: no setup among the starts, macOS, or WERKMEISTER_NO_WAIT
       [serviceStarts(ws, "api"), "darwin", false],
       [serviceStarts(ws, "api"), "linux", true],
     ]) {
-      if (noWait) process.env.WERKMEISTER_NO_WAIT = "1";
-      else delete process.env.WERKMEISTER_NO_WAIT;
       const stuck = hostLoads(90);
-      await waitForSetupLoad(ws, services, stuck, platform);
+      await withNoWait(noWait ? "1" : undefined, () =>
+        waitForSetupLoad(ws, services, stuck, platform),
+      );
       assert.deepEqual(stuck.slept, [], `${services} on ${platform}`);
     }
-    delete process.env.WERKMEISTER_NO_WAIT;
   });
 });
 
