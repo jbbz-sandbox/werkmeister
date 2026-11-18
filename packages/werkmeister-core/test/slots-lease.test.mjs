@@ -120,7 +120,11 @@ test("releaseSlot ends the lease; a lease whose workspace is gone is pruned; lab
     await allocateSlot("gone", 1, gone, noContainers);
     fs.rmSync(gone, { recursive: true });
     // Labelled "old" predates leases: it keeps slot 3 and gets a lease for it.
-    const s = await allocateSlot("b", 1, ws(home, "b"), labels({ old: { slot: 3, services: [] } }));
+    // On the host (no Docker marker): this test runs in a container too (SW-860).
+    const s = await allocateSlot("b", 1, ws(home, "b"), {
+      ...labels({ old: { slot: 3, services: [] } }),
+      dockerenv: path.join(home, "no-dockerenv"),
+    });
     assert.equal(s, 1, "slot 1 freed by the prune");
     const leases = readLeases();
     assert.equal(leases.gone, undefined);
@@ -138,5 +142,19 @@ test("releaseSlot also drops the feature from the waiting queue", async () => {
     await releaseSlot("gone");
     assert.deepEqual(readQueue(), []);
     assert.equal(readLeases()["gone"], undefined);
+  });
+});
+
+// SW-860: a workspace container mounts the real ~/.werkmeister but only its own folder, so every other
+// workspace's folder looks gone from there. Its allocate must not prune their leases.
+test("an allocate inside a container keeps a lease whose folder it can't see (SW-860)", async () => {
+  await withHome(async (home) => {
+    const queued = ws(home, "queued");
+    await allocateSlot("queued", 1, queued, noContainers);
+    fs.rmSync(queued, { recursive: true }); // as seen from the other workspace's container
+    const dockerenv = path.join(home, ".dockerenv");
+    fs.writeFileSync(dockerenv, "");
+    await allocateSlot("b", null, ws(home, "b"), { ...noContainers, dockerenv });
+    assert.equal(readLeases().queued?.slot, 1);
   });
 });
