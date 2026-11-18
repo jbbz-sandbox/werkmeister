@@ -1094,7 +1094,7 @@ async function gateChecks(
     const why = res.code ? retryIf(res) : null;
     if (why) {
       // Only before this one retry: the gate itself never waits on load (SW-542).
-      const waited = await waitForHostLoadNow(deps, undefined, "the gate's retry");
+      const { note: waited } = await waitForHostLoadNow(deps, undefined, "the gate's retry");
       res = await exec();
       lines[0] = `${cmd} → exit ${res.code}, retried once after ${why}${waited ? `; ${waited}` : ""}`;
     }
