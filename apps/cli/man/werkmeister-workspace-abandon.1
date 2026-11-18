@@ -1,6 +1,6 @@
 .TH WERKMEISTER-WORKSPACE-ABANDON 1 "" "werkmeister" "Werkmeister Manual"
 .SH NAME
-werkmeister\-workspace\-abandon \- End a workspace without shipping: record the reason in closeout.md and the PR files, push every branch and keep them, remove the workspace
+werkmeister\-workspace\-abandon \- End a workspace without shipping: record the reason in closeout.md and the PR files, move the issue to Done with the reason, push every branch and keep them, remove the workspace
 .SH SYNOPSIS
 \fBwerkmeister workspace abandon\fR <reason> [name]
 .SH OPTIONS
@@ -10,9 +10,12 @@ Skip the confirmation prompt
 .TP
 \fB\-\-skip\-postmortem <reason>\fR
 Close out without a post\-mortem; the reason goes in closeout.md
+.TP
+\fB\-\-keep\-open\fR
+Put the issue back as To Do instead of Done (park it, retry later)
 .SH DESCRIPTION
 .PP
-Ends a workspace whose work won't ship: superseded, out of scope, or stopped. Like \fBwerkmeister workspace close\fR, it refuses without \fBpostmortem.md\fR unless \fB\-\-skip\-postmortem\fR gives a reason. Then it records the reason in \fBcloseout.md\fR and the PR files, pushes every code branch that has commits of its own and keeps it, and removes the workspace. On the issue it posts \fBAbandoned: <reason>\fR and moves it to the \fBabandoned\fR status (on Jira none by default, a comment only; on GitHub closed as not planned; see Issue status). Use \fBwerkmeister workspace close\fR instead once every PR has shipped, or with \fB\-\-no\-pr\fR when the work changed no repo. It lists terminal Claude sessions still open in the workspace.
+Ends a workspace whose work won't ship: superseded, out of scope, or stopped. Like \fBwerkmeister workspace close\fR, it refuses without \fBpostmortem.md\fR unless \fB\-\-skip\-postmortem\fR gives a reason. Then it records the reason in \fBcloseout.md\fR and the PR files, pushes every code branch that has commits of its own and keeps it, and removes the workspace. On the issue it posts \fBAbandoned, not shipped: <reason>\fR, plus the branch that holds \fBpostmortem.md\fR when there is one, and moves it to the \fBabandoned\fR status (on Jira Done by default; on GitHub closed as not planned; see Issue status). With \fB\-\-keep\-open\fR the issue goes back to To Do (GitHub: left open, comment only) instead, for work parked to retry later. Use \fBwerkmeister workspace close\fR instead once every PR has shipped, or with \fB\-\-no\-pr\fR when the work changed no repo. It lists terminal Claude sessions still open in the workspace.
 .PP
 The full process is in docs/workspace\-lifecycle.md.
 .SH EXAMPLES
@@ -21,6 +24,7 @@ The full process is in docs/workspace\-lifecycle.md.
 .RS 4
 werkmeister workspace abandon "superseded by SW\-200"
 werkmeister workspace abandon "superseded by SW\-200" my\-feature
+werkmeister workspace abandon "blocked on SW\-210; retry after it ships" \-\-keep\-open
 .RE
 .fi
 .SH SEE ALSO

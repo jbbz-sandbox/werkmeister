@@ -3,7 +3,8 @@
  *
  * The one end-of-workspace verb (docs/workspace-lifecycle.md). Shipped: close
  * the issue, write closeout.md, remove the workspace, delete the merged code
- * branches. --abandon: record why, push every branch and keep them, remove. Both need
+ * branches. --abandon: record why, move the issue to Done (--keep-open: To Do), push every
+ * branch and keep them, remove. Both need
  * postmortem.md (SW-108) unless --skip-postmortem says why not. --no-pr: the work changed no
  * repo, so close as done with the reason instead of a PR (SW-270).
  * `name` defaults to the workspace the cwd is in. The checks live in
@@ -41,7 +42,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       `  ${Colors.DIM}${
         abandon === null
           ? "Closes the issue, writes closeout.md, removes the workspace, and deletes merged code branches."
-          : "Records the reason in closeout.md, pushes and keeps every branch with commits of its own, then removes the workspace."
+          : `Records the reason in closeout.md, moves the issue to ${args.keepOpen ? "To Do" : "Done"} with the reason, pushes and keeps every branch with commits of its own, then removes the workspace.`
       } Needs postmortem.md, or --skip-postmortem.${Colors.RESET}`,
     );
     if (
@@ -58,6 +59,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     ...(abandon === null ? {} : { abandon }),
     ...(skipPostmortem === null ? {} : { skipPostmortem }),
     ...(noPr === null ? {} : { noPr }),
+    ...(args.keepOpen ? { keepOpen: true } : {}),
   };
   const result = Object.keys(opts).length ? await closeOut(name, opts) : await closeOut(name);
   console.log(result.output);

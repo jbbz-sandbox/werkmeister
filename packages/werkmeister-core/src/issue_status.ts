@@ -50,7 +50,8 @@ const DEFAULTS: Record<TrackerId, IssueStatuses> = {
     in_review: "In Review",
     merged: null,
     done: "Done",
-    abandoned: null,
+    // No Won't Do in a default Jira workflow; the abandon comment says it wasn't shipped (SW-795).
+    abandoned: "Done",
   },
   github: {
     in_progress: "status: in progress",

@@ -93,7 +93,7 @@ UI-only tools render an interface in an MCP App client and return little to a sc
 | `remove-service` | Drop a service from a feature | `workspace?: string`, `service: string` |
 | `test` | Run a feature's Playwright suite | `workspace?: string`, `extraArgs?: string[]` |
 | `proxy-reload` | Regenerate and reload the reverse proxy | none |
-| `close-out` | End a workspace | `workspace?: string`, `abandon?: string`, `skip_postmortem?: string`, `no_pr?: string` |
+| `close-out` | End a workspace | `workspace?: string`, `abandon?: string`, `skip_postmortem?: string`, `no_pr?: string`, `keep_open?: boolean` |
 | `init-workspace` | Reconcile a workspace | `workspace?: string`, `repos?: string`, `services?: string`, `issue_id?: string`, `work_type?: string`, `task?: string`, `description?: string`, `labels?: string`, `group?: string`, `test_path?: string`, `starting_prompt?: string`, `context_strategy?: "icm" \| "jit"` |
 | `skills` | Check or sync a workspace's context layer | `workspace?: string`, `action: "check" \| "sync"` |
 | `standards` | Validate the standards tree | none |

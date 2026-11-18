@@ -22,8 +22,13 @@ test("findWorkspaceRoot walks up to the nearest .werkmeister directory", () => {
 });
 
 test("findWorkspaceRoot returns null when no .werkmeister exists above start", () => {
-  const bare = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "bare-")));
-  assert.equal(findWorkspaceRoot(bare), null);
+  // Not os.tmpdir(): with-temp-home makes it HOME, where another test's ~/.werkmeister would sit above it.
+  const bare = fs.realpathSync(fs.mkdtempSync("/tmp/bare-"));
+  try {
+    assert.equal(findWorkspaceRoot(bare), null);
+  } finally {
+    fs.rmSync(bare, { recursive: true, force: true });
+  }
 });
 
 // SW-113: a temp config's workspace root must hide a real workspace the CLI starts inside.

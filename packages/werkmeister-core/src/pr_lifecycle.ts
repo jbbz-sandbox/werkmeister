@@ -3488,6 +3488,35 @@ export function abandonWorkspace(ws: string, why: string): void {
   );
 }
 
+/** The abandon comment: the reason verbatim, and where the post-mortem survives the folder's removal (SW-795). */
+async function abandonComment(ws: string, why: string, deps: Deps): Promise<string> {
+  const lines = [`Abandoned, not shipped: ${why}`];
+  if (fs.existsSync(path.join(ws, "postmortem.md"))) {
+    const r = await deps.run("git", ["-C", ws, "rev-parse", "--abbrev-ref", "HEAD"]);
+    const branch = r.code === 0 ? r.stdout.trim() : "";
+    lines.push(
+      `Post-mortem: postmortem.md on ${branch && branch !== "HEAD" ? `branch ${branch}` : "the workspace's record branch"}, pushed at removal.`,
+    );
+  }
+  return lines.join("\n");
+}
+
+/** `--keep-open`: back in the queue instead of Done (SW-795). */
+// shortcut: To Do is Jira's default name; a GitHub issue is still open here, so it only gets the comment (its status label stays). Make it an issue_statuses point if a project names it otherwise.
+async function reopenIssue(
+  tracker: IssueTrackerStrategy,
+  ref: string,
+  comment: string,
+): Promise<string> {
+  const status = tracker.id === "jira" ? "To Do" : undefined;
+  try {
+    await tracker.updateIssue(ref, { ...(status && { status }), comment });
+    return status ? `${ref} → ${status}` : `${ref} commented, left open`;
+  } catch (e) {
+    return `${ref} not moved to "${status ?? "open"}": ${(e as Error).message}`;
+  }
+}
+
 /** The VS Code extension's terminal.ts writes one file per session shell pid here, holding its cwd (SW-421). */
 const vscodeTerminalsDir = (): string => path.join(sandboxHome(), "vscode-terminals");
 
@@ -3564,7 +3593,9 @@ export async function openTerminalSessions(
  *
  * @param name - The workspace's folder name.
  * @param opts - `abandon`: give up on unshipped work with this reason; the issue
- * gets the reason as a comment, every branch is pushed and kept.
+ * moves to its `abandoned` status (Jira: Done) with the reason and the post-mortem's
+ * branch as a comment, and every branch is pushed and kept.
+ * `keepOpen`: with `abandon`, put the issue back as To Do (GitHub: left open, comment only) instead.
  * `noPr`: the work changed no repo, so close it as done with this reason instead of a PR.
  * `skipPostmortem`: close without a `postmortem.md`, with this reason.
  * Each needs a non-empty reason; `noPr` can't be combined with the other two.
@@ -3592,7 +3623,7 @@ export async function openTerminalSessions(
  */
 export async function closeOut(
   name: string,
-  opts: { abandon?: string; skipPostmortem?: string; noPr?: string } = {},
+  opts: { abandon?: string; skipPostmortem?: string; noPr?: string; keepOpen?: boolean } = {},
   deps: Deps = defaultDeps(),
 ): Promise<{
   /** The equivalent CLI command, e.g. `werkmeister workspace close <name>`. */
@@ -3614,6 +3645,11 @@ export async function closeOut(
   if (opts.skipPostmortem !== undefined && !skip) {
     throw new WorkspaceError(
       `Skipping the post-mortem needs a reason: werkmeister workspace close ${name} --skip-postmortem "<reason>"`,
+    );
+  }
+  if (opts.keepOpen && !why) {
+    throw new WorkspaceError(
+      `--keep-open puts an abandoned issue back in the queue, so it needs abandon: werkmeister workspace abandon "<reason>" ${name} --keep-open`,
     );
   }
   const noPr = opts.noPr?.trim();
@@ -3643,7 +3679,7 @@ export async function closeOut(
     );
   }
   try {
-    return await closeOutLocked(name, ws, why, skip, noPr, deps);
+    return await closeOutLocked(name, ws, why, skip, noPr, !!opts.keepOpen, deps);
   } finally {
     fs.rmSync(lock, { force: true });
   }
@@ -3655,6 +3691,7 @@ async function closeOutLocked(
   why: string | undefined,
   skip: string | undefined,
   noPr: string | undefined,
+  keepOpen: boolean,
   deps: Deps,
 ): Promise<{ command: string; output: string; path: string; terminals: string[] }> {
   const command = `werkmeister workspace ${why ? "abandon <reason>" : "close"} ${name}`;
@@ -3669,6 +3706,8 @@ async function closeOutLocked(
       : null;
   // Before abandonWorkspace, which rewrites the PR files: a refusal changes nothing.
   if (why && postmortemRefusal) throw new WorkspaceError(postmortemRefusal);
+  // A retry after a failed removal: the issue already moved and has the comment, so it is not posted twice.
+  const retry = fs.existsSync(path.join(ws, "closeout.md"));
   if (why) abandonWorkspace(ws, why);
   const life = lifecycleOf(ws);
   const spikeDone =
@@ -3732,12 +3771,14 @@ async function closeOutLocked(
   const refs = issueRefsOf(cfg);
   let issueLine = "none";
   if (refs.length) {
+    const comment = why && !retry && (await abandonComment(ws, why, deps));
     // moveIssue never throws: a tracker refusal is a warning here, not a stopped close-out.
     issueLine = await eachIssue(refs, async (ref) => {
       const { tracker, statuses } = trackingOf(cfg, ref, deps);
-      if (why)
+      if (why && !retry && keepOpen) return reopenIssue(tracker, ref, comment || why);
+      if (why && !retry)
         return moveIssue(tracker, ref, "abandoned", statuses, {
-          comment: `Abandoned: ${why}`,
+          comment: comment || why,
           alwaysComment: true,
         });
       if (abandoned) {
