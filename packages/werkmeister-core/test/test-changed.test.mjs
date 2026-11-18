@@ -198,6 +198,26 @@ test("run-tests.sh given .mjs files runs only those", () => {
       encoding: "utf8",
     });
     assert.equal(smokeOnly.trim(), "smoke one");
+    // SW-756: only COVERAGE=1 writes a report, one per node --test run, naming the code outside test/.
+    const cov = path.join(root, "cov");
+    fs.writeFileSync(path.join(dir, "lib.mjs"), "export const one = () => 1;\n");
+    fs.writeFileSync(
+      path.join(dir, "test", "three.test.mjs"),
+      `import { test } from "node:test";\nimport { one } from "../lib.mjs";\ntest("three", () => one());\n`,
+    );
+    const run = (extra) =>
+      execFileSync("sh", ["run-tests.sh", "test/one.test.mjs", "test/three.test.mjs"], {
+        cwd: dir,
+        env: { ...env, COVERAGE: "", COVERAGE_DIR: cov, ...extra },
+        encoding: "utf8",
+      });
+    run({});
+    assert.equal(fs.existsSync(cov), false);
+    assert.match(run({ COVERAGE: "1" }), /three/);
+    const lcov = fs.readFileSync(path.join(cov, "lcov-isolated.info"), "utf8");
+    assert.match(lcov, /^SF:.*lib\.mjs$/m);
+    assert.doesNotMatch(lcov, /three\.test\.mjs/);
+    assert.ok(fs.existsSync(path.join(cov, "lcov-shared.info")));
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
