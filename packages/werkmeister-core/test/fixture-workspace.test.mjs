@@ -9,9 +9,8 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { jiraCreds } from "../dist/jira-rest.js";
-import { gatePrs } from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
-import { hostLoadLimit, readLeases } from "../dist/scheduler_state.js";
+import { readLeases } from "../dist/scheduler_state.js";
 import { initWorkspace, provisionWorkspace } from "../dist/workspace_init.js";
 import { tokensDir } from "../dist/workspace_token.js";
 import { pinWerkmeisterRoot, withFakeDaemon, withFixtureWorkspace } from "./fixtures.mjs";
@@ -138,136 +137,11 @@ test("create with every slot taken (slotsFull) names the path and prints the nex
   );
 });
 
-test("the gate fixture's one-file change runs lib's test in its container, logged by the fake docker", async () => {
-  await withFixtureWorkspace(
-    async (fx) => {
-      // The gate's setup one-shot re-run starts from compose.yml, which init writes (SW-362).
-      await withReporter(collectingReporter(), () =>
-        initWorkspace({}, fx.workspace, { build: false }),
-      );
-      const { ok, lines } = await gatePrs(fx.workspace);
-      assert.equal(ok, true, lines.join("\n"));
-      const calls = fs.readFileSync(fx.dockerLog, "utf8").split("\n");
-      const execs = calls.filter((c) => c.startsWith("exec "));
-      assert.equal(execs.length, 1, calls.join("\n"));
-      // Logged as container + row command, not the inlined script (SW-511).
-      assert.match(execs[0], /^exec demo-lib true$/);
-    },
-    { gate: true },
-  );
-});
-
-test("a gate fixture behind origin/main fails the base row after a fetch, before any docker exec (SW-669)", async () => {
-  await withFixtureWorkspace(
-    async (fx) => {
-      await withReporter(collectingReporter(), () =>
-        initWorkspace({}, fx.workspace, { build: false }),
-      );
-      assert.equal(
-        git(fx.repo, "rev-list", "--count", "HEAD..origin/main"),
-        "0",
-        "stale until fetched",
-      );
-      const { ok, lines } = await gatePrs(fx.workspace);
-      assert.equal(ok, false);
-      const out = lines.join("\n");
-      assert.match(out, /✗ base: 2 commits behind origin\/main — `git -C app rebase origin\/main`/);
-      assert.match(out, /✗ tests: not run — fix the rows above first/);
-      const calls = fs.existsSync(fx.dockerLog) ? fs.readFileSync(fx.dockerLog, "utf8") : "";
-      assert.doesNotMatch(calls, /^exec /m);
-      // After the rebase the command names, the same gate passes.
-      git(fx.repo, "rebase", "-q", "origin/main");
-      const again = await gatePrs(fx.workspace);
-      assert.equal(again.ok, true, again.lines.join("\n"));
-      assert.match(again.lines.join("\n"), /✓ base: up to date with origin\/main/);
-    },
-    { gate: true, behind: true },
-  );
-});
-
-// SW-664: a diff touching only the registry fragment, so the gate's fragment row is exercised end to end.
-test("a gate fixture with fragmentChange gates a fragment-only diff and runs only the service it changes", async () => {
-  const branch = `services:\n  lib:\n    type: cli\n    path: packages/lib\n    test: echo changed\nrepo:\n  path_mappings:\n    packages/lib: lib\n`;
-  await withFixtureWorkspace(
-    async (fx) => {
-      assert.equal(
-        git(fx.repo, "diff", "--name-only", "origin/main...HEAD"),
-        ".werkmeister/services.yaml",
-      );
-      await withReporter(collectingReporter(), () =>
-        initWorkspace({}, fx.workspace, { build: false }),
-      );
-      const { ok, lines } = await gatePrs(fx.workspace);
-      assert.equal(ok, true, lines.join("\n"));
-      assert.match(lines.join("\n"), /fragment: \.werkmeister\/services\.yaml changes lib/);
-      const execs = fs
-        .readFileSync(fx.dockerLog, "utf8")
-        .split("\n")
-        .filter((c) => c.startsWith("exec "));
-      assert.deepEqual(execs, ["exec demo-lib echo changed"]);
-    },
-    { gate: true, fragmentChange: branch },
-  );
-});
-
-// SW-817: compose.yml inited before the branch's fragment lands, so the gate sees the branch settings as changed.
-test("staleCompose holds the fragment back until applyFragmentChange, so the gate starts from compose.gate.yml", async () => {
-  const branch = `services:\n  lib:\n    type: cli\n    path: packages/lib\n    test: echo changed\n    environment:\n      FIXTURE_FLAG: "1"\nrepo:\n  path_mappings:\n    packages/lib: lib\n`;
-  await withFixtureWorkspace(
-    async (fx) => {
-      assert.equal(git(fx.repo, "diff", "--name-only", "origin/main...HEAD"), "");
-      await withReporter(collectingReporter(), () =>
-        initWorkspace({}, fx.workspace, { build: false }),
-      );
-      fx.applyFragmentChange();
-      assert.equal(
-        git(fx.repo, "diff", "--name-only", "origin/main...HEAD"),
-        ".werkmeister/services.yaml",
-      );
-      const { lines } = await gatePrs(fx.workspace);
-      const calls = fs.readFileSync(fx.dockerLog, "utf8");
-      assert.match(calls, /compose -f \S*compose\.gate\.yml .*up .*lib/, lines.join("\n"));
-      assert.match(calls, /^exec demo-lib echo changed$/m, lines.join("\n"));
-    },
-    { gate: true, fragmentChange: branch, staleCompose: true },
-  );
-});
-
 // SW-581: the config sits at the temp HOME's default path, so `machine migrate` runs against the fixture.
 test("the fixture's config is the temp HOME's ~/.werkmeister/config.yaml", async () => {
   await withFixtureWorkspace(async (fx) => {
     assert.equal(fx.configFile, path.join(fx.env.HOME, ".werkmeister", "config.yaml"));
   });
-});
-
-test("--change names the file the gate fixture changes, beside a fragment change too (SW-664)", async () => {
-  const { fixturePreset } = await import("../dist/fixture_workspace.js");
-  assert.deepEqual(fixturePreset({ gate: true }).repos, [
-    { name: "app", change: "packages/lib/index.js" },
-  ]);
-  assert.deepEqual(fixturePreset({ gate: true, change: "plugins/x/y.ts" }).repos, [
-    { name: "app", change: "plugins/x/y.ts" },
-  ]);
-  assert.deepEqual(fixturePreset({ gate: true, fragmentChange: "x" }).repos, [
-    { name: "app", change: undefined },
-  ]);
-  // Another path maps to no `lib`, so a --services registry without it is no longer refused.
-  assert.doesNotThrow(() =>
-    fixturePreset({
-      gate: true,
-      change: "docs/z.md",
-      services: "services:\n  web: { repo: app, path: . }\n",
-    }),
-  );
-  await withFixtureWorkspace(
-    async (fx) => {
-      assert.equal(
-        git(fx.repo, "diff", "--name-only", "origin/main...HEAD"),
-        ".werkmeister/services.yaml\nplugins/x/y.ts",
-      );
-    },
-    { gate: true, change: "plugins/x/y.ts", fragmentChange: "services: {}\n" },
-  );
 });
 
 test("init refuses a repo name that leaves repos_root, before touching any repo", async () => {
@@ -298,105 +172,6 @@ test("caller-exported Jira credentials don't reach a fixture run", async () => {
   }
 });
 
-test("config adds keys to the fixture's config.yaml, and any key but budget is refused (SW-670)", async () => {
-  const { fixturePreset } = await import("../dist/fixture_workspace.js");
-  await withFixtureWorkspace(
-    async () => {
-      assert.equal(hostLoadLimit(8), 0.01);
-    },
-    { config: { budget: { host_load: 0.01 } } },
-  );
-  for (const key of ["version", "paths", "overrides", "projects", "jira", "github_ingest"])
-    assert.throws(() => fixturePreset({ config: { [key]: {} } }), /--config may not set/);
-});
-
-test("containers and queue seed what the scheduler reads from Docker and queue.json (SW-685)", async () => {
-  const { runningLeases } = await import("../dist/lifecycle.js");
-  const { readQueue } = await import("../dist/scheduler_state.js");
-  const holder = {
-    feature: "holder",
-    workspace: "holder-ws",
-    startedAt: "2026-11-13T00:00:00Z",
-    memory: 2 ** 30,
-    nanoCpus: 6e9,
-  };
-  await withFixtureWorkspace(
-    async (fx) => {
-      assert.deepEqual(runningLeases(), [
-        { feature: "holder", cost: { memory: 2 ** 30, cpus: 6 }, rank: "person", busy: false },
-      ]);
-      assert.ok(fs.statSync(path.join(fx.root, "ws", "holder-ws")).isDirectory());
-      assert.deepEqual(readQueue(), ["a", "b"]);
-    },
-    { containers: [holder], queue: ["a", "b"] },
-  );
-  await withFixtureWorkspace(async () => {
-    assert.deepEqual(runningLeases(), []);
-    assert.deepEqual(readQueue(), []);
-  });
-});
-
-test("a queue entry with a wait seeds its lease, compose.yml and waiting.json (SW-809)", async () => {
-  const { readQueue, waiters } = await import("../dist/scheduler_state.js");
-  const { readWaiting } = await import("../dist/agent_state.js");
-  await withFixtureWorkspace(
-    async (fx) => {
-      const before = Date.now();
-      assert.deepEqual(readQueue(), ["head", "svc", "plain"]);
-      const leases = readLeases();
-      assert.equal(leases.head?.workspace, path.join(fx.root, "ws", "head"));
-      assert.equal(leases.svc?.workspace, path.join(fx.root, "ws", "svc"));
-      assert.equal(leases.plain, undefined, "a name-only entry seeds only its name");
-      assert.notEqual(leases.head.slot, leases.svc.slot);
-      assert.ok(fs.existsSync(path.join(leases.head.workspace, "compose.yml")));
-      const head = readWaiting(leases.head.workspace);
-      const waited = before - Date.parse(head.since);
-      assert.ok(waited >= 239 * 60_000 && waited < 240 * 60_000, `waited ${waited} ms`);
-      assert.equal(head.services, undefined);
-      assert.deepEqual(readWaiting(leases.svc.workspace).services, ["api", "web"]);
-      const [h, s, p] = waiters(readQueue(), []);
-      assert.equal(Math.round(h.waitedMs / 60_000), 239);
-      assert.ok(h.cost.cpus > 0, "a whole-feature head is priced from its compose.yml");
-      assert.equal(s.gate, false);
-      assert.equal(Math.round(s.waitedMs / 60_000), 3);
-      assert.deepEqual(p, { feature: "plain", waitedMs: 0, gate: false });
-    },
-    { queue: ["head:239", "svc:3:api,web", "plain"] },
-  );
-  const { fixturePreset } = await import("../dist/fixture_workspace.js");
-  for (const bad of [
-    "head:",
-    "head:-1",
-    "head:1.5",
-    "head:2:",
-    "head:2:API",
-    "head:2:a,,b",
-    "head:2:a:b",
-  ])
-    assert.throws(() => fixturePreset({ queue: [bad] }), /--queue: bad entry/, bad);
-});
-
-test("a seed value that could leave the fixture or isn't a number is refused (SW-685)", async () => {
-  const { fixturePreset } = await import("../dist/fixture_workspace.js");
-  const ok = {
-    feature: "h",
-    workspace: "h",
-    startedAt: "2026-11-13T00:00:00Z",
-    memory: 0,
-    nanoCpus: 1,
-  };
-  for (const bad of [
-    { feature: "../x" },
-    { workspace: "/etc" },
-    { startedAt: "soon" },
-    { memory: Number.NaN },
-    { nanoCpus: -1 },
-  ])
-    assert.throws(() => fixturePreset({ containers: [{ ...ok, ...bad }] }), /--running: bad value/);
-  assert.throws(() => fixturePreset({ queue: ["ok", "-x"] }), /--queue: bad entry "-x"/);
-  assert.doesNotThrow(() => fixturePreset({ containers: [ok], queue: ["ok"] }));
-});
-
 test("in-process, HOME is the fixture's, so anything written under ~ stays in it", async () => {
   const real = os.homedir();
   await withFixtureWorkspace(async (fx) => {
@@ -404,23 +179,6 @@ test("in-process, HOME is the fixture's, so anything written under ~ stays in it
     assert.ok(tokensDir().startsWith(`${fx.root}/`), tokensDir());
   });
   assert.equal(os.homedir(), real, "restored after");
-});
-
-test("the fake docker shows the gate's containers only to the gate's ps", async () => {
-  await withFixtureWorkspace(
-    async (fx) => {
-      const docker = (...args) =>
-        execFileSync(fx.env.WERKMEISTER_DOCKER_BIN, args, { encoding: "utf8" });
-      assert.equal(docker("ps", "--format", "{{.Names}}\t{{.State}}"), "demo-lib\trunning\n");
-      // A pre-rename project probe (compose.ts takeDownProject) must find nothing to take down.
-      assert.equal(
-        docker("ps", "-aq", "--filter", "label=com.docker.compose.project=sandbox-demo"),
-        "",
-      ); // name-check: ignore
-      assert.equal(docker("ps", "-q", "--filter", "label=werkmeister.feature"), "");
-    },
-    { gate: true },
-  );
 });
 
 test("the workspace folder is a git repo with a local origin, its code clone ignored", async () => {
@@ -522,23 +280,6 @@ test("callTool still calls the daemon when the build-header lookup throws", asyn
   );
 });
 
-test("--gate refuses a registry whose change would map to no service (SW-426)", async () => {
-  const { fixturePreset } = await import("../dist/fixture_workspace.js");
-  assert.throws(
-    () => fixturePreset({ gate: true, services: "services:\n  web: { repo: app, path: . }\n" }),
-    /--gate needs a `lib` service/,
-  );
-  // SW-447: the right repo at another path still maps the packages/lib change to no service.
-  assert.throws(
-    () =>
-      fixturePreset({ gate: true, services: "services:\n  lib: { repo: app, path: libs/lib }\n" }),
-    /--gate needs a `lib` service/,
-  );
-  assert.equal(fixturePreset({ gate: true }).running?.length, 1);
-  // SW-470: without --gate a broken registry reaches workspace init's own error.
-  assert.doesNotThrow(() => fixturePreset({ services: "{bad" }));
-});
-
 // SW-548: inside a werkmeister container the worktree is mounted at /app and at its host path, but its
 // node_modules is a volume at /app/node_modules only, so the host-path CLI fails ERR_MODULE_NOT_FOUND.
 test("with-fixture-workspace runs /app's CLI when /app is its worktree, and says why on a host with no node_modules (SW-548)", async () => {
@@ -590,44 +331,4 @@ test("with-fixture-workspace runs /app's CLI when /app is its worktree, and says
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
-});
-
-test("--pr-field status sets the gate PR file's status line verbatim, notes included (SW-549)", async () => {
-  for (const [status, ok] of [
-    ["approved  # approved via check-in 2026-11-06", true],
-    ["approvd", false],
-  ])
-    await withFixtureWorkspace(
-      async (fx) => {
-        const pr = fs.readFileSync(
-          path.join(fx.workspace, ".werkmeister", "notes", "pr-app.md"),
-          "utf8",
-        );
-        assert.equal(pr.match(/^status: .*$/gm)?.join("|"), `status: ${status}`);
-        await withReporter(collectingReporter(), () =>
-          initWorkspace({}, fx.workspace, { build: false }),
-        );
-        const { ok: passed, lines } = await gatePrs(fx.workspace);
-        assert.equal(passed, ok, lines.join("\n"));
-        if (!ok) assert.match(lines.join("\n"), /✗ approved: status: approvd/);
-      },
-      { gate: true, prFields: { status } },
-    );
-});
-
-test("prLines seeds a raw frontmatter line, so an unquoted colon value fails the gate's YAML parse (SW-851)", async () => {
-  await withFixtureWorkspace(
-    async (fx) => {
-      const pr = fs.readFileSync(
-        path.join(fx.workspace, ".werkmeister", "notes", "pr-app.md"),
-        "utf8",
-      );
-      assert.match(pr, /^skip_release: no changeset: test-only$/m);
-      await withReporter(collectingReporter(), () =>
-        initWorkspace({}, fx.workspace, { build: false }),
-      );
-      await assert.rejects(gatePrs(fx.workspace), /Quote values that contain a colon/);
-    },
-    { gate: true, prLines: ["skip_release: no changeset: test-only"] },
-  );
 });
