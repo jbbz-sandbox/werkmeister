@@ -112,6 +112,11 @@ jobs:
       - run: pnpm test ${{ matrix.shard }}/2
         if: github.head_ref != 'changeset-release/main'
         working-directory: packages/werkmeister-core
+      # SW-816: a file that throws in after() or leaves a handle open under a no-match pattern (SW-797) fails or hangs here.
+      - run: pnpm run test:no-match
+        if: matrix.shard == 2 && github.head_ref != 'changeset-release/main'
+        working-directory: packages/werkmeister-core
+        timeout-minutes: 5
 
   # SW-77: engines promises Node >=22, so the suites the gate names run on 22
   # itself. Everything else stays on 24, whose bundled npm the release needs.
