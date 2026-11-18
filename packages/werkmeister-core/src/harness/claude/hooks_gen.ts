@@ -484,11 +484,16 @@ export function autonomousRules(
     ...[...services, ...repoServices].flatMap((svc) =>
       [`feature up --service ${svc}`, `feature up ${feature} --service ${svc}`].flatMap(cli),
     ),
-    ...["logs", "test", "services", "feature logs", "feature test", "feature services"].flatMap(
-      (cmd) => cli(`${cmd} ${feature}:*`),
+    // SW-855: exact too. No `feature test` even exact: it runs the workspace's own `playwright.config.*`,
+    // which the agent can write, with the real HOME; its `-w <other> --scaffold` writes another workspace.
+    ...["logs", "services", "feature logs", "feature services"].flatMap((cmd) =>
+      cli(`${cmd} ${feature}`),
     ),
-    // SW-560: no `docker exec <f>-<svc>:*`: any container reaches the host daemon over
-    // host.docker.internal, and some mount the docker socket; its exact registered test still runs.
+    ...services.flatMap((svc) =>
+      ["logs", "feature logs"].flatMap((cmd) => cli(`${cmd} ${feature} ${svc}`)),
+    ),
+    // SW-560: no `docker exec <f>-<svc>:*`: some containers mount the docker socket, and any one that
+    // mounts the workspace reaches the werkmeister daemon with its token (SW-855); its exact registered test still runs.
     ...services.flatMap((svc) => [
       `Bash(docker logs ${feature}-${svc}:*)`,
       `Bash(docker restart ${feature}-${svc})`,

@@ -49,6 +49,8 @@ const within = (p: string, dir: string) =>
 /**
  * True when one of *entry*'s host binds is a docker socket (any path ending `docker.sock`, e.g. OrbStack's)
  * or the werkmeister home, or a parent of either.
+ * SW-855: complete for docker (no TCP API on host.docker.internal), partial for the werkmeister daemon,
+ * which any container holding the workspace's token reaches on :3002 (docs/context-strategies.md).
  */
 export function hostAccess(entry: ServiceEntry | undefined): boolean {
   const targets = ["/var/run/docker.sock", sandboxHome()].map(realPath);
