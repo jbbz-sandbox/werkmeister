@@ -181,6 +181,12 @@ test("each template renders with no undefined and a route per stage", async () =
             /`python3 -I -u -m http\.server 0 -b 127\.0\.0\.1 -d <dir>` as a background Bash job.*stop the job by its task ID/,
             `${wt}/${d}`,
           );
+          // SW-792: below the window's 477 px floor, the width is checked in a same-origin iframe.
+          assert.match(
+            c,
+            /does not size below 477 px.*iframe on the same origin.*width="375" height="812".*scrollWidth === /,
+            `${wt}/${d}`,
+          );
           assert.doesNotMatch(c, /docs-site/, `${wt}/${d}`);
         }
         // SW-619: the build stages re-check the base for the files their input doc changes, before any code.
