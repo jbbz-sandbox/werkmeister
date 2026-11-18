@@ -12,7 +12,7 @@ import { jiraCreds } from "../dist/jira-rest.js";
 import { gatePrs } from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { hostLoadLimit, readLeases } from "../dist/scheduler_state.js";
-import { initWorkspace } from "../dist/workspace_init.js";
+import { initWorkspace, provisionWorkspace } from "../dist/workspace_init.js";
 import { tokensDir } from "../dist/workspace_token.js";
 import { pinWerkmeisterRoot, withFakeDaemon, withFixtureWorkspace } from "./fixtures.mjs";
 
@@ -110,6 +110,29 @@ test("init with every slot taken (slotsFull) says the container step did not run
       assert.match(context, /container step did not run/i);
       assert.match(context, /All 4 feature slots are occupied|No available slots/);
       assert.match(context, /werkmeister workspace init/);
+    },
+    { slotsFull: true },
+  );
+});
+
+// SW-635: only init was covered, so create could go back to "Workspace ready." on a full machine;
+// and init's next-step banner repeated create's.
+test("create with every slot taken (slotsFull) names the path and prints the next step once", async () => {
+  await withFixtureWorkspace(
+    async () => {
+      const reporter = collectingReporter();
+      const dir = await withReporter(reporter, () =>
+        provisionWorkspace({ feature: "nospace", repos: "app" }, { build: false }),
+      );
+      const out = reporter.text();
+      assert.doesNotMatch(out, /Workspace ready\./);
+      assert.match(
+        out,
+        new RegExp(`Workspace created at ${dir}, but its containers are not set up`),
+      );
+      assert.doesNotMatch(out, /container step did not run/i, "init's banner is dropped");
+      // generate.ts's slot warning ("rerun … here") stays, as SW-635 asks; create's line says it once.
+      assert.equal(out.match(/then run `werkmeister workspace init` there/g)?.length, 1, out);
     },
     { slotsFull: true },
   );
