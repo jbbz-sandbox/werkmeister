@@ -1202,15 +1202,27 @@ async function gateChecks(
           `refs/remotes/origin/${branch}`,
         ])
       ).code === 0;
+    // SW-191: base commits in files this branch touches made a spec or test route stale mid-run. Warns only.
+    const names = async (range: string) => {
+      const r = await deps.run("git", ["-C", dir, "diff", "--name-only", range]);
+      return r.code ? [] : r.stdout.split("\n").filter(Boolean);
+    };
+    const theirs = count > 0 ? new Set(await names(`HEAD...origin/${base}`)) : new Set<string>();
+    const overlap = theirs.size
+      ? (await names(`origin/${base}...HEAD`)).filter((f) => theirs.has(f))
+      : [];
+    const also = overlap.length
+      ? `; origin/${base} also changed ${overlap.join(", ")} — rebase onto origin/${base}, recheck the spec and tests that name them, rerun`
+      : "";
     add(
       "base",
       behind.code === 0 && (count === 0 || pushed),
       behind.code
         ? `cannot check against origin/${base}: ${(behind.stderr || behind.stdout).trim()}`
         : pushed
-          ? `${commits}; ${branch} is already pushed, so \`pr watch\` flags a conflict and rule 5's \`--force-with-lease\` hand-off applies`
+          ? `${commits}; ${branch} is already pushed, so \`pr watch\` flags a conflict and rule 5's \`--force-with-lease\` hand-off applies${also}`
           : count
-            ? `${commits} — \`git -C ${file.dir} rebase origin/${base}\` (keeps one commit per ticket), rerun the tests, then rerun`
+            ? `${commits} — \`git -C ${file.dir} rebase origin/${base}\` (keeps one commit per ticket), rerun the tests, then rerun${also}`
             : `up to date with origin/${base}`,
     );
     const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);

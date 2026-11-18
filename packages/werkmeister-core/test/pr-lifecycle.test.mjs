@@ -1999,6 +1999,26 @@ test("gate: a pushed branch behind origin/<base> passes the base row with a note
   }
 });
 
+test("gate: base commits in files the branch touches are named in the base row, which still passes when pushed (SW-191)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const theirs = [
+      /diff --name-only HEAD\.\.\.origin\/main$/,
+      { stdout: "apps/api/x.ts\nREADME.md\n" },
+    ];
+    const g = await gate(ws, deps([DIFF_API, BEHIND, theirs]));
+    assert.deepEqual(failed(g), []);
+    const row = g.checks.find((c) => c.name === "base").detail;
+    assert.match(row, /origin\/main also changed apps\/api\/x\.ts — rebase onto origin\/main/);
+    assert.doesNotMatch(row, /README/);
+    // No overlap, no note.
+    const g2 = await gate(ws, deps([DIFF_API, BEHIND, [theirs[0], { stdout: "README.md\n" }]]));
+    assert.doesNotMatch(g2.checks.find((c) => c.name === "base").detail, /also changed/);
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gate: a fetch that fails fails the base row, naming git's error (SW-669)", async () => {
   const ws = icmWorkspace();
   try {
