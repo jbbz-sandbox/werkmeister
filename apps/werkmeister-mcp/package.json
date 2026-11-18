@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "serve:stdio": "node dist/proxy.js",
     "serve:http": "node dist/main.js",
-    "test": "node --test *.test.mjs"
+    "test": "sh ../../scripts/require-temp-home.sh && node --test *.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.1164.0",

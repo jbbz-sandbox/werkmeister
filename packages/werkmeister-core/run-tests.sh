@@ -5,6 +5,7 @@
 # A list of .mjs files (from `pnpm run test:changed`) runs only those tests and smokes.
 set -e
 cd "$(dirname "$0")"
+sh ../../scripts/require-temp-home.sh
 export WERKMEISTER_GH_BIN="$PWD/test/no-gh.sh"
 # Started by a calling git (rebase --exec, a hook), these point every fixture `git init` at the real repo (SW-520).
 unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR

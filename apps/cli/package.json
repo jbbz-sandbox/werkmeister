@@ -103,7 +103,7 @@
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run && vitest run -c bdd/vitest.config.ts",
+    "test": "sh ../../scripts/require-temp-home.sh && vitest run && vitest run -c bdd/vitest.config.ts",
     "prepack": "cd ../../packages/werkmeister-vscode && pnpm run build && pnpm run package --out ../../apps/cli/dist/werkmeister-workspaces.vsix"
   },
   "//prepack": "Ships the VS Code extension in the tarball for `werkmeister machine setup` to install. Pack-time only, never `build`, so a checkout has no dist/*.vsix and setup never installs a dev's local build. `npm pack` runs prepack even with `--dry-run`: inspect the tarball with `npm pack --ignore-scripts`, and delete dist/werkmeister-workspaces.vsix if a pack ran it.",

@@ -151,11 +151,18 @@ test("no core change runs nothing", () =>
   }));
 
 test("run-tests.sh given .mjs files runs only those", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "run-tests-"));
+  // At packages/core under a root with scripts/, so run-tests.sh finds the temp-HOME guard it runs first (SW-662).
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "run-tests-"));
+  const dir = path.join(root, "packages", "core");
   // A nested node --test sees NODE_TEST_CONTEXT and skips running its files.
   const { NODE_TEST_CONTEXT: _, ...env } = process.env;
   try {
-    fs.mkdirSync(path.join(dir, "test"));
+    fs.mkdirSync(path.join(dir, "test"), { recursive: true });
+    fs.mkdirSync(path.join(root, "scripts"));
+    fs.copyFileSync(
+      path.join(import.meta.dirname, "..", "..", "..", "scripts", "require-temp-home.sh"),
+      path.join(root, "scripts", "require-temp-home.sh"),
+    );
     fs.copyFileSync(
       path.join(import.meta.dirname, "..", "run-tests.sh"),
       path.join(dir, "run-tests.sh"),
@@ -192,6 +199,6 @@ test("run-tests.sh given .mjs files runs only those", () => {
     });
     assert.equal(smokeOnly.trim(), "smoke one");
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(root, { recursive: true, force: true });
   }
 });
