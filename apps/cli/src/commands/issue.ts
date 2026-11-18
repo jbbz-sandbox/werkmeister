@@ -27,6 +27,7 @@
  */
 
 import * as fs from "node:fs";
+import * as path from "node:path";
 
 import { findWorkspaceRoot } from "werkmeister-core/gate";
 import { candidateWorkspaceRoots } from "werkmeister-core/global_config";
@@ -43,7 +44,7 @@ import {
   trackerById,
 } from "werkmeister-core/issue_tracker";
 import { loadProjects } from "werkmeister-core/projects";
-import { loadConfigFile } from "werkmeister-core/workspace_prompts";
+import { loadConfigFile, readAutonomous } from "werkmeister-core/workspace_prompts";
 import { listRepoWorktrees, syncToBase } from "werkmeister-core/worktrees";
 import { checkCliCurrent } from "../lib/cli_currency.js";
 
@@ -83,6 +84,34 @@ export function newIssueFromArgs(
     return `Could not read --body-file ${bodyFile}: ${(e as Error).message}`;
   }
   return { project, type: type as IssueKind, title, body };
+}
+
+/**
+ * SW-815: an autonomous workspace's `issue create` is pre-approved, so it files only in its own issue's
+ * project and posts only a file inside the workspace: no stdin, no path out of it (a symlink is resolved).
+ * Null when the call may go ahead; a person's workspace is not limited.
+ */
+export function unattendedCreateRefusal(
+  args: Record<string, unknown>,
+  workspace: string | null,
+): string | null {
+  if (!workspace || !readAutonomous(workspace)) return null;
+  const own = issueIdOf(loadConfigFile(workspace, null)).split("-")[0]?.toUpperCase() ?? "";
+  const project = String(args.project ?? "")
+    .trim()
+    .toUpperCase();
+  if (!own || project !== own)
+    return `An autonomous workspace files only in its own issue's project (${own || "none set"}), not '${project}'.`;
+  const bodyFile = String(args.bodyFile ?? "");
+  const outside = `An autonomous workspace's --body-file must be a file inside the workspace, not '${bodyFile}'.`;
+  if (!bodyFile || bodyFile === "-") return outside;
+  try {
+    const real = fs.realpathSync(path.resolve(bodyFile));
+    const root = fs.realpathSync(workspace);
+    return real.startsWith(`${root}${path.sep}`) ? null : outside;
+  } catch {
+    return outside;
+  }
 }
 
 function fail(msg: string): never {
@@ -129,6 +158,11 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       fail(
         `${tracker.label} issues are filed with its own CLI: gh issue create -R <owner>/<repo>.`,
       );
+    const refusal = unattendedCreateRefusal(
+      args,
+      findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots()),
+    );
+    if (refusal) fail(refusal);
     const issue = newIssueFromArgs(args);
     if (typeof issue === "string") fail(issue);
     // Every --relates value is checked to be exactly one key before anything is filed, so a typo never
