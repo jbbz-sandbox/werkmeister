@@ -175,6 +175,12 @@ test("each template renders with no undefined and a route per stage", async () =
             /warns that a routed hostname does not resolve to 127\.0\.0\.1.*stop before any browser check and ask the person to run `werkmeister machine setup`.*Never click through or bypass a certificate warning/,
             `${wt}/${d}`,
           );
+          // SW-791: a static page is served on loopback for the browser check, and stopped by its task ID.
+          assert.match(
+            c,
+            /`python3 -I -u -m http\.server 0 -b 127\.0\.0\.1 -d <dir>` as a background Bash job.*stop the job by its task ID/,
+            `${wt}/${d}`,
+          );
           assert.doesNotMatch(c, /docs-site/, `${wt}/${d}`);
         }
         // SW-619: the build stages re-check the base for the files their input doc changes, before any code.
