@@ -84,6 +84,14 @@ export const AUTONOMOUS_DENY = [
   ),
   ...["add -g", "add --global", "remove -g", "remove --global"].map((cmd) => `Bash(pnpm ${cmd}:*)`),
   "Bash(gh pr merge:*)",
+  // SW-625: the next wake's rules follow these (FEATURE, dev_links, the record), so the agent can't widen them.
+  // Only these files: the gate's logs are redirected into .werkmeister/ (pr-rules.md rule 3).
+  ...[
+    ".env*",
+    ".werkmeister/workspace.yml",
+    ".werkmeister/claude-permissions.json",
+    ".werkmeister/token",
+  ].map((f) => `Edit(/${f})`),
   ...[
     "kube-switch",
     "up",

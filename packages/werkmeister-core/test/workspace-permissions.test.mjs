@@ -393,7 +393,8 @@ test("SW-186: each pre-rename spelling keeps its rule through the window, beside
     for (const [old, now] of [
       ["up", "feature up"],
       ["restart", "feature restart"],
-      ["init-workspace:*", "workspace init:*"],
+      ["init-workspace", "workspace init"],
+      ["init-workspace --refresh-issue", "workspace init --refresh-issue"],
       ["status:*", "feature status:*"],
       ["status:*", "infra status:*"],
     ]) {
@@ -1238,4 +1239,38 @@ test("SW-854: unattended_start holds only while the branch runs the registry's c
       config: `paths:\n  repos_root: ${repos}\n  workspaces_root: ${features}\n`,
     },
   );
+});
+
+test("SW-625: `pr` and `workspace init` rules stop at the workspace's own forms; its rule inputs can't be edited", () => {
+  const allow = autonomousRules("feat", ["api"]);
+  for (const name of ["werkmeister", "w9r"]) {
+    for (const cmd of [
+      "pr gate --tests",
+      "pr open",
+      "pr status --json",
+      "pr new werkmeister",
+      "pr adopt 12",
+      "workspace init",
+      "workspace init --refresh-issue",
+      "init-workspace --prune-context",
+      "workspace init --labels focus",
+    ])
+      assert.ok(claudeAllows(allow, `${name} ${cmd}`), `${name} ${cmd}`);
+    for (const cmd of [
+      "pr watch",
+      "pr watch --install",
+      "pr watch --uninstall",
+      "workspace init --feature other",
+      "workspace init --repos a,b",
+      "workspace init --force",
+      "workspace init --autonomous",
+      "init-workspace --feature other",
+      "workspace init --refresh-issue --feature other",
+    ])
+      assert.ok(!claudeAllows(allow, `${name} ${cmd}`), `${name} ${cmd}`);
+  }
+  for (const f of [".env*", ".werkmeister/workspace.yml", ".werkmeister/claude-permissions.json"])
+    assert.ok(AUTONOMOUS_DENY.includes(`Edit(/${f})`), f);
+  // The gate's logs land in .werkmeister/ by redirect, so the folder itself stays writable.
+  assert.ok(!AUTONOMOUS_DENY.includes("Edit(/.werkmeister/**)"));
 });
