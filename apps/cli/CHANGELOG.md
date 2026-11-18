@@ -1,5 +1,16 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.94.2
+
+### Patch Changes
+
+- 2896765: Two repos in one workspace that use the same `node_modules_volume` name now get `<repo>-<name>` volumes instead of sharing one; a workspace with one such repo keeps its volume. `clean` recognises the scoped names.
+- 444af37: When the branch is behind `origin/<base>`, the `pr gate` base row names the files base changed that the branch also touches, with "rebase, recheck the spec and tests that name them, rerun". The row's pass or fail is unchanged.
+- 598dbde: `workspace new` with no free slot prints the next step once: init's "container step did not run" banner is dropped when create called it; the slot warning and the "Workspace created at …" line stay.
+- 633fcce: `workspace new` no longer takes services from a command or log quoted in the issue: it ignores code blocks, indented lines and command-shaped `{{…}}`/backtick spans, maps a named code path (`packages/werkmeister-core/src`) to its service, and reads the starting prompt only when the issue names none.
+- 4aa1aad: `pr adopt` over an approved PR file that was never opened fills in its url, merge sha and status and keeps its body, instead of writing a follow-up file.
+- 2bcf30b: Templates and workspace skills are read from the checkout the code runs from when `WERKMEISTER_ROOT` is only config.yaml's `paths.werkmeister_root` (the value env.sh exports into every shell), so a workspace worktree's build renders its own templates. The daemon, Caddy and shared-infra paths still follow `WERKMEISTER_ROOT`, and any other value still wins everywhere.
+
 ## 0.94.1
 
 ### Patch Changes
