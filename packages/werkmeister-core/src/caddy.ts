@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 
 import { Colors } from "./colors.js";
 import { stopOrRestart } from "./compose.js";
-import { composeInvocation, INFRA_PROJECT } from "./compose_infra.js";
+import { composeInvocation, INFRA_PROJECT, warnStaleInfra } from "./compose_infra.js";
 import { sharedProxySkipReason, stateInfraRoot } from "./config.js";
 import { copyFileToContainer, execCapture, projectContainers } from "./docker.js";
 import { ProcError, run } from "./proc.js";
@@ -329,6 +329,8 @@ export async function reloadCaddy(): Promise<boolean> {
     info(`Caddy reload skipped (${skip})`);
     return true;
   }
+  // A reload only copies the Caddyfile: it can't fix a container still mounting a moved checkout (SW-610).
+  await warnStaleInfra();
   const hostCaddyfile = `${stateInfraRoot()}/proxy/Caddyfile`;
 
   info("Copying Caddyfile into Caddy container...");

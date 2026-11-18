@@ -27,6 +27,11 @@ vi.mock("werkmeister-core/compose", async (orig) => ({
   ]),
 }));
 vi.mock("werkmeister-core/k8s", () => ({ getPerServiceStatus: vi.fn(async () => []) }));
+// The SW-610 check lists the host's infra containers: never from a unit test.
+vi.mock("werkmeister-core/compose_infra", async (orig) => ({
+  ...(await orig<typeof import("werkmeister-core/compose_infra")>()),
+  warnStaleInfra: vi.fn(async () => {}),
+}));
 vi.mock("werkmeister-core/slots", () => ({
   getAllSlots: vi.fn(async () => ({ a: { slot: 1, services: ["api"] } })),
   slotCount: vi.fn(() => 12),
