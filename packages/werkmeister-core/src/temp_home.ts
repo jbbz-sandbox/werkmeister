@@ -38,8 +38,11 @@ trap 'exit 130' HUP INT TERM
 export COREPACK_HOME="\${COREPACK_HOME:-$HOME/.cache/node/corepack}"
 # OrbStack and Docker Desktop keep the compose plugin and context here (SW-285).
 export DOCKER_CONFIG="\${DOCKER_CONFIG:-$HOME/.docker}"
-# A temp HOME isolates files, not the daemon: unreachable unless the caller sets it (SW-264).
-export WERKMEISTER_HOST="\${WERKMEISTER_HOST:-http://127.0.0.1:1}"
+# A temp HOME isolates files, not the daemon: unreachable unless the caller sets it (SW-264). Refused, as a
+# stopped daemon is: fetch rejects :1 as a "bad port" before connecting (SW-743). A short retry, not the 15 s restart gap.
+# shortcut: 65535 is in macOS's ephemeral range, so a port-0 listener (another test's fake daemon) can hold it; bind-and-close a port (SW-708) if that flakes.
+export WERKMEISTER_HOST="\${WERKMEISTER_HOST:-http://127.0.0.1:65535}"
+export WERKMEISTER_DAEMON_RETRY_MS="\${WERKMEISTER_DAEMON_RETRY_MS:-500}"
 # An agent's shell inherits its Claude Code session's variables; CI has none (SW-332). CLAUDE_BIN stays.
 unset CLAUDECODE
 for v in $(env | sed -n '/^CLAUDE_CODE_[A-Za-z0-9_]*=/s/=.*//p'); do unset "$v"; done
