@@ -10,6 +10,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { execAsync } from "../../lib/__tests__/helpers/exec_async.js";
+import { hostLoadText } from "../budget.js";
 
 const CLI_DIR = path.resolve(fileURLToPath(import.meta.url), "../../../..");
 /** Built by the `test` script. */
@@ -99,10 +100,17 @@ it("prints the budget, leases and Waiting queue as JSON", async () => {
 it("lists slots in slot order and the queue in start order", async () => {
   const res = await budget();
   expect(res.status, res.stderr).toBe(0);
-  expect(res.stdout).toContain("Budget: 8 GiB memory, 4 CPUs, host load 6, preemption off");
+  expect(res.stdout).toContain(`Budget: 8 GiB memory, 4 CPUs, ${hostLoadText(6)}, preemption off`);
   expect(res.stdout).toMatch(/Slots:\n {2}1 {2}alpha\n {2}2 {2}beta {2}\/ws\/beta\n/);
   expect(res.stdout).toContain("Running: docker unavailable");
   expect(res.stdout).toMatch(
     /Waiting:\n {2}1\. gamma {2}whole feature\n {2}2\. delta {2}whole feature\n {2}3\. eps {2}cli \(1 CPUs, 1\.0 GiB\) {2}waited 12 min/,
   );
+});
+
+// SW-728: the line showed the limit as `host load 24`, a reading, and on macOS nothing applies it.
+it("labels the host-load limit as a limit, and says macOS doesn't enforce it", () => {
+  expect(hostLoadText(24, "linux")).toBe("host load limit 24");
+  expect(hostLoadText(24, "darwin")).toBe("host load limit 24 (not enforced on macOS)");
+  expect(hostLoadText(0, "darwin")).toBe("host load limit off");
 });

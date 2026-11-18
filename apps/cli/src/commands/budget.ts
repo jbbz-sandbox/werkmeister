@@ -22,9 +22,15 @@ const GIB = 2 ** 30;
 const limit = (n: number, unit: string) =>
   Number.isFinite(n) ? `${Number(n.toFixed(1))}${unit}` : "no limit";
 
+/** The host-load *limit* (a ceiling, not a reading), and that macOS doesn't apply it (SW-556, SW-728). */
+export function hostLoadText(limit: number, platform: NodeJS.Platform = process.platform): string {
+  if (!limit) return "host load limit off";
+  return `host load limit ${limit}${platform === "darwin" ? " (not enforced on macOS)" : ""}`;
+}
+
 export async function run(args: Record<string, unknown>): Promise<void> {
   const budget = await loadBudget();
-  const hostLoad = hostLoadLimit(os.cpus().length);
+  const hostLoad = hostLoadLimit(os.availableParallelism());
   // A snapshot for display: no `allocate` lock, so a lease taken mid-read shows next time.
   const leases = readLeases();
   const waiting = await waitingQueue();
@@ -69,7 +75,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   console.log(
     `Budget: ${limit(budget.memory / GIB, " GiB")} memory, ${limit(budget.cpus, " CPUs")}, ` +
-      `host load ${hostLoad || "unchecked"}, preemption ${budget.preempt ? "on" : "off"}`,
+      `${hostLoadText(hostLoad)}, preemption ${budget.preempt ? "on" : "off"}`,
   );
   const held = Object.entries(leases).sort(([, a], [, b]) => a.slot - b.slot);
   console.log(held.length ? "Slots:" : "Slots: none held");
