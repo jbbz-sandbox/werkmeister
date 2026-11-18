@@ -3812,6 +3812,44 @@ test("adoptPr: a merged PR from outside is written, shipped by its release tag, 
   }
 });
 
+// SW-735: the person merged before `pr open` ran; adopt replaced the approved file's notes.
+test("adoptPr over an approved, never-opened PR file fills it in and keeps its body", async () => {
+  const body = "# fix: the thing\n\n## Recommendations for reviewer\n- keep me\n";
+  const ws = icmWorkspace({
+    files: { app: `---\nstatus: approved\n---\n${body}` },
+  });
+  fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  try {
+    const view = {
+      url: "https://github.com/o/app/pull/841",
+      headRefName: "me/demo",
+      baseRefName: "main",
+      title: "fix: the thing",
+      state: "MERGED",
+      mergeCommit: { oid: "abc" },
+    };
+    const d = deps([
+      [/^gh pr view 841 /, { stdout: JSON.stringify(view) }],
+      [/tag --contains/, { stdout: "" }],
+      [/ls-remote/, { code: 2 }],
+    ]);
+    await adoptPr(ws, { pr: "841" }, d);
+    const files = readPrFiles(ws);
+    assert.deepEqual(
+      files.map((f) => path.basename(f.path)),
+      ["pr-app.md"],
+      "no follow-up file",
+    );
+    const [f] = files;
+    assert.equal(f.fm.url, view.url);
+    assert.equal(f.fm.merge_sha, "abc");
+    assert.equal(f.fm.status, "merged");
+    assert.ok(fs.readFileSync(f.path, "utf8").endsWith(body), "the body is kept");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("adoptPr --no-pr: a closed PR file with the reason; close-out then runs", async () => {
   const ws = icmWorkspace({ files: {} });
   fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
