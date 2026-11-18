@@ -26,7 +26,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { infraRoot } from "./config.js";
+import { sourceInfraRoot } from "./config.js";
 import { loadManifest } from "./gate.js";
 import { harnessLayoutFor } from "./harness/layout.js";
 import { info, success } from "./reporter.js";
@@ -48,7 +48,7 @@ const _MANAGED_PREFIXES = ["w9r-", "sb-"];
 
 /** The hand-authored entry-skill sources: infra/skills/<name>/SKILL.md. */
 export function skillsSourceDir(): string {
-  return path.join(infraRoot(), "skills");
+  return path.join(sourceInfraRoot(), "skills");
 }
 
 function isDir(p: string): boolean {
