@@ -156,6 +156,22 @@ test("migrate moves the home and repoints every file that carried the old path",
   assert.ok(fs.existsSync(path.join(features, "ws1", ".sandbox")), "no --workspaces: not renamed");
 });
 
+// SW-581: crontab isn't scoped by HOME, so under the fixture the pr-watch step never reads or writes it.
+test("under the fixture the pr-watch schedule is skipped: no crontab call", async () => {
+  const saved = process.env.WERKMEISTER_FIXTURE;
+  process.env.WERKMEISTER_FIXTURE = "1";
+  try {
+    const step = (await run({ prWatch: { ...prWatch(), platform: "linux" } })).find(
+      (s) => s.label === "pr-watch schedule",
+    );
+    assert.equal(step.detail, "skipped in the fixture");
+    assert.ok(!calls.some((c) => c.startsWith("crontab")), calls.join("\n"));
+  } finally {
+    if (saved === undefined) delete process.env.WERKMEISTER_FIXTURE;
+    else process.env.WERKMEISTER_FIXTURE = saved;
+  }
+});
+
 test("a second run changes nothing, and --workspaces then renames only legacy workspaces", async () => {
   await run();
   const before = snapshot(home);

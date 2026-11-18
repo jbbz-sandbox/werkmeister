@@ -242,7 +242,9 @@ export function seedFixture(root: string, opts: FixtureOptions = {}): Fixture {
 
   write(path.join(root, "services.yaml"), opts.services ?? SERVICES);
   write(path.join(root, "ports.yaml"), PORTS);
-  const configFile = path.join(root, "config.yaml");
+  // At the temp HOME's default path, so `machine migrate` treats it as the home it is (SW-581).
+  const home = path.join(root, "home");
+  const configFile = path.join(dotDir(home), "config.yaml");
   write(
     configFile,
     `version: 1
@@ -388,8 +390,7 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
     return [c.feature, ws, c.startedAt, c.memory, c.nanoCpus].join("\t");
   });
 
-  const home = path.join(root, "home");
-  fs.mkdirSync(home);
+  fs.mkdirSync(home, { recursive: true });
   const fakes = writeFakes(path.join(root, "bin"), {
     prUrl: `https://github.com/${FIXTURE_REPO_SLUG}/pull/1`,
     running: opts.running ?? [],
