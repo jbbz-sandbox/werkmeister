@@ -436,8 +436,47 @@ const START_FIELDS = [
 ];
 const WHOLE_FEATURE_STARTS = ["up", "restart", "feature up", "feature restart"];
 
+// SW-626: the git a run needs, not `git:*`, which ran commands through `rebase -x`, `bisect run`,
+// `submodule foreach`, `difftool -x` and `-C <other workspace>`. Push is `werkmeister pr open`'s.
+const GIT_PREFIXES = [
+  "status",
+  "diff",
+  "log",
+  "show",
+  "add",
+  "commit",
+  "restore",
+  "branch",
+  "rev-parse",
+  "ls-files",
+  "merge-base",
+  "rev-list",
+  "switch",
+  "checkout",
+  "symbolic-ref",
+  "worktree list",
+];
+// Exact: rebase's pr-rules.md rule 3 catch-up (any other rebase takes `-x <cmd>`); fetch takes any URL, path
+// or `--upl=<cmd>`; `remote -v add|set-url` dispatches the subcommand after `-v`. No grep: the Grep tool covers it.
+const GIT_EXACT = [
+  "rebase origin/main",
+  "rebase --continue",
+  "rebase --abort",
+  "fetch",
+  "fetch origin",
+  "fetch origin main",
+  "remote -v",
+  "remote get-url origin",
+];
+/** The git rules, bare or with `-C <dir>` for one of *dirs* (the workspace's own repos). */
+export const gitRules = (dirs: string[] = []) =>
+  ["", ...dirs.map((d) => `-C ${d} `)].flatMap((c) => [
+    ...GIT_PREFIXES.map((s) => `Bash(git ${c}${s}:*)`),
+    ...GIT_EXACT.map((s) => `Bash(git ${c}${s})`),
+  ]);
+
 export const AUTONOMOUS_RULES = [
-  "Bash(git:*)",
+  ...gitRules(),
   // `werkmeister pr open` does the push and the PR; gh is read-only here.
   ...["pr view", "pr checks", "pr diff", "pr list", "issue view", "run view", "run list"].map(
     (cmd) => `Bash(gh ${cmd}:*)`,
@@ -680,6 +719,10 @@ export function workspaceAllowRules(
       hostAccess(registry[svc], workspaceRoot) &&
       !(registry[svc]?.["unattended_start"] && unchanged(svc)),
   );
+  // SW-626: `-C` only into the workspace's own repos, by absolute path or by name from the workspace root.
+  const repoGit = gitRules(repoDirs(workspaceRoot).flatMap((d) => [d, path.basename(d)])).filter(
+    (r) => r.startsWith("Bash(git -C "),
+  );
   // SW-815: a follow-up the run finds, linked to this workspace's issue; `create` is Jira-only.
   const issueId = String(readWorkspaceField(workspaceRoot, "issue_id") ?? "").trim();
   const followUp = /^[A-Z][A-Z0-9_]*-\d+$/.test(issueId)
@@ -689,6 +732,7 @@ export function workspaceAllowRules(
     ...new Set([
       ...rules,
       ...autonomousRules(feature, services, extra, hostMounted),
+      ...repoGit,
       ...installs,
       ...followUp,
     ]),

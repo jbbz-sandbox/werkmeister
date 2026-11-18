@@ -19,9 +19,9 @@ export const cli = (rule: string) => CLI_NAMES.map((name) => `Bash(${name} ${rul
 // shortcut: prefix rules — `npm install foo -g`, an agent-edited test script or a repo's own git
 // hook still runs (SW-522); a runner without host mounts is the upgrade if runs need a hard boundary.
 export const AUTONOMOUS_DENY = [
-  // SW-560: `Bash(git:*)` is allowed, and an alias, pager, fsmonitor or hook set through config, or a
+  // SW-560: the git subcommands a run needs are allowed, and an alias, pager, fsmonitor or hook set through config, or a
   // git-* binary on --exec-path, runs any command. No `* -c *`/`* config *` forms: deny beats allow, and they
-  // refuse `git commit -m "fix config"`; `git -C <dir> -c …` is SW-626's.
+  // refuse `git commit -m "fix config"`. SW-626: the allow rules name a subcommand right after `git` or `-C <repo>`, so `-C <dir> -c …` asks.
   "Bash(git -c:*)",
   "Bash(git config:*)",
   ...["--config", "--exec-path", "--template"].flatMap((flag) => [
@@ -29,6 +29,10 @@ export const AUTONOMOUS_DENY = [
     `Bash(git * ${flag}*)`,
   ]),
   "Bash(git --git-dir*)",
+  // SW-626: options of allowed subcommands that reach past the repo: diff/log/show write any path with
+  // `--output`, and `diff --no-index` reads any. git takes no abbreviation of either; `grep -O` and fetch's
+  // `--upload-pack` do (`-lO`, `--open`, `--upl`), so grep isn't allowed and fetch is exact instead.
+  ...["--output", "--no-index"].map((flag) => `Bash(git * ${flag}*)`),
   // SW-521: a registered test chain's bare `node --test` segment (buildAllowRules) runs any file
   // with the real HOME; npx and pnpm exec segments name their tool, so they stay allowed.
   "Bash(node:*)",
@@ -92,6 +96,9 @@ export const AUTONOMOUS_DENY = [
     ".werkmeister/claude-permissions.json",
     ".werkmeister/token",
   ].map((f) => `Edit(/${f})`),
+  // SW-626: a repo's config (fsmonitor, aliases, hooksPath) and hooks run on the allowed git commands.
+  "Edit(/.git/**)",
+  "Edit(/**/.git/**)",
   ...[
     "kube-switch",
     "up",
