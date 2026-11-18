@@ -19,6 +19,7 @@ import {
   configPath,
   envVar,
   expandUser,
+  isFixture,
   sandboxHome,
   servicesLocalYamlPath,
   servicesYamlPath,
@@ -188,7 +189,8 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
   const target = path.join(home, DOT_DIR);
   const would = (did: string, will: string) => (checkOnly ? will : did);
 
-  if (envVar("CONFIG_FILE")) {
+  // One that names the default path (the fixture's, SW-581) moves nothing elsewhere, so migrate runs.
+  if (envVar("CONFIG_FILE") && path.resolve(configPath()) !== path.join(target, "config.yaml")) {
     return [
       {
         label: "tool home",
@@ -320,9 +322,12 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
   }
 
   // Its log path is the home; in --check before the move, `current` is judged against the old one.
-  const prWatch = prWatchScheduleState(opts.prWatch);
   const prLabel = "pr-watch schedule";
-  if (!prWatch.installed) {
+  // crontab isn't scoped by HOME: a fixture run must not rewrite the caller's real one (SW-581).
+  const prWatch = isFixture() ? undefined : prWatchScheduleState(opts.prWatch);
+  if (!prWatch) {
+    steps.push({ label: prLabel, ok: true, detail: "skipped in the fixture" });
+  } else if (!prWatch.installed) {
     steps.push({ label: prLabel, ok: true, detail: "not installed" });
   } else if (prWatch.current && !(checkOnly && moving)) {
     steps.push({ label: prLabel, ok: true, detail: "up to date" });

@@ -210,6 +210,13 @@ test("a gate fixture with fragmentChange gates a fragment-only diff and runs onl
   );
 });
 
+// SW-581: the config sits at the temp HOME's default path, so `machine migrate` runs against the fixture.
+test("the fixture's config is the temp HOME's ~/.werkmeister/config.yaml", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    assert.equal(fx.configFile, path.join(fx.env.HOME, ".werkmeister", "config.yaml"));
+  });
+});
+
 test("--change names the file the gate fixture changes, beside a fragment change too (SW-664)", async () => {
   const { fixturePreset } = await import("../dist/fixture_workspace.js");
   assert.deepEqual(fixturePreset({ gate: true }).repos, [
