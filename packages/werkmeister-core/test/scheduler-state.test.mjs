@@ -671,3 +671,23 @@ test("preemption: a feature with a docker exec in flight is never a victim (SW-8
     assert.deepEqual(admit(budget, runningLeases(run(1)), [], req), { kind: "wait", position: 1 });
   });
 });
+
+// SW-861: the grant runs in another process (a stop, a down, the daemon), so its compose output never
+// reaches the queued session: its nudge must name where the error is, not "above".
+test("a waiter whose compose up fails in the grant is told where to read why (SW-861)", () =>
+  queuedBehindHolders(
+    (fx) => {
+      const docker = path.join(fx.root, "bin", "docker");
+      const sh = fs
+        .readFileSync(docker, "utf8")
+        .replace(
+          "stop|compose|network) ;;",
+          'compose) case "$*" in *" up "*) exit 1 ;; esac ;;\n    stop|network) ;;',
+        );
+      fs.writeFileSync(docker, sh);
+    },
+    (_started, ws) => {
+      assert.doesNotMatch(readNudge(ws) ?? "", /above/);
+      assert.match(readNudge(ws) ?? "", /werkmeister feature logs big/);
+    },
+  ));
