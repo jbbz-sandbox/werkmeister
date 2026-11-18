@@ -50,6 +50,7 @@ import { parse as parseYaml } from "yaml";
 import {
   candidateServiceNames,
   containerTestCommand,
+  hostAccess,
   isPlainChain,
   serviceTestCommand,
   wrappedTestCommand,
@@ -57,15 +58,12 @@ import {
 import {
   type ArchetypeRegistry,
   dotDir,
-  expandUser,
   getReposRoot,
   loadArchetypes,
   loadReposConfig,
   loadServices,
   type ReposConfig,
-  type ServiceEntry,
   type ServicesConfig,
-  sandboxHome,
   sandboxRoot,
 } from "../../config.js";
 import { frozenInstalls } from "../../fragment_detect/workspace.js";
@@ -560,28 +558,6 @@ export function buildAllowRules(
         .map((r) => `${wrapped}--no-wait ${r.slice(wrapped.length)}`),
     );
   return [...new Set([...rules, ...READ_ONLY_GIT_RULES])];
-}
-
-/**
- * True when one of *entry*'s host binds is a docker socket (any path ending `docker.sock`, e.g. OrbStack's)
- * or the werkmeister home, or a parent of either; symlinks resolved (`/var` → `/private/var` on macOS).
- */
-function hostAccess(entry: ServiceEntry | undefined): boolean {
-  const real = (p: string) => {
-    try {
-      return fs.realpathSync(p);
-    } catch {
-      return path.resolve(p);
-    }
-  };
-  const targets = ["/var/run/docker.sock", sandboxHome()].map(real);
-  return (entry?.extra_volumes ?? []).some((spec) => {
-    const src = spec.split(":")[0];
-    if (!src.includes("/")) return false; // a named volume
-    const host = real(expandUser(src));
-    if (path.basename(host) === "docker.sock") return true;
-    return targets.some((t) => t === host || t.startsWith(`${host}${path.sep}`) || host === "/");
-  });
 }
 
 /**

@@ -14,6 +14,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
   containerTestCommand,
+  hostAccess,
+  seesHostPath,
   serviceNoTests,
   serviceTestCommand,
   type ValidationRow,
@@ -28,6 +30,7 @@ import {
   loadArchetypes,
   loadCaches,
   type ReposConfig,
+  type ServiceEntry,
   type ServicesConfig,
 } from "../../config.js";
 import { ingressHostnames, loadFeatureRouters } from "../../feature_routing.js";
@@ -323,18 +326,23 @@ Hit a bug, or need to log a feature or task, in the \`werkmeister\` tool or a re
 // werkmeister-context.md generation
 // ---------------------------------------------------------------------------
 
+// SW-769: wrap where the real ~/.werkmeister is at risk, but only if the container sees <ws> (a docker.sock-only one would exit 127).
+const withTempHome = (entry: ServiceEntry | undefined, tempHome: string) =>
+  tempHome && hostAccess(entry) && seesHostPath(entry, tempHome) ? tempHome : "";
+
 function testCommandLine(
   feature: string,
   svc: string,
   servicesConfig: ServicesConfig,
   archetypes: ArchetypeRegistry,
   lint?: string,
+  tempHome = "",
 ): string {
   const cmd = serviceTestCommand(svc, servicesConfig[svc], archetypes);
   const noTests = serviceNoTests(servicesConfig[svc]);
   if (noTests) return `- \`${svc}\`: no tests (registry: ${noTests})`;
   return cmd
-    ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, lint ? `${lint} && ${cmd}` : cmd)}\``
+    ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, lint ? `${lint} && ${cmd}` : cmd, withTempHome(servicesConfig[svc], tempHome))}\``
     : `- \`${svc}\`: no test command registered (add \`test:\` to its registry entry)`;
 }
 
@@ -576,7 +584,7 @@ The registry's \`test:\` for each service (or its archetype's), run in its conta
         : ""
     }
 
-${svcs.map((s, i) => testCommandLine(feature, s, servicesConfig, archetypes ?? loadArchetypes(), svcLint[i])).join("\n")}
+${svcs.map((s, i) => testCommandLine(feature, s, servicesConfig, archetypes ?? loadArchetypes(), svcLint[i], tempHome)).join("\n")}
 ${sharedCachesLine(caches)}
 `;
   } else {
