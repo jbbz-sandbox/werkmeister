@@ -172,6 +172,8 @@ export interface InitWorkspaceOptions {
    * outlive it on the real docker daemon, holding a slot.
    */
   build?: boolean;
+  /** Skip the no-slot banner: `workspace new` prints its own next step after it. */
+  quietNoSlot?: boolean;
 }
 
 /**
@@ -970,11 +972,12 @@ export async function initWorkspace(
   }
 
   if (!containers) {
-    warn(
-      `Workspace initialised, but the container step did not run: no slot, so ${COMPOSE_FILE} was not (re)generated ` +
-        "(see the slot warning above). `werkmeister feature up` fails until you free a slot " +
-        "and rerun `werkmeister workspace init`.",
-    );
+    if (!opts.quietNoSlot)
+      warn(
+        `Workspace initialised, but the container step did not run: no slot, so ${COMPOSE_FILE} was not (re)generated ` +
+          "(see the slot warning above). `werkmeister feature up` fails until you free a slot " +
+          "and rerun `werkmeister workspace init`.",
+      );
     return { containers };
   }
   raw(
@@ -1006,7 +1009,7 @@ async function runInitWorkspace(
     return await initWorkspace(
       { ...resolved, feature: featureSlug, force: opts.force },
       workspaceDir,
-      opts,
+      { ...opts, quietNoSlot: true },
     );
   } catch (exc) {
     // A WorkspaceInitError has already emitted its own `[err]` line — the
