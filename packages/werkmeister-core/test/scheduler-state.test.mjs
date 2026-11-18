@@ -14,6 +14,7 @@ import { generateFeatureCompose } from "../dist/generate.js";
 import { grantWaiters, runningFeatures, runningLeases, up } from "../dist/lifecycle.js";
 import { workspaceServices } from "../dist/registry_sync.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
+import { admit } from "../dist/scheduler.js";
 import {
   enqueue,
   featureCost,
@@ -645,5 +646,28 @@ test("preemption rank: a stopped session with a live background shell is working
     const shell = { command: "werkmeister pr gate --tests", at, id: "b1" };
     fs.writeFileSync(path.join(sessions, "s.json"), JSON.stringify({ ...stopped, shell }));
     assert.equal(rank(), "working");
+  });
+});
+
+// SW-856: a `docker exec` still running in a feature's container (a test run, a probe) is work in
+// flight, whatever its session's hook record says: preemption must not stop that feature.
+test("preemption: a feature with a docker exec in flight is never a victim (SW-856)", async () => {
+  await withHome(async (home) => {
+    const ws = path.join(home, "features", "auto");
+    fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "autonomous: true\n");
+    // Docker's `.ExecIDs` lists the container's running execs; the last column is their count.
+    const run = (execs) => (cmd) =>
+      cmd[1] === "ps"
+        ? { status: 0, stdout: "id1\n" }
+        : { status: 0, stdout: `auto\t${ws}\t2026-10-29T10:00:00Z\t${G}\t4000000000\t${execs}` };
+    const budget = { memory: 8 * G, cpus: 6, preempt: true };
+    const req = { feature: "other", cost: { memory: G, cpus: 4 }, byPerson: true };
+    assert.deepEqual(admit(budget, runningLeases(run(0)), [], req), {
+      kind: "preempt",
+      victims: ["auto"],
+    });
+    assert.equal(runningLeases(run(1))[0].busy, true);
+    assert.deepEqual(admit(budget, runningLeases(run(1)), [], req), { kind: "wait", position: 1 });
   });
 });

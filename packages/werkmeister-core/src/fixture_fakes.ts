@@ -31,7 +31,7 @@ export interface FakeWorld {
   rules?: unknown[];
   /** Containers the fake docker shows as running, to the gate's `ps --format {{.Names}}…` only. */
   running?: string[];
-  /** `docker inspect` lines (`feature\tworkdir\tstartedAt\tmemory\tnanoCpus`) the scheduler reads as running features (SW-685). */
+  /** `docker inspect` lines (`feature\tworkdir\tstartedAt\tmemory\tnanoCpus\texecs`) the scheduler reads as running features (SW-685). */
   containers?: string[];
   /** Set: `docker exec` runs its last argument (the gate row's command) with `sh -c` here and exits with its code. Absent: exit 0. */
   execCwd?: string;

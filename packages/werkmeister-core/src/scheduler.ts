@@ -23,7 +23,7 @@ export interface Lease {
   feature: string;
   cost: Cost;
   rank: Rank;
-  /** Mid-gate or paused: stopping it would break a run in flight. */
+  /** A `docker exec` running in it, mid-gate or paused: stopping it would break a run in flight. */
   busy: boolean;
 }
 

@@ -87,6 +87,8 @@ export interface FixtureContainer {
   /** Bytes reserved. */
   memory: number;
   nanoCpus: number;
+  /** `docker exec`s running in it (SW-856): the scheduler treats any as work in flight. */
+  execs?: number;
 }
 
 // Names become folders under the fixture and lines in the fakes, from a pre-approved wrapper's input.
@@ -205,10 +207,10 @@ export function fixturePreset({
         ? c.workspace
         : Number.isNaN(Date.parse(c.startedAt))
           ? c.startedAt
-          : [c.memory, c.nanoCpus].find((n) => !Number.isSafeInteger(n) || n < 0);
+          : [c.memory, c.nanoCpus, c.execs ?? 0].find((n) => !Number.isSafeInteger(n) || n < 0);
     if (bad !== undefined)
       throw new Error(
-        `--running: bad value ${JSON.stringify(bad)}: feature and workspace are lowercase names, startedAt a date, memory and nanoCpus whole numbers`,
+        `--running: bad value ${JSON.stringify(bad)}: feature and workspace are lowercase names, startedAt a date, memory, nanoCpus and execs whole numbers`,
       );
   }
   const badEntry = opts.queue?.find((q) => !QUEUE_ENTRY.test(q));
@@ -408,7 +410,7 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
   const containers = (opts.containers ?? []).map((c) => {
     const ws = path.join(root, "ws", c.workspace);
     fs.mkdirSync(ws, { recursive: true });
-    return [c.feature, ws, c.startedAt, c.memory, c.nanoCpus].join("\t");
+    return [c.feature, ws, c.startedAt, c.memory, c.nanoCpus, c.execs ?? 0].join("\t");
   });
 
   fs.mkdirSync(home, { recursive: true });

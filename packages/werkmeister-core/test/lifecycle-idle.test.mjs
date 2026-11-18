@@ -215,3 +215,12 @@ test("stopIdle: a session waiting on a person past the cutoff is reaped only whi
   });
   assert.deepEqual(r.lines, ["never-fits: kept (session active)"]);
 });
+
+// SW-856, SW-702: the reaper stopped a container mid `docker exec` when the session's record read idle
+// (a turn ended over a background run, idle_stop_minutes: 10). A running exec keeps the feature.
+test("idleFeatures: a docker exec in flight keeps the feature (SW-856)", () => {
+  const busy = {
+    running: [{ feature: "demo", workspace: WS, startedAt: [NOW - 60 * MIN], execs: 1 }],
+  };
+  assert.deepEqual(idleFeatures(input(busy)), []);
+});
