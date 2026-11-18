@@ -44,6 +44,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   candidateServiceNames,
@@ -423,6 +424,18 @@ export const READ_ONLY_GIT_RULES = [
 // `werkmeister:*`, `docker:*`, `npm:*`, `gh:*` or whole MCP server, which reached
 // the shared proxy, other features and the linked CLI. The PR guard is a
 // PreToolUse deny, so `gh pr create` stays blocked.
+// SW-854: what decides the container a start runs; a branch that changes one loses `unattended_start`.
+const START_FIELDS = [
+  "command",
+  "image",
+  "build",
+  "entrypoint",
+  "archetype",
+  "extra_volumes",
+  "environment",
+];
+const WHOLE_FEATURE_STARTS = ["up", "restart", "feature up", "feature restart"];
+
 export const AUTONOMOUS_RULES = [
   "Bash(git:*)",
   // `werkmeister pr open` does the push and the PR; gh is read-only here.
@@ -431,7 +444,7 @@ export const AUTONOMOUS_RULES = [
   ),
   // No-arg forms act on the cwd's FEATURE; `autonomousRules` adds the named ones.
   // Each pre-SW-186 spelling keeps its rule until the CLI drops it, beside its new one.
-  ...["up", "restart", "feature up", "feature restart"].flatMap(cli),
+  ...WHOLE_FEATURE_STARTS.flatMap(cli),
   ...[
     "status",
     "feature status",
@@ -471,24 +484,32 @@ export const AUTONOMOUS_RULES = [
 /**
  * AUTONOMOUS_RULES plus the `werkmeister` and `docker` commands that name this feature or its containers.
  * *repoServices*: the workspace's repos' other services (on-demand ones), which only `feature up --service` starts.
+ * *hostMounted*: services whose start runs their `command:` with host mounts; none of their starts is pre-approved.
  */
 export function autonomousRules(
   feature: string,
   services: string[],
   repoServices: string[] = [],
+  hostMounted: string[] = [],
 ): string[] {
-  if (!feature) return AUTONOMOUS_RULES;
+  // SW-854: a start or restart runs the service's `command:`, often a package script the agent can edit.
+  const startable = (svc: string) => !hostMounted.includes(svc);
+  const wholeFeature = services.every(startable);
+  const base = wholeFeature
+    ? AUTONOMOUS_RULES
+    : AUTONOMOUS_RULES.filter((r) => !WHOLE_FEATURE_STARTS.flatMap(cli).includes(r));
+  if (!feature) return base;
   return [
-    ...AUTONOMOUS_RULES,
+    ...base,
     // Exact: `werkmeister feature restart <f> infra` and `docker restart <f>-a <other>` stay out.
-    ...["up", "restart", "feature up", "feature restart"].flatMap((cmd) =>
-      cli(`${cmd} ${feature}`),
-    ),
+    ...(wholeFeature ? WHOLE_FEATURE_STARTS.flatMap((cmd) => cli(`${cmd} ${feature}`)) : []),
     // SW-132: one of its own services, the way the PR gate starts them. SW-843: exact, since a
     // trailing `<other>` or `-w <path>` would start another workspace's container.
-    ...[...services, ...repoServices].flatMap((svc) =>
-      [`feature up --service ${svc}`, `feature up ${feature} --service ${svc}`].flatMap(cli),
-    ),
+    ...[...services, ...repoServices]
+      .filter(startable)
+      .flatMap((svc) =>
+        [`feature up --service ${svc}`, `feature up ${feature} --service ${svc}`].flatMap(cli),
+      ),
     // SW-855: exact too. No `feature test` even exact: it runs the workspace's own `playwright.config.*`,
     // which the agent can write, with the real HOME; its `-w <other> --scaffold` writes another workspace.
     ...["logs", "services", "feature logs", "feature services"].flatMap((cmd) =>
@@ -499,10 +520,8 @@ export function autonomousRules(
     ),
     // SW-560: no `docker exec <f>-<svc>:*`: some containers mount the docker socket, and any one that
     // mounts the workspace reaches the werkmeister daemon with its token (SW-855); its exact registered test still runs.
-    ...services.flatMap((svc) => [
-      `Bash(docker logs ${feature}-${svc}:*)`,
-      `Bash(docker restart ${feature}-${svc})`,
-    ]),
+    ...services.map((svc) => `Bash(docker logs ${feature}-${svc}:*)`),
+    ...services.filter(startable).map((svc) => `Bash(docker restart ${feature}-${svc})`),
   ];
 }
 
@@ -622,10 +641,12 @@ export function workspaceAllowRules(
   const extra = hostServices.filter((s) => !services.includes(s));
   const any = services.length > 0 || extra.length > 0;
   const loaded = any ? loadServices() : {};
+  const branch = any ? workspaceServices(loaded, workspaceRoot) : {};
+  const registry = any ? withComposeMounts(loaded, workspaceRoot, branch) : {};
   const rules = buildAllowRules(
     any ? feature : "",
     services,
-    any ? withComposeMounts(loaded, workspaceRoot, workspaceServices(loaded, workspaceRoot)) : {},
+    registry,
     any ? loadArchetypes() : {},
     wrapper,
     builtClis,
@@ -641,13 +662,27 @@ export function workspaceAllowRules(
   const installs = repoNames.flatMap((name) =>
     frozenInstalls((f) => fs.existsSync(path.join(reposRoot, name, f))).map((c) => `Bash(${c})`),
   );
+  // `unattended_start` comes from the machine registry (synced from main), never the branch's fragment, and
+  // holds only while the branch runs the same container: its fragment's `command:`/`image:` win in compose (SW-337).
+  const unchanged = (svc: string) =>
+    START_FIELDS.every((k) => isDeepStrictEqual(loaded[svc]?.[k], branch[svc]?.[k]));
+  const hostMounted = Object.keys(registry).filter(
+    (svc) =>
+      hostAccess(registry[svc], workspaceRoot) &&
+      !(registry[svc]?.["unattended_start"] && unchanged(svc)),
+  );
   // SW-815: a follow-up the run finds, linked to this workspace's issue; `create` is Jira-only.
   const issueId = String(readWorkspaceField(workspaceRoot, "issue_id") ?? "").trim();
   const followUp = /^[A-Z][A-Z0-9_]*-\d+$/.test(issueId)
     ? cli(`issue create --relates ${issueId}:*`)
     : [];
   return [
-    ...new Set([...rules, ...autonomousRules(feature, services, extra), ...installs, ...followUp]),
+    ...new Set([
+      ...rules,
+      ...autonomousRules(feature, services, extra, hostMounted),
+      ...installs,
+      ...followUp,
+    ]),
   ];
 }
 

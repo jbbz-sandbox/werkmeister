@@ -55,6 +55,11 @@ Rules:
   shared workspace `.env` holds no secrets. An `env_vars:` value also sits in that shared
   `.env`, so every service sees it, and `env_vars:` keys are never namespaced. Namespaced
   keys no service declares (e.g. test logins for agents) reach no container.
+- `unattended_start: <reason>`: an autonomous run gets no pre-approved start or restart
+  (`feature up`, `feature up --service`, `docker restart`) for a service whose `extra_volumes` give it the
+  docker socket or the werkmeister home, since its `command:` often runs a script the agent can edit. This
+  field records why one such service is safe to start anyway. Only the machine registry's value counts
+  (synced from the default branch); a branch's own fragment cannot grant it.
 - `x-` keys are dropped from the output and exist to hold YAML anchors.
 - A duplicate service name, `port_offset` or `k8s_forward_port` across two repos fails the
   merge naming both. `werkmeister registry --check` reports drift.
