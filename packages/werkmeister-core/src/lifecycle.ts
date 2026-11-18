@@ -316,6 +316,10 @@ export async function up(
       );
     }
     containersStarted = true;
+    // Up now: two admits return before the one that dequeues (Docker unreadable, a zero-cost start), and
+    // a leftover entry keeps the hook saying "queued" over running containers (SW-863), as in restart().
+    await dequeue(feature);
+    clearWaiting(workspace);
   } else {
     info("No local services to start -- routing entirely to k8s");
     const onDemand = onDemandServices(servicesConfig, localServices, workspace);
