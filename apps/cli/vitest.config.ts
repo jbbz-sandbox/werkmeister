@@ -17,7 +17,10 @@ export default defineConfig({
     // Likewise no werkmeister daemon: the scheduler falls back in-process rather than reach the host's (SW-185).
     env: {
       DOCKER_HOST: "unix:///nonexistent/werkmeister-tests.sock",
-      WERKMEISTER_HOST: "http://127.0.0.1:9",
+      // Refused like a stopped daemon; fetch rejects :9 as a "bad port" before connecting (SW-743).
+      // shortcut: a port-0 listener can be handed 65535 on macOS; bind-and-close one (SW-708) if that flakes.
+      WERKMEISTER_HOST: "http://127.0.0.1:65535",
+      WERKMEISTER_DAEMON_RETRY_MS: "500",
     },
   },
 });

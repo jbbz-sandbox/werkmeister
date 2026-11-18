@@ -244,7 +244,7 @@ test("WERKMEISTER_HOST defaults to an unreachable host; a caller's value is kept
     spawnSync(bin, ["sh", "-c", 'printf %s "$WERKMEISTER_HOST"'], { encoding: "utf8", env }).stdout;
   try {
     const { WERKMEISTER_HOST: _, ...env } = process.env;
-    assert.equal(host(env), "http://127.0.0.1:1");
+    assert.equal(host(env), "http://127.0.0.1:65535");
     assert.equal(host({ ...env, WERKMEISTER_HOST: "http://mine:9" }), "http://mine:9");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
@@ -258,13 +258,14 @@ test("a daemon call under the wrapper raises DaemonUnavailable, never reaching :
     console.log(m.daemonUrl());
     await m.callTool("scheduler", {}, { timeoutMs: 5000 }).then(
       () => console.log("reached"),
-      (e) => console.log(e instanceof m.DaemonUnavailable ? e.code : e.message));
+      (e) => console.log(e instanceof m.DaemonUnavailable ? e.code : e.message, /ECONNREFUSED/.test(e.message)));
   })`;
   try {
     const { WERKMEISTER_HOST: _, ...env } = process.env;
     const r = spawnSync(bin, ["node", "-e", script], { encoding: "utf8", env });
     assert.equal(r.status, 0, r.stderr);
-    assert.equal(r.stdout, "http://127.0.0.1:1\nDAEMON_DOWN\n");
+    // SW-743: refused like a stopped daemon, not fetch's "bad port" for :1, and within the short retry.
+    assert.equal(r.stdout, "http://127.0.0.1:65535\nDAEMON_DOWN true\n");
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
