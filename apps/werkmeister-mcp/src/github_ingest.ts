@@ -1,17 +1,20 @@
 import { type GithubIngestConfig, parseIngestMessage } from "werkmeister-core/github_ingest";
 
-export interface QueueMessage {
-  Body?: string;
-  ReceiptHandle?: string;
+/** One event off a transport: its raw body, and `ack` to tell the transport it was handled. */
+export interface SourceMessage {
+  body: string;
+  ack: () => Promise<void>;
+}
+
+/**
+ * SW-879: where PR events come from (SQS today; smee.io or Pub/Sub later). `receive` waits for
+ * the next batch (may return []); an un-acked message must come back later, so a failed pass retries.
+ */
+export interface EventSource {
+  receive: () => Promise<SourceMessage[]>;
 }
 
 export interface IngestDeps {
-  receive: (req: {
-    QueueUrl: string;
-    WaitTimeSeconds: number;
-    MaxNumberOfMessages: number;
-  }) => Promise<QueueMessage[]>;
-  remove: (receiptHandle: string) => Promise<void>;
   watch: (opts: { desktop: false; repo: string }) => Promise<{ lines: string[] }>;
   track: <T>(work: () => Promise<T>) => Promise<T>;
   log: (msg: string) => void;
@@ -23,32 +26,28 @@ const BACKOFF_MIN_MS = 5_000;
 const BACKOFF_MAX_MS = 300_000;
 
 /**
- * SW-583: long-poll the GitHub ingest queue and run one `pr watch` pass per repo a batch names.
- * A message is deleted only after its pass returns, so a throw redelivers it and SQS's redrive
- * moves it to the DLQ; delivery ids are remembered so a redelivery runs no second pass.
+ * SW-583: pull GitHub events off `source` and run one `pr watch` pass per repo a batch names.
+ * A message is acked only after its pass returns, so a throw leaves it for redelivery;
+ * delivery ids are remembered so a redelivery runs no second pass.
  */
-export function startGithubIngest(queueUrl: string, deps: IngestDeps): { stop(): void } {
+export function startGithubIngest(source: EventSource, deps: IngestDeps): { stop(): void } {
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms).unref()));
   const seen = new Map<string, true>();
   const remember = (id: string) => {
     seen.set(id, true);
     if (seen.size > SEEN_MAX) seen.delete(seen.keys().next().value as string);
   };
-  const removeAll = async (handles: string[]) => {
-    for (const h of handles) await deps.remove(h);
+  const ackAll = async (msgs: SourceMessage[]) => {
+    for (const m of msgs) await m.ack();
   };
   let stopped = false;
   let backoff = 0;
 
   void (async () => {
     while (!stopped) {
-      let batch: QueueMessage[];
+      let batch: SourceMessage[];
       try {
-        batch = await deps.receive({
-          QueueUrl: queueUrl,
-          WaitTimeSeconds: 20,
-          MaxNumberOfMessages: 10,
-        });
+        batch = await source.receive();
         backoff = 0;
       } catch (e) {
         backoff = Math.min(backoff ? backoff * 2 : BACKOFF_MIN_MS, BACKOFF_MAX_MS);
@@ -58,26 +57,25 @@ export function startGithubIngest(queueUrl: string, deps: IngestDeps): { stop():
         await sleep(backoff);
         continue;
       }
-      const byRepo = new Map<string, { handles: string[]; ids: string[]; label: string }>();
+      const byRepo = new Map<string, { msgs: SourceMessage[]; ids: string[]; label: string }>();
       for (const m of batch) {
-        if (!m.ReceiptHandle) continue;
-        const msg = parseIngestMessage(m.Body ?? "");
+        const msg = parseIngestMessage(m.body);
         if (!msg) {
-          deps.log(`github ingest: dropped a malformed message: ${(m.Body ?? "").slice(0, 200)}`);
-          await deps.remove(m.ReceiptHandle).catch(() => {});
+          deps.log(`github ingest: dropped a malformed message: ${m.body.slice(0, 200)}`);
+          await m.ack().catch(() => {});
           continue;
         }
         if (seen.has(msg.delivery)) {
-          await deps.remove(m.ReceiptHandle).catch(() => {});
+          await m.ack().catch(() => {});
           continue;
         }
         const key = msg.repo.toLowerCase();
         const group = byRepo.get(key) ?? {
-          handles: [],
+          msgs: [],
           ids: [],
           label: `${msg.event}/${msg.action ?? "-"} on ${msg.repo} (${msg.delivery})`,
         };
-        group.handles.push(m.ReceiptHandle);
+        group.msgs.push(m);
         group.ids.push(msg.delivery);
         byRepo.set(key, group);
       }
@@ -85,7 +83,7 @@ export function startGithubIngest(queueUrl: string, deps: IngestDeps): { stop():
         try {
           const r = await deps.track(() => deps.watch({ desktop: false, repo }));
           deps.log(`github ingest: ${g.label}: ${r.lines[0] ?? "pass ran"}`);
-          await removeAll(g.handles);
+          await ackAll(g.msgs);
           for (const id of g.ids) remember(id);
         } catch (e) {
           deps.log(
@@ -103,21 +101,45 @@ export function startGithubIngest(queueUrl: string, deps: IngestDeps): { stop():
   };
 }
 
-/** The real SQS calls for {@link startGithubIngest}; the SDK loads only when ingest is configured. */
-export async function sqsDeps(
+/** The SQS {@link EventSource}: 20 s long polls, ack deletes. The SDK loads only when ingest is configured. */
+export async function sqsSource(
   cfg: GithubIngestConfig,
-): Promise<Pick<IngestDeps, "receive" | "remove">> {
+  client?: {
+    send: (command: object) => Promise<{ Messages?: { Body?: string; ReceiptHandle?: string }[] }>;
+  },
+): Promise<EventSource> {
   const { SQSClient, ReceiveMessageCommand, DeleteMessageCommand } = await import(
     "@aws-sdk/client-sqs"
   );
-  const client = new SQSClient({
-    region: cfg.region,
-    credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
-  });
+  const sqs =
+    client ??
+    new SQSClient({
+      region: cfg.region,
+      credentials: { accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey },
+    });
   return {
-    receive: async (req) => (await client.send(new ReceiveMessageCommand(req))).Messages ?? [],
-    remove: async (h) => {
-      await client.send(new DeleteMessageCommand({ QueueUrl: cfg.queueUrl, ReceiptHandle: h }));
+    receive: async () => {
+      const { Messages = [] } = await sqs.send(
+        new ReceiveMessageCommand({
+          QueueUrl: cfg.queueUrl,
+          WaitTimeSeconds: 20,
+          MaxNumberOfMessages: 10,
+        }),
+      );
+      return Messages.flatMap(({ Body, ReceiptHandle }) =>
+        ReceiptHandle
+          ? [
+              {
+                body: Body ?? "",
+                ack: async () => {
+                  await sqs.send(
+                    new DeleteMessageCommand({ QueueUrl: cfg.queueUrl, ReceiptHandle }),
+                  );
+                },
+              },
+            ]
+          : [],
+      );
     },
   };
 }

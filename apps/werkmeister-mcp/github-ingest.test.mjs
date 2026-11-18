@@ -1,9 +1,9 @@
-// SW-583: the daemon's SQS long-poll loop, driven by a fake queue. No AWS, no real pr watch.
+// SW-583/SW-879: the daemon's ingest loop, driven by a fake EventSource. No AWS, no real pr watch.
 
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { setTimeout as tick } from "node:timers/promises";
-import { startGithubIngest } from "./dist/github_ingest.js";
+import { sqsSource, startGithubIngest } from "./dist/github_ingest.js";
 
 const msg = (delivery, repo = "o/app", handle = delivery) => ({
   ReceiptHandle: handle,
@@ -12,20 +12,24 @@ const msg = (delivery, repo = "o/app", handle = delivery) => ({
 
 /** A queue that hands out each scripted batch once, then waits; `stop()` ends the loop. */
 function harness(batches, { watch } = {}) {
-  const calls = { receive: [], removed: [], watched: [], logs: [], slept: [] };
+  const calls = { removed: [], watched: [], logs: [], slept: [] };
   let n = 0;
-  const deps = {
-    receive: async (req) => {
-      calls.receive.push(req);
+  const source = {
+    receive: async () => {
       const b = batches[n++];
       if (b instanceof Error) throw b;
-      if (b) return b;
+      if (b)
+        return b.map((m) => ({
+          body: m.Body,
+          ack: async () => {
+            calls.removed.push(m.ReceiptHandle);
+          },
+        }));
       await tick(5);
       return [];
     },
-    remove: async (h) => {
-      calls.removed.push(h);
-    },
+  };
+  const deps = {
     watch:
       watch ??
       (async (opts) => {
@@ -38,20 +42,15 @@ function harness(batches, { watch } = {}) {
       calls.slept.push(ms);
     },
   };
-  const loop = startGithubIngest("https://sqs/q", deps);
+  const loop = startGithubIngest(source, deps);
   return { calls, loop, done: () => tick(30).then(() => loop.stop()) };
 }
 
-test("one message: one pass for its repo, then deleted; long poll of 20 s", async () => {
+test("one message: one pass for its repo, then acked", async () => {
   const h = harness([[msg("d1")]]);
   await h.done();
   assert.deepEqual(h.calls.watched, ["o/app"]);
   assert.deepEqual(h.calls.removed, ["d1"]);
-  assert.deepEqual(h.calls.receive[0], {
-    QueueUrl: "https://sqs/q",
-    WaitTimeSeconds: 20,
-    MaxNumberOfMessages: 10,
-  });
   assert.ok(h.calls.logs.some((l) => l.includes("issue_comment/created on o/app (d1): ok")));
 });
 
@@ -97,4 +96,28 @@ test("a malformed body is deleted and logged, never passed on", async () => {
   assert.deepEqual(h.calls.watched, []);
   assert.deepEqual(h.calls.removed, ["bad"]);
   assert.ok(h.calls.logs.some((l) => l.includes("dropped a malformed message")));
+});
+
+test("sqsSource: 20 s long poll of up to 10, skips handle-less messages, ack deletes", async () => {
+  const sent = [];
+  const client = {
+    send: async (cmd) => {
+      sent.push([cmd.constructor.name, cmd.input]);
+      return { Messages: [{ Body: "b1", ReceiptHandle: "h1" }, { Body: "b2" }] };
+    },
+  };
+  const cfg = { queueUrl: "https://sqs/q", region: "r", accessKeyId: "a", secretAccessKey: "s" };
+  const msgs = await (await sqsSource(cfg, client)).receive();
+  assert.deepEqual(
+    msgs.map((m) => m.body),
+    ["b1"],
+  );
+  await msgs[0].ack();
+  assert.deepEqual(sent, [
+    [
+      "ReceiveMessageCommand",
+      { QueueUrl: "https://sqs/q", WaitTimeSeconds: 20, MaxNumberOfMessages: 10 },
+    ],
+    ["DeleteMessageCommand", { QueueUrl: "https://sqs/q", ReceiptHandle: "h1" }],
+  ]);
 });
