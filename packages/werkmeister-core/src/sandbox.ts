@@ -1303,7 +1303,8 @@ function servicesNamedIn(text: string, repos: string[]): string[] {
     .replace(/\\/g, "") // Jira wiki markup escapes hyphens (`smart\-app`).
     .replace(/\{(code|noformat)[^}]*\}[\s\S]*?\{\1\}/g, "")
     .replace(/```[\s\S]*?```/g, "")
-    .replace(/^(?: {4}|\t).*$/gm, "")
+    // An indented line is a quoted log, unless it is a nested list item (SW-886).
+    .replace(/^(?: {4}|\t)(?!\s*(?:[-*+]|\d+\.)\s).*$/gm, "")
     // One span at a time: a pattern spanning two spans would eat the prose between them.
     .replace(/\{\{[^}]*\}\}|`[^`\n]*`/g, (m) => (/\s/.test(m) ? "" : m));
   return Object.entries(loadServices())

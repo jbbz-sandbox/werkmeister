@@ -332,6 +332,15 @@ test("a service named only in a quoted command is not taken; the brief's service
       assert.equal(byPath.resolved.services, "werkmeister-core", "a code path the issue names");
       const between = await create("Fix `a b` in werkmeister-core, see `c d` too.", false);
       assert.equal(between.resolved.services, "werkmeister-core", "prose between two code spans");
+      const nested = await create(
+        "- a\n    - change werkmeister-core here\n\t* or docs-site",
+        false,
+      );
+      assert.equal(
+        nested.resolved.services,
+        "docs-site,werkmeister-core",
+        "nested list items (SW-886)",
+      );
       const brief =
         '<result>{"description":"D.","starting_prompt":"## Where to start\\n- Repo werkmeister, service werkmeister-core."}</result>';
       const byBrief = await create(quoted, async () => brief);
