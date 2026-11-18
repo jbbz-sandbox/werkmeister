@@ -49,6 +49,16 @@ setup_services:
     ]);
   });
 
+  it("adds the repo-scoped name a clash between repos uses (SW-110)", () => {
+    writeServices(`
+services:
+  web:
+    repo: shop
+    node_modules_volume: node-modules
+`);
+    expect(getVolumeBaseNames()).toEqual(["node-modules", "shop-node-modules"]);
+  });
+
   it("skips bind mounts, null volumes and duplicates", () => {
     writeServices(`
 services:

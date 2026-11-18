@@ -742,6 +742,9 @@ function registryVolumeBases(): Set<string> {
       const nodeModulesVol = def["node_modules_volume"];
       if (typeof nodeModulesVol === "string" && nodeModulesVol) {
         bases.add(nodeModulesVol);
+        // SW-110: a clash between repos names it `<repo>-<vol>` (repoScopedNodeModules).
+        if (typeof def["repo"] === "string" && def["repo"])
+          bases.add(`${def["repo"]}-${nodeModulesVol}`);
       }
       const extraVolumes = def["extra_volumes"];
       if (!Array.isArray(extraVolumes)) {

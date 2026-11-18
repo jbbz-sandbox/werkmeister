@@ -109,7 +109,12 @@ test("two features mount one external shared volume, each keeping its own per-fe
 test("a shared volume is never a per-feature base name, so clean never claims it", async () => {
   await withSandboxHome(
     async () => {
-      assert.deepEqual(getVolumeBaseNames(), ["node-modules", "turbo-cache"]);
+      // demo-repo-node-modules: the name a clash between repos gives it (SW-110).
+      assert.deepEqual(getVolumeBaseNames(), [
+        "demo-repo-node-modules",
+        "node-modules",
+        "turbo-cache",
+      ]);
       assert.equal(featureFromVolume("sandbox-pnpm-store", volumeBaseNames()), null);
     },
     { services: SERVICES },

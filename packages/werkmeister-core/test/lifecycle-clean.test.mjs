@@ -41,7 +41,8 @@ test("longest-first base names keep the shorter suffix from eating the feature",
       - turbo-cache:/turbo
 `,
   });
-  assert.deepEqual(bases, ["turbo-cache", "cache"]);
+  // demo-repo-cache: the name a clash between repos gives it (SW-110), longest first too.
+  assert.deepEqual(bases, ["demo-repo-cache", "turbo-cache", "cache"]);
 });
 
 // The classification is what `planClean` exists to get right, and the only part
@@ -86,4 +87,15 @@ test("no live feature's volume is proposed for removal, whatever the ordering", 
     assert.ok(!live.has(feature), `would delete live feature ${feature}`);
   }
   assert.deepEqual(orphanedVolumes, ["gone-cache"]);
+});
+
+test("a live feature whose name ends in a repo keeps its plain volume next to the repo-scoped base (SW-110)", () => {
+  // `fix-shop-node-modules` reads as `fix` under `shop-node-modules` first; `fix-shop` is the live one.
+  const { activeVolumes, orphanedVolumes } = classifyVolumes(
+    ["fix-shop-node-modules", "gone-shop-node-modules"],
+    ["shop-node-modules", "node-modules"],
+    new Set(["fix-shop"]),
+  );
+  assert.deepEqual(activeVolumes, ["fix-shop-node-modules"]);
+  assert.deepEqual(orphanedVolumes, ["gone-shop-node-modules"]);
 });

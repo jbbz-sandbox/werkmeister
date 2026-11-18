@@ -581,6 +581,39 @@ export function onDemandServices(
 }
 
 /**
+ * SW-110: two checked-out repos whose fragments share a `node_modules_volume`
+ * name would mount one volume, and one repo's install breaks the other's tree.
+ * On such a clash the name gets the repo (`<repo>-<vol>`); otherwise it is
+ * kept, so a workspace keeps its installed volume. Returns copies.
+ */
+export function repoScopedNodeModules(
+  [services, setups]: [ServicesConfig, ServicesConfig],
+  workspaceRoot: string,
+): [ServicesConfig, ServicesConfig] {
+  const here = (def: unknown): def is ServiceEntry =>
+    isDict(def) &&
+    Boolean(def["repo"]) &&
+    Boolean(def["node_modules_volume"]) &&
+    fs.existsSync(path.join(workspaceRoot, String(def["repo"])));
+  const reposOf = new Map<string, Set<string>>();
+  for (const def of [...Object.values(services), ...Object.values(setups)]) {
+    if (!here(def)) continue;
+    const vol = String(def["node_modules_volume"]);
+    reposOf.set(vol, (reposOf.get(vol) ?? new Set()).add(String(def["repo"])));
+  }
+  const scope = (defs: ServicesConfig): ServicesConfig =>
+    Object.fromEntries(
+      Object.entries(defs).map(([name, def]) => [
+        name,
+        here(def) && (reposOf.get(String(def["node_modules_volume"]))?.size ?? 0) > 1
+          ? { ...def, node_modules_volume: `${def["repo"]}-${def["node_modules_volume"]}` }
+          : def,
+      ]),
+    );
+  return [scope(services), scope(setups)];
+}
+
+/**
  * Render the compose file for *feature* without writing it.
  *
  * Split out from `generateFeatureCompose` so a caller can compare the current
@@ -598,11 +631,14 @@ function renderFeatureCompose(
 ): [outPath: string, content: string, kind: string] {
   const [registryServices, portsConfig] = resolveServicesAndPorts(config);
   const [workspaceRoot, outPath] = resolveComposeOutPath(feature, workspaceOverride);
-  const [servicesConfig, cachedSetups] = applyCaches(
-    registryServices,
-    config && "setup_services" in config ? (config["setup_services"] ?? {}) : loadSetupServices(),
-    config && "archetypes" in config ? (config["archetypes"] ?? {}) : loadArchetypes(),
-    config && "caches" in config ? (config["caches"] ?? {}) : loadCaches(),
+  const [servicesConfig, cachedSetups] = repoScopedNodeModules(
+    applyCaches(
+      registryServices,
+      config && "setup_services" in config ? (config["setup_services"] ?? {}) : loadSetupServices(),
+      config && "archetypes" in config ? (config["archetypes"] ?? {}) : loadArchetypes(),
+      config && "caches" in config ? (config["caches"] ?? {}) : loadCaches(),
+      workspaceRoot,
+    ),
     workspaceRoot,
   );
   const devLinks = loadDevLinks(workspaceRoot);
