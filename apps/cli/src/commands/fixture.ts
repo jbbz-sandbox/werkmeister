@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -21,7 +21,7 @@ import {
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -49,6 +49,7 @@ export function parse(argv: string[]) {
     services: undefined as string | undefined,
     fragment: undefined as string | undefined,
     fragmentChange: undefined as string | undefined,
+    staleCompose: false,
     changeBase: undefined as string | undefined,
     changeBranch: undefined as string | undefined,
     change: undefined as string | undefined,
@@ -69,6 +70,7 @@ export function parse(argv: string[]) {
     else if (a === "--merged") opts.merged = true;
     else if (a === "--behind") opts.behind = true;
     else if (a === "--slots-full") opts.slotsFull = true;
+    else if (a === "--stale-compose") opts.staleCompose = true;
     else if (a === "--queue" && argv[i + 1] !== undefined) {
       // An entry with a wait is one waiter whose commas list its services (SW-809).
       const v = argv[++i] as string;
@@ -199,6 +201,8 @@ export async function run(argv: string[]): Promise<void> {
     // Both shape the change --gate's PR file gates; without one they would go unexercised.
     if ((opts.change || opts.fragmentChange !== undefined) && !opts.gate)
       throw new Error("--change and --fragment-change need --gate");
+    if (opts.staleCompose && opts.fragmentChange === undefined)
+      throw new Error("--stale-compose needs --fragment-change");
     if ((opts.changeBase !== undefined || opts.changeBranch !== undefined) && !opts.change)
       throw new Error("--change-base and --change-branch need --change");
   } catch (e) {
@@ -218,7 +222,12 @@ export async function run(argv: string[]): Promise<void> {
       WERKMEISTER_ROOT: path.resolve(path.dirname(process.argv[1] as string), ".."),
     };
     let code = 0;
-    for (const step of steps) {
+    // compose.yml from the base fragment, then the branch's lands: a workspace inited before its change (SW-817).
+    if (fx.applyFragmentChange) {
+      code = await runStep(["workspace", "init", "--no-build"], fx.workspace, env);
+      if (code === 0) fx.applyFragmentChange();
+    }
+    for (const step of code === 0 ? steps : []) {
       code = await runStep(step, fx.workspace, env);
       if (code !== 0) break;
     }
