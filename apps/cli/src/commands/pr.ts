@@ -8,6 +8,7 @@
  * and limits the action to that repo's PR files; a PR file's name (`werkmeister-why-page`) limits it to that file.
  *   gate    run the pre-PR gate, change nothing; --tests: only its lint and test rows, on the uncommitted tree
  *   open    gate each `approved` PR file, push, open the PR, record its URL
+ *   push    force-push an open PR's rebased branch with a lease (rule 5, SW-717)
  *   status  record merged / shipped / closed from GitHub and release tags
  *   adopt   write the PR file for a fix that landed outside the workspace
  *   new     after a worktree's PR merged: cut a fresh branch from base and write a draft follow-up PR file
@@ -22,6 +23,7 @@ import {
   gateTests,
   newPr,
   openPrs,
+  pushPrs,
   refreshPrStatus,
   watchPrs,
 } from "werkmeister-core";
@@ -62,7 +64,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
           ? await (args.tests ? gateTests : gatePrs)(ws, repo)
           : args.action === "open"
             ? await openPrs(ws, repo)
-            : { ok: true, ...(await refreshPrStatus(ws)) };
+            : args.action === "push"
+              ? await pushPrs(ws, repo)
+              : { ok: true, ...(await refreshPrStatus(ws)) };
   // SW-527: a bare redirected `pr open > pr-open.log` has no echo, so the log ends with its own exit line.
   if (args.action === "open" && !args.json)
     result.lines.push(

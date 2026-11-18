@@ -92,6 +92,7 @@ werkmeister's own apps (the MCP server and the CLI) import internal entries, not
 | `pr` | | excluded: a group; its verbs are the rows below |
 | `pr gate` | `gatePrs` | |
 | `pr open` | `openPrs` | |
+| `pr push` | `pushPrs` | |
 | `pr status` | `refreshPrStatus` | |
 | `pr adopt` | `adoptPr` | |
 | `pr watch` | `watchPrs` | |

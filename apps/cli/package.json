@@ -51,6 +51,7 @@
     "./man/werkmeister-pr.1",
     "./man/werkmeister-pr-gate.1",
     "./man/werkmeister-pr-open.1",
+    "./man/werkmeister-pr-push.1",
     "./man/werkmeister-pr-status.1",
     "./man/werkmeister-pr-adopt.1",
     "./man/werkmeister-pr-watch.1",

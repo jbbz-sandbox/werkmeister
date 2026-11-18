@@ -268,6 +268,8 @@ const START_GRANTS = ["issue start", "issue view"];
 
 const propose: Stage = {
   name: "propose",
+  // SW-717: rule 5's conflict fix pushes its own rebased branch; pr push refuses any other.
+  grants: ["pr push:*"],
   job: "acceptance walk and PR files",
   writes:
     "the code commits (one per repo, or one per ticket in a grouped PR), `output/pr-<worktree>.md` per repo",

@@ -1531,6 +1531,12 @@ const SPECS: CommandSpec[] = [
     [
       ["gate", "Run the pre-PR gate", ["[repo]"], ["wait", "tests", "json"]],
       ["open", "Gate, push and open each approved PR file", ["[repo]"], ["wait", "json"]],
+      [
+        "push",
+        "Force-push an open PR's rebased branch with a lease (rule 5); refuses anything but this workspace's own clean branch",
+        ["[repo]"],
+        ["json"],
+      ],
       ["status", "Record merged, shipped or closed for each PR file", ["[repo]"], ["json"]],
       ["adopt", "Record a PR opened outside the workspace", ["[pr]", "[repo]"], ["no-pr", "json"]],
       [

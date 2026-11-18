@@ -89,6 +89,7 @@ export {
   openPrs,
   type PrCallback,
   type PrView,
+  pushPrs,
 } from "./pr_lifecycle.js";
 export { type SyncRegistryOptions, syncRegistry } from "./registry_sync.js";
 export type { WorkspaceResources } from "./resources.js";

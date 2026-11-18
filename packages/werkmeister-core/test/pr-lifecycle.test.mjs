@@ -11,7 +11,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import YAML from "yaml";
 
 import { heldWakes, readNotices } from "../dist/agent_state.js";
-import { dotDir } from "../dist/config.js";
+import { dotDir, getReposRoot } from "../dist/config.js";
 import { resolveIssueStatuses } from "../dist/issue_status.js";
 import {
   abandonWorkspace,
@@ -36,6 +36,7 @@ import {
   openPrs,
   openTerminalSessions,
   prFileDir,
+  pushPrs,
   readPrFiles,
   refreshPrStatus,
   releaseVscodeSessions,
@@ -2016,7 +2017,7 @@ test("gate: a pushed branch behind origin/<base> passes the base row with a note
     assert.deepEqual(failed(g), []);
     assert.match(
       g.checks.find((c) => c.name === "base").detail,
-      /3 commits behind origin\/main; me\/ws is already pushed.*--force-with-lease/,
+      /3 commits behind origin\/main; me\/ws is already pushed.*werkmeister pr push/,
     );
   } finally {
     clean(ws);
@@ -4581,8 +4582,9 @@ test("wakeMessage: each event opens with the ticket's sentence, all in one messa
         "  Rebase, never merge main in (GitHub can't rebase-merge a branch with a merge from its base):",
         "    git -C /w/app fetch origin main && git -C /w/app rebase origin/main",
         "  A conflict in a generated file (a snapshot, a lockfile): take main's copy and regenerate it; never hand-merge it.",
-        "  You can't force-push: give the person",
-        "    git -C /w/app push --force-with-lease=me/ws:abc",
+        "  Then push it (a lease on origin's head; refuses anything but this workspace's own clean branch):",
+        "    werkmeister pr push app",
+        "  and rerun the gate's tests.",
       ].join("\n"),
       "Follow the workspace router; push the fix to the PR's branch.",
     ].join("\n\n"),
@@ -4786,13 +4788,8 @@ test("claimCallbacks: a conflict wakes once with the base commits; resolved rese
         `PR ${URL9} conflicts with main, resolve it.\n  Base moved:\n    abc1234 feat: moved\n`,
       ),
     );
-    // SW-494: the lease names the PR file's branch and GitHub's head, the commit the person replaces.
-    assert.ok(
-      wakes(r)[0].includes(
-        `git -C ${path.join(ws, "app")} push --force-with-lease=me/ws:${SHA1}\n`,
-      ),
-      wakes(r)[0],
-    );
+    // SW-717: the session pushes its own rebased branch; no hand-off to the person.
+    assert.ok(wakes(r)[0].includes("    werkmeister pr push app\n"), wakes(r)[0]);
     assert.ok(wakes(r)[0].includes(`git -C ${path.join(ws, "app")} rebase origin/main`));
     assert.equal(readPrFiles(ws)[0].fm.notified_conflict, "true");
     assert.deepEqual(wakes(await claim(ws, deps([conflicting, moved]))), []);
@@ -5975,6 +5972,152 @@ test("runGate: a skipped idle service loses the lint/release pick to a non-skipp
     );
     await gate(ws, d);
     assert.deepEqual(d.started, ["feat-api"], d.calls.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
+/** An open PR on this workspace's own branch, me/<ws>; `pushDeps` answers git as a pushable rebased branch. */
+function pushWorkspace() {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "open", extra: "url: u\n" }) } });
+  const own = `${os.userInfo().username}/${path.basename(ws)}`;
+  // A worktree of the registered repo `app`, as init makes it.
+  fs.mkdirSync(path.join(ws, "app"));
+  fs.writeFileSync(
+    path.join(ws, "app", ".git"),
+    `gitdir: ${path.join(getReposRoot(), "app", ".git", "worktrees", "app")}\n`,
+  );
+  const f = path.join(ws, "stages", "03_propose", "output", "pr-app.md");
+  fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace("branch: me/ws", `branch: ${own}`));
+  return { ws, own };
+}
+const pushDeps = (own, over = []) =>
+  deps([
+    ...over,
+    [/rev-parse --abbrev-ref HEAD$/, { stdout: `${own}\n` }],
+    [/status --porcelain$/, { stdout: "" }],
+    [/rev-list --merges --count origin\/main\.\.HEAD$/, { stdout: "0\n" }],
+    [/rev-parse --verify -q refs\/remotes\/origin\//, { stdout: "abc123\n" }],
+    [/ls-remote origin refs\/heads\//, { stdout: `abc123\trefs/heads/${own}\n` }],
+  ]);
+
+test("pr push: force-pushes this workspace's own rebased branch with a lease on origin's head (SW-717)", async () => {
+  const { ws, own } = pushWorkspace();
+  try {
+    const d = pushDeps(own);
+    const r = await pushPrs(ws, undefined, d);
+    assert.ok(r.ok, r.lines.join("\n"));
+    assert.ok(
+      d.calls.some((c) =>
+        c.endsWith(`push --no-verify --force-with-lease=${own}:abc123 origin ${own}`),
+      ),
+      d.calls.join("\n"),
+    );
+    assert.match(r.lines[0], /pushed .*rerun the gate's tests/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("pr push refuses another branch, a dirty tree, a merged-in base and a stale lease, and pushes nothing (SW-717)", async () => {
+  const { ws, own } = pushWorkspace();
+  try {
+    const cases = [
+      [
+        "other branch",
+        [[/rev-parse --abbrev-ref HEAD$/, { stdout: "main\n" }]],
+        /checked out, not/,
+      ],
+      ["dirty", [[/status --porcelain$/, { stdout: " M a.ts\n" }]], /not clean/],
+      [
+        "merged base",
+        [[/rev-list --merges/, { stdout: "1\n" }]],
+        /1 merge commit\(s\) from origin\/main/,
+      ],
+      [
+        "stale lease",
+        [[/ls-remote/, { stdout: `def456\trefs/heads/${own}\n` }]],
+        /not the leased abc123/,
+      ],
+      [
+        "no lease",
+        [[/rev-parse --verify -q refs\/remotes/, { code: 1, stdout: "" }]],
+        /no origin\/.* to lease/,
+      ],
+    ];
+    for (const [label, over, why] of cases) {
+      const d = pushDeps(own, over);
+      const r = await pushPrs(ws, undefined, d);
+      assert.equal(r.ok, false, label);
+      assert.match(r.lines[0], why, label);
+      assert.ok(!d.calls.some((c) => / push /.test(c)), `${label}: nothing pushed`);
+    }
+    // The base, or a branch that isn't <user>/<this workspace>, is never pushed.
+    const f = path.join(ws, "stages", "03_propose", "output", "pr-app.md");
+    // Review of SW-717: another user's, and another workspace whose name extends this one (`<ws>-retry`), never pass.
+    for (const branch of ["main", "me/other-ws", `someone/${path.basename(ws)}`, `${own}-retry`]) {
+      fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/^branch: .*$/m, `branch: ${branch}`));
+      const d = pushDeps(branch);
+      const r = await pushPrs(ws, undefined, d);
+      assert.match(r.lines[0], /not this workspace's own/, branch);
+      assert.ok(!d.calls.some((c) => / push /.test(c)), `${branch}: nothing pushed`);
+    }
+  } finally {
+    clean(ws);
+  }
+});
+
+test("pr push runs no git outside this workspace's own worktrees, pushes a follow-up only after its PR settled, and only open files (SW-717 review)", async () => {
+  const { ws, own } = pushWorkspace();
+  const f = path.join(ws, "stages", "03_propose", "output", "pr-app.md");
+  const nothingRan = (d, label) =>
+    assert.deepEqual(
+      d.calls.filter((c) => /^git /.test(c)),
+      [],
+      label,
+    );
+  try {
+    // The worktree's .git pointer, which the agent can edit, leads outside the repos root.
+    fs.writeFileSync(path.join(ws, "app", ".git"), "gitdir: /tmp/evil/.git\n");
+    let d = pushDeps(own);
+    let r = await pushPrs(ws, undefined, d);
+    assert.match(r.lines[0], /not one of this workspace's worktrees/);
+    nothingRan(d, "redirected .git");
+    // A PR file naming a folder outside the workspace.
+    fs.writeFileSync(
+      path.join(ws, "app", ".git"),
+      `gitdir: ${path.join(getReposRoot(), "app", ".git", "worktrees", "app")}\n`,
+    );
+    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/^---\n/, "---\nworktree: ../evil\n"));
+    d = pushDeps(own);
+    r = await pushPrs(ws, undefined, d);
+    assert.match(r.lines[0], /not one of this workspace's worktrees/);
+    nothingRan(d, "worktree: ../evil");
+    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace("worktree: ../evil\n", ""));
+
+    // A `pr new` follow-up pushes once this workspace's own-branch PR has shipped.
+    const follow = `${own}-fix`;
+    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/^branch: .*$/m, `branch: ${follow}`));
+    fs.writeFileSync(
+      path.join(path.dirname(f), "pr-app-first.md"),
+      prFile({ status: "shipped", extra: "worktree: app\nurl: u0\n" }).replace(
+        "branch: me/ws",
+        `branch: ${own}`,
+      ),
+    );
+    d = pushDeps(follow);
+    r = await pushPrs(ws, "app", d);
+    assert.ok(r.ok, r.lines.join("\n"));
+
+    // A file named directly but not open is not pushed, and the message is push's own.
+    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace(/^status: .*$/m, "status: merged"));
+    d = pushDeps(follow);
+    r = await pushPrs(ws, "app", d);
+    assert.deepEqual(r, {
+      ok: false,
+      lines: ["No open PR to push for app (a PR file with status: open)."],
+    });
+    nothingRan(d, "merged file");
   } finally {
     clean(ws);
   }

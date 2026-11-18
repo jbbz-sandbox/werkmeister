@@ -874,7 +874,8 @@ test("SW-807: an ICM run pre-approves only its own issue's start and view, exact
   yml("context_strategy: jit\nwork_type: bugfix\n");
   assert.deepEqual(workspaceAllowRules(root, false), READ_ONLY_GIT_RULES);
   yml('context_strategy: "icm "\nwork_type: bugfix\n');
-  const grants = ["issue start", "issue view"].flatMap((g) => [
+  // SW-717: pr push refuses anything but the workspace's own clean, merge-free branch with a live lease.
+  const grants = ["issue start", "issue view", "pr push:*"].flatMap((g) => [
     `Bash(werkmeister ${g})`,
     `Bash(w9r ${g})`,
   ]);

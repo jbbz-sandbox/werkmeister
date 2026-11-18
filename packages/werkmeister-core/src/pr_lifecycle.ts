@@ -21,6 +21,7 @@ import {
   containerOf,
   dotDir,
   envVar,
+  getReposRoot,
   IDLE_SERVICE_TYPES,
   isFixture,
   loadArchetypes,
@@ -1220,7 +1221,7 @@ async function gateChecks(
       behind.code
         ? `cannot check against origin/${base}: ${(behind.stderr || behind.stdout).trim()}`
         : pushed
-          ? `${commits}; ${branch} is already pushed, so \`pr watch\` flags a conflict and rule 5's \`--force-with-lease\` hand-off applies${also}`
+          ? `${commits}; ${branch} is already pushed, so \`pr watch\` flags a conflict; after a rebase \`werkmeister pr push\` force-pushes it with a lease (rule 5)${also}`
           : count
             ? `${commits} — \`git -C ${file.dir} rebase origin/${base}\` (keeps one commit per ticket), rerun the tests, then rerun${also}`
             : `up to date with origin/${base}`,
@@ -2644,8 +2645,10 @@ const conflictSteps = (e: Extract<WakeEvent, { kind: "conflict" }>) =>
     `  Rebase, never merge ${e.base} in (GitHub can't rebase-merge a branch with a merge from its base):`,
     `    git -C ${e.dir} fetch origin ${e.base} && git -C ${e.dir} rebase origin/${e.base}`,
     `  A conflict in a generated file (a snapshot, a lockfile): take ${e.base}'s copy and regenerate it; never hand-merge it.`,
-    "  You can't force-push: give the person",
-    `    git -C ${e.dir} push --force-with-lease=${e.branch || "<branch>"}:${e.head || "<old sha>"}`,
+    // SW-717: the lease is origin/<branch> as last fetched, so the session pushes its own branch.
+    "  Then push it (a lease on origin's head; refuses anything but this workspace's own clean branch):",
+    `    werkmeister pr push ${path.basename(e.dir)}`,
+    "  and rerun the gate's tests.",
   ].join("\n");
 
 /** One message for every new event on a PR; each block opens with SW-160's sentence. */
@@ -3501,6 +3504,120 @@ export async function mergesFromBase(dir: string, base: string, run: Run): Promi
     `origin/${base}..HEAD`,
   ]);
   return r.code ? null : Number(r.stdout.trim() || 0);
+}
+
+/**
+ * Force-pushes each open PR's rebased branch with a lease, so a session can finish rule 5's
+ * conflict fix without the person. The lease is `origin/<branch>` as last fetched, never
+ * typed by the agent. Refuses, and pushes nothing for that file, unless: the worktree is one of
+ * this workspace's own (checked without git); the branch is this workspace's own (the PR file's `branch:`, checked out, `<user>/<workspace>[-<slug>]`, not the
+ * base); the worktree is clean; it holds no merge commit from its base; and origin still has the
+ * leased head.
+ *
+ * @param ws - The workspace folder.
+ * @param only - A code worktree's directory name or a PR file's name, as for `pr gate`.
+ * @param deps - The services it uses; leave it at its default.
+ * @returns `ok`, false when any file was refused or its push failed; `lines`, one per PR file.
+ *
+ * @example
+ * ```ts
+ * import { pushPrs } from "werkmeister-core/sdk";
+ *
+ * const { ok, lines } = await pushPrs("/work/my-workspace");
+ * console.log(ok, lines.join("\n"));
+ * ```
+ */
+export async function pushPrs(
+  ws: string,
+  only?: string,
+  deps: Deps = defaultDeps(),
+): Promise<{
+  /** False when any PR file was refused or its push failed. */
+  ok: boolean;
+  /** One line per PR file: pushed, refused and why, or failed. */
+  lines: string[];
+}> {
+  const all = readPrFiles(ws);
+  // Not selectFiles: it keeps a file named by *only* whatever its status, and its refusal says "set approved".
+  const files = all.filter(
+    (f) => (!only || f.stem === only || f.dir === only) && statusOf(f) === "open",
+  );
+  if (!files.length)
+    return {
+      ok: false,
+      lines: [`No open PR to push${only ? ` for ${only}` : ""} (a PR file with status: open).`],
+    };
+  const lines: string[] = [];
+  let ok = true;
+  for (const f of files) {
+    const line = await pushOne(ws, all, f, deps);
+    if (line.startsWith("refused") || line.startsWith("failed")) ok = false;
+    lines.push(`${f.stem}: ${line}`);
+  }
+  return { ok, lines };
+}
+
+/**
+ * The PR file's worktree, when it is one of this workspace's own (a direct child whose `.git`
+ * file points into a repo under the repos root), else null. Plain fs, so no git runs on a
+ * folder or git config the agent chose: git can run commands from config (`core.fsmonitor`).
+ */
+function ownWorktree(ws: string, f: PrFile): string | null {
+  if (!f.dir || f.dir !== path.basename(f.dir)) return null;
+  const dir = path.join(ws, f.dir);
+  if (!repoDirs(ws).includes(dir)) return null;
+  let gitdir: string;
+  try {
+    gitdir = /^gitdir: (.+)$/m.exec(fs.readFileSync(path.join(dir, ".git"), "utf8"))?.[1] ?? "";
+  } catch {
+    return null; // a `.git` folder (a clone) or nothing: not a worktree of a registered repo
+  }
+  const rel = path.relative(getReposRoot(), path.resolve(dir, gitdir.trim()));
+  return /^[^/\\]+[/\\]\.git[/\\]worktrees[/\\][^/\\]+$/.test(rel) ? dir : null;
+}
+
+async function pushOne(ws: string, all: PrFile[], f: PrFile, deps: Deps): Promise<string> {
+  const dir = ownWorktree(ws, f);
+  if (!dir)
+    return `refused: ${f.dir || "the PR file's worktree"} is not one of this workspace's worktrees of a repo under ${getReposRoot()} (a standalone clone keeps its git config in the workspace, so push it by hand)`;
+  const branch = String(f.fm["branch"] ?? "");
+  const base = String(f.fm["base"] ?? "main");
+  const git = (...args: string[]) => deps.run("git", ["-C", dir, ...args]);
+  // init names it <user>/<workspace>; a `pr new` follow-up adds -<slug> once a PR on it settled.
+  const own = `${os.userInfo().username}/${path.basename(ws)}`;
+  const followUp =
+    branch.startsWith(`${own}-`) &&
+    all.some((p) => p.fm["branch"] === own && PAST_MERGE.has(statusOf(p)));
+  if (branch !== own && !followUp)
+    return `refused: ${branch || "no branch:"} is not this workspace's own ${own} branch (or a \`pr new\` follow-up of it)`;
+  const head = (await git("rev-parse", "--abbrev-ref", "HEAD")).stdout.trim();
+  if (head !== branch)
+    return `refused: ${f.dir} has ${head || "no branch"} checked out, not ${branch}`;
+  const status = await git("status", "--porcelain");
+  if (status.code || status.stdout.trim())
+    return `refused: ${f.dir} is not clean — commit first:\n${status.stdout.trimEnd() || status.stderr.trim()}`;
+  const merges = await mergesFromBase(dir, base, deps.run);
+  if (merges !== 0)
+    return `refused: ${merges === null ? "cannot count" : merges} merge commit(s) from origin/${base} — rebase instead: git -C ${f.dir} rebase origin/${base}`;
+  const lease = (
+    await git("rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`)
+  ).stdout.trim();
+  if (!lease)
+    return `refused: no origin/${branch} to lease against — \`werkmeister pr open\` pushes a new branch`;
+  const remote = await git("ls-remote", "origin", `refs/heads/${branch}`);
+  const live = remote.stdout.split(/\s/)[0] ?? "";
+  if (remote.code || live !== lease)
+    return `refused: origin's ${branch} is ${live || "unreadable"}, not the leased ${lease} — someone pushed since your fetch; \`git -C ${f.dir} fetch origin ${branch}\`, check what changed, rebase onto it, rerun`;
+  const push = await git(
+    "push",
+    "--no-verify",
+    `--force-with-lease=${branch}:${lease}`,
+    "origin",
+    branch,
+  );
+  return push.code
+    ? `failed: ${(push.stderr || push.stdout).trim()}`
+    : `pushed ${branch} (lease ${lease.slice(0, 12)}); rerun the gate's tests (rule 5)`;
 }
 
 /** `--abandon`: record *why* on every unsettled PR file and in closeout.md. */

@@ -181,6 +181,7 @@ export {
   newPr,
   openPrs,
   type PrStatus,
+  pushPrs,
   readPrFiles,
   refreshPrStatus,
   runGate,
