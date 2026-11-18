@@ -1225,6 +1225,19 @@ async function gateChecks(
             ? `${commits} — \`git -C ${file.dir} rebase origin/${base}\` (keeps one commit per ticket), rerun the tests, then rerun${also}`
             : `up to date with origin/${base}`,
     );
+    if (behind.code === 0) {
+      const merges = await mergesFromBase(dir, base, deps.run);
+      add(
+        "merges",
+        merges === 0,
+        merges === null
+          ? `cannot count merge commits in origin/${base}..HEAD`
+          : merges
+            ? `${merges} merge commit${merges === 1 ? "" : "s"} in origin/${base}..HEAD — a rebase merge queue replays only non-merge commits, so a conflict a merge resolved comes back. ` +
+              `Rebase instead: \`git -C ${file.dir} rebase origin/${base}\` (rule 5), rerun the tests, then rerun`
+            : "no merge commits",
+      );
+    }
     const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
     add(
       "clean",
@@ -3475,6 +3488,19 @@ export function renderCloseout(prs: PrFile[], issue: string, note?: string): str
     ),
     "",
   ].join("\n");
+}
+
+/** Merge commits on HEAD since `origin/<base>`, or null when git can't count them; the gate (SW-733) and `pr push` (SW-717) refuse any. */
+export async function mergesFromBase(dir: string, base: string, run: Run): Promise<number | null> {
+  const r = await run("git", [
+    "-C",
+    dir,
+    "rev-list",
+    "--merges",
+    "--count",
+    `origin/${base}..HEAD`,
+  ]);
+  return r.code ? null : Number(r.stdout.trim() || 0);
 }
 
 /** `--abandon`: record *why* on every unsettled PR file and in closeout.md. */
