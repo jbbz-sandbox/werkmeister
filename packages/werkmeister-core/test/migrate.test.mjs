@@ -585,7 +585,7 @@ test("SW-660: migrate adds the test-command rules an older init is missing", asy
   write(path.join(ws, ".env"), "FEATURE=demo\nSERVICES=api\n");
   writeWorkspaceSettings(ws);
   const { tempHomeWrapper } = await import("../dist/temp_home.js");
-  const chain = `Bash(${tempHomeWrapper(ws)} sh -c 'pnpm lint && pnpm test')`;
+  const chain = `Bash(${tempHomeWrapper(ws)} --cwd ${path.join(ws, "demo")} sh -c 'pnpm lint && pnpm test')`;
   const settingsFile = path.join(ws, ".claude", "settings.json");
   const record = path.join(ws, ".werkmeister", "claude-permissions.json");
   for (const file of [settingsFile, record]) {

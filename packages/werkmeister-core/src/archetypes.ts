@@ -163,11 +163,18 @@ export function isPlainChain(cmd: string): boolean {
  * so every part runs under the temp HOME (`with-temp-home a && b` wraps only `a`) and a `{ …; }`
  * group is not a syntax error (SW-660).
  */
-export function wrappedTestCommand(tempHome: string, test: string, lint?: string): string {
+export function wrappedTestCommand(
+  tempHome: string,
+  test: string,
+  lint?: string,
+  repo?: string,
+): string {
   const full = lint ? `${lint} && ${test}` : test;
   if (!tempHome) return full;
-  if (isPlainChain(full) && !full.includes("&&")) return `${tempHome} ${full}`;
-  return `${tempHome} sh -c '${full.split("'").join(`'\\''`)}'`;
+  // SW-652: from *repo*'s worktree (<ws>/<repo>; tempHome is <ws>/.werkmeister/bin/…), whatever the shell's cwd.
+  const wrapper = repo ? `${tempHome} --cwd ${path.resolve(tempHome, "../../..", repo)}` : tempHome;
+  if (isPlainChain(full) && !full.includes("&&")) return `${wrapper} ${full}`;
+  return `${wrapper} sh -c '${full.split("'").join(`'\\''`)}'`;
 }
 
 /**
