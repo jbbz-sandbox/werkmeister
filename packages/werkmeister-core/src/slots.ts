@@ -27,6 +27,7 @@ import { workspaceForFeature } from "./compose.js";
 import { baselineUpstream, loadPorts, loadServices, sandboxHome, slotPortRange } from "./config.js";
 import { docker } from "./docker.js";
 import { SandboxError } from "./errors.js";
+import { insideContainer } from "./global_config.js";
 import { sandboxLock } from "./locks.js";
 import { error, info, success, warn } from "./reporter.js";
 import { pickSlot } from "./scheduler.js";
@@ -208,6 +209,8 @@ export async function getAllSlotsFromDocker(): Promise<Record<string, SlotEntry>
 /** Reads Docker labels; injectable so tests need no daemon. */
 export interface SlotDeps {
   labels: () => Promise<Record<string, SlotEntry> | null>;
+  /** Docker's marker file, for tests; default `/.dockerenv`. */
+  dockerenv?: string;
 }
 
 const defaultSlotDeps: SlotDeps = { labels: getAllSlotsFromDocker };
@@ -220,13 +223,20 @@ const defaultSlotDeps: SlotDeps = { labels: getAllSlotsFromDocker };
  * label and a lease disagree on a slot's owner the label wins: those
  * containers are what bind its ports.
  */
-function heldSlots(dockerSlots: Record<string, SlotEntry> | null): {
+function heldSlots(
+  dockerSlots: Record<string, SlotEntry> | null,
+  dockerenv?: string,
+): {
   leases: Record<string, SlotLease>;
   held: Map<number, string>;
 } {
   const leases = readLeases();
-  for (const [f, l] of Object.entries(leases)) {
-    if (l.workspace && !fs.existsSync(l.workspace)) delete leases[f];
+  // A container mounts the real ~/.werkmeister but only its own workspace: every other folder
+  // reads gone from there, so only the host prunes (SW-860).
+  if (!insideContainer(dockerenv)) {
+    for (const [f, l] of Object.entries(leases)) {
+      if (l.workspace && !fs.existsSync(l.workspace)) delete leases[f];
+    }
   }
   for (const [f, e] of Object.entries(dockerSlots ?? {})) {
     leases[f] ??= { slot: e.slot, workspace: workspaceForFeature(f) ?? "" };
@@ -274,7 +284,7 @@ function allocateSlotHere(
   return sandboxLock(
     "allocate",
     async () => {
-      const { leases, held } = heldSlots(await deps.labels());
+      const { leases, held } = heldSlots(await deps.labels(), deps.dockerenv);
       const slot = pickSlot(feature, held, count, preferredSlot ?? null);
       if (slot === null) {
         error(`All ${count} feature slots are occupied!`);
