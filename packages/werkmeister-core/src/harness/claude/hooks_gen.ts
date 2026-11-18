@@ -449,15 +449,24 @@ export const AUTONOMOUS_RULES = [
     "status",
     "feature status",
     "infra status",
-    "pr",
+    // SW-625: no `pr watch`: `--install` writes a host launchd job, and a wake resumes every workspace.
+    "pr gate",
+    "pr open",
+    "pr status",
+    "pr new",
+    "pr adopt",
     "issue view",
     "issue start",
-    "init-workspace",
-    "workspace init",
     "skills",
     "standards",
     "notes context",
   ].flatMap((cmd) => cli(`${cmd}:*`)),
+  // SW-625: exact; `--feature <other>` repoints .env at another workspace's containers, `--repos`/`--force`/`--autonomous` reshape it.
+  ...["init-workspace", "workspace init"].flatMap((cmd) =>
+    ["", " --refresh-issue", " --prune-context", " --labels focus"].flatMap((flag) =>
+      cli(`${cmd}${flag}`),
+    ),
+  ),
   "Bash(docker ps:*)",
   // Local build and test; no `npm install` or `pnpm add`, so a new dependency waits for a person.
   // SW-521: no `node`, `npx`, `pnpm exec` or `python3`, which run any file with the real HOME;
