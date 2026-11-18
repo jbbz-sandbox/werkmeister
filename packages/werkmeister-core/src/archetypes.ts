@@ -24,12 +24,14 @@ import {
   type ArchetypeRegistry,
   dotDir,
   expandUser,
+  getReposRoot,
   loadArchetypes,
   type ReposConfig,
   type ServiceEntry,
   type ServicesConfig,
   sandboxHome,
   sandboxRoot,
+  workspacesRoot,
 } from "./config.js";
 
 const realPath = (p: string) => {
@@ -51,15 +53,22 @@ const within = (p: string, dir: string) =>
   p === dir || p.startsWith(`${dir}${path.sep}`) || dir === "/";
 
 /**
- * True when one of *entry*'s host binds is a docker socket (any path ending `docker.sock`, e.g. OrbStack's)
- * or the werkmeister home, or a parent of either.
+ * True when one of *entry*'s host binds is a docker socket (any path ending `docker.sock`, e.g. OrbStack's),
+ * or the werkmeister home, the workspaces root or the repos root, or a parent of one. With *workspaceRoot*,
+ * also anything else under those roots: another workspace, or a checkout a dev-linked CLI runs from.
  * SW-855: complete for docker (no TCP API on host.docker.internal), partial for the werkmeister daemon,
  * which any container holding the workspace's token reaches on :3002 (docs/context-strategies.md).
  */
-export function hostAccess(entry: ServiceEntry | undefined): boolean {
-  const targets = ["/var/run/docker.sock", sandboxHome()].map(realPath);
+export function hostAccess(entry: ServiceEntry | undefined, workspaceRoot?: string): boolean {
+  const roots = [workspacesRoot(), getReposRoot()].map(realPath);
+  const targets = ["/var/run/docker.sock", sandboxHome(), ...roots].map(realPath);
+  // Both roots default to ~/workspace, so the workspace's own mount is under them.
+  const own = workspaceRoot && realPath(workspaceRoot);
   return hostBinds(entry).some(
-    (host) => path.basename(host) === "docker.sock" || targets.some((t) => within(t, host)),
+    (host) =>
+      path.basename(host) === "docker.sock" ||
+      targets.some((t) => within(t, host)) ||
+      Boolean(own && roots.some((r) => within(host, r)) && !within(host, own)),
   );
 }
 

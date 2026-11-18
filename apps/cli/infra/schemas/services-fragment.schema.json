@@ -172,6 +172,10 @@
           "description": "Per-feature named volume mounted over node_modules."
         },
         "extra_volumes": { "$ref": "#/definitions/volumes" },
+        "unattended_start": {
+          "type": "string",
+          "description": "SW-854: why an autonomous run may start or restart this service without a prompt although its extra_volumes give it the docker socket or the werkmeister home. Read from the machine registry only, never a branch fragment."
+        },
         "environment": { "$ref": "#/definitions/environment" },
         "secrets": {
           "type": "array",

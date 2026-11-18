@@ -153,6 +153,8 @@ services:
     setup_service: werkmeister-install
     image: node:22
     command: "cd packages/werkmeister-core && exec pnpm exec tsc --watch --preserveWatchOutput"
+    # SW-854: autonomous runs start it without a prompt despite its host mounts.
+    unattended_start: "Its command runs tsc from the frozen install; no package.json script the agent can edit, and tsc runs no project code."
     # SW-406: the gate row's typecheck, core, cli and mcp suites share this container.
     cpus: "3"
     # Measured 2026-11-12: a gate row peaked at 1.8 GiB (docker stats, page cache included) against the old 2G limit.
