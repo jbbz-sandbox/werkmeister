@@ -468,6 +468,30 @@ test("WERKMEISTER_HOST is dead under the fixture unless it is given a fake daemo
   );
 });
 
+// SW-718: the CLI's build-header lookup threw before the request, so `feature stop --via-daemon` never called.
+test("callTool still calls the daemon when the build-header lookup throws", async () => {
+  const { callTool, expectDaemonBuild } = await import("../dist/daemon_client.js");
+  await withFakeDaemon(
+    async (daemon) => {
+      expectDaemonBuild(() => {
+        throw new Error("Could not locate the werkmeister CLI package");
+      });
+      try {
+        await withFixtureWorkspace(
+          async () => {
+            assert.deepEqual((await callTool("stop", {}, { token: "t" })).data, { ok: 1 });
+          },
+          { daemon: daemon.url },
+        );
+      } finally {
+        expectDaemonBuild(() => null);
+      }
+      assert.equal(daemon.calls.filter((c) => c.startsWith("POST /api/tool")).length, 1);
+    },
+    { stop: { ok: 1 } },
+  );
+});
+
 test("--gate refuses a registry whose change would map to no service (SW-426)", async () => {
   const { fixturePreset } = await import("../dist/fixture_workspace.js");
   assert.throws(

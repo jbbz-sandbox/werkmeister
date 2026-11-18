@@ -177,11 +177,13 @@ describe("sandbox stop --via-daemon", () => {
     expect(stopFeature).toHaveBeenCalledWith("demo");
   });
 
-  it("stays silent on any other daemon error: nobody reads a SessionEnd child", async () => {
+  // SW-718: a silent exit 0 hid a stop that never reached the daemon.
+  it("prints any other daemon error, then returns: no throw, no exit, no local stop", async () => {
     vi.mocked(callTool).mockRejectedValue(new SandboxError("not running", "NOT_RUNNING"));
-    await runStop({ feature: "demo", via_daemon: true });
+    await go(() => runStop({ feature: "demo", via_daemon: true }));
     expect(stopFeature).not.toHaveBeenCalled();
-    expect(lines).toEqual([]);
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(lines).toEqual(["[error] feature stop --via-daemon: not running"]);
   });
 });
 

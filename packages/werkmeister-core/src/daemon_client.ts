@@ -196,6 +196,15 @@ export function expectDaemonBuild(get: () => string | null): void {
   expectedBuild = get;
 }
 
+// The header is a hint: a lookup that throws (no checkout to find, SW-718) sends none rather than dropping the call.
+function buildToSend(): string | null {
+  try {
+    return expectedBuild?.() ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function checkBuild(onDisk: string | null, res: Response): void {
   const loaded = res.headers.get(BUILD_HEADER);
   if (staleWarned || !onDisk || !loaded || loaded === onDisk) return;
@@ -324,7 +333,7 @@ export async function callTool<T = unknown>(
   opts: { token?: string | null; signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<ToolResult<T>> {
   const timeout = AbortSignal.timeout(opts.timeoutMs ?? 120_000);
-  const build = expectedBuild?.() ?? null;
+  const build = buildToSend();
   const res = await send(`${daemonUrl()}/api/tool`, {
     method: "POST",
     headers: {
