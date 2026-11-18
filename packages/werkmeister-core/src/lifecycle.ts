@@ -310,7 +310,8 @@ export async function up(
     info("Starting containers...");
     if (!(await withStartRecord(workspace, "up", () => composeUpAsync(feature, signal)))) {
       throw new SandboxError(
-        "Failed to start containers. Check docker compose output above.",
+        // Not "above": a grant runs this in another process, and its nudge carries this text (SW-861).
+        `Failed to start containers: \`werkmeister feature logs ${feature}\` shows why.`,
         "COMPOSE_UP_FAILED",
       );
     }
@@ -489,7 +490,7 @@ export async function startService(
     // A timed-out or cancelled up leaves the container Created, never started (SW-86).
     const state = (await getContainerStatus(feature)).find((c) => c.service === service)?.status;
     throw new SandboxError(
-      `Failed to start ${service}${state ? ` (left ${state})` : ""} — see the compose output above`,
+      `Failed to start ${service}${state ? ` (left ${state})` : ""}: \`werkmeister feature logs ${feature} ${service}\` shows why`,
       "COMPOSE_UP_FAILED",
     );
   }
