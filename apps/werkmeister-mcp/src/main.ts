@@ -36,7 +36,7 @@ import { watchPrs } from "werkmeister-core/pr_lifecycle";
 import { ownScheduler } from "werkmeister-core/scheduler_client";
 import { readQueue } from "werkmeister-core/scheduler_state";
 import { DAEMON_LABEL } from "werkmeister-core/web_servers";
-import { sqsDeps, startGithubIngest } from "./github_ingest.js";
+import { sqsSource, startGithubIngest } from "./github_ingest.js";
 import { resolveFeature, SCOPE_HEADER } from "./lib/feature.js";
 import { restartGuard } from "./lib/self_restart.js";
 import { readOrCreateToken, type Scope, scopeOf } from "./lib/token.js";
@@ -117,8 +117,7 @@ async function startHttp(): Promise<void> {
   if (ingest) {
     // Ingest is optional: a missing SDK must never keep the daemon from serving.
     try {
-      startGithubIngest(ingest.queueUrl, {
-        ...(await sqsDeps(ingest)),
+      startGithubIngest(await sqsSource(ingest), {
         watch: (opts) => watchPrs(opts),
         track: (work) => guard.track(work),
         log,

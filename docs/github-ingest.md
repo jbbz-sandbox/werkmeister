@@ -85,6 +85,8 @@ The AWS path above is the only one that ships. Two alternatives exist for people
 | Google Cloud: Cloud Run and Pub/Sub | planned, no code yet | a Google Cloud project | kept, 7 days at most |
 | smee.io relay | prototype on a branch | nothing but a smee.io channel | lost; the 10-minute poll catches up |
 
+A new backend implements `EventSource` in `apps/werkmeister-mcp/src/github_ingest.ts`: `receive()` returns a batch of `{ body, ack }`, and a message that is never acked must come back later. `sqsSource` is the AWS one. The loop that dedups deliveries, groups them by repo and runs the passes doesn't change.
+
 ### Google Cloud (Pub/Sub)
 
 The same design on Google Cloud, as an alternative and not a replacement:
