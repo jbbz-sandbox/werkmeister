@@ -691,3 +691,24 @@ test("a waiter whose compose up fails in the grant is told where to read why (SW
       assert.match(readNudge(ws) ?? "", /werkmeister feature logs big/);
     },
   ));
+
+// SW-863: an admit that returns before the locked one (Docker unreadable here) started the containers but
+// left queue.json and waiting.json, so the hook kept saying "queued" over a running feature.
+test("an up admitted with Docker unreadable leaves the queue and waiting.json once it starts (SW-863)", () =>
+  queuedBehindHolders(
+    (fx) => {
+      const docker = path.join(fx.root, "bin", "docker");
+      const sh = fs
+        .readFileSync(docker, "utf8")
+        .replace(
+          '"ps -q --filter label=com.werkmeister.feature")',
+          '"ps -q --filter label=com.werkmeister.feature") exit 1 ;;\n        "ps -q unused")',
+        );
+      fs.writeFileSync(docker, sh);
+    },
+    (started, ws) => {
+      assert.deepEqual(started, ["big"]);
+      assert.deepEqual(readQueue(), []);
+      assert.equal(fs.existsSync(waitingPath(ws)), false);
+    },
+  ));
