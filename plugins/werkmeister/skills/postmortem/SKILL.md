@@ -55,7 +55,10 @@ the workspace root, unless the person says to skip it
    - **file:** a tracker issue through the workspace's `issues-report.md`
      (search first, as it says). The body names the workspace and the PR URL
      (the PR file's `url:`); relate it to the workspace's issue where the filing
-     command allows it.
+     command allows it. Cite the run's own files (`stages/*/output/*`, scripts
+     it wrote) by the workspace's record branch on the workspace repo plus the
+     path, or a permalink at the pushed commit, never by the workspace folder:
+     close-out removes the folder before the issue is worked.
    - **known issue:** a row in the known-issues file of the folder that holds
      the workspace (`../KNOWN-ISSUES.md`, created if missing): the finding,
      where it came from, and its proposed fix.

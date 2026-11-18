@@ -332,3 +332,9 @@ test("jira placeholder base_url counts as not configured (#114)", async () => {
     for (const [k, v] of Object.entries(saved)) if (v !== undefined) process.env[k] = v;
   }
 });
+
+test("a filing that cites this run's files names the record branch, not the workspace folder (SW-827)", () => {
+  const md = buildIssuesReportMd("sw-1-x");
+  assert.match(md, /record branch/);
+  assert.match(md, /close-out removes/);
+});
