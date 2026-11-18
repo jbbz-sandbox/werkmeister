@@ -171,20 +171,14 @@ test("init writes the icm layer and nothing of jit's", async () => {
     assert.match(rule5, /take the base's copy and regenerate it/, "SW-494");
     assert.match(
       rule5,
-      /`git -C <absolute worktree path> push --force-with-lease=<branch>:<old sha>`/,
-      "SW-494",
+      /push it with `werkmeister pr push \[repo\]`: it force-pushes with a lease/,
+      "SW-717",
     );
     // SW-568: the pr open log goes to the absolute workspace path, so a drifted cwd cannot write it into a code worktree.
     assert.match(
       fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
       /`werkmeister pr open > <absolute workspace path>\/\.werkmeister\/pr-open\.log 2>&1`/,
       "SW-568",
-    );
-    // SW-565: a manual re-rebase has no wake message; the lease SHA comes verbatim from rev-parse.
-    assert.match(
-      rule5,
-      /take `<old sha>` from the output of `git rev-parse origin\/<branch>`, pasted verbatim: never shortened or retyped/,
-      "SW-565",
     );
     assert.match(
       fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
@@ -809,8 +803,13 @@ test("SW-807: each bugfix contract lists its own pre-approved commands and steer
         section("01_reproduce"),
         /^- `werkmeister issue start`\n- `werkmeister issue view`\n/,
       );
-      for (const d of ["02_fix", "03_exercise", "04_propose"])
+      for (const d of ["02_fix", "03_exercise"])
         assert.match(section(d), /^- Every other command asks\./);
+      // SW-717: rule 5's conflict fix pushes the session's own rebased branch.
+      assert.match(
+        section("04_propose"),
+        /^- `werkmeister pr push …`\n- Every other command asks\./,
+      );
       for (const d of ["01_reproduce", "02_fix", "03_exercise", "04_propose"])
         assert.match(section(d), /never a `python3` heredoc or `python3 -c`/);
     },

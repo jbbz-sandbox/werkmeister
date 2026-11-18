@@ -76,6 +76,9 @@ Run the pre\-PR gate
 \fBpr open\fR [repo]
 Gate, push and open each approved PR file
 .TP
+\fBpr push\fR [repo]
+Force\-push an open PR's rebased branch with a lease (rule 5); refuses anything but this workspace's own clean branch
+.TP
 \fBpr status\fR [repo]
 Record merged, shipped or closed for each PR file
 .TP
@@ -215,6 +218,7 @@ Restart the daemon, through launchd when launchd owns it
 \fBwerkmeister\-pr\fR(1),
 \fBwerkmeister\-pr\-gate\fR(1),
 \fBwerkmeister\-pr\-open\fR(1),
+\fBwerkmeister\-pr\-push\fR(1),
 \fBwerkmeister\-pr\-status\fR(1),
 \fBwerkmeister\-pr\-adopt\fR(1),
 \fBwerkmeister\-pr\-watch\fR(1),
