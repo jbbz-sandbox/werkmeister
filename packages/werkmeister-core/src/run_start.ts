@@ -7,11 +7,11 @@ export const INTERACTIVE_LINE =
   "This is an interactive run: check with me at each stage's human check.";
 
 export const GATE_LINE =
-  "Run `werkmeister feature up` only when the gate needs it, and `werkmeister feature stop` this workspace's containers right after `werkmeister pr open` succeeds.";
+  "Run `werkmeister feature up` only when the gate, the exercise or a measurement needs the container, and `werkmeister feature stop` this workspace's containers right after `werkmeister pr open` succeeds.";
 
 /** What an autonomous run may not do, as markdown bullets. */
 export const RUN_LIMITS = [
-  "Tests never call the real Jira or GitHub APIs; the tracker is mocked. The only real issue updates are the status moves `werkmeister issue start` and `werkmeister pr open` make for this ticket and its `group:` members; run both.",
+  "Tests never call the real Jira or GitHub APIs; the tracker is mocked. The only real issue updates are the status moves `werkmeister issue start` and `werkmeister pr open` make for this ticket and its `group:` members; run both. A follow-up the run finds is filed with `werkmeister issue create --relates <this ticket>` (SW-815); no other tracker writes.",
   "Never read or write the real `~/.werkmeister`; tests use a temporary HOME. To see the machine config's shape run `werkmeister machine config`: it masks secrets such as `jira.api_token`.",
   "No `npm link`, `npm`/`pnpm install -g`, `npm publish`, `werkmeister infra proxy-reload`, and no other workspaces.",
   'Where the ticket says "to confirm", use it as written unless the code shows a reason to change it, and record each choice in the stage output for PR review.',

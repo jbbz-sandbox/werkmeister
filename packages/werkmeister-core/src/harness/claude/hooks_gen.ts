@@ -72,8 +72,15 @@ import { workspaceServices } from "../../registry_sync.js";
 import { info } from "../../reporter.js";
 import { repoDirs } from "../../standards.js";
 import { tempHomeWrapper } from "../../temp_home.js";
-// biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
-import { readAutonomous, readAutoStop, readGrants, readModel } from "../../workspace_prompts.js";
+// biome-ignore-start lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
+import {
+  readAutonomous,
+  readAutoStop,
+  readGrants,
+  readModel,
+  readWorkspaceField,
+} from "../../workspace_prompts.js";
+// biome-ignore-end lint/suspicious/noImportCycles: SW-188
 import { AUTONOMOUS_DENY, CLI_NAMES, cli, pluginTool } from "../autonomous_deny.js";
 import { CODEX_HOOKS_FILE, CODEX_LAUNCH, writeCodexConfig } from "../codex/index.js";
 // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
@@ -670,7 +677,14 @@ export function workspaceAllowRules(
   const installs = repoNames.flatMap((name) =>
     frozenInstalls((f) => fs.existsSync(path.join(reposRoot, name, f))).map((c) => `Bash(${c})`),
   );
-  return [...new Set([...rules, ...autonomousRules(feature, services, extra), ...installs])];
+  // SW-815: a follow-up the run finds, linked to this workspace's issue; `create` is Jira-only.
+  const issueId = String(readWorkspaceField(workspaceRoot, "issue_id") ?? "").trim();
+  const followUp = /^[A-Z][A-Z0-9_]*-\d+$/.test(issueId)
+    ? cli(`issue create --relates ${issueId}:*`)
+    : [];
+  return [
+    ...new Set([...rules, ...autonomousRules(feature, services, extra), ...installs, ...followUp]),
+  ];
 }
 
 function builtCliWrappers(workspaceRoot: string): string[] {

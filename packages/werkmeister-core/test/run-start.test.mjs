@@ -134,6 +134,12 @@ test("the run limits allow issue start's status move beside pr open's", () => {
   assert.match(RUN_LIMITS, /status moves `werkmeister issue start` and `werkmeister pr open` make/);
 });
 
+// SW-815: a measure-and-file ticket had to override both limits to file its cuts and measure in the container.
+test("the run limits allow a related follow-up and a feature up the exercise needs", () => {
+  assert.match(RUN_LIMITS, /`werkmeister issue create --relates <this ticket>`/);
+  assert.match(GATE_LINE, /only when the gate, the exercise or a measurement needs the container/);
+});
+
 test("the run limits name the commands the brief defers (SW-296)", () => {
   for (const cmd of [
     "`npm link`",

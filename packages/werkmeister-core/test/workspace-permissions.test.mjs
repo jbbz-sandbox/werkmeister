@@ -1096,3 +1096,25 @@ test("off, a rewrite after the ask block was deleted does not restore it (SW-842
   );
   assert.deepEqual(readSettings(root).permissions, { allow: ["a"] });
 });
+
+test("SW-815: an autonomous run may file a follow-up related to its own issue, nothing wider", () => {
+  const withIssue = (id) => {
+    const root = workspace();
+    fs.mkdirSync(path.join(root, ".werkmeister"));
+    fs.writeFileSync(path.join(root, ".werkmeister", "workspace.yml"), `issue_id: "${id}"\n`);
+    return root;
+  };
+  const rules = workspaceAllowRules(withIssue("SW-855"), true);
+  assert.ok(rules.includes("Bash(werkmeister issue create --relates SW-855:*)"));
+  assert.ok(
+    !rules.some((r) => /issue create(?! --relates SW-855:)/.test(r)),
+    "no bare issue create",
+  );
+  assert.ok(
+    !workspaceAllowRules(withIssue("SW-855"), false).some((r) => r.includes("issue create")),
+  );
+  // Not a Jira key: no rule (a `*` or space in it would widen the prefix).
+  assert.ok(
+    !workspaceAllowRules(withIssue("SW-855 *"), true).some((r) => r.includes("issue create")),
+  );
+});
