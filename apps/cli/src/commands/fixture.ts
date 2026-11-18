@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -21,7 +21,13 @@ import {
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+
+/** PR-file keys the pre-approved wrapper may set: none reaches a git or Claude call (SW-514). */
+const PR_KEYS = "skip_release|skip_exercise|skip_review|release|status";
+// Not status: the PR file always has its own status line, and --pr-field status= already writes it verbatim.
+const PR_LINE_KEYS = "skip_release|skip_exercise|skip_review|release";
+const LINE_BREAK = /[\r\n\u2028\u2029\u0085]/;
 
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
@@ -46,6 +52,7 @@ export function parse(argv: string[]) {
     slotsFull: false,
     issue: undefined as string | undefined,
     prFields: undefined as Record<string, string> | undefined,
+    prLines: undefined as string[] | undefined,
     services: undefined as string | undefined,
     fragment: undefined as string | undefined,
     fragmentChange: undefined as string | undefined,
@@ -100,12 +107,14 @@ export function parse(argv: string[]) {
     } else if (a === "--pr-field") {
       // Only fields that reach no git or Claude call: branch, base, session… do from the allowed wrapper.
       // status is one line, written verbatim, so a newline can't add one of those (SW-549).
-      const m = /^(skip_release|skip_exercise|skip_review|release|status)=(.*)$/s.exec(
-        argv[++i] ?? "",
-      );
-      if (!m || (m[1] === "status" && /[\r\n\u2028\u2029\u0085]/.test(m[2] ?? "")))
-        return { bad: a };
+      const m = new RegExp(`^(${PR_KEYS})=(.*)$`, "s").exec(argv[++i] ?? "");
+      if (!m || (m[1] === "status" && LINE_BREAK.test(m[2] ?? ""))) return { bad: a };
       opts.prFields = { ...opts.prFields, [m[1] as string]: m[2] as string };
+    } else if (a === "--pr-line") {
+      // Written unquoted, so a test can seed what YAML.stringify would quote (SW-851); --pr-field's keys but status, one line.
+      const l = argv[++i] ?? "";
+      if (!new RegExp(`^(${PR_LINE_KEYS}): \\S`).test(l) || LINE_BREAK.test(l)) return { bad: a };
+      opts.prLines = [...(opts.prLines ?? []), l];
     } else if (a === "--print" && argv[i + 1] !== undefined) print.push(argv[++i] as string);
     else if (
       (a === "--services" ||
@@ -180,13 +189,15 @@ export async function run(argv: string[]): Promise<void> {
       console.error(
         parsed.bad === "--pr-field"
           ? "--pr-field: skip_release, skip_exercise, skip_review, release or status (one line) =<value>, with --gate"
-          : parsed.bad === "--issue"
-            ? "--issue: a GitHub issue as owner/repo#number, e.g. o/app#1"
-            : parsed.bad === "--change"
-              ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
-              : parsed.bad === "--running"
-                ? "--running: a file under the current folder, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus line per container"
-                : `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
+          : parsed.bad === "--pr-line"
+            ? '--pr-line: one raw line "<key>: <value>", key skip_release, skip_exercise, skip_review or release (status: --pr-field), with --gate'
+            : parsed.bad === "--issue"
+              ? "--issue: a GitHub issue as owner/repo#number, e.g. o/app#1"
+              : parsed.bad === "--change"
+                ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
+                : parsed.bad === "--running"
+                  ? "--running: a file under the current folder, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus line per container"
+                  : `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
       );
     console.error(USAGE);
     process.exitCode = 2;
@@ -198,6 +209,7 @@ export async function run(argv: string[]): Promise<void> {
     seed = fixturePreset({ ...opts, daemon: undefined });
     // Only --gate seeds a PR file, so the fields would otherwise vanish silently.
     if (opts.prFields && !seed.prFile) throw new Error("--pr-field needs --gate");
+    if (opts.prLines && !seed.prFile) throw new Error("--pr-line needs --gate");
     // Both shape the change --gate's PR file gates; without one they would go unexercised.
     if ((opts.change || opts.fragmentChange !== undefined) && !opts.gate)
       throw new Error("--change and --fragment-change need --gate");

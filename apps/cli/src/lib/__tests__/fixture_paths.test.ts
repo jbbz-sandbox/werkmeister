@@ -101,6 +101,31 @@ it("--pr-field status takes one line, kept verbatim with its note (SW-549)", () 
   });
 });
 
+it("--pr-line keeps a raw line unquoted, only for --pr-field's keys and one line (SW-851)", async () => {
+  const line = "skip_release: no changeset: test-only";
+  const r = parse(["--pr-line", line, "--pr-line", "release: none", "pr", "gate"]);
+  expect(r.opts?.prLines).toEqual([line, "release: none"]);
+  for (const f of [
+    "branch: --receive-pack=x",
+    "status: approved",
+    "skip_release:x",
+    "skip_release: ",
+    "release: a\nbranch: x",
+    "release: a\u2028b",
+    "",
+  ])
+    expect(parse(["--pr-line", f, "pr", "gate"])).toEqual({ bad: "--pr-line" });
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await run(["--pr-line", line, "--version"]);
+    expect(process.exitCode).toBe(2);
+    expect(error.mock.calls[0]?.[0]).toMatch(/--pr-line needs --gate/);
+  } finally {
+    error.mockRestore();
+    process.exitCode = 0;
+  }
+});
+
 it("--issue takes only owner/repo#number, never a gh flag (SW-509)", () => {
   expect(parse(["--issue", "o/app#1", "pr", "status"]).opts?.issue).toBe("o/app#1");
   for (const f of ["SW-1", "o/app", "--repo/x#1", "-o/app#1", "o/app#1 --web"])
