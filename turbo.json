@@ -21,7 +21,7 @@
     },
     "test": {
       "dependsOn": ["build"],
-      "passThroughEnv": ["WERKMEISTER_FEATURE", "SANDBOX_FEATURE"]
+      "passThroughEnv": ["WERKMEISTER_FEATURE", "SANDBOX_FEATURE", "TMPDIR"]
     },
     "dev": {
       "cache": false,
