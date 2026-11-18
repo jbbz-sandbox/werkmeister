@@ -30,7 +30,6 @@ import {
   DEFAULT_SETUP_CPUS,
   dotDir,
   IDLE_SERVICE_TYPES,
-  infraRoot,
   loadArchetypes,
   loadCaches,
   loadPorts,
@@ -42,6 +41,7 @@ import {
   type ServicesConfig,
   SHARED_VOLUME_MARKER,
   sandboxRoot,
+  sourceInfraRoot,
   stateInfraRoot,
 } from "./config.js";
 import { loadFeatureRouters } from "./feature_routing.js";
@@ -267,7 +267,7 @@ function installArrayAppend(): void {
 /** Create and return a nunjucks `Environment` (jinja2-parity settings). */
 function getNunjucksEnv(): nunjucks.Environment {
   installArrayAppend();
-  const templatesDir = path.join(infraRoot(), "templates");
+  const templatesDir = path.join(sourceInfraRoot(), "templates");
   if (!fs.existsSync(templatesDir) || !fs.statSync(templatesDir).isDirectory()) {
     fs.mkdirSync(templatesDir, { recursive: true });
   }

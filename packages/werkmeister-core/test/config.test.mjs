@@ -21,6 +21,7 @@ import {
   sandboxRoot,
   servicesYamlPath,
   slotPortRange,
+  sourceInfraRoot,
   stateInfraRoot,
   workspacesRoot,
 } from "../dist/config.js";
@@ -127,6 +128,29 @@ test("sandboxRoot: WERKMEISTER_ROOT wins, else a walk-up finds the checkout's ap
 
   process.env.WERKMEISTER_ROOT = "~/elsewhere/apps/cli";
   assert.equal(sandboxRoot(), path.join(homedir(), "elsewhere", "apps", "cli"));
+});
+
+// SW-742: env.sh exports config's werkmeister_root (main's checkout) into every workspace shell.
+test("sourceInfraRoot: env.sh's inherited WERKMEISTER_ROOT yields to the code's own checkout; sandboxRoot keeps it", async () => {
+  process.env.WERKMEISTER_ROOT_PINNED = "1";
+  const own = sandboxRoot();
+  await withConfig("paths:\n  werkmeister_root: ~/main/apps/cli\n");
+  const main = path.join(homedir(), "main", "apps", "cli");
+  process.env.WERKMEISTER_ROOT = main;
+  assert.equal(
+    sourceInfraRoot(),
+    path.join(own, "infra"),
+    "templates: the code's own, not env.sh's",
+  );
+  // The daemon plist, Caddy and shared infra hang off sandboxRoot: a worktree build never repoints them.
+  assert.equal(sandboxRoot(), main);
+  assert.equal(infraRoot(), path.join(main, "infra"));
+  process.env.WERKMEISTER_ROOT = "~/elsewhere/apps/cli";
+  assert.equal(
+    sourceInfraRoot(),
+    path.join(homedir(), "elsewhere", "apps", "cli", "infra"),
+    "a deliberate one",
+  );
 });
 
 test("SW-239: sandboxRoot() and monorepoRoot() throw in a test that has not pinned the root", () => {

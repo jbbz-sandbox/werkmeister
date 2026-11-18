@@ -779,6 +779,29 @@ export function getVolumeBaseNames(): string[] {
 // Where the CLI checkout is
 // ---------------------------------------------------------------------------
 
+/** The `apps/cli` of the checkout this module sits in, found by walking up; null outside one. */
+function ownCheckoutCli(): string | null {
+  let dir = import.meta.dirname;
+  for (let i = 0; i < 8; i++) {
+    const cli = path.join(dir, "apps", "cli");
+    if (fs.existsSync(cli)) return cli;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+/** config.yaml's `paths.werkmeister_root`, the value env.sh exports; null when unset or unreadable. */
+function storedWerkmeisterRoot(): string | null {
+  try {
+    const stored = (loadConfig().paths as Record<string, unknown> | undefined)?.werkmeister_root;
+    return typeof stored === "string" && stored ? path.resolve(expandUser(stored)) : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The CLI package directory (`<checkout>/apps/cli`) — the root of everything
  * that ships as CODE: `infra/`, `dist/`, the `werkmeister` wrapper.
@@ -791,6 +814,8 @@ export function getVolumeBaseNames(): string[] {
  *
  * The walk-up is what a bundled consumer cannot do — a `.vsix` has no monorepo
  * around it — which is why `WERKMEISTER_ROOT` ranks first rather than as a fallback.
+ * Machine-wide paths (the daemon's plist entry, Caddy, shared infra) hang off this,
+ * so it stays on that order; templates and skills read {@link sourceInfraRoot}.
  */
 export function sandboxRoot(): string {
   // SW-239: an unpinned test silently builds or writes in main's checkout (or turbo's walk-up).
@@ -799,15 +824,8 @@ export function sandboxRoot(): string {
   }
   const override = envVar("ROOT");
   if (override) return path.resolve(expandUser(override));
-
-  let dir = import.meta.dirname;
-  for (let i = 0; i < 8; i++) {
-    const cli = path.join(dir, "apps", "cli");
-    if (fs.existsSync(cli)) return cli;
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
+  const own = ownCheckoutCli();
+  if (own) return own;
   const installed = installedCliPackage();
   if (installed) return installed;
   throw new Error(
@@ -856,6 +874,19 @@ export function installedCliPackage(pathEnv = process.env.PATH ?? ""): string | 
  */
 export function infraRoot(): string {
   return path.join(sandboxRoot(), "infra");
+}
+
+/**
+ * The `infra/` the templates and skills are read from: {@link infraRoot}, except that a
+ * `WERKMEISTER_ROOT` equal to config.yaml's `paths.werkmeister_root` (env.sh's export into
+ * every shell) yields to the checkout this code runs from, so a worktree's build renders its
+ * own templates. Reads only: nothing machine-wide is placed from it.
+ */
+export function sourceInfraRoot(): string {
+  const root = sandboxRoot();
+  const own = ownCheckoutCli();
+  const useOwn = own !== null && own !== root && root === storedWerkmeisterRoot();
+  return path.join(useOwn ? own : root, "infra");
 }
 
 /**
