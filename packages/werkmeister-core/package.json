@@ -110,7 +110,8 @@
     "docs:links": "typedoc",
     "docs:sdk": "node ../../scripts/format-examples.mjs --check && typedoc --options typedoc.sdk.json",
     "test": "sh ./run-tests.sh",
-    "test:changed": "node test-changed.mjs"
+    "test:changed": "node test-changed.mjs",
+    "test:no-match": "node --test --test-concurrency=3 --test-name-pattern=__nomatch__ test/*.test.mjs"
   },
   "dependencies": {
     "@types/dockerode": "^4.0.1",

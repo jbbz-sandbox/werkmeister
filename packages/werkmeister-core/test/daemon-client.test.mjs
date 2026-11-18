@@ -68,7 +68,8 @@ before(async () => {
 after(() => {
   delete process.env.WERKMEISTER_HOST;
   daemon.close();
-  fs.rmSync(home, { recursive: true, force: true });
+  // A no-match --test-name-pattern skips before() but still runs after() (SW-816).
+  if (home) fs.rmSync(home, { recursive: true, force: true });
 });
 
 test("daemonToken: env, then the workspace's own token, then the machine token", () => {
