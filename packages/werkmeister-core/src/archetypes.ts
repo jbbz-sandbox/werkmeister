@@ -17,15 +17,19 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { parse as parseYaml } from "yaml";
+
 import {
   type Archetype,
   type ArchetypeRegistry,
+  dotDir,
   expandUser,
   loadArchetypes,
   type ReposConfig,
   type ServiceEntry,
   type ServicesConfig,
   sandboxHome,
+  sandboxRoot,
 } from "./config.js";
 
 const realPath = (p: string) => {
@@ -346,4 +350,43 @@ export function validateServiceArchetypes(
     }
   }
   return errors;
+}
+
+/**
+ * SW-845: *registry* with each entry's `extra_volumes` widened to every bind compose mounts: the
+ * branch's own fragment and the workspace's `dev_links` too (both agent-editable), variables
+ * substituted as generate.ts does. Only the mounts: test commands stay the registry's.
+ * *branch* is registry_sync.ts's `workspaceServices(registry, workspaceRoot)`; importing it here is a cycle.
+ */
+export function withComposeMounts(
+  registry: ServicesConfig,
+  workspaceRoot: string,
+  branch: ServicesConfig,
+): ServicesConfig {
+  // generate.ts's loadDevLinks reads the same field, but generate imports this module.
+  let devLinks: Record<string, string[]> = {};
+  try {
+    const yml = parseYaml(
+      fs.readFileSync(path.join(dotDir(workspaceRoot), "workspace.yml"), "utf8"),
+    );
+    devLinks = yml?.["dev_links"] ?? {};
+  } catch {
+    // No workspace.yml (or unreadable): no dev_links, as generate.ts reads it.
+  }
+  return Object.fromEntries(
+    Object.entries(registry).map(([id, entry]) => {
+      const repo = path.join(workspaceRoot, String(branch[id]?.["repo"] ?? entry["repo"] ?? ""));
+      const specs = [
+        ...(entry.extra_volumes ?? []),
+        ...(branch[id]?.extra_volumes ?? []),
+        ...(devLinks[id] ?? []),
+      ].map((s) => {
+        const out = s.split("${WORKSPACE}").join(workspaceRoot).split("${REPO}").join(repo);
+        return out.includes("${WERKMEISTER_ROOT}")
+          ? out.split("${WERKMEISTER_ROOT}").join(sandboxRoot())
+          : out;
+      });
+      return [id, { ...entry, extra_volumes: specs }];
+    }),
+  );
 }

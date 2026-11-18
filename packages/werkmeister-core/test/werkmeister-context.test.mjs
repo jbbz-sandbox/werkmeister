@@ -320,3 +320,54 @@ test("a host with a remote upstream is not marked local-only (SW-300)", async ()
     },
   );
 });
+
+test("SW-872: a host-access mount from dev_links alone still prints the test under with-temp-home", async () => {
+  const fs = await import("node:fs");
+  const os = await import("node:os");
+  const path = await import("node:path");
+  const { withComposeMounts } = await import("../dist/archetypes.js");
+  const { workspaceServices } = await import("../dist/registry_sync.js");
+  await withSandboxHome(
+    async (home) => {
+      const ws = fs.mkdtempSync(path.join(os.tmpdir(), "ctx-devlinks-"));
+      fs.mkdirSync(path.join(ws, ".werkmeister"));
+      fs.writeFileSync(
+        path.join(ws, ".werkmeister", "workspace.yml"),
+        `dev_links:\n  core: ["${home}:${home}", "\${WORKSPACE}:\${WORKSPACE}"]\n`,
+      );
+      const tempHome = path.join(ws, ".werkmeister", "bin", "with-temp-home");
+      const ctx = (cfg) =>
+        buildSandboxContextMd(
+          "test",
+          1,
+          11100,
+          11119,
+          ["core"],
+          cfg,
+          "",
+          {},
+          ["core"],
+          false,
+          tempHome,
+        );
+      const line = (out) => out.split("\n").find((l) => l.startsWith("- `core`: "));
+      assert.ok(
+        !line(ctx(loadServices())).includes(tempHome),
+        "registry alone: no host access seen",
+      );
+      assert.ok(
+        line(
+          ctx(withComposeMounts(loadServices(), ws, workspaceServices(loadServices(), ws))),
+        ).includes(`${tempHome} --no-wait`),
+      );
+    },
+    {
+      services: `${SERVICES}  core:
+    type: library
+    repo: demo-repo
+    path: packages/core
+    test: npm test
+`,
+    },
+  );
+});
