@@ -52,6 +52,11 @@ vi.mock("werkmeister-core/slots", async (orig) => ({
   requireLeasedSlot: async () => 2,
   getPortRange: () => [11020, 11039],
 }));
+// Passes through; SW-672 makes one call throw.
+vi.mock("werkmeister-core/scheduler_state", async (orig) => {
+  const real = await orig<typeof import("werkmeister-core/scheduler_state")>();
+  return { ...real, waitForSetupLoad: vi.fn(real.waitForSetupLoad) };
+});
 vi.mock("werkmeister-core/reporter", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/reporter")>()),
   info: vi.fn(),
@@ -60,7 +65,12 @@ vi.mock("werkmeister-core/reporter", async (orig) => ({
 import { readNudge, readWaiting, writeWaiting } from "werkmeister-core/agent_state";
 import { composeUpServiceAsync, getContainerStatus } from "werkmeister-core/compose";
 import { grantWaiters, startService } from "werkmeister-core/lifecycle";
-import { enqueue, readQueue, writeLeases } from "werkmeister-core/scheduler_state";
+import {
+  enqueue,
+  readQueue,
+  waitForSetupLoad,
+  writeLeases,
+} from "werkmeister-core/scheduler_state";
 
 let tmp: string;
 let mine: string;
@@ -177,4 +187,15 @@ it("a granted waiter whose containers all run hears they are up", async () => {
 it("runs no grant when nobody waits", async () => {
   await startService("mine", mine, "api");
   expect(ops).toEqual(["admit", "compose-up"]);
+});
+
+// SW-672: a HOST_LOAD throw after admission would leave a queue entry, or follow a preemption, for a start that never ran.
+it("a start over the host load fails before admission: no admit, no queue entry", async () => {
+  vi.mocked(waitForSetupLoad).mockRejectedValueOnce(
+    Object.assign(new Error("load is high after the wait"), { code: "HOST_LOAD" }),
+  );
+  await expect(startService("mine", mine, "api")).rejects.toMatchObject({ code: "HOST_LOAD" });
+  expect(ops).toEqual([]);
+  expect(readQueue()).toEqual([]);
+  expect(readWaiting(mine)).toBeNull();
 });
