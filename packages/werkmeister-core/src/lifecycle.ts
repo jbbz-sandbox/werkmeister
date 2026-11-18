@@ -1989,8 +1989,12 @@ export function classifyVolumes(
   const activeVolumes: string[] = [];
   const orphanedVolumes: string[] = [];
   for (const vol of volumes) {
-    const feature = featureFromVolume(vol, baseNames);
-    (feature && live.has(feature) ? activeVolumes : orphanedVolumes).push(vol);
+    // SW-110: `fix-shop-node-modules` is live feature `fix-shop` under `node-modules`, or `fix` under
+    // `shop-node-modules`. Any reading that leaves a live feature keeps it: a wrong one deletes node_modules.
+    const isLive = baseNames.some(
+      (b) => vol.endsWith(`-${b}`) && live.has(vol.slice(0, -b.length - 1)),
+    );
+    (isLive ? activeVolumes : orphanedVolumes).push(vol);
   }
   return { activeVolumes, orphanedVolumes };
 }
