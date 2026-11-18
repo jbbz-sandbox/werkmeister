@@ -1,5 +1,14 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.94.4
+
+### Patch Changes
+
+- 2a8f495: `with-temp-home` takes `--cwd <dir>` (after `--no-wait`) and runs its command there, whatever the shell's cwd; in the werkmeister container the same worktree maps to `/app`. The test commands in `werkmeister-context.md` and their allow rules now pass `--cwd <ws>/<repo>`, so they work from the workspace root too, still with no `cd` (SW-652). Rerun `werkmeister workspace init` to regenerate the file; `werkmeister machine migrate` refreshes the rules and the wrapper.
+- 47cd1d8: Tests only: `up_exit.test.ts` drops an inherited `WERKMEISTER_ROOT`, and the `waitForSetupLoad` tests restore `WERKMEISTER_NO_WAIT` (SW-671).
+- eb7da8b: `werkmeister internal wait-load` decides exit 75 from the wait's structured result (`spent`, `note`), not by parsing its note (SW-716).
+- a0625a5: `with-fixture-workspace --stale-compose` (with `--fragment-change`) inits the workspace before the branch's fragment lands, so `pr gate` starts the service from `compose.gate.yml`; in-process fixtures get `staleCompose` and `applyFragmentChange()` (SW-817).
+
 ## 0.94.3
 
 ### Patch Changes

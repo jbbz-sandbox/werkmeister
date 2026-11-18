@@ -1,5 +1,19 @@
 # sandbox-core
 
+## 0.94.4
+
+### Patch Changes
+
+- e5bfa35: The fixture's config.yaml sits at its temp HOME's `~/.werkmeister/config.yaml`, and `machine migrate` runs when `*_CONFIG_FILE` names that default path, so `with-fixture-workspace machine migrate` works (SW-581).
+- 2a8f495: `with-temp-home` takes `--cwd <dir>` (after `--no-wait`) and runs its command there, whatever the shell's cwd; in the werkmeister container the same worktree maps to `/app`. The test commands in `werkmeister-context.md` and their allow rules now pass `--cwd <ws>/<repo>`, so they work from the workspace root too, still with no `cd` (SW-652). Rerun `werkmeister workspace init` to regenerate the file; `werkmeister machine migrate` refreshes the rules and the wrapper.
+- 2775cec: The core, CLI and MCP test entries refuse to start when HOME holds the real `~/.werkmeister` and is not `with-temp-home`'s temp HOME, which every version of the wrapper marks by setting TMPDIR to it (SW-662).
+- 47cd1d8: Tests only: `up_exit.test.ts` drops an inherited `WERKMEISTER_ROOT`, and the `waitForSetupLoad` tests restore `WERKMEISTER_NO_WAIT` (SW-671).
+- eb7da8b: `werkmeister internal wait-load` decides exit 75 from the wait's structured result (`spent`, `note`), not by parsing its note (SW-716).
+- 46c84f0: `with-temp-home` pins the daemon at `http://127.0.0.1:65535`, which is refused like a stopped daemon unless a test listener was handed that port (port 1 was rejected by fetch as a bad port), with a 500 ms retry (SW-743).
+- 1f15a0f: Tests only: `daemon-client.test.mjs` no longer fails under a no-match `--test-name-pattern`, and a `test:no-match` check runs in CI (SW-816).
+- a0625a5: `with-fixture-workspace --stale-compose` (with `--fragment-change`) inits the workspace before the branch's fragment lands, so `pr gate` starts the service from `compose.gate.yml`; in-process fixtures get `staleCompose` and `applyFragmentChange()` (SW-817).
+- e65468d: Tests only: a guard test fails when a file in `shared-process.list` is missing or touches shared process state (SW-826).
+
 ## 0.94.3
 
 ### Patch Changes
