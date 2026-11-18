@@ -1,5 +1,14 @@
 # sandbox-core
 
+## 0.94.1
+
+### Patch Changes
+
+- 03c1389: Generated `.werkmeister/pr-rules.md` no longer names Changesets outside the two places that explain changesets-only behaviour: the release-bot example, the merged-PR release note and the quoted `skip_release` example now say "release entry". The repo-agnostic test now checks every markdown file `workspace init` writes (skills, `_shared/`, `CLAUDE.md`), not only the stage contracts.
+- 448cb50: `werkmeister-context.md` § Test commands now prints the test of a container that holds the real `~/.werkmeister` or the docker socket, and mounts the workspace folder at its host path, under the temp HOME: `docker exec -w /app <container> <ws>/.werkmeister/bin/with-temp-home --no-wait sh -c '…'`, as its Validation text requires. Other containers (a docker.sock-only one cannot see `<ws>/.werkmeister/bin`) keep the bare `docker exec` line, and the allow rules are unchanged. Rerun `werkmeister workspace init` to regenerate the file.
+- db0280e: The implement stage contracts name one way to serve a static HTML page for a browser check (the Chrome tool refuses `file://`): `python3 -I -u -m http.server 0 -b 127.0.0.1 -d <dir>` as a background job, stopped by its task ID, recorded in `exercise.md` as the method.
+- 8223702: The implement stage contracts say the Chrome window does not size below 477 px, and check a narrower width (e.g. 375 px) in a same-origin iframe built with the JS tool: a screenshot plus `scrollWidth === clientWidth` inside the frame.
+
 ## 0.94.0
 
 ## 0.93.12
