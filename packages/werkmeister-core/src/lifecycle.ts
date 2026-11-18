@@ -66,7 +66,13 @@ import {
   needsCluster,
   sharedProxySkipReason,
 } from "./config.js";
-import { docker, listVolumeNames, projectContainers, removeVolume } from "./docker.js";
+import {
+  docker,
+  listVolumeNames,
+  projectContainers,
+  removeVolume,
+  runningExecCommands,
+} from "./docker.js";
 import { dotDir } from "./dot_dir.js";
 import { SandboxError } from "./errors.js";
 import {
@@ -625,9 +631,9 @@ export const RANK_WORD: Record<Rank, string> = {
   person: "a person's workspace",
 };
 
-/** A running lease for a person to read: `name (3 CPUs, 0.8 GiB, idle, gate running)`. */
+/** A running lease for a person to read: `name (3 CPUs, 0.8 GiB, idle, run in flight)`. */
 export function describeLease(l: Lease): string {
-  return `${l.feature} (${cpus(l.cost.cpus)}, ${gib(l.cost.memory)}, ${RANK_WORD[l.rank]}${l.busy ? ", gate running" : ""})`;
+  return `${l.feature} (${cpus(l.cost.cpus)}, ${gib(l.cost.memory)}, ${RANK_WORD[l.rank]}${l.busy ? ", run in flight" : ""})`;
 }
 
 /**
@@ -870,6 +876,8 @@ export interface RunningFeature {
   memory: number;
   /** Σ `HostConfig.NanoCpus`, cores. */
   cpus: number;
+  /** `docker exec`s running in its containers now (`.ExecIDs`: Docker drops an exec when it exits). */
+  execs: number;
 }
 
 export interface IdleInput {
@@ -887,6 +895,8 @@ export interface IdleInput {
 
 /** Why a running feature is not idle, or null when it is. */
 function busyReason(f: RunningFeature, input: IdleInput, cutoff: number): string | null {
+  // A test run or probe in its container is work in flight, whatever the session record says (SW-856).
+  if (f.execs) return "docker exec running";
   // An open session that has sat idle past the cutoff does not count (SW-39 D3), nor, while others
   // queue, one that has waited on a person that long: its status stays busy through the ask (SW-675).
   const recent = (s: { statusUpdatedAt: number }) => (s.statusUpdatedAt ?? Infinity) > cutoff;
@@ -944,17 +954,25 @@ export function runningFeatures(
     }
     if (!list.size) return [];
     const feature = `or (index .Config.Labels "${LABEL_FEATURE}") (index .Config.Labels "${LEGACY_LABEL_FEATURE}")`;
-    const fmt = `{{${feature}}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}\t{{.HostConfig.MemoryReservation}}\t{{.HostConfig.NanoCpus}}`;
+    const fmt = `{{${feature}}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}\t{{.HostConfig.MemoryReservation}}\t{{.HostConfig.NanoCpus}}\t{{len .ExecIDs}}`;
     const inspect = runCmd(["docker", "inspect", "--format", fmt, ...list]);
     if (inspect.status !== 0) return null;
     const byFeature = new Map<string, RunningFeature>();
     for (const line of inspect.stdout.split("\n").filter(Boolean)) {
-      const [feature, workspace, started, memory, nanoCpus] = line.split("\t");
+      const [feature, workspace, started, memory, nanoCpus, execs] = line.split("\t");
       if (!feature || !workspace) continue;
-      const f = byFeature.get(feature) ?? { feature, workspace, startedAt: [], memory: 0, cpus: 0 };
+      const f = byFeature.get(feature) ?? {
+        feature,
+        workspace,
+        startedAt: [],
+        memory: 0,
+        cpus: 0,
+        execs: 0,
+      };
       f.startedAt.push(Date.parse(started));
       f.memory += Number(memory) || 0;
       f.cpus += (Number(nanoCpus) || 0) / 1e9;
+      f.execs += Number(execs) || 0;
       byFeature.set(feature, f);
     }
     return [...byFeature.values()];
@@ -968,7 +986,7 @@ export interface StopIdleOptions {
   only?: string;
   now?: number;
   run?: (cmd: string[]) => RunResult;
-  stop?: (feature: string) => Promise<unknown>;
+  stop?: (feature: string, opts: { why: string }) => Promise<unknown>;
   /** Override for whether anyone waits for capacity; default: the queue file. */
   queued?: boolean;
 }
@@ -1012,7 +1030,7 @@ export async function stopIdle(
     }
     const asking = input.sessions(f.workspace).some((s) => s.asking);
     try {
-      await (opts.stop ?? stop)(f.feature);
+      await (opts.stop ?? stop)(f.feature, { why: `idle ≥ ${minutes} min` });
       lines.push(
         asking
           ? `${f.feature}: stopped (waiting on a person ≥ ${minutes} min, others queued)`
@@ -1092,7 +1110,9 @@ export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | 
               : state?.agent === "working"
                 ? "working"
                 : "idle";
+      // A running `docker exec` (a session's test run, not only the gate's) is never stopped (SW-856).
       const busy =
+        f.execs > 0 ||
         readPaused(f.workspace) !== null ||
         (mtimeMs(lastExecMarker(f.workspace)) ?? 0) > gateCutoff;
       const lease: Lease = {
@@ -1161,7 +1181,7 @@ async function admitOrQueueHere(
       const victimWs = readLeases()[victim]?.workspace || workspaceForFeature(victim);
       try {
         // stop, not pause: a paused container keeps its memory.
-        await stop(victim, { grant: false });
+        await stop(victim, { grant: false, why: `preempted to make room for '${feature}'` });
       } catch (e) {
         // A failed stop can still have killed it (SW-738): queue it to come back, and wait rather than
         // start over budget; this start had the head's turn, so it keeps it. A victim that still runs
@@ -1303,6 +1323,18 @@ async function grantWaitersQuietly(): Promise<void> {
 }
 
 /**
+ * What a session hears when werkmeister stopped its containers under these commands (SW-856):
+ * they died with them (exit 137), so the session reruns them rather than reading a test failure.
+ */
+export function killedNudge(why: string, killed: string[]): string {
+  return (
+    `Werkmeister stopped this workspace's containers (${why}) while these ran in them: ` +
+    `${killed.map((c) => `\`${c}\``).join(", ")}. They were killed (exit 137), not failed: start the ` +
+    "containers with `werkmeister feature up` (`--service <name>` for an on-demand one), then rerun them."
+  );
+}
+
+/**
  * Stop *feature*'s containers, leaving them and its slot in place so
  * `restart`/`up` can resume it.
  *
@@ -1311,10 +1343,19 @@ async function grantWaitersQuietly(): Promise<void> {
  */
 export async function stop(
   feature: string,
-  { grant = true }: { grant?: boolean } = {},
+  { grant = true, why }: { grant?: boolean; why?: string } = {},
 ): Promise<StopResult> {
   refuseInsideOwnContainer(feature, "stop");
   const slot = await requireSlot(feature);
+  // *why* marks a stop nobody in the workspace asked for: name what it kills to the session (SW-856).
+  const workspace = why ? workspaceForFeature(feature) : null;
+  if (why && workspace) {
+    const names = (await getContainerStatus(feature))
+      .filter((c) => c.status === "running")
+      .map((c) => c.name);
+    const killed = await runningExecCommands(names);
+    if (killed.length) writeNudge(workspace, killedNudge(why, killed));
+  }
 
   info(`Stopping containers for '${feature}' (slot ${slot})...`);
   if (!(await composeStop(feature))) {

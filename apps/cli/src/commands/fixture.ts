@@ -83,7 +83,7 @@ export function parse(argv: string[]) {
       const v = argv[++i] as string;
       opts.queue = [...(opts.queue ?? []), ...(v.includes(":") ? [v] : v.split(","))];
     } else if (a === "--running" && argv[i + 1] !== undefined) {
-      // fixturePreset checks each value; here only the shape: five tab-separated columns a line.
+      // fixturePreset checks each value; here only the shape: five tab-separated columns a line, or six with the running execs (SW-856).
       const file = inside(process.cwd(), argv[++i] as string);
       if (!file || !fs.existsSync(file)) return { bad: a };
       const rows = fs
@@ -91,13 +91,14 @@ export function parse(argv: string[]) {
         .split("\n")
         .filter((l) => l.trim())
         .map((l) => l.split("\t"));
-      if (rows.some((r) => r.length !== 5)) return { bad: a };
-      opts.containers = rows.map(([feature, workspace, startedAt, memory, nanoCpus]) => ({
+      if (rows.some((r) => r.length !== 5 && r.length !== 6)) return { bad: a };
+      opts.containers = rows.map(([feature, workspace, startedAt, memory, nanoCpus, execs]) => ({
         feature: feature as string,
         workspace: workspace as string,
         startedAt: startedAt as string,
         memory: Number(memory),
         nanoCpus: Number(nanoCpus),
+        ...(execs !== undefined && { execs: Number(execs) }),
       }));
     } else if (a === "--issue") {
       // Input hygiene: no leading dash or whitespace in what becomes gh's `-R <repo>` (gh is the fake here; `--workspace` refs are unchecked).
@@ -196,7 +197,7 @@ export async function run(argv: string[]): Promise<void> {
               : parsed.bad === "--change"
                 ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
                 : parsed.bad === "--running"
-                  ? "--running: a file under the current folder, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus line per container"
+                  ? "--running: a file under the current folder, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus[<TAB>execs] line per container"
                   : `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
       );
     console.error(USAGE);

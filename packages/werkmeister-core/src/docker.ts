@@ -660,6 +660,27 @@ export async function copyFileToContainer(
   );
 }
 
+/**
+ * The command line of each `docker exec` running in *names* now, for telling a session what a
+ * stop killed (SW-856). Empty when none run or the daemon can't be read: a stop never waits on it.
+ */
+export async function runningExecCommands(names: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const name of names) {
+    try {
+      const { ExecIDs } = await docker().getContainer(name).inspect();
+      for (const id of ExecIDs ?? []) {
+        const e = await docker().getExec(id).inspect();
+        if (e.Running)
+          out.push([e.ProcessConfig.entrypoint, ...e.ProcessConfig.arguments].join(" "));
+      }
+    } catch {
+      // Gone already, or no daemon: nothing to name.
+    }
+  }
+  return out;
+}
+
 export interface ExecResult {
   exitCode: number;
   stdout: string;

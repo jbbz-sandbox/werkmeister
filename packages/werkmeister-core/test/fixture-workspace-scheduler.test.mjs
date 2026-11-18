@@ -42,6 +42,10 @@ test("containers and queue seed what the scheduler reads from Docker and queue.j
     },
     { containers: [holder], queue: ["a", "b"] },
   );
+  // SW-856: a 6th column, the running execs, reaches the scheduler as busy.
+  await withFixtureWorkspace(async () => assert.equal(runningLeases()[0].busy, true), {
+    containers: [{ ...holder, execs: 1 }],
+  });
   await withFixtureWorkspace(async () => {
     assert.deepEqual(runningLeases(), []);
     assert.deepEqual(readQueue(), []);
@@ -103,6 +107,7 @@ test("a seed value that could leave the fixture or isn't a number is refused (SW
     { startedAt: "soon" },
     { memory: Number.NaN },
     { nanoCpus: -1 },
+    { execs: 1.5 },
   ])
     assert.throws(() => fixturePreset({ containers: [{ ...ok, ...bad }] }), /--running: bad value/);
   assert.throws(() => fixturePreset({ queue: ["ok", "-x"] }), /--queue: bad entry "-x"/);
