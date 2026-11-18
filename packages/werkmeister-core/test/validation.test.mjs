@@ -205,7 +205,7 @@ test("a repo with a gate lint: its test commands start with the lint; a repo wit
       const out = build({ demo: { lint: "npx biome ci ." } });
       assert.match(
         out,
-        /\| `core` \| demo \| `packages\/core` \| `\/ws\/\.werkmeister\/bin\/with-temp-home sh -c 'npx biome ci \. && npm test'` \|/,
+        /\| `core` \| demo \| `packages\/core` \| `\/ws\/\.werkmeister\/bin\/with-temp-home --cwd \/ws\/demo sh -c 'npx biome ci \. && npm test'` \|/,
       );
       assert.match(out, /first runs the repo's lint, the same command the PR gate's lint row runs/);
       assert.doesNotMatch(

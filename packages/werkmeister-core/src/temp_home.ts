@@ -18,7 +18,13 @@ export const TEMP_HOME_SCRIPT = `#!/bin/sh
 # and exports it, so a with-temp-home nested under it skips its wait too (SW-425).
 [ "\${1:-}" != --no-wait ] || { export WERKMEISTER_NO_WAIT=1; shift; }
 no_wait=\${WERKMEISTER_NO_WAIT:-}
-[ "$#" -gt 0 ] || { echo "usage: with-temp-home [--no-wait] <cmd> [args...]" >&2; exit 2; }
+# --cwd <dir> next runs the command there, whatever the shell's cwd, with no \`cd\` to break the allow rule (SW-652).
+# In the werkmeister container the worktree is also at /app, the only place its node_modules volume is mounted (SW-548).
+if [ "\${1:-}" = --cwd ] && [ "$#" -ge 2 ]; then
+  if [ /app -ef "$2" ]; then cd /app; else cd "$2"; fi || exit 1
+  shift 2
+fi
+[ "$#" -gt 0 ] || { echo "usage: with-temp-home [--no-wait] [--cwd <dir>] <cmd> [args...]" >&2; exit 2; }
 # Wait like the pr gate while host load is over budget.host_load (SW-224), before HOME
 # changes so the real config's budget applies; no werkmeister on PATH, no wait.
 # In the background with a trap, so killing the wrapper ends the wait too (SW-456).

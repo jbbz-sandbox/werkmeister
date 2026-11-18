@@ -536,12 +536,15 @@ export function buildAllowRules(
       if (isPlainChain(cmd)) rules.push(...segments(cmd).map((c) => `Bash(${c}:*)`));
     }
     if (!tempHome) continue;
-    const lint = reposConfig[String(servicesConfig[svc]?.["repo"] ?? "")]?.lint;
-    const wrapped = wrappedTestCommand(tempHome, cmd, lint);
-    // Exact for an `sh -c` line: a prefix would let `; <anything>` ride after the quote.
-    rules.push(
-      wrapped.startsWith(`${tempHome} sh -c '`) ? `Bash(${wrapped})` : `Bash(${wrapped}:*)`,
-    );
+    const repo = servicesConfig[svc]?.["repo"];
+    const lint = reposConfig[String(repo ?? "")]?.lint;
+    const wrapped = wrappedTestCommand(tempHome, cmd, lint, repo ? String(repo) : undefined);
+    // Exact for an `sh -c` line: a prefix would let `; <anything>` ride after the quote. Past any --cwd (SW-652).
+    const shC = wrapped
+      .slice(tempHome.length)
+      .replace(/^ --cwd \S+/, "")
+      .startsWith(" sh -c '");
+    rules.push(shC ? `Bash(${wrapped})` : `Bash(${wrapped}:*)`);
   }
   if (tempHome) for (const cli of builtClis) rules.push(`Bash(${tempHome} ${cli}:*)`);
   // SW-292: its sibling runs only the workspace's own built CLI, in a fixture, so it is safe whole;

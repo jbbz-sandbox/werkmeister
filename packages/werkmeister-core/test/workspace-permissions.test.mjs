@@ -519,7 +519,9 @@ test("SW-398: every allow rule werkmeister-context.md names is generated", async
       const named = [...doc.matchAll(/`(Bash\([^`]+\))`/g)].map((m) => m[1]);
       assert.ok(named.length, "the doc names an allow rule");
       const rules = buildAllowRules("", [], loadServices(), {}, wrapper, [], ["cli"]);
-      const generic = named.map((r) => r.replace("<test command>", "pnpm test"));
+      const generic = named.map((r) =>
+        r.replace("<worktree>", "/ws/w/demo").replace("<test command>", "pnpm test"),
+      );
       for (const r of generic)
         assert.ok(rules.includes(r), `${r} missing from:\n${rules.join("\n")}`);
       assert.ok(!rules.includes(`Bash(${wrapper}:*)`), "never the wrapper alone");
@@ -662,14 +664,41 @@ test("SW-660: the repo's lint the context file joins is allowed with the test, a
   const services = { svc: { repo: "r", test: "pnpm test" } };
   const repos = { r: { lint: "pnpm lint && pnpm run docs:check" } };
   const rules = buildAllowRules("", [], services, {}, W660, [], ["svc"], repos);
-  const printed = wrappedTestCommand(W660, "pnpm test", repos.r.lint);
-  assert.equal(printed, `${W660} sh -c 'pnpm lint && pnpm run docs:check && pnpm test'`);
+  const printed = wrappedTestCommand(W660, "pnpm test", repos.r.lint, "r");
+  assert.equal(
+    printed,
+    `${W660} --cwd /ws/w/r sh -c 'pnpm lint && pnpm run docs:check && pnpm test'`,
+  );
   assert.ok(allowed(rules, printed), rules.join("\n"));
   assert.ok(
-    allowed(rules, `${W660} --no-wait sh -c 'pnpm lint && pnpm run docs:check && pnpm test'`),
+    allowed(
+      rules,
+      `${W660} --no-wait --cwd /ws/w/r sh -c 'pnpm lint && pnpm run docs:check && pnpm test'`,
+    ),
   );
   assert.ok(!allowed(rules, `${printed} && rm -rf x`), "nothing rides after the quote");
   assert.ok(!rules.some((r) => r.startsWith("Bash(pnpm ")), "no unwrapped lint rule");
+});
+
+// SW-652: a test command runs from its repo's worktree; the shell's cwd drifts, and a `cd` would lose this rule.
+test("SW-652: the wrapped test command runs from its repo's worktree via --cwd, printed and allowed alike", async () => {
+  const { wrappedTestCommand } = await import("../dist/archetypes.js");
+  const services = { svc: { repo: "r", test: "pnpm test" }, chain: { repo: "r", test: "a && b" } };
+  const rules = buildAllowRules("", [], services, {}, W660, [], ["svc", "chain"]);
+  const simple = wrappedTestCommand(W660, "pnpm test", undefined, "r");
+  assert.equal(simple, `${W660} --cwd /ws/w/r pnpm test`);
+  const chained = wrappedTestCommand(W660, "a && b", undefined, "r");
+  assert.equal(chained, `${W660} --cwd /ws/w/r sh -c 'a && b'`);
+  for (const cmd of [simple, chained]) {
+    assert.ok(allowed(rules, cmd), `${cmd}\n${rules.join("\n")}`);
+    assert.ok(allowed(rules, cmd.replace(`${W660} `, `${W660} --no-wait `)), `--no-wait ${cmd}`);
+    assert.ok(!/(^|\s)cd\s/.test(cmd), "no cd");
+  }
+  assert.ok(!allowed(rules, `${W660} --cwd /elsewhere pnpm test`), "only the worktree's --cwd");
+  assert.ok(rules.includes(`Bash(${chained})`), "the sh -c line stays an exact rule past --cwd");
+  assert.ok(!allowed(rules, `${chained} ; rm -rf x`), "nothing rides after the quote");
+  // No repo, no worktree to name: the command runs where it is, as before.
+  assert.equal(wrappedTestCommand(W660, "pnpm test"), `${W660} pnpm test`);
 });
 
 test("SW-660: a { …; } / || test command is printed and allowed as one exact sh -c line that parses", async () => {
@@ -678,18 +707,18 @@ test("SW-660: a { …; } / || test command is printed and allowed as one exact s
   const services = { svc: { repo: "r", test: BRACE } };
   const repos = { r: { lint: "pnpm lint" } };
   const rules = buildAllowRules("feat", ["svc"], services, {}, W660, [], [], repos);
-  const printed = wrappedTestCommand(W660, BRACE, "pnpm lint");
-  assert.equal(printed, `${W660} sh -c 'pnpm lint && ${BRACE}'`);
+  const printed = wrappedTestCommand(W660, BRACE, "pnpm lint", "r");
+  assert.equal(printed, `${W660} --cwd /ws/w/r sh -c 'pnpm lint && ${BRACE}'`);
   assert.equal(spawnSync("sh", ["-n", "-c", printed]).status, 0, "printed command is valid shell");
   assert.ok(rules.includes(`Bash(${printed})`), rules.join("\n"));
-  assert.ok(rules.includes(`Bash(${W660} --no-wait sh -c 'pnpm lint && ${BRACE}')`));
+  assert.ok(rules.includes(`Bash(${W660} --no-wait --cwd /ws/w/r sh -c 'pnpm lint && ${BRACE}')`));
   assert.ok(allowed(rules, printed));
   // Only the container form and the sh -c lines hold the group; no split-up segment rules.
   const withBrace = rules.filter((r) => r.includes("}"));
   assert.deepEqual(withBrace, [
     `Bash(docker exec feat-svc sh -c '${BRACE}')`,
     `Bash(${printed})`,
-    `Bash(${W660} --no-wait sh -c 'pnpm lint && ${BRACE}')`,
+    `Bash(${W660} --no-wait --cwd /ws/w/r sh -c 'pnpm lint && ${BRACE}')`,
   ]);
 });
 
@@ -750,8 +779,16 @@ test("SW-660: the headless wake passes the workspace's rules, lint and sh -c for
       fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\nSERVICES=api,core\n");
       const rules = workspaceAllowRules(root, true);
       const w = path.join(dotDir(root), "bin", "with-temp-home");
-      assert.ok(rules.includes(`Bash(${w} sh -c 'pnpm lint && pnpm test')`), rules.join("\n"));
-      assert.ok(rules.includes(`Bash(${w} sh -c 'pnpm lint && ${BRACE}')`), rules.join("\n"));
+      assert.ok(
+        rules.includes(
+          `Bash(${w} --cwd ${path.join(root, "demo")} sh -c 'pnpm lint && pnpm test')`,
+        ),
+        rules.join("\n"),
+      );
+      assert.ok(
+        rules.includes(`Bash(${w} --cwd ${path.join(root, "demo")} sh -c 'pnpm lint && ${BRACE}')`),
+        rules.join("\n"),
+      );
       const args = claudeSendArgs("hi", null, null, { allow: rules });
       assert.deepEqual(args[args.indexOf("--allowedTools") + 1].split(","), rules);
     },

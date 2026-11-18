@@ -185,7 +185,36 @@ test("--no-wait first runs at once, without wait-load, and is not passed on (SW-
     assert.equal(r.stdout, "first");
     const alone = spawnSync(bin, ["--no-wait"], { encoding: "utf8", env });
     assert.equal(alone.status, 2);
-    assert.match(alone.stderr, /usage: with-temp-home \[--no-wait\] <cmd>/);
+    assert.match(alone.stderr, /usage: with-temp-home \[--no-wait\] \[--cwd <dir>\] <cmd>/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// SW-652: a test command works only from its worktree, and the shell's cwd drifts; a `cd` would lose the allow rule.
+test("--cwd <dir> runs the command there, whatever the shell's cwd, after --no-wait too (SW-652)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(root, "worktree-")));
+    for (const args of [
+      ["--cwd", dir],
+      ["--no-wait", "--cwd", dir],
+    ]) {
+      const r = spawnSync(bin, [...args, "sh", "-c", "pwd -P"], {
+        encoding: "utf8",
+        cwd: os.tmpdir(),
+      });
+      assert.equal(r.status, 0, r.stderr);
+      assert.equal(r.stdout.trim(), dir, args.join(" "));
+    }
+    const gone = spawnSync(bin, ["--cwd", path.join(root, "nope"), "sh", "-c", "echo ran"], {
+      encoding: "utf8",
+    });
+    assert.notEqual(gone.status, 0);
+    assert.equal(gone.stdout, "", "a missing --cwd runs nothing");
+    const alone = spawnSync(bin, ["--cwd", dir], { encoding: "utf8" });
+    assert.equal(alone.status, 2);
+    assert.match(alone.stderr, /usage: with-temp-home \[--no-wait\] \[--cwd <dir>\] <cmd>/);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
