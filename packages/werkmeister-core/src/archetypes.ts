@@ -14,14 +14,54 @@
  * touches the raw fields.
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+
 import {
   type Archetype,
   type ArchetypeRegistry,
+  expandUser,
   loadArchetypes,
   type ReposConfig,
   type ServiceEntry,
   type ServicesConfig,
+  sandboxHome,
 } from "./config.js";
+
+const realPath = (p: string) => {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return path.resolve(p);
+  }
+};
+
+/** Host sources of *entry*'s bind mounts (named volumes skipped), symlinks resolved (`/var` → `/private/var` on macOS). */
+const hostBinds = (entry: ServiceEntry | undefined) =>
+  (entry?.extra_volumes ?? [])
+    .map((spec) => spec.split(":")[0])
+    .filter((src) => src.includes("/"))
+    .map((src) => realPath(expandUser(src)));
+
+const within = (p: string, dir: string) =>
+  p === dir || p.startsWith(`${dir}${path.sep}`) || dir === "/";
+
+/**
+ * True when one of *entry*'s host binds is a docker socket (any path ending `docker.sock`, e.g. OrbStack's)
+ * or the werkmeister home, or a parent of either.
+ */
+export function hostAccess(entry: ServiceEntry | undefined): boolean {
+  const targets = ["/var/run/docker.sock", sandboxHome()].map(realPath);
+  return hostBinds(entry).some(
+    (host) => path.basename(host) === "docker.sock" || targets.some((t) => within(t, host)),
+  );
+}
+
+/** True when *entry*'s container sees host path *p* at the same path (one of its binds covers it). */
+export function seesHostPath(entry: ServiceEntry | undefined, p: string): boolean {
+  const target = realPath(p);
+  return hostBinds(entry).some((host) => within(target, host));
+}
 
 function isDict(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -99,8 +139,17 @@ export function serviceNoTests(svcDef: ServiceEntry | null | undefined): string 
  * worktree's `node_modules` live. werkmeister-context.md and the workspace's
  * `permissions.allow` rule both use it, so the rule matches what the agent runs.
  */
-export function containerTestCommand(feature: string, svc: string, cmd: string): string {
-  return `docker exec ${feature}-${svc} sh -c '${cmd.split("'").join(`'\\''`)}'`;
+export function containerTestCommand(
+  feature: string,
+  svc: string,
+  cmd: string,
+  tempHome?: string,
+): string {
+  const quoted = `sh -c '${cmd.split("'").join(`'\\''`)}'`;
+  // SW-769: a container holding the real ~/.werkmeister runs its tests under a temp HOME, as Validation says.
+  return tempHome
+    ? `docker exec -w /app ${feature}-${svc} ${tempHome} --no-wait ${quoted}`
+    : `docker exec ${feature}-${svc} ${quoted}`;
 }
 
 /** True when *cmd* is simple commands joined only by `&&`: no group, pipe, `||`, `;`, `&`, newline or substitution. */

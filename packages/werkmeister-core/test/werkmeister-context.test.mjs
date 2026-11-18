@@ -142,6 +142,51 @@ test("each local service's test command runs in its container; none says so", as
   );
 });
 
+test("a host-access container that sees the workspace prints its test under with-temp-home; others stay bare (SW-769)", async () => {
+  await withSandboxHome(
+    async () => {
+      const out = buildSandboxContextMd(
+        "test",
+        1,
+        11100,
+        11119,
+        ["core", "sock", "frontend"],
+        loadServices(),
+        "",
+        {},
+        ["core", "sock", "frontend"],
+        false,
+        "/ws/.werkmeister/bin/with-temp-home",
+      );
+      assert.match(
+        out,
+        /^- `core`: `docker exec -w \/app test-core \/ws\/\.werkmeister\/bin\/with-temp-home --no-wait sh -c 'npm test'`$/m,
+      );
+      assert.match(
+        out,
+        /^- `frontend`: `docker exec test-frontend sh -c 'npm test -w frontend'`$/m,
+      );
+      // docker.sock alone: <ws>/.werkmeister/bin is not in that container, so the wrapped form would exit 127.
+      assert.match(out, /^- `sock`: `docker exec test-sock sh -c 'npm test'`$/m);
+    },
+    {
+      services: `${SERVICES}  core:
+    type: library
+    repo: demo-repo
+    path: packages/core
+    test: npm test
+    extra_volumes: ["/var/run/docker.sock:/var/run/docker.sock", "/ws:/ws"]
+  sock:
+    type: library
+    repo: demo-repo
+    path: packages/sock
+    test: npm test
+    extra_volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
+`,
+    },
+  );
+});
+
 test("a service whose registry says test: none shows its reason, not a missing command (SW-119)", async () => {
   await withSandboxHome(
     async () => {
