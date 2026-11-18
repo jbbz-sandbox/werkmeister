@@ -140,10 +140,12 @@ before(async () => {
   const socket = path.join(tmp, "docker.sock");
   docker = await fakeDocker(socket);
   const port = await freePort();
+  // HOST unset: the default loopback bind (SW-680). The core container exports HOST=0.0.0.0.
+  const { HOST: _bind, ...parentEnv } = process.env;
   server = spawn(process.execPath, ["dist/main.js"], {
     cwd: import.meta.dirname,
     env: {
-      ...process.env,
+      ...parentEnv,
       HOME: home,
       PORT: String(port),
       DOCKER_HOST: `unix://${socket}`,
@@ -272,6 +274,21 @@ test("/api/tool refuses a workspace token, an unknown token and any Origin", asy
     (await apiTool(machineToken, "status", {}, { Origin: "http://evil.example" })).status,
     403,
   );
+});
+
+// SW-680: SW-631 refuses a tokenless request on every bind; this pins it on the running server.
+test("a request with no Authorization gets 401 on the loopback bind, /api/tool and /mcp", async () => {
+  for (const route of ["/api/tool", "/mcp"]) {
+    const res = await fetchFresh(`${base}${route}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ name: "status", arguments: {} }),
+    });
+    assert.equal(res.status, 401, `${route} answered ${res.status}`);
+  }
 });
 
 test("/api/tool reports a tool error as 400 with its code", async () => {
