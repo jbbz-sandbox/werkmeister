@@ -58,13 +58,15 @@ function stopIfIdle(): void {
 /**
  * The detached child of {@link stopIfIdle}, run in the workspace root: the only
  * CLI path that forwards to the daemon. Falls back to a local stop when the
- * daemon is down, and stays silent either way — nobody is watching its output.
+ * daemon is down. Any other failure is printed, never thrown: the SessionEnd
+ * child's stdio is ignored, so only a person running it by hand sees it (SW-718).
  */
 async function stopViaDaemon(feature: string): Promise<void> {
   try {
     await callTool("stop", { workspace: path.basename(process.cwd()) }, { timeoutMs: 60_000 });
   } catch (e) {
     if (e instanceof DaemonUnavailable) await stopFeature(feature).catch(() => {});
+    else error(`feature stop --via-daemon: ${(e as Error).message}`);
   }
 }
 
