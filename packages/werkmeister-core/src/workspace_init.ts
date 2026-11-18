@@ -30,6 +30,7 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
+import { writeNudge } from "./agent_state.js";
 import { presentArchetypes } from "./archetypes.js";
 import { Colors } from "./colors.js";
 import { ensureSharedVolumes, retireLegacyProject, workspaceComposeArgv } from "./compose.js";
@@ -64,6 +65,7 @@ import {
   writeIssueCopy,
 } from "./issue_snapshot.js";
 import { issueTracker, projectForIssue } from "./issue_tracker.js";
+import { liveSessions } from "./lifecycle.js";
 import {
   defaultWorkspaceRepo,
   originMismatch,
@@ -860,6 +862,7 @@ export async function initWorkspace(
 
   // 5b–6c. The context layer — CLAUDE.md and everything the agent reads
   // beside it — belongs to the workspace's strategy (docs/context-strategies.md).
+  const rerun = fs.existsSync(path.join(workspaceRoot, "CLAUDE.md"));
   strategy.init({
     workspaceRoot,
     workspaceName,
@@ -880,6 +883,7 @@ export async function initWorkspace(
     if (id === strategy.id) continue;
     reportLeftovers(workspaceRoot, strategyById(id), strategy, Boolean(args["prune_context"]));
   }
+  if (rerun) recordRegeneratedContracts(workspaceRoot, strategy.ownedPaths());
 
   // 6d needs the present archetypes whichever strategy ran.
   const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
@@ -985,6 +989,32 @@ export async function initWorkspace(
       "Open a new Claude Code session from the workspace root to pick up the context.\n\n",
   );
   return { containers };
+}
+
+export const CONTRACTS_CHANGED_NUDGE =
+  "`werkmeister workspace init` just regenerated this workspace's contracts (CLAUDE.md, CONTEXT.md, `_shared/`, the stage CONTEXT.md files; committed on the record branch as `chore: regenerate workspace contracts`). Re-read CLAUDE.md and the current stage's CONTEXT.md before going on: their rules now govern. An instruction the person gave you in chat still wins; if the two conflict, ask.";
+
+/**
+ * SW-760: a rerun rewrites the contracts under any live session. Commit them alone on the record
+ * branch, so they don't ride along with the agent's next commit, and leave the session a nudge.
+ * Only the generated rule files: stage outputs and notes are the agent's.
+ */
+export function recordRegeneratedContracts(workspaceRoot: string, owned: string[]): boolean {
+  const stageContracts = (dir: string) =>
+    fs.existsSync(path.join(workspaceRoot, dir))
+      ? fs
+          .readdirSync(path.join(workspaceRoot, dir))
+          .map((s) => path.join(dir, s, "CONTEXT.md"))
+          .filter((f) => fs.existsSync(path.join(workspaceRoot, f)))
+      : [];
+  const paths = owned
+    .flatMap((p) => (p === "stages" ? stageContracts(p) : [p]))
+    .filter((p) => !p.includes("*") && !p.endsWith("/notes"))
+    .filter((p) => fs.existsSync(path.join(workspaceRoot, p)));
+  if (!paths.length || !commitRecord(workspaceRoot, "chore: regenerate workspace contracts", paths))
+    return false;
+  if (liveSessions(workspaceRoot).length) writeNudge(workspaceRoot, CONTRACTS_CHANGED_NUDGE);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
