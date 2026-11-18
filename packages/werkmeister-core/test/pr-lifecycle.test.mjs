@@ -1984,6 +1984,30 @@ test("gate: a branch behind origin/<base> fails in the quick rows, after a fetch
   }
 });
 
+test("gate: a merge commit from the base fails the merges row, naming the rebase; none passes (SW-733)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const merged = await gate(
+      ws,
+      deps([DIFF_API, [/rev-list --merges --count origin\/main\.\.HEAD$/, { stdout: "2\n" }]]),
+    );
+    assert.deepEqual(failed(merged), ["merges", "tests"]);
+    assert.match(
+      merged.checks.find((c) => c.name === "merges").detail,
+      /2 merge commits in origin\/main\.\.HEAD.*git -C \S+ rebase origin\/main/,
+    );
+    const unread = await gate(
+      ws,
+      deps([DIFF_API, [/rev-list --merges --count/, { code: 128, stdout: "" }]]),
+    );
+    assert.deepEqual(failed(unread), ["merges", "tests"]);
+    const plain = await gate(ws, deps([DIFF_API]));
+    assert.equal(plain.checks.find((c) => c.name === "merges").detail, "no merge commits");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gate: a pushed branch behind origin/<base> passes the base row with a note, so a rerun or an open PR isn't blocked (SW-669)", async () => {
   const ws = icmWorkspace();
   try {
