@@ -73,7 +73,15 @@ function fromRest(r: JiraRestIssue): Issue {
   const f = r.fields ?? {};
   const comments: IssueComment[] = (f.comment?.comments ?? []).flatMap((c) => {
     const body = c.body?.trim();
-    return body ? [{ author: c.author?.displayName ?? "unknown", created: c.created, body }] : [];
+    return body
+      ? [
+          {
+            author: c.author?.displayName ?? "unknown",
+            created: c.created,
+            body: wikiToMarkdown(body),
+          },
+        ]
+      : [];
   });
   return {
     ref: r.key,
@@ -82,7 +90,7 @@ function fromRest(r: JiraRestIssue): Issue {
     statusCategory: category(f.status?.statusCategory?.key),
     type: str(f.issuetype?.name),
     assignee: str(f.assignee?.displayName),
-    description: str(f.description),
+    description: f.description ? wikiToMarkdown(String(f.description)) : str(f.description),
     url: jiraBrowseUrl(r.key) ?? undefined,
     comments,
   };
@@ -203,6 +211,57 @@ export function markdownToWiki(md: string): string {
       if (li) {
         const depth = Math.floor(li[1].replace(/\t/g, "  ").length / 2) + 1;
         return `${(/\d/.test(li[2]) ? "#" : "*").repeat(depth)} ${inline(li[3])}`;
+      }
+      return inline(line);
+    })
+    .join("\n");
+}
+
+/** A wiki escape (`\-`, `\{`) as its bare character. */
+const unescapeWiki = (s: string) => s.replace(/\\([-{}!*_+^~[\]|#()\\])/g, "$1");
+
+/**
+ * Jira wiki markup (REST v2's description and comment bodies) as Markdown, so
+ * `.werkmeister/issue.md` and `issue view` read cleanly (SW-878): headings,
+ * lists, bold, `{{monospace}}`, links and smart links, `{code}` / `{noformat}`
+ * blocks, and backslash escapes. The reverse of {@link markdownToWiki}.
+ */
+// shortcut: line-based like markdownToWiki; tables, colours, panels and quotes pass through as text.
+export function wikiToMarkdown(wiki: string): string {
+  let fence = false;
+  const inline = (s: string) =>
+    s
+      // An escape (`\}`) never closes a span, and `{{{{x}}}}` (braces shown in code) closes at the last `}}`.
+      .split(/(\{\{(?:\\.|[^\\\n])*?\}\}(?!\}))/)
+      .map((p) =>
+        p.startsWith("{{") && p.endsWith("}}") && p.length > 4
+          ? `\`${unescapeWiki(p.slice(2, -2))}\``
+          : unescapeWiki(
+              p
+                .replace(/\[([^|\]\n]+)\|([^|\]\s]+)(?:\|smart-link)?\]/g, (_m, text, url) => {
+                  // A smart link's text is its URL; show the key the URL ends in.
+                  const key =
+                    text === url ? /\/browse\/([A-Z][A-Z0-9]+-\d+)$/.exec(url)?.[1] : null;
+                  return `[${key ?? text}](${url})`;
+                })
+                .replace(/(?<![\\\w*])\*(?=\S)([^*\n]*?\S)\*(?![\w*])/g, "**$1**"),
+            ),
+      )
+      .join("");
+  return wiki
+    .split("\n")
+    .map((line) => {
+      if (/^\s*\{(code|noformat)(:[^}]*)?\}\s*$/.test(line)) {
+        fence = !fence;
+        return "```";
+      }
+      if (fence) return line;
+      const h = /^h([1-6])\.\s+(.*)$/.exec(line);
+      if (h) return `${"#".repeat(Number(h[1]))} ${inline(h[2])}`;
+      const li = /^([*#-]+)\s+(.*)$/.exec(line);
+      if (li) {
+        const indent = "  ".repeat(li[1].length - 1);
+        return `${indent}${li[1].endsWith("#") ? "1." : "-"} ${inline(li[2])}`;
       }
       return inline(line);
     })
