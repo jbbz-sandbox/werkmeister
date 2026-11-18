@@ -2468,10 +2468,10 @@ test("waitForHostLoadNow: low free memory counts on macOS too, where load does n
     withReporter({ emit: (e) => lines.push(e.msg) }, () => waitForHostLoadNow(host, "darwin")),
   );
   assert.equal(host.slept.length, 6);
-  assert.equal(
-    note,
-    "ran with low memory (3% free, under budget.free_memory 15%); the 1.5 min host-load wait is spent",
-  );
+  assert.deepEqual(note, {
+    spent: true,
+    note: "ran with low memory (3% free, under budget.free_memory 15%); the 1.5 min host-load wait is spent",
+  });
   assert.match(lines[0], /waiting up to 1\.5 min for free memory to rise \(3% free/);
 });
 
@@ -2479,7 +2479,7 @@ test("waitForHostLoadNow: waits for memory to free on linux, and names what it w
   const reads = [lowMemory, lowMemory, plentyMemory];
   const host = { ...loaded([0.5]), hostMemory: () => (reads.shift() ?? plentyMemory)() };
   const note = await withSandboxHome(() => waitForHostLoadNow(host, "linux"));
-  assert.equal(note, "waited 30 s for free memory");
+  assert.deepEqual(note, { spent: false, note: "waited 30 s for free memory" });
 });
 
 test("lowMemory: budget.free_memory 0 turns it off, and unreadable memory is not low (SW-620)", async () => {
@@ -2503,7 +2503,7 @@ test("waitForHostLoadNow: WERKMEISTER_NO_WAIT=1 skips the memory wait too (SW-62
   process.env.WERKMEISTER_NO_WAIT = "1";
   try {
     const host = { ...loaded([0.5]), hostMemory: lowMemory };
-    assert.equal(await withSandboxHome(() => waitForHostLoadNow(host, "darwin")), "");
+    assert.equal((await withSandboxHome(() => waitForHostLoadNow(host, "darwin"))).note, "");
     assert.deepEqual(host.slept, []);
   } finally {
     delete process.env.WERKMEISTER_NO_WAIT;
@@ -2517,7 +2517,7 @@ test("waitForHostLoadNow: with-temp-home's wait polls and says up front how long
   const waited = await withSandboxHome(() =>
     withReporter(reporter, () => waitForHostLoadNow(falls, "linux")),
   );
-  assert.equal(waited, "waited 30 s for host load");
+  assert.deepEqual(waited, { spent: false, note: "waited 30 s for host load" });
   assert.deepEqual(falls.slept, [15000, 15000]);
   assert.match(
     lines.join("\n"),
@@ -2529,14 +2529,17 @@ test("waitForHostLoadNow: with-temp-home's wait stops at 90 s, under an agent's 
   const stuck = loaded([90]);
   const note = await withSandboxHome(() => waitForHostLoadNow(stuck, "linux"));
   assert.equal(stuck.slept.length, 6);
-  assert.equal(note, "ran with host load 90.0 over 8; the 1.5 min host-load wait is spent");
+  assert.deepEqual(note, {
+    spent: true,
+    note: "ran with host load 90.0 over 8; the 1.5 min host-load wait is spent",
+  });
 });
 
 // SW-556: macOS's loadavg counts idle daemons in R state (450-550 on a quiet host) and never the
 // Linux VM that runs the tests, so with-temp-home has nothing to wait on there.
 test("waitForHostLoadNow: on macOS it returns at once, whatever loadavg reads (SW-556)", async () => {
   const stuck = loaded([90]);
-  assert.equal(await withSandboxHome(() => waitForHostLoadNow(stuck, "darwin")), "");
+  assert.equal((await withSandboxHome(() => waitForHostLoadNow(stuck, "darwin"))).note, "");
   assert.deepEqual(stuck.slept, []);
 });
 
@@ -5430,7 +5433,7 @@ test("waitForHostLoadNow: WERKMEISTER_NO_WAIT=1 skips the wait as --no-wait does
   const falls = loaded([90, 1]);
   process.env.WERKMEISTER_NO_WAIT = "1";
   try {
-    assert.equal(await withSandboxHome(() => waitForHostLoadNow(falls, "linux")), "");
+    assert.equal((await withSandboxHome(() => waitForHostLoadNow(falls, "linux"))).note, "");
   } finally {
     delete process.env.WERKMEISTER_NO_WAIT;
   }

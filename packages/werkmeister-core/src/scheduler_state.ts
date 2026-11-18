@@ -241,13 +241,20 @@ const realHostLoad: HostLoadDeps = {
   sleep: (ms) => delay(ms),
 };
 
+/** What with-temp-home's wait did: *spent* means a limit was still over when it gave up (SW-716). */
+export interface HostLoadWait {
+  spent: boolean;
+  note: string;
+}
+
 const minutes = (ms: number) => Number((ms / 60_000).toFixed(1));
 
 /**
  * The wait of `werkmeister internal wait-load`, which the generated with-temp-home runs first (SW-224):
  * up to 90 s for the 1-minute load to fall under the limit and free memory to rise over its own (SW-620),
- * saying so up front and printing progress each minute (SW-262); the note for the wrapper's stderr, or "".
- * A spent wait's note starts "ran with". The gate stopped waiting in SW-542.
+ * saying so up front and printing progress each minute (SW-262). Returns the note for the wrapper's stderr ("" when
+ * it did not wait) and whether the wait is *spent* with a limit still over (SW-716).
+ * The gate stopped waiting in SW-542.
  * Load not on macOS: its loadavg counts idle daemons in R state (450-550 on a quiet host) and never the
  * Linux VM that runs the tests, so it is no signal to wait on (SW-556). Its memory is: Claude Code
  * stops an idle background shell when the Mac runs low (SW-620).
@@ -256,9 +263,10 @@ export async function waitForHostLoadNow(
   deps: HostLoadDeps = realHostLoad,
   platform: NodeJS.Platform = process.platform,
   before = "with-temp-home; --no-wait skips",
-): Promise<string> {
+): Promise<HostLoadWait> {
   // WERKMEISTER_NO_WAIT skips it inside the command too, not only in with-temp-home's shell (SW-425).
-  if (envVar("NO_WAIT")) return "";
+  const none: HostLoadWait = { spent: false, note: "" };
+  if (envVar("NO_WAIT")) return none;
   const read = () => {
     const { load, cores } = deps.hostLoad();
     const limit = platform === "darwin" ? 0 : hostLoadLimit(cores);
@@ -270,7 +278,7 @@ export async function waitForHostLoadNow(
     };
   };
   let now = read();
-  if (!now.loadOver && !now.memory) return "";
+  if (!now.loadOver && !now.memory) return none;
   const waitedFor = [now.loadOver && "host load", now.memory && "free memory"]
     .filter(Boolean)
     .join(" and ");
@@ -292,13 +300,17 @@ export async function waitForHostLoadNow(
   for (let waited = LOAD_POLL_MS; waited <= WRAPPER_LOAD_WAIT_MS; waited += LOAD_POLL_MS) {
     await deps.sleep(LOAD_POLL_MS);
     now = read();
-    if (!now.loadOver && !now.memory) return `waited ${waited / 1000} s for ${waitedFor}`;
+    if (!now.loadOver && !now.memory)
+      return { spent: false, note: `waited ${waited / 1000} s for ${waitedFor}` };
     if (waited % LOAD_PROGRESS_MS === 0 && waited < WRAPPER_LOAD_WAIT_MS)
       info(
         `still waiting: ${state()}, ${waited / 1000} s so far, up to ${minutes(WRAPPER_LOAD_WAIT_MS - waited)} min left`,
       );
   }
-  return `ran with ${state()}; the ${minutes(WRAPPER_LOAD_WAIT_MS)} min host-load wait is spent`;
+  return {
+    spent: true,
+    note: `ran with ${state()}; the ${minutes(WRAPPER_LOAD_WAIT_MS)} min host-load wait is spent`,
+  };
 }
 
 /**
@@ -320,12 +332,12 @@ export async function waitForSetupLoad(
     .map(([name]) => name);
   if (!setups.length) return;
   const what = setups.join(", ");
-  const note = await waitForHostLoadNow(
+  const { spent, note } = await waitForHostLoadNow(
     deps,
     platform,
     `starting ${what}; WERKMEISTER_NO_WAIT=1 skips`,
   );
-  if (!note.startsWith("ran with")) return;
+  if (!spent) return;
   const { load, cores } = deps.hostLoad();
   const limit = hostLoadLimit(cores);
   const memory = lowMemory(deps.hostMemory);
