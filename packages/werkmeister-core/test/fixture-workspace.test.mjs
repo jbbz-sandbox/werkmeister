@@ -614,3 +614,20 @@ test("--pr-field status sets the gate PR file's status line verbatim, notes incl
       { gate: true, prFields: { status } },
     );
 });
+
+test("prLines seeds a raw frontmatter line, so an unquoted colon value fails the gate's YAML parse (SW-851)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const pr = fs.readFileSync(
+        path.join(fx.workspace, ".werkmeister", "notes", "pr-app.md"),
+        "utf8",
+      );
+      assert.match(pr, /^skip_release: no changeset: test-only$/m);
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      await assert.rejects(gatePrs(fx.workspace), /Quote values that contain a colon/);
+    },
+    { gate: true, prLines: ["skip_release: no changeset: test-only"] },
+  );
+});
