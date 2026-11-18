@@ -55,6 +55,7 @@ import {
 import {
   admitOrQueue,
   admitServiceStart,
+  GATE_CAPACITY_WAIT_MS,
   restart,
   startsAsPerson,
 } from "werkmeister-core/lifecycle";
@@ -264,6 +265,26 @@ describe("admitServiceStart", () => {
     expect(polls).toBe(2);
     expect(readQueue()).toEqual([]);
     expect(readWaiting(mine)).toBeNull();
+  });
+
+  // SW-869: a gate gave up at 10 min, which dropped its place; it now waits the whole command's budget in place.
+  it("a gate's start waits past 10 min in its place, keeping its wait, then starts", async () => {
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), ON_DEMAND);
+    writeLeases({ mine: { slot: 2, workspace: mine } });
+    busy(other, 7);
+    let polls = 0;
+    let since: string | undefined;
+    const sleep = async () => {
+      since ??= readWaiting(mine)?.since;
+      expect(readWaiting(mine)?.since).toBe(since);
+      if (++polls === 41) busy(other, 4); // 41 polls of 15 s: past the 10-min service wait
+    };
+    await admitServiceStart("mine", mine, "api", { sleep, waitMs: GATE_CAPACITY_WAIT_MS });
+    expect(polls).toBe(41);
+    expect(readQueue()).toEqual([]);
   });
 
   it("fails NO_CAPACITY after the wait and leaves the queue", async () => {

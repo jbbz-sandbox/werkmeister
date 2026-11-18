@@ -39,6 +39,7 @@ import { eachIssue, type IssueStatuses, issueStatuses, moveIssue } from "./issue
 import { groupOf, issueIdOf, issueRefsOf, issueTracker, projectOf } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
 import {
+  GATE_CAPACITY_WAIT_MS,
   grantWaiters,
   idleStopMinutes,
   lastExecMarker,
@@ -284,6 +285,8 @@ async function httpStatus(url: string): Promise<number> {
 }
 
 export function defaultDeps(): Deps {
+  // Built once per command, so the wait is a total across its starts, not per start (SW-869).
+  const capacityDeadline = Date.now() + GATE_CAPACITY_WAIT_MS;
   return {
     run: execRun,
     httpStatus,
@@ -332,7 +335,10 @@ export function defaultDeps(): Deps {
       return { lines: [...lines, ...granted.map((f) => `${f}: started from the waiting queue`)] };
     },
     startService: (ws, feature, service, composeName) =>
-      startService(feature, ws, service, composeName, { skipCurrentSetups: true }),
+      startService(feature, ws, service, composeName, {
+        skipCurrentSetups: true,
+        waitMs: Math.max(0, capacityDeadline - Date.now()),
+      }),
     portHolders: (ws, feature, services) => portHolders(feature, ws, services),
     gateCompose: (ws, feature, services) =>
       renderGateCompose(
