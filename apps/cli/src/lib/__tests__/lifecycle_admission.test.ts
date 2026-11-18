@@ -108,6 +108,58 @@ it("a person's up stops the autonomous feature, queues it as preempted, and is a
   expect(readWaiting(victim)).toMatchObject({ position: 1, reason: "preempted" });
 });
 
+// SW-702: nothing recorded who stopped a feature or why, so its later grant could not say.
+it("a preemption records why it stopped the victim in its workspace", async () => {
+  const victim = workspace("victim", { autonomous: true });
+  const mine = workspace("mine", { autonomous: false });
+  writeLeases({ victim: { slot: 1, workspace: victim } });
+  vi.mocked(workspaceForFeature).mockImplementation((f) => (f === "victim" ? victim : null));
+  vi.mocked(run).mockImplementation((cmd: string[]) =>
+    cmd[1] === "ps"
+      ? { status: 0, stdout: "id1\n", stderr: "" }
+      : {
+          status: 0,
+          stdout: `victim\t${victim}\t2026-10-30T10:00:00Z\t${1.5 * G}\t0\n`,
+          stderr: "",
+        },
+  );
+  try {
+    expect(await admitOrQueue("mine", mine, true)).toBeNull();
+  } finally {
+    vi.mocked(workspaceForFeature).mockReset().mockReturnValue(null);
+  }
+  const last = JSON.parse(
+    fs.readFileSync(path.join(victim, ".werkmeister", "last-stop.json"), "utf8"),
+  );
+  expect(last).toMatchObject({ why: "preempted to make room for 'mine'", killed: [] });
+});
+
+// Review: the record is best effort; a victim whose folder is gone (or unseen from a container) must still stop.
+it("a preemption stops a victim whose workspace folder is gone", async () => {
+  const victim = workspace("victim", { autonomous: true });
+  const mine = workspace("mine", { autonomous: false });
+  writeLeases({ victim: { slot: 1, workspace: victim } });
+  vi.mocked(workspaceForFeature).mockImplementation((f) =>
+    f === "victim" ? path.join(tmp, "gone") : null,
+  );
+  vi.mocked(composeStop).mockClear();
+  vi.mocked(run).mockImplementation((cmd: string[]) =>
+    cmd[1] === "ps"
+      ? { status: 0, stdout: "id1\n", stderr: "" }
+      : {
+          status: 0,
+          stdout: `victim\t${victim}\t2026-10-30T10:00:00Z\t${1.5 * G}\t0\n`,
+          stderr: "",
+        },
+  );
+  try {
+    expect(await admitOrQueue("mine", mine, true)).toBeNull();
+  } finally {
+    vi.mocked(workspaceForFeature).mockReset().mockReturnValue(null);
+  }
+  expect(composeStop).toHaveBeenCalledWith("victim");
+});
+
 // SW-738: the stop "failed" yet killed the victim, and our start ran neither way; the victim never came back.
 it("a victim whose stop fails is queued to come back, and the start waits at the head instead", async () => {
   const victim = workspace("victim", { autonomous: true });

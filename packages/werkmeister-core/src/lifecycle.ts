@@ -29,13 +29,16 @@ import * as path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   agentOf,
+  claimLastStop,
   clearPaused,
   clearWaiting,
+  type LastStop,
   nudgePath,
   readPaused,
   readSessions,
   readWaiting,
   STALE_SESSION_MS,
+  writeLastStop,
   writeNudge,
   writePaused,
   writeWaiting,
@@ -320,6 +323,8 @@ export async function up(
     // a leftover entry keeps the hook saying "queued" over running containers (SW-863), as in restart().
     await dequeue(feature);
     clearWaiting(workspace);
+    // Its stop is answered by this start; a later grant must not report it (SW-702). The grant claims it first.
+    claimLastStop(workspace);
   } else {
     info("No local services to start -- routing entirely to k8s");
     const onDemand = onDemandServices(servicesConfig, localServices, workspace);
@@ -1085,13 +1090,21 @@ const GRANTED_NUDGE =
  * The granted session's nudge. Preemption stops on-demand containers too, and the grant's `up` starts
  * only the default set, so name each one left stopped and how to start it (SW-840).
  */
-async function grantedNudge(feature: string): Promise<string> {
+async function grantedNudge(feature: string, last: LastStop | null): Promise<string> {
   const stopped = (await getContainerStatus(feature)).filter(
     (c) => c.status !== "running" && !isOneShotService(c.service, c.role),
   );
-  if (!stopped.length) return GRANTED_NUDGE;
+  // Say why it was down at all (SW-702): nothing else tells the session who stopped it.
+  const why = last
+    ? `Werkmeister had stopped it (${last.why})` +
+      (last.killed.length
+        ? `, killing ${last.killed.map((c) => `\`${c}\``).join(", ")}: rerun them`
+        : "") +
+      ". "
+    : "";
+  if (!stopped.length) return why + GRANTED_NUDGE;
   return (
-    `Capacity freed: this workspace started, but these containers are still stopped: ${stopped.map((c) => c.name).join(", ")}. ` +
+    `${why}Capacity freed: this workspace started, but these containers are still stopped: ${stopped.map((c) => c.name).join(", ")}. ` +
     `Start them with ${stopped.map((c) => `\`werkmeister feature up --service ${c.service}\``).join(", ")}, ` +
     "then continue where you left off."
   );
@@ -1254,41 +1267,50 @@ async function grantWaitersNow(): Promise<string[]> {
       await dequeue(feature);
       continue;
     }
-    const waiting = readWaiting(workspace);
-    if (waiting?.parked) {
-      if (await startParked(feature, workspace, waiting.parked.service)) {
-        started.push(feature);
-        if (liveSessions(workspace).length) writeNudge(workspace, await grantedNudge(feature));
-      }
-      continue;
-    }
-    // A service start's own poll admits it; `up` would start the wrong set and dequeue it.
-    if (waiting?.services) continue;
-    let r: UpResult;
+    // Before up(), which drops the record on any start, so only this grant's nudge reports it (SW-702).
+    const last = claimLastStop(workspace);
     try {
-      r = await up(feature, workspace, { byPerson: false });
-    } catch (e) {
-      // One waiter's failed re-up (HOST_LOAD, NO_COMPOSE, ...) must not end the pass for the rest (SW-737).
-      const message = `Could not start '${feature}' from the waiting queue: ${(e as Error).message}`;
-      warn(message);
-      // Admission already dropped it (never fits, or a start that failed after admit): only its session can act (SW-682, SW-848).
-      if (!readQueue().includes(feature)) {
-        clearWaiting(workspace);
-        // A never-fits rerun would fail the same way; its message already says what to change.
-        const neverFits = e instanceof SandboxError && e.code === "NEVER_FITS";
-        writeNudge(
-          workspace,
-          neverFits
-            ? message
-            : `${message}\nIt left the queue: run \`werkmeister feature up\` to queue it again.`,
-        );
+      const waiting = readWaiting(workspace);
+      if (waiting?.parked) {
+        if (await startParked(feature, workspace, waiting.parked.service)) {
+          started.push(feature);
+          if (liveSessions(workspace).length)
+            writeNudge(workspace, await grantedNudge(feature, last));
+        }
+        continue;
       }
-      continue;
+      // A service start's own poll admits it; `up` would start the wrong set and dequeue it.
+      if (waiting?.services) continue;
+      let r: UpResult;
+      try {
+        r = await up(feature, workspace, { byPerson: false });
+      } catch (e) {
+        // One waiter's failed re-up (HOST_LOAD, NO_COMPOSE, ...) must not end the pass for the rest (SW-737).
+        const message = `Could not start '${feature}' from the waiting queue: ${(e as Error).message}`;
+        warn(message);
+        // Admission already dropped it (never fits, or a start that failed after admit): only its session can act (SW-682, SW-848).
+        if (!readQueue().includes(feature)) {
+          clearWaiting(workspace);
+          // A never-fits rerun would fail the same way; its message already says what to change.
+          const neverFits = e instanceof SandboxError && e.code === "NEVER_FITS";
+          writeNudge(
+            workspace,
+            neverFits
+              ? message
+              : `${message}\nIt left the queue: run \`werkmeister feature up\` to queue it again.`,
+          );
+        }
+        continue;
+      }
+      // Backfill (SW-675): a later waiter may fit; admission itself holds the room for a starved head.
+      if (r.waiting !== undefined) continue;
+      started.push(feature);
+      if (liveSessions(workspace).length) writeNudge(workspace, await grantedNudge(feature, last));
+    } finally {
+      // Still waiting: the grant that starts it reports the stop.
+      if (last && !started.includes(feature) && readQueue().includes(feature))
+        writeLastStop(workspace, last);
     }
-    // Backfill (SW-675): a later waiter may fit; admission itself holds the room for a starved head.
-    if (r.waiting !== undefined) continue;
-    started.push(feature);
-    if (liveSessions(workspace).length) writeNudge(workspace, await grantedNudge(feature));
   }
   return started;
 }
@@ -1374,7 +1396,13 @@ export async function stop(
       .filter((c) => c.status === "running")
       .map((c) => c.name);
     const killed = await runningExecCommands(names);
-    if (killed.length) writeNudge(workspace, killedNudge(why, killed));
+    // Best effort: a folder gone, or unseen from a container (SW-860), must not block the stop.
+    try {
+      writeLastStop(workspace, { at: new Date().toISOString(), why, killed });
+      if (killed.length) writeNudge(workspace, killedNudge(why, killed));
+    } catch (e) {
+      warn(`Could not tell '${feature}' why it stopped: ${(e as Error).message}`);
+    }
   }
 
   info(`Stopping containers for '${feature}' (slot ${slot})...`);

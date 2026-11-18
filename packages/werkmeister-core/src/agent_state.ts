@@ -504,6 +504,35 @@ export function clearWaiting(root: string): void {
   fs.rmSync(waitingPath(root), { force: true });
 }
 
+/** Why werkmeister last stopped this workspace on its own (SW-702): preemption or the idle reaper. */
+export interface LastStop {
+  at: string;
+  why: string;
+  killed: string[];
+}
+
+const lastStopPath = (root: string) => path.join(dotDir(root), "last-stop.json");
+
+export function writeLastStop(root: string, stop: LastStop): void {
+  writeAtomic(lastStopPath(root), stop);
+}
+
+/** Read and remove the last stop, so one grant reports it once. */
+export function claimLastStop(root: string): LastStop | null {
+  try {
+    const o = JSON.parse(fs.readFileSync(lastStopPath(root), "utf8"));
+    fs.rmSync(lastStopPath(root), { force: true });
+    if (typeof o?.why !== "string") return null;
+    return {
+      at: String(o.at),
+      why: o.why,
+      killed: Array.isArray(o.killed) ? o.killed.map(String) : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** The pending "continue" for a live session, left by Resume for the pane to deliver. */
 export function readNudge(root: string): string | null {
   try {

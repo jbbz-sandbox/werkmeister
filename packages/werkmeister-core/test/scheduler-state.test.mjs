@@ -8,7 +8,13 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { readNudge, readWaiting, waitingPath, writeWaiting } from "../dist/agent_state.js";
+import {
+  readNudge,
+  readWaiting,
+  waitingPath,
+  writeLastStop,
+  writeWaiting,
+} from "../dist/agent_state.js";
 import { loadPorts, loadServices } from "../dist/config.js";
 import { generateFeatureCompose } from "../dist/generate.js";
 import { grantWaiters, runningFeatures, runningLeases, up } from "../dist/lifecycle.js";
@@ -712,3 +718,30 @@ test("an up admitted with Docker unreadable leaves the queue and waiting.json on
       assert.equal(fs.existsSync(waitingPath(ws)), false);
     },
   ));
+
+// SW-702: a preempted session heard "Capacity freed" and nothing about why it had been down.
+test("the grant's nudge names why werkmeister stopped the feature and what it killed, once (SW-702)", () =>
+  queuedBehindHolders(
+    (fx) =>
+      writeLastStop(path.join(fx.root, "ws", "big"), {
+        at: "2026-11-18T00:00:00Z",
+        why: "preempted to make room for 'other'",
+        killed: ["pnpm test"],
+      }),
+    (_started, ws) => {
+      assert.match(
+        readNudge(ws) ?? "",
+        /^Werkmeister had stopped it \(preempted to make room for 'other'\), killing `pnpm test`: rerun them\. Capacity freed/,
+      );
+      assert.equal(fs.existsSync(path.join(ws, ".werkmeister", "last-stop.json")), false);
+    },
+  ));
+
+// Review (SW-702): a record no grant reported (its session had ended) was told on a much later, unrelated grant.
+test("a start drops a stop record no grant reported, so a later grant can't report it stale (SW-702)", () =>
+  queuedBehindHolders(undefined, async (_started, ws) => {
+    const record = path.join(ws, ".werkmeister", "last-stop.json");
+    writeLastStop(ws, { at: "2026-11-16T00:00:00Z", why: "idle ≥ 10 min", killed: [] });
+    await withReporter(collectingReporter().reporter, () => up("big", ws, { byPerson: false }));
+    assert.equal(fs.existsSync(record), false);
+  }));
