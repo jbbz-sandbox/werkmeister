@@ -77,7 +77,8 @@ ${appRow}
 1. ${searchStep}
 2. Title: one-line summary. Label or issue type: from the type table. Body: the template for its type, via \`--body-file\`.
 3. Paste exact commands and error output — don't paraphrase.
-4. Tell the person the issue URL, then resume what you were doing.
+4. Cite this run's own files (\`stages/*/output/*\`, scripts it wrote) by this workspace's record branch on the workspace repo (\`git -C <workspace root> branch --show-current\`) plus the path, or a permalink at the pushed commit, never by the workspace folder: close-out removes the folder, and the issue is usually worked after that.
+5. Tell the person the issue URL, then resume what you were doing.
 
 ## Body template: bug
 
