@@ -1,5 +1,20 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.95.0
+
+### Minor Changes
+
+- 8ce9825: SW-717: `werkmeister pr push [repo]` force-pushes an open PR's rebased branch with `--force-with-lease` on `origin/<branch>`, so a session finishes rule 5's conflict fix without the person. It refuses anything but the workspace's own checked-out branch, a dirty tree, a merge from the base, or a lease origin no longer matches. ICM workspaces pre-approve it; rule 5 and the conflict wake message name it. SDK: `pushPrs`.
+- 6b0433e: SW-795: `werkmeister workspace abandon "<reason>"` (and the `close-out` MCP tool with `abandon`) now moves a Jira issue to Done instead of leaving it In Progress, so an abandoned ticket leaves the queue. The comment reads `Abandoned, not shipped: <reason>` and names the branch that holds `postmortem.md`. `--keep-open` (MCP `keep_open`) puts the issue back as To Do instead, for work parked to retry later. Set `issue_statuses.abandoned: null` to keep the old comment-only behaviour.
+
+### Patch Changes
+
+- 51e1348: SW-733: `werkmeister pr gate` fails a branch that holds a merge commit from its base, naming the rebase to run instead, since a rebase merge queue replays only non-merge commits.
+- 1c5abaf: SW-827: the generated `issues-report.md` and the postmortem skill tell a run to cite its own files by the workspace record branch plus path (or a permalink), never by the workspace folder, which close-out removes.
+- 2eca2ca: SW-874: `workspace init` warns when `work_type` names no template (e.g. `bug`), naming the valid keys, instead of silently using the feature stages.
+- 22e16b2: SW-878: an issue fetched from Jira REST now reads as Markdown, not Jira wiki markup, in `.werkmeister/issue.md` and `werkmeister issue view`: `{{code}}` becomes backticks, `\-` escapes are dropped, smart links become Markdown links named by their issue key, and headings, lists, bold and `{code}` blocks are converted.
+- 4367479: SW-886: `workspace create` counts a service named in a nested Markdown list item, which it used to drop as an indented log line.
+
 ## 0.94.4
 
 ### Patch Changes
