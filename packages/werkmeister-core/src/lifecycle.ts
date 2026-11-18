@@ -502,6 +502,8 @@ export async function startService(
 
 const SERVICE_POLL_MS = 15_000;
 const SERVICE_WAIT_MS = 10 * 60_000;
+/** One deadline for all of a `pr gate` / `pr open` run's service starts (SW-869): giving up drops the queue place, so wait longer in place rather than ask for a rerun. */
+export const GATE_CAPACITY_WAIT_MS = 30 * 60_000;
 
 /**
  * Admit starting *service* (and what compose starts with it) against the budget,
@@ -600,7 +602,7 @@ export async function admitServiceStart(
           parked = true;
         }
         throw new SandboxError(
-          `No capacity to start ${services.join(", ")} for '${feature}' after ${waitMs / 60_000} min ` +
+          `No capacity to start ${services.join(", ")} for '${feature}' after ${Math.round(waitMs / 60_000)} min ` +
             `(queue position ${position})${parked ? "; it stays queued" : ""}.` +
             (released.length
               ? ` ${[...up].join(", ")} stayed stopped; \`werkmeister feature up\` starts the feature again.`
@@ -612,7 +614,7 @@ export async function admitServiceStart(
       if (!waited) {
         warn(
           // SW-734: say how a wait the person doesn't want ends.
-          `Waiting for capacity to start ${services.join(", ")}: position ${position}, up to ${waitMs / 60_000} min. ` +
+          `Waiting for capacity to start ${services.join(", ")}: position ${position}, up to ${Math.round(waitMs / 60_000)} min. ` +
             "Stopping the command ends the wait; `pr gate` and `pr open` start no service the PR file's `skip_tests` names.",
         );
       }
