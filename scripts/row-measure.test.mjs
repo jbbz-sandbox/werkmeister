@@ -52,6 +52,15 @@ test("wait_quiet refuses with 75 above the limit and passes under it", async () 
   assert.deepEqual([quiet.stdout, quiet.stderr], ["ok 0.5\n", ""]);
 });
 
+// SW-824: awk compares a non-number as text, so `5 > abc` is false and the wait was silently off.
+test("wait_quiet rejects a non-numeric ROW_LOAD_LIMIT", async () => {
+  await assert.rejects(sh("wait_quiet", { ROW_BUSY: "5", ROW_LOAD_LIMIT: "abc" }), (e) => {
+    assert.equal(e.code, 2);
+    assert.match(e.stderr, /ROW_LOAD_LIMIT takes cores, got 'abc'/);
+    return true;
+  });
+});
+
 // A fake docker on PATH stands in for the container: each "run" records the worktree's a.txt as its wall time,
 // so the medians show A ran on the base and B on the branch, and the tree is checked afterwards.
 const FAKE_DOCKER = `#!/bin/sh
@@ -147,11 +156,16 @@ test("ab-row keeps and flags the last run when the tries run out, and ROW_OTHERS
   assert.match(onceTxt, /flagged: others 188\.8 s over 30 s after 1 tries/);
 });
 
-test("ab-row rejects a bad ROW_OTHERS_TRIES", async () => {
+test("ab-row rejects a bad ROW_OTHERS_TRIES or a non-numeric ROW_OTHERS_LIMIT (SW-824)", async () => {
   const { ab } = await abRepo();
   await assert.rejects(ab({ ROW_OTHERS_TRIES: "0" }), (e) => {
     assert.equal(e.code, 1);
     assert.match(e.stderr, /ROW_OTHERS_TRIES takes an attempt count, got '0'/);
+    return true;
+  });
+  await assert.rejects(ab({ ROW_OTHERS_LIMIT: "abc" }), (e) => {
+    assert.equal(e.code, 1);
+    assert.match(e.stderr, /ROW_OTHERS_LIMIT takes seconds, got 'abc'/);
     return true;
   });
 });

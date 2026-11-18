@@ -37,6 +37,8 @@ shift $((OPTIND - 1))
 case $n in '' | *[!0-9]* | 0) die "-n takes a pair count, got '$n'" ;; esac
 others_limit=${ROW_OTHERS_LIMIT:-30} tries=${ROW_OTHERS_TRIES:-2}
 case $tries in '' | *[!0-9]* | 0) die "ROW_OTHERS_TRIES takes an attempt count, got '$tries'" ;; esac
+# awk compares a non-number as text, so a typo would turn the rerun off silently (SW-824).
+case $others_limit in '' | *[!0-9.]*) die "ROW_OTHERS_LIMIT takes seconds, got '$others_limit'" ;; esac
 
 repo=$(git rev-parse --show-toplevel) || exit 1
 repo=$(cd "$repo" && pwd -P)
