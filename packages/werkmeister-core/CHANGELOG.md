@@ -1,5 +1,12 @@
 # sandbox-core
 
+## 0.95.0
+
+### Minor Changes
+
+- 8ce9825: SW-717: `werkmeister pr push [repo]` force-pushes an open PR's rebased branch with `--force-with-lease` on `origin/<branch>`, so a session finishes rule 5's conflict fix without the person. It refuses anything but the workspace's own checked-out branch, a dirty tree, a merge from the base, or a lease origin no longer matches. ICM workspaces pre-approve it; rule 5 and the conflict wake message name it. SDK: `pushPrs`.
+- 6b0433e: SW-795: `werkmeister workspace abandon "<reason>"` (and the `close-out` MCP tool with `abandon`) now moves a Jira issue to Done instead of leaving it In Progress, so an abandoned ticket leaves the queue. The comment reads `Abandoned, not shipped: <reason>` and names the branch that holds `postmortem.md`. `--keep-open` (MCP `keep_open`) puts the issue back as To Do instead, for work parked to retry later. Set `issue_statuses.abandoned: null` to keep the old comment-only behaviour.
+
 ## 0.94.4
 
 ### Patch Changes
