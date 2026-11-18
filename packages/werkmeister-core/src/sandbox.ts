@@ -1289,21 +1289,34 @@ export async function distillIssue(
 }
 
 /**
- * The registered services in *repos* whose id the issue spells out as a whole
- * word: matched, not model-picked, so an unattended create stays deterministic.
+ * The registered services in *repos* that *text* names: by id as a whole word,
+ * or by the service's `path` (`packages/x`, `packages/x/src/y.ts`). Matched, not
+ * model-picked: on the issue text an unattended create is deterministic; the
+ * starting-prompt fallback is only as stable as the brief it reads. Quoted commands and
+ * logs are evidence, not a choice (SW-707): code blocks, indented lines and code
+ * spans holding whitespace are dropped first; a one-word span like `{{api}}` stays.
  */
-function servicesNamedIn(issue: IssueSnapshot, repos: string[]): string[] {
+function servicesNamedIn(text: string, repos: string[]): string[] {
   const wanted = new Set(repos.map((r) => r.trim()).filter(Boolean));
-  // Jira wiki markup escapes hyphens (`smart\-app`).
-  const text = [issue.title, issue.body, ...issue.comments.map((c) => c.body)]
-    .join("\n")
-    .replace(/\\/g, "");
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const prose = text
+    .replace(/\\/g, "") // Jira wiki markup escapes hyphens (`smart\-app`).
+    .replace(/\{(code|noformat)[^}]*\}[\s\S]*?\{\1\}/g, "")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/^(?: {4}|\t).*$/gm, "")
+    // One span at a time: a pattern spanning two spans would eat the prose between them.
+    .replace(/\{\{[^}]*\}\}|`[^`\n]*`/g, (m) => (/\s/.test(m) ? "" : m));
   return Object.entries(loadServices())
     .filter(([, def]) => wanted.has(String(def?.repo ?? "")))
+    .filter(([id, def]) => {
+      const p = String(def?.path ?? "").replace(/^\.?\/+|\/+$/g, "");
+      return (
+        new RegExp(`(?<![\\w./-])${esc(id)}(?![\\w/-])`).test(prose) ||
+        // A one-segment path (`docs`) is too often a plain word.
+        (p.includes("/") && new RegExp(`(?<![\\w.-])${esc(p)}(?![\\w.-])`).test(prose))
+      );
+    })
     .map(([id]) => id)
-    .filter((id) =>
-      new RegExp(`(?<![\\w./-])${id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![\\w/-])`).test(text),
-    )
     .sort();
 }
 
@@ -1352,25 +1365,32 @@ export async function prepareCreate(
     rawServices !== null &&
     rawServices !== undefined &&
     (Array.isArray(rawServices) ? rawServices : [rawServices]).every((v) => !String(v).trim());
-  if (!resolved.services && resolved.repos && !blankOnPurpose) {
-    const named = servicesNamedIn(issue, resolved.repos.split(","));
-    if (named.length) {
-      resolved.services = named.join(",");
-      info(
-        `Services taken from the issue text: ${resolved.services} (pass --services "" for none)`,
-      );
-    }
-  }
-
   if (opts.distill !== false && (!resolved.description || !resolved.starting_prompt)) {
     const { fields, warning } = await distillIssue(
       issue,
       opts.distill ?? ((p) => harness().ask(p)),
     );
-    // Only the prose: a model-picked feature or services would make unattended creates nondeterministic.
+    // Only the prose, never a model-picked feature or services list; the services step below may
+    // still match names in this starting prompt when the issue text names none (SW-707).
     for (const k of ["description", "starting_prompt"])
       if (!resolved[k] && fields[k]) resolved[k] = fields[k];
     if (warning) warn(`description/starting_prompt not filled from the issue: ${warning}`);
+  }
+
+  if (!resolved.services && resolved.repos && !blankOnPurpose) {
+    const repos = resolved.repos.split(",");
+    const issueText = [issue.title, issue.body, ...issue.comments.map((c) => c.body)].join("\n");
+    let named = servicesNamedIn(issueText, repos);
+    let from = "the issue text";
+    // SW-707: the issue may name a service only as evidence; the brief's "service X" is the next signal.
+    if (!named.length && resolved.starting_prompt) {
+      named = servicesNamedIn(resolved.starting_prompt, repos);
+      from = "the starting prompt";
+    }
+    if (named.length) {
+      resolved.services = named.join(",");
+      info(`Services taken from ${from}: ${resolved.services} (pass --services "" for none)`);
+    }
   }
   return { resolved, issue };
 }

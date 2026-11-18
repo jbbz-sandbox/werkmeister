@@ -292,3 +292,51 @@ test("a missing feature tells the CLI user how to give one", () => {
     /^WorkspaceError: A feature name is required \(pass it as an argument, set it in \.\/\.werkmeister\/workspace\.yml, or run interactively\)\.$/,
   );
 });
+
+test("a service named only in a quoted command is not taken; the brief's service or a named code path is (SW-707)", async () => {
+  const services = `services:
+  docs-site:
+    type: web
+    repo: demo-repo
+    path: apps/docs-site
+    port_offset: 2
+  werkmeister-core:
+    type: api
+    repo: demo-repo
+    path: packages/werkmeister-core
+    port_offset: 3
+`;
+  // SW-614's body: the evidence command names docs-site; nothing else names a service.
+  const quoted =
+    "On 2026-11-08 {{werkmeister feature up \\-\\-service docs\\-site}} printed:\n\n" +
+    "    [warn] werkmeister daemon not reachable (ECONNRESET).\n";
+  const create = (body, distill) =>
+    withFakeGh({ issue: { ...ISSUE, body } }, () =>
+      quiet(() =>
+        prepareCreate({ issue_id: "o/r#5", repos: "demo-repo" }, { cwd: cwd(), distill }),
+      ),
+    );
+  await withSandboxHome(
+    async () => {
+      const bare = await create(quoted, false);
+      assert.equal(bare.resolved.services, undefined, "a --service inside a quoted command");
+      const block = await create(
+        "{noformat}\nwerkmeister-core: ok\n{noformat}\n```\ndocs-site\n```",
+        false,
+      );
+      assert.equal(block.resolved.services, undefined, "ids only inside log blocks");
+      const byPath = await create(
+        `${quoted}\nThe client is in {{packages/werkmeister\\-core/src}}.`,
+        false,
+      );
+      assert.equal(byPath.resolved.services, "werkmeister-core", "a code path the issue names");
+      const between = await create("Fix `a b` in werkmeister-core, see `c d` too.", false);
+      assert.equal(between.resolved.services, "werkmeister-core", "prose between two code spans");
+      const brief =
+        '<result>{"description":"D.","starting_prompt":"## Where to start\\n- Repo werkmeister, service werkmeister-core."}</result>';
+      const byBrief = await create(quoted, async () => brief);
+      assert.equal(byBrief.resolved.services, "werkmeister-core", "the brief's named service");
+    },
+    { config: GH, services },
+  );
+});
