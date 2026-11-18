@@ -45,14 +45,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { parse as parseYaml } from "yaml";
-
 import {
   candidateServiceNames,
   containerTestCommand,
   hostAccess,
   isPlainChain,
   serviceTestCommand,
+  withComposeMounts,
   wrappedTestCommand,
 } from "../../archetypes.js";
 import {
@@ -64,7 +63,6 @@ import {
   loadServices,
   type ReposConfig,
   type ServicesConfig,
-  sandboxRoot,
 } from "../../config.js";
 import { frozenInstalls } from "../../fragment_detect/workspace.js";
 import { load as loadGlobalConfig } from "../../global_config.js";
@@ -575,41 +573,6 @@ export function buildAllowRules(
   return [...new Set([...rules, ...READ_ONLY_GIT_RULES])];
 }
 
-/**
- * SW-845: *registry* with each entry's `extra_volumes` widened to every bind compose mounts: the
- * branch's own fragment and the workspace's `dev_links` too (both agent-editable), variables
- * substituted as generate.ts does. Only the mounts: test commands stay the registry's.
- */
-function withComposeMounts(registry: ServicesConfig, workspaceRoot: string): ServicesConfig {
-  const branch = workspaceServices(registry, workspaceRoot);
-  // generate.ts's loadDevLinks reads the same field; importing it closes a cycle (generate → claude_md → jira → here).
-  let devLinks: Record<string, string[]> = {};
-  try {
-    const yml = parseYaml(
-      fs.readFileSync(path.join(dotDir(workspaceRoot), "workspace.yml"), "utf8"),
-    );
-    devLinks = yml?.["dev_links"] ?? {};
-  } catch {
-    // No workspace.yml (or unreadable): no dev_links, as generate.ts reads it.
-  }
-  return Object.fromEntries(
-    Object.entries(registry).map(([id, entry]) => {
-      const repo = path.join(workspaceRoot, String(branch[id]?.["repo"] ?? entry["repo"] ?? ""));
-      const specs = [
-        ...(entry.extra_volumes ?? []),
-        ...(branch[id]?.extra_volumes ?? []),
-        ...(devLinks[id] ?? []),
-      ].map((s) => {
-        const out = s.split("${WORKSPACE}").join(workspaceRoot).split("${REPO}").join(repo);
-        return out.includes("${WERKMEISTER_ROOT}")
-          ? out.split("${WERKMEISTER_ROOT}").join(sandboxRoot())
-          : out;
-      });
-      return [id, { ...entry, extra_volumes: specs }];
-    }),
-  );
-}
-
 function _readEnv(workspaceRoot: string): Record<string, string> {
   let text: string;
   try {
@@ -658,10 +621,11 @@ export function workspaceAllowRules(
   }
   const extra = hostServices.filter((s) => !services.includes(s));
   const any = services.length > 0 || extra.length > 0;
+  const loaded = any ? loadServices() : {};
   const rules = buildAllowRules(
     any ? feature : "",
     services,
-    any ? withComposeMounts(loadServices(), workspaceRoot) : {},
+    any ? withComposeMounts(loaded, workspaceRoot, workspaceServices(loaded, workspaceRoot)) : {},
     any ? loadArchetypes() : {},
     wrapper,
     builtClis,

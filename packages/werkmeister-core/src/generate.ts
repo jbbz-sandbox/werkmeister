@@ -17,7 +17,7 @@ import { isDeepStrictEqual } from "node:util";
 import nunjucks from "nunjucks";
 import * as YAML from "yaml";
 
-import { candidateServiceNames } from "./archetypes.js";
+import { candidateServiceNames, withComposeMounts } from "./archetypes.js";
 import { applyCaches } from "./build_caches.js";
 import { projectName } from "./compose.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
@@ -1802,7 +1802,12 @@ export async function generateWorkspaceCompose(
     portStart,
     portEnd,
     localServices,
-    servicesConfig,
+    // SW-872: the mounts compose gives (fragment, dev_links), as the allow rules count them.
+    withComposeMounts(
+      servicesConfig,
+      workspaceRoot,
+      workspaceServices(servicesConfig, workspaceRoot),
+    ),
     testPath,
     null,
     candidateServiceNames(repoNames, reposConfig, localServices),
