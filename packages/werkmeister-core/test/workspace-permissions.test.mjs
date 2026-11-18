@@ -354,14 +354,14 @@ test("SW-560: no route past the registered commands to scripts, readers, docker 
     ])
       assert.ok(!runs(cmd), cmd);
     // SW-649: a repo-less workspace has no lockfile install; the per-repo ones are tested below.
+    // SW-626: and no `-C` rule; the per-repo ones are tested there.
     for (const cmd of [
       "git status",
-      "git -C werkmeister diff",
+      "git diff",
       "git commit -m x",
       "git commit -m fix config loader",
       "git add config src",
-      "git grep -c x",
-      "git -C . log -1 -- config",
+      "git log -1 -- config",
     ])
       assert.ok(runs(cmd), cmd);
   }
@@ -1273,4 +1273,84 @@ test("SW-625: `pr` and `workspace init` rules stop at the workspace's own forms;
     assert.ok(AUTONOMOUS_DENY.includes(`Edit(/${f})`), f);
   // The gate's logs land in .werkmeister/ by redirect, so the folder itself stays writable.
   assert.ok(!AUTONOMOUS_DENY.includes("Edit(/.werkmeister/**)"));
+});
+
+// A deny rule's `*` matches any run of characters; `:*` at the end is a word-boundary prefix.
+const claudeDenies = (rules, cmd) =>
+  rules.some((r) => {
+    const m = /^Bash\((.*?)(:\*)?\)$/.exec(r);
+    if (!m) return false;
+    if (m[2]) return cmd === m[1] || cmd.startsWith(`${m[1]} `);
+    const re = m[1].split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&"));
+    return new RegExp(`^${re.join(".*")}$`).test(cmd);
+  });
+
+test("SW-626: git is an allow-list; `-C` reaches only the workspace's own repos", async () => {
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  await withSandboxHome(async () => {
+    const root = workspace();
+    fs.mkdirSync(dotDir(root), { recursive: true });
+    fs.mkdirSync(path.join(root, "repo", ".git"), { recursive: true });
+    fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\n");
+    const repo = path.join(root, "repo");
+    const allow = workspaceAllowRules(root, true);
+    assert.ok(!allow.includes("Bash(git:*)"), "no blanket git rule");
+    for (const cmd of [
+      "git status",
+      "git diff origin/main...HEAD -- src",
+      "git log --oneline -5",
+      "git add stages/01_reproduce/output/repro.md",
+      'git commit -q -m "SW-626 fix"',
+      "git fetch origin main",
+      "git fetch",
+      "git remote -v",
+      "git remote get-url origin",
+      "git rebase origin/main",
+      "git rebase --continue",
+      `git -C ${repo} status --short`,
+      `git -C ${repo} rebase origin/main`,
+      "git -C repo log --oneline HEAD..origin/main",
+      "git worktree list",
+    ])
+      assert.ok(claudeAllows(allow, cmd), cmd);
+    for (const cmd of [
+      "git rebase -x 'sh evil.sh' origin/main",
+      "git rebase origin/main -x 'sh evil.sh'",
+      "git bisect run sh evil.sh",
+      "git submodule foreach sh evil.sh",
+      "git difftool -x evil HEAD",
+      "git push origin HEAD",
+      "git init sub",
+      "git clone /x y",
+      "git worktree add ../x",
+      "git stash",
+      "git -C /Users/x/features/other reset --hard",
+      "git -C /Users/x/features/other status",
+      `git -C ${repo} -c alias.x=!sh x`,
+      `git -C ${repo}/../../other status`,
+      "git --work-tree=/x status",
+      // Review of SW-626: fetch takes any URL or `--upl=<cmd>`, `remote -v` dispatches add/set-url, grep -O runs a pager.
+      "git fetch /Users/x/features/other/repo",
+      "git fetch --upl='touch m' .",
+      "git remote -v add evil https://x/y.git",
+      "git remote -v set-url origin https://x/y.git",
+      "git grep -lO'touch m' a",
+      "git grep --open='touch m' a",
+    ])
+      assert.ok(!claudeAllows(allow, cmd), cmd);
+  });
+  // `--output` writes any path, `--no-index` reads any; git takes no abbreviation of either.
+  for (const cmd of [
+    "git log -1 --format=tformat:FEATURE=other --output=.env",
+    "git -C /ws/repo show HEAD --output=/Users/x/.werkmeister/services.local.yaml",
+    "git diff --output=x",
+    "git diff --no-index /dev/null /Users/x/.werkmeister/config.yaml",
+    "git -C /ws/repo diff --no-index a b",
+  ])
+    assert.ok(claudeDenies(AUTONOMOUS_DENY, cmd), cmd);
+  assert.ok(
+    AUTONOMOUS_DENY.includes("Edit(/.git/**)") && AUTONOMOUS_DENY.includes("Edit(/**/.git/**)"),
+  );
+  for (const cmd of ['git commit -m "fix config"', "git diff HEAD~1", "git log -p"])
+    assert.ok(!claudeDenies(AUTONOMOUS_DENY, cmd), cmd);
 });
