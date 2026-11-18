@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.94.3
+
+### Patch Changes
+
+- 31dd7fd: Shared infra made from an old checkout path is detected. A container made from another checkout's compose file is named, with `werkmeister infra up` as the fix, by `feature up`, `infra proxy-reload`, `feature status` and `infra status`. `infra up` now recreates those containers too, including one whose only drift is the files it was made from. Caddy counts as unhealthy when its `/__werkmeister` picker page is missing from its mount, which used to 404 on every routed host.
+- 879f709: `feature stop --via-daemon` (the SessionEnd auto-stop) calls the daemon even when the CLI can't find its own daemon build for the build header. The lookup failure used to throw before the request, and the error was dropped, so the stop did nothing and exited 0. It now sends no header, and any daemon error other than "not running" is printed.
+
 ## 0.94.2
 
 ### Patch Changes
