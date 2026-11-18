@@ -34,6 +34,7 @@ import {
 import { stageDecisions } from "./icm_decisions.js";
 import {
   askLine,
+  ICM_TEMPLATES,
   type IcmVars,
   prDir,
   proposeDir,
@@ -486,6 +487,12 @@ function drifted(root: string): Array<[string, string]> {
 function init(ctx: InitContext): void {
   const root = ctx.workspaceRoot;
   const stages = templateFor(ctx.inputs["work_type"] ?? "");
+  // templateFor falls back to feature silently; a typo (`bug`) would get the wrong stages unnoticed (SW-874).
+  const wt = (ctx.inputs["work_type"] ?? "").trim().toLowerCase();
+  if (wt && !Object.hasOwn(ICM_TEMPLATES, wt))
+    warn(
+      `work_type "${ctx.inputs["work_type"]}" is not a template; using feature. Valid: ${Object.keys(ICM_TEMPLATES).join(", ")}.`,
+    );
   const foreign = foreignStageDirs(root, stages);
   if (foreign.length) {
     warn(

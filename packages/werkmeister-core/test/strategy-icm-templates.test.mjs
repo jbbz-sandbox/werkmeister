@@ -41,6 +41,33 @@ test("templateFor normalises free-text casing and whitespace", () => {
   );
 });
 
+test("init with an unknown work_type warns and names the valid keys (SW-874)", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "icm-wt-"));
+  const std = fs.mkdtempSync(path.join(os.tmpdir(), "icm-wt-standards-"));
+  try {
+    const log = collectingReporter();
+    await withSandboxHome(
+      () =>
+        withReporter(log, async () =>
+          strategyById("icm").init({
+            workspaceRoot: root,
+            workspaceName: "demo",
+            repos: [["repo", "me/demo"]],
+            task: "t",
+            meta: { FEATURE: "demo", SERVICES: "api" },
+            inputs: { work_type: "bug", starting_prompt: "p", autonomous: "false" },
+            configOverride: null,
+          }),
+        ),
+      { config: `overrides:\n  standards_dir: ${std}\n` },
+    );
+    assert.match(log.text(), /work_type "bug".*feature, bugfix, incident, refactor, spike/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(std, { recursive: true, force: true });
+  }
+});
+
 test("each template renders with no undefined and a route per stage", async () => {
   for (const wt of Object.keys(EXPECTED)) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), `icm-${wt}-`));
