@@ -59,6 +59,8 @@ measure_one() {
 # returns 75 (with-temp-home's "load still over") when the wait runs out. Sets busy_before, waited_s.
 wait_quiet() {
   limit=${ROW_LOAD_LIMIT:-1.0}
+  # awk compares a non-number as text, so a typo would turn the wait off silently (SW-824).
+  case $limit in '' | *[!0-9.]*) echo "row: ROW_LOAD_LIMIT takes cores, got '$limit'" >&2; return 2 ;; esac
   max=${ROW_LOAD_WAIT:-600}
   waited_s=0
   busy_before=$(busy_cores)
