@@ -3154,6 +3154,7 @@ export async function adoptPr(
 
   let fm: Record<string, unknown>;
   let title: string;
+  let unopened: PrFile | null = null;
   if (opts.noPr !== undefined) {
     if (!opts.noPr.trim()) throw new WorkspaceError("--no-pr needs a reason.");
     taken();
@@ -3187,11 +3188,14 @@ export async function adoptPr(
     const tracked = readPrFiles(ws).find((f) => f.fm["url"] === pr.url);
     if (tracked)
       throw new WorkspaceError(`${pr.url} is already tracked in ${path.basename(tracked.path)}.`);
-    // The worktree's first PR file is taken: adopt as a follow-up named by PR number (SW-103).
-    const followUp = fs.existsSync(file);
-    if (followUp) file = path.join(dir, `pr-${repo}-${/\/pull\/(\d+)/.exec(pr.url)?.[1]}.md`);
-    taken();
     const merged = pr.state === "MERGED";
+    const existing = fs.existsSync(file) ? parsePrFile(file) : null;
+    // SW-735: a PR file never opened (no url) is this PR's record: fill in its fields, keep its body.
+    if (existing && !existing.fm["url"]) unopened = existing;
+    // The worktree's first PR file is taken: adopt as a follow-up named by PR number (SW-103).
+    const followUp = Boolean(existing) && !unopened;
+    if (followUp) file = path.join(dir, `pr-${repo}-${/\/pull\/(\d+)/.exec(pr.url)?.[1]}.md`);
+    if (!unopened) taken();
     fm = {
       ...(followUp ? { worktree: repo } : {}),
       repo: /github\.com\/([^/]+\/[^/]+)\/pull\//.exec(pr.url)?.[1] ?? "",
@@ -3206,10 +3210,12 @@ export async function adoptPr(
     title = pr.title;
   }
   // Through the YAML library: a hand-written `release: @scope/pkg@1.0` is invalid YAML.
-  fs.writeFileSync(
-    file,
-    `---\n${YAML.stringify(fm)}---\n# ${title}\n\nAdopted with \`werkmeister pr adopt\`: the work landed outside this workspace.\n`,
-  );
+  if (unopened) writePrFields(unopened, fm as Record<string, string>);
+  else
+    fs.writeFileSync(
+      file,
+      `---\n${YAML.stringify(fm)}---\n# ${title}\n\nAdopted with \`werkmeister pr adopt\`: the work landed outside this workspace.\n`,
+    );
   const lines = [`${path.basename(file, ".md").replace(/^pr-/, "")}: adopted as ${fm["status"]}`];
   if (fm["status"] !== "closed") lines.push(...(await refreshPrStatus(ws, deps)).lines);
   // No-op when refreshPrStatus already committed it.
