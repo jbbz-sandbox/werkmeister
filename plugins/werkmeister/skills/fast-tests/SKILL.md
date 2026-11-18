@@ -63,13 +63,14 @@ write — as a person or an agent.
    code currently does.
 8. **Right file.** Add to the feature's file if it stays small; don't grow the suite's long pole.
 
-**After writing** — check the new/changed test files against a budget, repeated to catch flakiness:
+**After writing** — check the new/changed test files against a budget, repeated to catch flakiness
+(`<skill-dir>` here and below is the folder holding this SKILL.md):
 
 ```bash
 # new or modified test files on this branch
 FILES=$(git diff --name-only --diff-filter=AM origin/main...HEAD | grep -E '(^|/)(test|tests|spec|__tests__)/|(\.|_)(test|spec)\.' )
-python3 scripts/scan_test_smells.py $FILES
-python3 scripts/profile_tests.py --cmd "<run one test file>" --max-seconds 2 --fail-on-waiting --repeat 5 $FILES
+python3 <skill-dir>/scripts/scan_test_smells.py $FILES
+python3 <skill-dir>/scripts/profile_tests.py --cmd "<run one test file>" --max-seconds 2 --fail-on-waiting --repeat 5 $FILES
 ```
 
 - Budget: unit-test files ≤ 1–2 s each; integration files ≤ 10 s; never above the suite's current long pole.
@@ -99,7 +100,7 @@ profile in the ticket before the lever.
 ### 2. Profile per file: wall vs CPU
 
 ```bash
-python3 scripts/profile_tests.py --cmd "<run one test file>" "<glob>" [--workers N] [--json out.json]
+python3 <skill-dir>/scripts/profile_tests.py --cmd "<run one test file>" "<glob>" [--workers N] [--json out.json]
 # e.g.  --cmd "npx jest {file}"   --cmd "node --test {file}"   --cmd "python -m pytest -q {file}"
 #       --cmd "npx vitest run {file}"   --cmd "go test ./{file}" (units = package dirs)   --cmd "bundle exec rspec {file}"
 ```
@@ -114,7 +115,7 @@ Read four numbers ([references/evidence.md](references/evidence.md#where-the-tim
 | Time before first / after last test | Serial setup (install, compile, boot, migrate) | Step 6 |
 | Files that fail when run alone | Order dependence / shared state | [references/flaky.md](references/flaky.md) |
 
-Also run `python3 scripts/scan_test_smells.py <test dirs>` for static hints (sleeps, fixed ports and paths, real
+Also run `python3 <skill-dir>/scripts/scan_test_smells.py <test dirs>` for static hints (sleeps, fixed ports and paths, real
 network calls, retry annotations, serial-only settings, focused tests).
 
 ### 3. Remove idle waits (usually the biggest win)
@@ -200,6 +201,8 @@ These rules make your own loop fast and your results trustworthy ([references/ag
 9. **Flaky failure?** Re-run that one test once to classify it; if it is unrelated to your diff and flips, report it
    as flaky with evidence. Don't retry the whole suite in a loop.
 10. **Parallel agents:** use your own worktree and your own ports, DBs and temp dirs so concurrent runs don't collide.
+11. **Inside a werkmeister workspace:** run the suite with the workspace's own test command from
+    `.werkmeister/werkmeister-context.md`, through `with-temp-home`, never against the host's `~/.werkmeister`.
 
 ## Done criteria for a speed-up task
 

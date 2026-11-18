@@ -25,8 +25,8 @@ Examples of the good column, per language: [waits.md](waits.md).
 BASE=${BASE:-origin/main}
 FILES=$(git diff --name-only --diff-filter=AM "$BASE"...HEAD | grep -E '(^|/)(test|tests|spec|__tests__)/|(\.|_)(test|spec)\.' || true)
 [ -z "$FILES" ] && exit 0
-python3 scripts/scan_test_smells.py $FILES
-python3 scripts/profile_tests.py --cmd "npx vitest run {file}" --max-seconds 2 --fail-on-waiting --repeat 5 $FILES
+python3 <skill-dir>/scripts/scan_test_smells.py $FILES
+python3 <skill-dir>/scripts/profile_tests.py --cmd "npx vitest run {file}" --max-seconds 2 --fail-on-waiting --repeat 5 $FILES
 ```
 
 - `--max-seconds` — per-file budget. Suggested: unit ≤ 1–2 s, integration ≤ 10 s, E2E set separately. A good upper
@@ -59,8 +59,9 @@ jobs:
           FILES=$(git diff --name-only --diff-filter=AM origin/${{ github.base_ref }}...HEAD \
             | grep -E '(^|/)(test|tests|spec|__tests__)/|(\.|_)(test|spec)\.' || true)
           [ -z "$FILES" ] && exit 0
-          python3 skills/fast-tests/scripts/scan_test_smells.py $FILES
-          python3 skills/fast-tests/scripts/profile_tests.py --cmd "npx vitest run {file}" \
+          SKILL_DIR=tools/fast-tests  # where this repo keeps its copy of the skill's scripts/
+          python3 "$SKILL_DIR/scripts/scan_test_smells.py" $FILES
+          python3 "$SKILL_DIR/scripts/profile_tests.py" --cmd "npx vitest run {file}" \
             --max-seconds 2 --fail-on-waiting --repeat 5 $FILES
 ```
 
