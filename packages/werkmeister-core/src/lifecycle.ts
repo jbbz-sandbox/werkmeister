@@ -555,7 +555,14 @@ export async function admitServiceStart(
       // Never byPerson: an agent's gate in a person's workspace must not stop another run's containers.
       let position = await admitOrQueue(feature, workspace, false, starting);
       // Not in a person's workspace: their running app must not go down because they asked for one more service.
-      if (position !== null && ownRunning.length && !released.length && readAutonomous(workspace)) {
+      // Nor in the grant pass (SW-873): with no wait it would stop its own set and drop it, never parked.
+      if (
+        position !== null &&
+        grant &&
+        ownRunning.length &&
+        !released.length &&
+        readAutonomous(workspace)
+      ) {
         // Release instead of hold (SW-675): two gates each holding core while waiting for one more
         // service deadlock a full budget. Stopped, not removed: one request then brings back the set.
         await stop(feature, { grant: false });
@@ -1240,6 +1247,8 @@ async function grantWaitersNow(): Promise<string[]> {
     // A lease pruned by a process that can't see the folder must not cost the waiter its start (SW-848).
     const workspace = readLeases()[feature]?.workspace || workspaceForFeature(feature);
     if (!workspace) {
+      // No folder to nudge in: say it here, at least (SW-873).
+      warn(`'${feature}' left the waiting queue: its workspace can't be found`);
       await dequeue(feature);
       continue;
     }
@@ -1294,7 +1303,11 @@ async function startParked(feature: string, workspace: string, service: string):
       grant: false, // this is the grant pass: another would wait on it
     });
   } catch (e) {
-    if (!(e instanceof SandboxError && e.code === "NO_CAPACITY")) {
+    // No room keeps it parked; any other way out of the queue its session must hear (SW-873).
+    if (
+      !(e instanceof SandboxError && e.code === "NO_CAPACITY") ||
+      !readQueue().includes(feature)
+    ) {
       const message = `Could not start '${feature}' ${service} from the waiting queue: ${(e as Error).message}`;
       warn(message);
       // Its session was told it continues once started; it must hear that it won't (SW-701 review).

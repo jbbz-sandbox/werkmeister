@@ -557,6 +557,28 @@ describe("admitServiceStart", () => {
     expect(readWaiting(mine)).toBeNull();
   });
 
+  // SW-873: the grant pass released the workspace's own set with no wait, so it could not park: dropped silently.
+  it("the grant pass's parked start keeps its running containers and stays parked", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ other: { slot: 1, workspace: other }, mine: { slot: 2, workspace: mine } });
+    both(other, mine, 3, () => 3);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      { name: "mine-core", status: "running", service: "core" } as never,
+    ]);
+    vi.mocked(composeStop).mockClear();
+    const opts = { sleep: async () => {}, waitMs: 0, park: true, grant: false };
+    await expect(admitServiceStart("mine", mine, "api", opts)).rejects.toMatchObject({
+      code: "NO_CAPACITY",
+    });
+    expect(composeStop).not.toHaveBeenCalledWith("mine");
+    expect(readQueue()).toEqual(["mine"]);
+    expect(readWaiting(mine)).toMatchObject({ parked: { service: "api" } });
+  });
+
   it("a start that gives up with nobody else waiting runs no grant", async () => {
     const other = workspace("other", { autonomous: true });
     session(other);
