@@ -32,6 +32,8 @@ for f in $tests; do
 done
 rc=0
 # The container's CPU limit (cgroup-aware), at most 4 so a dev host isn't flooded; SW-101's fixed 2 fit a 1-CPU container (SW-406).
+# More workers don't help: the suite is CPU-bound, and on a 3-CPU container 8 workers took 62 s against 47 s at 4,
+# CPU-heavy files 5x slower while sleep-bound ones didn't grow, so nothing shared but CPU is contended (SW-882).
 # Guarded: `node --test` with no file runs its own default glob.
 # shellcheck disable=SC2086 # test file names have no spaces
 [ -z "$isolated" ] || node --test --test-concurrency="$(node -p 'Math.min(os.availableParallelism(), 4)')" ${shard:+--test-shard="$shard"} $isolated || rc=$?
