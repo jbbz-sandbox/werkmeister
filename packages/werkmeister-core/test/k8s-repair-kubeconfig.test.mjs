@@ -21,6 +21,7 @@ const VARS = [
   "WERKMEISTER_ROOT",
   "PATH",
   "DOCKER_HOST",
+  "WERKMEISTER_TIMEOUT_SCALE",
 ];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 
@@ -117,13 +118,15 @@ esac`,
 
 // SW-260: a loaded host can take longer than the old 10 s cap just to run
 // `kubectl config view`; simulate that lag instead of loading the host (SW-214).
+// At 0.05 scale the 30 s cap is 1.5 s and the old 10 s one 0.5 s, so a 0.6 s lag still tells them apart (SW-880).
 test("still finds the cluster unreachable when kubectl is slow to answer (SW-260)", async () => {
+  process.env.WERKMEISTER_TIMEOUT_SCALE = "0.05";
   stub(
     "kubectl",
     path.join(home, "bin"),
     `
 case "$*" in
-  *"config view"*) sleep 11; printf 'clusters:\\n- cluster:\\n    server: https://127.0.0.1:26443\\n' ;;
+  *"config view"*) sleep 0.6; printf 'clusters:\\n- cluster:\\n    server: https://127.0.0.1:26443\\n' ;;
   *current-context*) echo orbstack ;;
   *"get --raw"*) echo 'connection refused' >&2; exit 1 ;;
 esac`,

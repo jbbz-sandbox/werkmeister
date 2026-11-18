@@ -117,10 +117,11 @@ test("resolveEndpoint resolves the context store's precedence without the CLI", 
 
 // SW-294: a load-starved `docker context inspect` timed out at 10 s and fell back to the
 // default socket, a different daemon on OrbStack/Colima. A sleeping stub stands in for load.
+// At 0.05 scale the 30 s cap is 1.5 s and the old 10 s one 0.5 s, so a 0.6 s lag still tells them apart (SW-880).
 test("resolveEndpoint waits out a slow docker CLI instead of guessing the default socket", () => {
   const dir = mkdtempSync(path.join(tmpdir(), "docker-config-"));
   const docker = path.join(dir, "docker");
-  writeFileSync(docker, "#!/bin/sh\nsleep 11\necho unix:///slow/docker.sock\n", { mode: 0o755 });
+  writeFileSync(docker, "#!/bin/sh\nsleep 0.6\necho unix:///slow/docker.sock\n", { mode: 0o755 });
   // A context with no meta.json leaves the store unsure, so the CLI is asked.
   writeFileSync(path.join(dir, "config.json"), JSON.stringify({ currentContext: "colima" }));
   try {
@@ -130,6 +131,7 @@ test("resolveEndpoint waits out a slow docker CLI instead of guessing the defaul
         DOCKER_HOST: undefined,
         DOCKER_CONTEXT: undefined,
         WERKMEISTER_DOCKER_BIN: docker,
+        WERKMEISTER_TIMEOUT_SCALE: "0.05",
       },
       () => assert.deepEqual(resolveEndpoint(), { socketPath: "/slow/docker.sock" }),
     );
