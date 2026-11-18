@@ -244,11 +244,13 @@ test("autonomousRules: the feature's own werkmeister and docker targets, exact w
     "Bash(werkmeister feature up feat)",
     "Bash(w9r feature up feat)",
     "Bash(werkmeister feature restart feat)",
-    "Bash(werkmeister feature logs feat:*)",
-    "Bash(werkmeister feature test feat:*)",
+    "Bash(werkmeister feature logs feat)",
+    "Bash(werkmeister feature logs feat api)",
     "Bash(docker restart feat-api)",
   ])
     assert.ok(rules.includes(r), r);
+  // SW-855: `feature test` runs the workspace's own playwright config with the real HOME, so it asks.
+  assert.ok(!rules.some((r) => / test feat/.test(r)), "no feature test rule");
   // SW-560: no ad-hoc exec; the container's exact registered test comes from buildAllowRules.
   assert.ok(!rules.some((r) => r.startsWith("Bash(docker exec")), "no docker exec rule");
   assert.deepEqual(autonomousRules("", ["api"]), AUTONOMOUS_RULES);
@@ -935,6 +937,26 @@ test("SW-843: `feature up --service` is pre-approved only for this workspace's o
     assert.ok(claudeAllows(rules, "werkmeister feature up --service api"));
     assert.ok(!claudeAllows(rules, "werkmeister feature up --service api other"));
   });
+});
+
+test("SW-855: `feature test|logs|services <feature>` take no `-w <other>` or extra arguments", () => {
+  const allow = autonomousRules("feat", ["api"]);
+  for (const name of ["werkmeister", "w9r"]) {
+    for (const verb of ["", "feature "]) {
+      for (const cmd of ["logs feat", "logs feat api", "services feat"])
+        assert.ok(claudeAllows(allow, `${name} ${verb}${cmd}`), `${name} ${verb}${cmd}`);
+      for (const cmd of [
+        "test feat",
+        "test feat -w /Users/x/features/other --scaffold",
+        "test feat -- --config=/tmp/evil.config.js",
+        "test feat -- /Users/x/features/other/e2e",
+        "logs feat -w /Users/x/features/other",
+        "logs feat other",
+        "services feat -w /Users/x/features/other",
+      ])
+        assert.ok(!claudeAllows(allow, `${name} ${verb}${cmd}`), `${name} ${verb}${cmd}`);
+    }
+  }
 });
 
 test("SW-845: no pre-approved container test for a service that mounts the docker socket or the werkmeister home", async () => {
