@@ -107,8 +107,20 @@ export function headCanWaitOut(budget: Budget, running: Lease[], head: Waiter): 
  * Whether *req* may start now. *running* is ordered longest-inactive first;
  * *queue* is the waiting requests, first come first served.
  */
+/** A whole `up` of *feature* adds only what its running lease doesn't already hold (SW-889). */
+function added(cost: Cost, running: Lease[], feature: string): Cost {
+  const own = running.find((l) => l.feature === feature);
+  if (!own) return cost;
+  return {
+    memory: Math.max(0, cost.memory - own.cost.memory),
+    cpus: Math.max(0, cost.cpus - own.cost.cpus),
+  };
+}
+
 export function admit(budget: Budget, running: Lease[], queue: Waiter[], req: Request): Decision {
-  if (!req.services && running.some((l) => l.feature === req.feature)) return { kind: "admit" };
+  const reup = !req.services && running.some((l) => l.feature === req.feature);
+  const cost = req.services ? req.cost : added(req.cost, running, req.feature);
+  if (reup && !cost.memory && !cost.cpus) return { kind: "admit" };
   if (req.cost.memory > budget.memory || req.cost.cpus > budget.cpus) {
     return { kind: "never-fits", cost: req.cost };
   }
@@ -118,8 +130,8 @@ export function admit(budget: Budget, running: Lease[], queue: Waiter[], req: Re
     { memory: 0, cpus: 0 },
   );
   const fits = (freed: Cost) =>
-    used.memory - freed.memory + req.cost.memory <= budget.memory &&
-    used.cpus - freed.cpus + req.cost.cpus <= budget.cpus;
+    used.memory - freed.memory + cost.memory <= budget.memory &&
+    used.cpus - freed.cpus + cost.cpus <= budget.cpus;
 
   const gate = !!req.gate || (!!req.services && running.some((l) => l.feature === req.feature));
   const queued = queue.find((w) => w.feature === req.feature);
@@ -135,7 +147,11 @@ export function admit(budget: Budget, running: Lease[], queue: Waiter[], req: Re
   const endsGate = !!req.services && running.some((l) => l.feature === req.feature && l.busy);
   // Only a release's grant starts a whole-feature head, and room can free without one (a timed-out
   // gate's stop, a Docker restart), so holding behind one that fits now waits forever (SW-729).
-  const headCost = order[0].cost;
+  // A parked head's cost is just its services; a whole-feature head's, its set less what already runs.
+  const headCost =
+    order[0].cost && !order[0].parked
+      ? added(order[0].cost, running, order[0].feature)
+      : order[0].cost;
   const headAwaitsGrant =
     !!headCost &&
     used.memory + headCost.memory <= budget.memory &&

@@ -455,3 +455,23 @@ test("a starved head that only a person's stop could fit does not hold a start b
     });
   }
 });
+
+// SW-889: three running workspaces counted 3 CPUs each (9) on an 8-CPU budget. A whole-feature `up`
+// of a feature that already runs part of its set was admitted without pricing what it adds.
+test("a re-up of a running feature is priced for what it adds (SW-889)", () => {
+  const eight = { memory: 16 * G, cpus: 8, preempt: false };
+  const running = [lease("a", 1, 3), lease("b", 1, 3), lease("c", 1, 1)];
+  assert.equal(admit(eight, running, [], req("c", 2, 3)).kind, "wait");
+  // What it adds fits (c's 1 running plus 2 more is 7 of 8), and a re-up of a whole running set adds nothing.
+  assert.deepEqual(admit(eight, running.slice(1), [], req("c", 2, 3)), { kind: "admit" });
+  assert.deepEqual(admit(eight, [...running.slice(0, 2), lease("c", 1, 3)], [], req("c", 1, 3)), {
+    kind: "admit",
+  });
+  // Queued as a starved head, it is priced the same way: its 5 more CPUs fit the 8 now (2 + 1 + 5), so
+  // it awaits a grant and holds nothing (SW-729); priced whole (9) it would hold every start behind it.
+  const reupHead = { ...w("c", 30), cost: { memory: 1 * G, cpus: 6 } };
+  const svc = { ...req("d", 0.5, 1), services: ["api"] };
+  assert.deepEqual(admit(eight, [lease("a", 1, 2), lease("c", 1, 1)], [reupHead], svc), {
+    kind: "admit",
+  });
+});
