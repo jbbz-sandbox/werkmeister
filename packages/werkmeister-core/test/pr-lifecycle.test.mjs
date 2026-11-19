@@ -138,7 +138,7 @@ function deps(table, over = {}) {
     stopped,
     started,
     run: r.run,
-    httpStatus: async () => 200,
+    probe: async () => ({ ok: true, detail: "HTTP 200" }),
     services: REGISTRY.services,
     archetypes: {},
     repos: REGISTRY.repos,
@@ -1915,9 +1915,42 @@ test("gate: failing test, down health endpoint", async () => {
   const ws = icmWorkspace();
   try {
     const d = deps([DIFF_API, [/npm test -w api/, { code: 1, stdout: "1 failing" }]], {
-      httpStatus: async () => 502,
+      probe: async () => ({ ok: false, detail: "HTTP 502" }),
     });
     assert.deepEqual(failed(await gate(ws, d)), ["test api", "baseline api"]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate: baseline uses the probe health_endpoint names, not always an HTTP GET (SW-938)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const { health_endpoint: _, ...noHealth } = REGISTRY.services.api;
+    const cases = [
+      // [health_endpoint (undefined = absent), probe gets, probe ok, detail]
+      ["", "", true, /^tcp localhost:\d+ → tcp open$/],
+      ["", "", false, /^tcp localhost:\d+ → ECONNREFUSED$/],
+      ["postgres", "postgres", true, /^postgres localhost:\d+ → ok$/],
+      ["redis", "redis", false, /^redis localhost:\d+ → ECONNREFUSED$/],
+      ["/health", "/health", true, /^GET http:\/\/localhost:\d+\/health → ok$/],
+      [undefined, "/", true, /^GET http:\/\/localhost:\d+\/ → ok$/],
+    ];
+    for (const [health, want, ok, detail] of cases) {
+      const probed = [];
+      const api = health === undefined ? noHealth : { ...noHealth, health_endpoint: health };
+      const d = deps([DIFF_API], {
+        services: { ...REGISTRY.services, api },
+        probe: async (_port, h) => {
+          probed.push(h);
+          return { ok, detail: ok ? (h === "" ? "tcp open" : "ok") : "ECONNREFUSED" };
+        },
+      });
+      const row = (await gate(ws, d)).checks.find((c) => c.name === "baseline api");
+      assert.equal(row.ok, ok, `${JSON.stringify(health)}: ${row.detail}`);
+      assert.deepEqual(probed, [want]);
+      assert.match(row.detail, detail);
+    }
   } finally {
     clean(ws);
   }
