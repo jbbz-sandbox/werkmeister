@@ -47,6 +47,31 @@ test("a service name another repo already has fails the trial merge", () => {
   assert.match(errors[0], /services\.shop is defined by both legacy and shop/);
 });
 
+test("a clash between a disabled repo and another repo does not block the write", () => {
+  const root = fixture(SHOP, "shop");
+  const reposRoot = path.dirname(root);
+  for (const [repo, service] of [
+    ["off", "a"],
+    ["on", "b"],
+  ]) {
+    mkdirSync(path.join(reposRoot, repo, ".werkmeister"), { recursive: true });
+    writeFileSync(
+      path.join(reposRoot, repo, ".werkmeister", "services.yaml"),
+      `services:\n  ${service}:\n    path: .\n    port_offset: 7\n`,
+    );
+  }
+  const plan = planFragment(root, opts(root));
+  const rendered = renderFragment(plan);
+  const local = path.join(reposRoot, "services.local.yaml");
+  writeFileSync(local, "{}\n");
+  assert.match(
+    validateFragment(rendered, plan, reposRoot, undefined, local).join("\n"),
+    /port_offset 7 is defined by both/,
+  );
+  writeFileSync(local, "disabled_fragments: [off]\n");
+  assert.deepEqual(validateFragment(rendered, plan, reposRoot, undefined, local), []);
+});
+
 test("a schema violation is reported with its path", () => {
   const root = fixture(SHOP, "shop");
   const plan = planFragment(root, opts(root));

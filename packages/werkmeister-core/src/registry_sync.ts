@@ -449,7 +449,8 @@ function placeholderPaths(): PlaceholderPaths {
   };
 }
 
-function readLocalOverlay(localPath: string): YamlMap {
+/** The machine overrides file as a map; empty when the file is missing or blank. */
+export function readLocalOverlay(localPath: string): YamlMap {
   if (!fs.existsSync(localPath)) return {};
   let doc: unknown;
   try {
