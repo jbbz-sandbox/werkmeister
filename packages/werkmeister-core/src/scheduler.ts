@@ -86,6 +86,24 @@ export function queueOrder(queue: Waiter[]): Waiter[] {
 }
 
 /**
+ * Whether the starved *head* can wait its room out: it fits once every lease but a person's leaves.
+ * A person's lease never ends by itself, so holding for one only stalls the queue (SW-903).
+ * A head of unknown cost (a service start) is assumed to.
+ */
+export function headCanWaitOut(budget: Budget, running: Lease[], head: Waiter): boolean {
+  if (!head.cost) return true;
+  const kept = running
+    .filter((l) => l.rank === "person" && l.feature !== head.feature)
+    .reduce((a, l) => ({ memory: a.memory + l.cost.memory, cpus: a.cpus + l.cost.cpus }), {
+      memory: 0,
+      cpus: 0,
+    });
+  return (
+    kept.memory + head.cost.memory <= budget.memory && kept.cpus + head.cost.cpus <= budget.cpus
+  );
+}
+
+/**
  * Whether *req* may start now. *running* is ordered longest-inactive first;
  * *queue* is the waiting requests, first come first served.
  */
@@ -128,7 +146,8 @@ export function admit(budget: Budget, running: Lease[], queue: Waiter[], req: Re
     !endsGate &&
     !headAwaitsGrant &&
     !order[0].parked &&
-    (order[0].gate || order[0].waitedMs >= STARVE_MS);
+    (order[0].gate ||
+      (order[0].waitedMs >= STARVE_MS && headCanWaitOut(budget, running, order[0])));
   if (fits({ memory: 0, cpus: 0 }) && (req.byPerson || !headHolds)) return { kind: "admit" };
 
   // An idle or human-check lease (a session parked on a question) has nobody in it, so the queue head
