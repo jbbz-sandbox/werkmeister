@@ -80,6 +80,7 @@ notified_checks:               # written by pr watch: <head sha>: <failing check
 notified_queue:                # written by pr watch: the merge-queue commit whose failed runs were announced
 notified_review:               # written by pr watch: time of the newest review or comment announced
 notified_conflict:             # written by pr watch while an announced conflict lasts
+conflict_head:                 # written by pr watch with notified_conflict: the PR head it saw; pr push leases on it, then records the head it pushed; kept until settled
 ---
 # feat(cli): owner/repo#133 Workspace PR lifecycle
 <body: summary, test and exercise results, acceptance table, Fixes owner/repo#133>
@@ -204,7 +205,7 @@ While the PR is open, the same pass also wakes the session when it needs work (r
 | a check on the head commit fails (`FAILURE`, `TIMED_OUT`, `STARTUP_FAILURE`; a status `FAILURE`/`ERROR`) | check `<name>` failed on PR `<url>`, fix it. | the first error lines of `gh run view --job <id> --log-failed` | `notified_checks`: the head SHA and the names announced on it. A new head announces every failing check again |
 | a merge-queue run (`merge_group`, on `gh-readonly-queue/<base>/pr-<N>-…`) of the PR's newest queue entry fails, in any of its workflows: GitHub drops it from the queue while its head checks stay green | check `merge queue (<workflow>)` failed on PR `<url>`, fix it. | the first error lines of `gh run view <run> --log-failed` | `notified_queue`: the queue entry's commit. A re-queued entry that fails wakes again |
 | a CHANGES_REQUESTED review, a review or PR comment, or an inline comment | address the review on PR `<url>`: | the comments, quoted (`path:line` for inline ones) | `notified_review`: the time of the newest one. `pr open` sets it, so an early review still counts; a PR opened before this keeps its old comments as history |
-| `mergeable` is `CONFLICTING` | PR `<url>` conflicts with `<base>`, resolve it. | `git log --oneline HEAD..origin/<base>`, then the steps: rebase onto `origin/<base>` (never merge it in), regenerate a conflicting generated file, and `werkmeister pr push <repo>` | `notified_conflict`, cleared once GitHub reports it mergeable again, so a later conflict counts |
+| `mergeable` is `CONFLICTING` | PR `<url>` conflicts with `<base>`, resolve it. | `git log --oneline HEAD..origin/<base>`, then the steps: rebase onto `origin/<base>` (never merge it in), regenerate a conflicting generated file, and `werkmeister pr push <repo>` | `notified_conflict`, cleared once GitHub reports it mergeable again, so a later conflict counts; `conflict_head`, the PR head the wake saw, kept until the PR settles or the next conflict wake (a conflict flagged without one wakes again). `pr push` leases on it and refuses when origin moved since, or when the local branch never held it, so neither a fetch nor a commit pushed before the conflict is dropped |
 
 Comments carrying the Claude Code footer (`Generated with [Claude Code]`) are the session's own replies and don't wake it. A merged or closed PR gets its status message, not a wake.
 

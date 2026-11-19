@@ -4582,7 +4582,7 @@ test("wakeMessage: each event opens with the ticket's sentence, all in one messa
         "  Rebase, never merge main in (GitHub can't rebase-merge a branch with a merge from its base):",
         "    git -C /w/app fetch origin main && git -C /w/app rebase origin/main",
         "  A conflict in a generated file (a snapshot, a lockfile): take main's copy and regenerate it; never hand-merge it.",
-        "  Then push it (a lease on origin's head; refuses anything but this workspace's own clean branch):",
+        "  Then push it (a lease on the PR head this message saw; refuses anything but this workspace's own clean branch):",
         "    werkmeister pr push app",
         "  and rerun the gate's tests.",
       ].join("\n"),
@@ -4792,6 +4792,8 @@ test("claimCallbacks: a conflict wakes once with the base commits; resolved rese
     assert.ok(wakes(r)[0].includes("    werkmeister pr push app\n"), wakes(r)[0]);
     assert.ok(wakes(r)[0].includes(`git -C ${path.join(ws, "app")} rebase origin/main`));
     assert.equal(readPrFiles(ws)[0].fm.notified_conflict, "true");
+    // SW-890: the head the wake saw is what `pr push` leases on.
+    assert.equal(readPrFiles(ws)[0].fm.conflict_head, SHA1);
     assert.deepEqual(wakes(await claim(ws, deps([conflicting, moved]))), []);
     assert.deepEqual(wakes(await claim(ws, deps([openView({ mergeable: "UNKNOWN" })]))), []);
     assert.equal(readPrFiles(ws)[0].fm.notified_conflict, "true", "still computing: no flicker");
@@ -4799,10 +4801,28 @@ test("claimCallbacks: a conflict wakes once with the base commits; resolved rese
     assert.deepEqual(wakes(await claim(ws, deps([openView()]))), []);
     assert.ok(!("notified_conflict" in readPrFiles(ws)[0].fm), "resolved: the flag is gone");
     assert.equal(
+      readPrFiles(ws)[0].fm.conflict_head,
+      SHA1,
+      "resolved: the head stays for a re-push",
+    );
+    assert.equal(
       (await claim(ws, deps([conflicting, moved]))).claimed.length,
       1,
       "a later conflict is news",
     );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("claimCallbacks: a conflict flagged before SW-890, with no conflict_head, wakes again to record the head", async () => {
+  const ws = icmWorkspace({ files: { app: openFile(`notified_conflict: "true"\n`) } });
+  try {
+    const moved = [/log --oneline -10 HEAD\.\.origin\/main/, { stdout: "abc1234 feat: moved\n" }];
+    const conflicting = openView({ mergeable: "CONFLICTING" });
+    assert.equal((await claim(ws, deps([conflicting, moved]))).claimed.length, 1);
+    assert.equal(readPrFiles(ws)[0].fm.conflict_head, SHA1);
+    assert.deepEqual(wakes(await claim(ws, deps([conflicting, moved]))), [], "once");
   } finally {
     clean(ws);
   }
@@ -4925,12 +4945,22 @@ test("claimCallbacks: a desktop PR's wake goes to the mod and is never held", as
 
 test("claimCallbacks: settled drops the wake marks with the callback", async () => {
   const ws = icmWorkspace({
-    files: { app: openFile(`notified_checks: "${SHA1}: test"\nnotified_conflict: "true"\n`) },
+    files: {
+      app: openFile(
+        `notified_checks: "${SHA1}: test"\nnotified_conflict: "true"\nconflict_head: "${SHA1}"\n`,
+      ),
+    },
   });
   try {
     await claim(ws, deps([[/^gh pr view/, { stdout: JSON.stringify({ state: "CLOSED" }) }]]));
     const fm = readPrFiles(ws)[0].fm;
-    for (const k of ["notified_checks", "notified_review", "notified_conflict", "session"])
+    for (const k of [
+      "notified_checks",
+      "notified_review",
+      "notified_conflict",
+      "conflict_head",
+      "session",
+    ])
       assert.ok(!(k in fm), k);
   } finally {
     clean(ws);
@@ -5988,7 +6018,10 @@ function pushWorkspace() {
     `gitdir: ${path.join(getReposRoot(), "app", ".git", "worktrees", "app")}\n`,
   );
   const f = path.join(ws, "stages", "03_propose", "output", "pr-app.md");
-  fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace("branch: me/ws", `branch: ${own}`));
+  fs.writeFileSync(
+    f,
+    fs.readFileSync(f, "utf8").replace("branch: me/ws", `branch: ${own}\nconflict_head: abc123`),
+  );
   return { ws, own };
 }
 const pushDeps = (own, over = []) =>
@@ -5997,11 +6030,12 @@ const pushDeps = (own, over = []) =>
     [/rev-parse --abbrev-ref HEAD$/, { stdout: `${own}\n` }],
     [/status --porcelain$/, { stdout: "" }],
     [/rev-list --merges --count origin\/main\.\.HEAD$/, { stdout: "0\n" }],
-    [/rev-parse --verify -q refs\/remotes\/origin\//, { stdout: "abc123\n" }],
+    [/rev-parse HEAD$/, { stdout: "new777\n" }],
+    [/log -g -n 500 --format=%H refs\/heads\//, { stdout: "abc123\nold000\n" }],
     [/ls-remote origin refs\/heads\//, { stdout: `abc123\trefs/heads/${own}\n` }],
   ]);
 
-test("pr push: force-pushes this workspace's own rebased branch with a lease on origin's head (SW-717)", async () => {
+test("pr push: force-pushes this workspace's own rebased branch with a lease on the conflict wake's head (SW-717, SW-890)", async () => {
   const { ws, own } = pushWorkspace();
   try {
     const d = pushDeps(own);
@@ -6014,6 +6048,11 @@ test("pr push: force-pushes this workspace's own rebased branch with a lease on 
       d.calls.join("\n"),
     );
     assert.match(r.lines[0], /pushed .*rerun the gate's tests/);
+    assert.equal(
+      readPrFiles(ws)[0].fm.conflict_head,
+      "new777",
+      "a second push leases on what this one pushed",
+    );
   } finally {
     clean(ws);
   }
@@ -6037,12 +6076,7 @@ test("pr push refuses another branch, a dirty tree, a merged-in base and a stale
       [
         "stale lease",
         [[/ls-remote/, { stdout: `def456\trefs/heads/${own}\n` }]],
-        /not the leased abc123/,
-      ],
-      [
-        "no lease",
-        [[/rev-parse --verify -q refs\/remotes/, { code: 1, stdout: "" }]],
-        /no origin\/.* to lease/,
+        /not abc123, the head the conflict wake saw/,
       ],
     ];
     for (const [label, over, why] of cases) {
@@ -6062,6 +6096,45 @@ test("pr push refuses another branch, a dirty tree, a merged-in base and a stale
       assert.match(r.lines[0], /not this workspace's own/, branch);
       assert.ok(!d.calls.some((c) => / push /.test(c)), `${branch}: nothing pushed`);
     }
+  } finally {
+    clean(ws);
+  }
+});
+
+test("pr push leases on the conflict wake's head, so a fetch that moved origin/<branch> past it is refused (SW-890)", async () => {
+  const { ws, own } = pushWorkspace();
+  const f = path.join(ws, "stages", "03_propose", "output", "pr-app.md");
+  try {
+    // A reviewer pushed rev999 after the wake saw abc123; the agent's full fetch moved origin/<branch> to it.
+    const fetched = [
+      [/rev-parse --verify -q refs\/remotes\/origin\//, { stdout: "rev999\n" }],
+      [/ls-remote origin refs\/heads\//, { stdout: `rev999\trefs/heads/${own}\n` }],
+    ];
+    let d = pushDeps(own, fetched);
+    let r = await pushPrs(ws, undefined, d);
+    assert.equal(r.ok, false, r.lines.join("\n"));
+    assert.ok(!d.calls.some((c) => / push /.test(c)), "the reviewer's commit is not dropped");
+
+    // A reviewer's commit pushed before the wake is the lease itself, but this branch never held it.
+    for (const [label, over] of [
+      ["not reachable", [[/rev-list -n 1 abc123 --not/, { stdout: "abc123\n" }]]],
+      ["object missing", [[/rev-list -n 1 abc123 --not/, { code: 128, stdout: "" }]]],
+      ["no reflog", [[/log -g/, { code: 128, stdout: "" }]]],
+    ]) {
+      d = pushDeps(own, over);
+      r = await pushPrs(ws, undefined, d);
+      assert.equal(r.ok, false, label);
+      assert.match(r.lines[0], /never held/, label);
+      assert.ok(!d.calls.some((c) => / push /.test(c)), `${label}: nothing pushed`);
+    }
+
+    // No conflict_head: refused with the reason, nothing pushed.
+    fs.writeFileSync(f, fs.readFileSync(f, "utf8").replace("conflict_head: abc123\n", ""));
+    d = pushDeps(own);
+    r = await pushPrs(ws, undefined, d);
+    assert.equal(r.ok, false, r.lines.join("\n"));
+    assert.match(r.lines[0], /conflict_head/);
+    assert.ok(!d.calls.some((c) => / push /.test(c)), "missing head: nothing pushed");
   } finally {
     clean(ws);
   }
