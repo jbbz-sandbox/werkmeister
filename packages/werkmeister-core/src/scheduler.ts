@@ -25,6 +25,8 @@ export interface Lease {
   rank: Rank;
   /** A `docker exec` running in it, mid-gate or paused: stopping it would break a run in flight. */
   busy: boolean;
+  /** Its running compose services, when Docker's labels name them (SW-907). */
+  services?: string[];
 }
 
 export interface Request {
@@ -35,6 +37,8 @@ export interface Request {
   services?: string[];
   /** A gate that released its own containers to wait for them and its new ones together (SW-675). */
   gate?: boolean;
+  /** A whole `up` of a running feature: what its `up` services not yet running add (SW-907). */
+  added?: Cost;
 }
 
 /** A queued request as admission sees it (SW-675). */
@@ -119,7 +123,7 @@ function added(cost: Cost, running: Lease[], feature: string): Cost {
 
 export function admit(budget: Budget, running: Lease[], queue: Waiter[], req: Request): Decision {
   const reup = !req.services && running.some((l) => l.feature === req.feature);
-  const cost = req.services ? req.cost : added(req.cost, running, req.feature);
+  const cost = req.services ? req.cost : (req.added ?? added(req.cost, running, req.feature));
   if (reup && !cost.memory && !cost.cpus) return { kind: "admit" };
   if (req.cost.memory > budget.memory || req.cost.cpus > budget.cpus) {
     return { kind: "never-fits", cost: req.cost };

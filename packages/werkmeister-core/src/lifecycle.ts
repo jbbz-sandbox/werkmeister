@@ -123,6 +123,7 @@ import {
   readQueue,
   requestAdmission,
   requeueFirst,
+  reservedLeases,
   type Starting,
   serviceStarts,
   setupsCurrent,
@@ -504,6 +505,8 @@ export async function startService(
       composeUpServiceAsync(feature, service, path.join(workspace, composeName), noDeps),
     );
   } finally {
+    // Its admit reservation ends with the start, as `up`'s dequeue ends its (SW-907 review).
+    await dequeue(feature);
     // After the start, not at admission: admission prices only running containers, so a grant before
     // it would hand a waiter the room this start is about to take (SW-737).
     if (grant) await grantIfQueued();
@@ -685,7 +688,8 @@ export async function capacityWait(
   // What is asked against what is free, so a too-big request reads apart from a busy host (SW-763).
   const budget = await loadBudget();
   if (Number.isFinite(budget.cpus) && Number.isFinite(budget.memory)) {
-    const used = running.reduce(
+    // Admission also counts admitted starts not yet running (SW-907 review).
+    const used = [...running, ...reservedLeases(running, feature)].reduce(
       (a, l) => ({ cpus: a.cpus + l.cost.cpus, memory: a.memory + l.cost.memory }),
       { cpus: 0, memory: 0 },
     );
@@ -913,6 +917,8 @@ export interface RunningFeature {
   cpus: number;
   /** `docker exec`s running in its containers now (`.ExecIDs`: Docker drops an exec when it exits). */
   execs: number;
+  /** Each running container's compose service, where labelled. */
+  services: string[];
 }
 
 export interface IdleInput {
@@ -989,12 +995,12 @@ export function runningFeatures(
     }
     if (!list.size) return [];
     const feature = `or (index .Config.Labels "${LABEL_FEATURE}") (index .Config.Labels "${LEGACY_LABEL_FEATURE}")`;
-    const fmt = `{{${feature}}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}\t{{.HostConfig.MemoryReservation}}\t{{.HostConfig.NanoCpus}}\t{{len .ExecIDs}}`;
+    const fmt = `{{${feature}}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}\t{{.HostConfig.MemoryReservation}}\t{{.HostConfig.NanoCpus}}\t{{len .ExecIDs}}\t{{index .Config.Labels "com.docker.compose.service"}}`;
     const inspect = runCmd(["docker", "inspect", "--format", fmt, ...list]);
     if (inspect.status !== 0) return null;
     const byFeature = new Map<string, RunningFeature>();
     for (const line of inspect.stdout.split("\n").filter(Boolean)) {
-      const [feature, workspace, started, memory, nanoCpus, execs] = line.split("\t");
+      const [feature, workspace, started, memory, nanoCpus, execs, service] = line.split("\t");
       if (!feature || !workspace) continue;
       const f = byFeature.get(feature) ?? {
         feature,
@@ -1003,11 +1009,14 @@ export function runningFeatures(
         memory: 0,
         cpus: 0,
         execs: 0,
+        services: [],
       };
       f.startedAt.push(Date.parse(started));
       f.memory += Number(memory) || 0;
       f.cpus += (Number(nanoCpus) || 0) / 1e9;
       f.execs += Number(execs) || 0;
+      // `index` prints "<no value>" for a missing label.
+      if (service && service !== "<no value>") f.services.push(service);
       byFeature.set(feature, f);
     }
     return [...byFeature.values()];
@@ -1162,11 +1171,19 @@ export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | 
         f.execs > 0 ||
         readPaused(f.workspace) !== null ||
         (mtimeMs(lastExecMarker(f.workspace)) ?? 0) > gateCutoff;
+      // Admission prices compose; a container started with no or lower limits read as free (SW-907).
+      const declared = f.services.length
+        ? featureCost(f.workspace, f.services)
+        : { memory: 0, cpus: 0 };
       const lease: Lease = {
         feature: f.feature,
-        cost: { memory: f.memory, cpus: f.cpus },
+        cost: {
+          memory: Math.max(f.memory, declared.memory),
+          cpus: Math.max(f.cpus, declared.cpus),
+        },
         rank,
         busy,
+        ...(f.services.length && { services: f.services }),
       };
       return { lease, at: state ? Date.parse(state.at) : 0 };
     })

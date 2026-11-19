@@ -22,6 +22,7 @@ import { workspaceServices } from "../dist/registry_sync.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { admit } from "../dist/scheduler.js";
 import {
+  dequeue,
   enqueue,
   featureCost,
   hostLoadLimit,
@@ -787,5 +788,63 @@ test("preemption rank: a permission prompt mid-turn is working; a question is hu
     };
     assert.equal(rank("permission"), "working");
     assert.equal(rank("question"), "human-check");
+  });
+});
+
+// SW-907 (1): an on-demand service running beside the feature was subtracted from a plain `up`'s
+// cost, though `up` starts none of it: `docs` (1 CPU) running made a 3-CPU `up` cost 2.
+test("a plain up beside a running on-demand service prices every up service it starts (SW-907)", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, COMPOSE);
+    const budget = { memory: 8 * G, cpus: 3.5, preempt: false };
+    const running = [
+      {
+        feature: "f",
+        cost: { memory: G, cpus: 1 },
+        rank: "working",
+        busy: false,
+        services: ["later"],
+      },
+    ];
+    // 1 running + 3 to start = 4 CPUs > 3.5.
+    assert.equal((await requestAdmission("f", ws, false, running, budget)).kind, "wait");
+  });
+});
+
+// SW-907 (2): a running feature is priced at its live limits, admission at compose's; a container
+// started with no limit (an older compose) read as free.
+test("a running feature costs at least what compose reserves for its running services (SW-907)", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, COMPOSE);
+    const run = (cmd) =>
+      cmd[1] === "ps"
+        ? { status: 0, stdout: "id1\n" }
+        : { status: 0, stdout: `f\t${ws}\t2026-10-29T10:00:00Z\t0\t0\t0\tapi` };
+    const lease = runningLeases(run).find((l) => l.feature === "f");
+    assert.deepEqual(lease.cost, { memory: 128 * 2 ** 20, cpus: 1 });
+  });
+});
+
+// SW-907 (3): admission saw only running containers, so two admits before either one's containers
+// existed both fit the same room.
+test("two admits before either feature's containers run cannot both take the same room (SW-907)", async () => {
+  await withHome(async (home) => {
+    const mk = (name) => {
+      const ws = path.join(home, name);
+      fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+      fs.writeFileSync(path.join(ws, "compose.yml"), COMPOSE);
+      return ws;
+    };
+    const budget = { memory: 8 * G, cpus: 4, preempt: false };
+    assert.deepEqual(await requestAdmission("f", mk("wf"), false, [], budget), { kind: "admit" });
+    // f's 3 CPUs are admitted but not yet running: g's 3 more do not fit 4.
+    const wg = mk("wg");
+    assert.equal((await requestAdmission("g", wg, false, [], budget)).kind, "wait");
+    // f asking again does not count its own reservation; once its start settles, g fits.
+    assert.deepEqual(await requestAdmission("f", path.join(home, "wf"), false, [], budget), {
+      kind: "admit",
+    });
+    await dequeue("f");
+    assert.deepEqual(await requestAdmission("g", wg, false, [], budget), { kind: "admit" });
   });
 });

@@ -58,6 +58,12 @@ const LOCK_TIMEOUT = 30.0;
 const stateDir = () => path.join(sandboxHome(), "scheduler");
 export const leasesPath = () => path.join(stateDir(), "leases.json");
 export const queuePath = () => path.join(stateDir(), "queue.json");
+/** Admitted starts whose containers may not run yet: feature → cost and when (SW-907). */
+export const startingPath = () => path.join(stateDir(), "starting.json");
+
+// shortcut: a start that fails after admit holds its reservation this long (only a success dequeues);
+// drop it on each failure path if that stalls the queue.
+const RESERVED_MS = 10 * 60_000;
 
 function readJson<T>(file: string, ok: (v: unknown) => v is T, fallback: T): T {
   try {
@@ -100,11 +106,40 @@ function writeQueue(q: string[]): void {
   writeJson(queuePath(), q);
 }
 
-/** Drop *feature* from the waiting queue. */
+type Reserved = Record<string, { cost: Cost; at: number }>;
+
+function readReserved(): Reserved {
+  return readJson(startingPath(), isDict, {}) as Reserved;
+}
+
+/**
+ * Admitted starts other than *feature*'s whose containers don't run yet, as leases: admission priced
+ * only running containers, so two admits before either one's existed both fit the same room (SW-907).
+ */
+export function reservedLeases(running: Lease[], feature: string, now = Date.now()): Lease[] {
+  return Object.entries(readReserved())
+    .filter(
+      ([f, r]) =>
+        f !== feature &&
+        now - r.at < RESERVED_MS &&
+        Number.isFinite(r.cost?.cpus) &&
+        !running.some((l) => l.feature === f),
+    )
+    .map(([f, r]) => ({ feature: f, cost: r.cost, rank: "person", busy: true }));
+}
+
+/** Drop *feature* from the waiting queue, and its admit reservation: its start settled. */
 export function dequeue(feature: string): Promise<void> {
   return sandboxLock(
     "scheduler",
-    async () => writeQueue(readQueue().filter((f) => f !== feature)),
+    async () => {
+      writeQueue(readQueue().filter((f) => f !== feature));
+      const reserved = readReserved();
+      if (feature in reserved) {
+        delete reserved[feature];
+        writeJson(startingPath(), reserved);
+      }
+    },
     { timeout: LOCK_TIMEOUT },
   );
 }
@@ -387,6 +422,13 @@ export function featureCost(workspace: string, services?: string[]): Cost {
   return cost;
 }
 
+/** The services a plain `up` starts: those behind no profile. */
+function upServices(workspace: string): string[] {
+  return Object.entries(composeServices(workspace))
+    .filter(([, svc]) => isDict(svc) && !svc["profiles"])
+    .map(([name]) => name);
+}
+
 const dependsOn = (svc: ComposeService | undefined): string[] => {
   const deps = svc?.["depends_on"];
   return Array.isArray(deps) ? deps.map(String) : isDict(deps) ? Object.keys(deps) : [];
@@ -527,18 +569,32 @@ export function requestAdmission(
     async () => {
       const stored = readQueue();
       const queue = withoutDeadWaiters(stored);
-      const d = admit(budget, running, waiters(queue, running), {
+      const held = [...running, ...reservedLeases(running, feature)];
+      const own = starting ? undefined : running.find((l) => l.feature === feature);
+      // What runs may be an on-demand service `up` doesn't start: price the `up` services not running (SW-907).
+      const added = own?.services
+        ? featureCost(
+            workspace,
+            upServices(workspace).filter((s) => !own.services?.includes(s)),
+          )
+        : undefined;
+      const d = admit(budget, held, waiters(queue, held), {
         feature,
         cost,
         byPerson,
         services: starting?.services,
         ...(starting?.gate && { gate: true }),
+        ...(added && { added }),
       });
       let next = queue;
       // A whole `up` of a feature that runs keeps its containers when it waits: queued, the hook would
       // hold its session over them (SW-909). It leaves the queue, as an admit does; the caller reruns.
-      const reup = !starting && running.some((l) => l.feature === feature);
-      if (d.kind === "wait" && !reup) {
+      if (
+        (d.kind === "admit" || d.kind === "preempt") &&
+        !running.some((l) => l.feature === feature)
+      )
+        writeJson(startingPath(), { ...readReserved(), [feature]: { cost, at: Date.now() } });
+      if (d.kind === "wait" && !own) {
         // waiting.json first: if it can't be written, the queue must not move (SW-246).
         writeWaiting(workspace, {
           position: d.position,
