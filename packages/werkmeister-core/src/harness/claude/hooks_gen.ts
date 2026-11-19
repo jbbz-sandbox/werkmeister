@@ -749,30 +749,34 @@ function builtCliWrappers(workspaceRoot: string): string[] {
  * SW-473: `--exec-runs` runs the registry's rows on the host, so its forms of the pre-approved fixture
  * wrapper and built CLI ask first. The CLI takes it only as the first fixture option, so a prefix catches it.
  * SW-510: `node --test <file>` through the temp-HOME wrapper runs any file, one the agent just wrote too.
- * SW-842: config.yaml `workspace_ask_rules: false` drops the node --test asks; the --exec-runs ones always stay.
+ * SW-842, SW-828: the node --test asks only with config.yaml `workspace_ask_rules: true`, since they
+ * prompted on every core test run even in auto mode; the --exec-runs ones always stay.
  */
 export function workspaceAskRules(workspaceRoot: string): string[] {
   const tempHome = tempHomeWrapper(workspaceRoot);
-  // Only the boolean turns them off: a typo or string keeps the asks. Every settings writer and migrate read them here.
-  const nodeTestOff = loadGlobalConfig()["workspace_ask_rules"] === false;
-  const nodeTest = nodeTestOff
-    ? []
-    : [
-        `Bash(${tempHome} env WERKMEISTER_ROOT=* node --test*)`,
-        `Bash(${tempHome} --no-wait env WERKMEISTER_ROOT=* node --test*)`,
-        // SW-720: the probe form werkmeister-context.md names; an ask, so auto mode prompts instead of denying it.
-        `Bash(${tempHome} node --test*)`,
-        `Bash(${tempHome} --no-wait node --test*)`,
-        // The same form in the service's container, where a host without node_modules runs it.
-        `Bash(docker exec * ${tempHome} node --test*)`,
-        `Bash(docker exec * ${tempHome} --no-wait node --test*)`,
-      ];
+  // Only the boolean turns them on: a typo or string leaves them off. Every settings writer and migrate read them here.
+  const nodeTest =
+    loadGlobalConfig()["workspace_ask_rules"] === true
+      ? [
+          `Bash(${tempHome} env WERKMEISTER_ROOT=* node --test*)`,
+          `Bash(${tempHome} --no-wait env WERKMEISTER_ROOT=* node --test*)`,
+          // SW-720: the probe form werkmeister-context.md names; with no ask, auto mode's classifier decides it (SW-828).
+          `Bash(${tempHome} node --test*)`,
+          `Bash(${tempHome} --no-wait node --test*)`,
+          // The same form in the service's container, where a host without node_modules runs it.
+          `Bash(docker exec * ${tempHome} node --test*)`,
+          `Bash(docker exec * ${tempHome} --no-wait node --test*)`,
+        ]
+      : [];
   const builtClis = builtCliWrappers(workspaceRoot);
   if (!builtClis.length) return nodeTest;
   const fixture = path.join(path.dirname(tempHome), "with-fixture-workspace");
   return [
     `Bash(${fixture} --exec-runs:*)`,
     `Bash(${fixture} --no-wait --exec-runs:*)`,
+    // SW-828: the container form the werkmeister repo's validation text names. Glob, not `:*`: a `*` before `:*` is literal (SW-807).
+    `Bash(docker exec * ${fixture} --exec-runs*)`,
+    `Bash(docker exec * ${fixture} --no-wait --exec-runs*)`,
     ...builtClis.flatMap((cli) => [
       `Bash(${tempHome} ${cli} internal fixture --exec-runs:*)`,
       `Bash(${tempHome} --no-wait ${cli} internal fixture --exec-runs:*)`,

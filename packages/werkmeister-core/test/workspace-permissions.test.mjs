@@ -469,11 +469,13 @@ test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and
   setAutonomous(root, false);
   strategyById("icm").refresh(root);
   settings = readSettings(root);
+  // SW-828: a workspace without a built CLI has no asks by default, and an empty list writes no key.
   const ask = workspaceAskRules(root);
+  assert.deepEqual(ask, []);
   // SW-807: an icm refresh keeps the stage grants once autonomous is off.
   const allow = workspaceAllowRules(root, false);
-  assert.deepEqual(settings.permissions, { allow: ["Bash(git:*)", ...allow], ask });
-  assert.deepEqual(readRecord(root), { allow, ask });
+  assert.deepEqual(settings.permissions, { allow: ["Bash(git:*)", ...allow] });
+  assert.deepEqual(readRecord(root), { allow });
 });
 
 // The rules before narrowing, as a record from an earlier release holds them.
@@ -575,7 +577,7 @@ test("a rewrite after the ask block was deleted restores it from the record (SW-
   assert.deepEqual(readRecord(root), { allow: ["a"], ask: ["q", "r"] });
 });
 
-test("node --test through the temp-HOME wrapper asks, every form, never allowed (SW-510, SW-720)", () => {
+test("node --test through the temp-HOME wrapper asks when turned on, every form, never allowed (SW-510, SW-720)", () => {
   const w = "/ws/w/.werkmeister/bin/with-temp-home";
   const cli = "/ws/w/werkmeister/apps/cli/werkmeister";
   const forms = [
@@ -591,22 +593,14 @@ test("node --test through the temp-HOME wrapper asks, every form, never allowed 
   const root = workspace();
   const bin = path.join(dotDir(root), "bin");
   assert.deepEqual(
-    workspaceAskRules(root),
+    withConfig("workspace_ask_rules: true\n", () => workspaceAskRules(root)),
     forms.map((r) => r.replaceAll("/ws/w/.werkmeister/bin", bin)),
   );
 });
 
-test("--exec-runs forms of the fixture wrapper and built CLI ask; only node --test without a built CLI (SW-473)", () => {
+test("--exec-runs forms of the fixture wrapper and built CLI ask, host and container; none without a built CLI (SW-473, SW-828)", () => {
   const root = workspace();
-  const nodeTest = (bin) => [
-    `Bash(${bin}/with-temp-home env WERKMEISTER_ROOT=* node --test*)`,
-    `Bash(${bin}/with-temp-home --no-wait env WERKMEISTER_ROOT=* node --test*)`,
-    `Bash(${bin}/with-temp-home node --test*)`,
-    `Bash(${bin}/with-temp-home --no-wait node --test*)`,
-    `Bash(docker exec * ${bin}/with-temp-home node --test*)`,
-    `Bash(docker exec * ${bin}/with-temp-home --no-wait node --test*)`,
-  ];
-  assert.deepEqual(workspaceAskRules(root), nodeTest(path.join(dotDir(root), "bin")));
+  assert.deepEqual(workspaceAskRules(root), []);
   const cli = path.join(root, "werkmeister", "apps", "cli");
   fs.mkdirSync(cli, { recursive: true });
   fs.mkdirSync(path.join(root, "werkmeister", ".git"));
@@ -615,9 +609,10 @@ test("--exec-runs forms of the fixture wrapper and built CLI ask; only node --te
   assert.deepEqual(workspaceAskRules(root), [
     `Bash(${bin}/with-fixture-workspace --exec-runs:*)`,
     `Bash(${bin}/with-fixture-workspace --no-wait --exec-runs:*)`,
+    `Bash(docker exec * ${bin}/with-fixture-workspace --exec-runs*)`,
+    `Bash(docker exec * ${bin}/with-fixture-workspace --no-wait --exec-runs*)`,
     `Bash(${bin}/with-temp-home ${cli}/werkmeister internal fixture --exec-runs:*)`,
     `Bash(${bin}/with-temp-home --no-wait ${cli}/werkmeister internal fixture --exec-runs:*)`,
-    ...nodeTest(bin),
   ]);
 });
 
@@ -1030,7 +1025,7 @@ test("SW-845: a socket added by the branch's fragment or a dev_link also drops t
   );
 });
 
-// SW-842: the machine opt-out. Only the YAML boolean turns the asks off.
+// SW-842, SW-828: the machine opt-in. Only the YAML boolean turns the node --test asks on.
 function withConfig(yaml, fn) {
   const saved = process.env.WERKMEISTER_CONFIG_FILE;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ws-cfg-"));
@@ -1046,27 +1041,27 @@ function withConfig(yaml, fn) {
   }
 }
 
-test("workspace_ask_rules: false drops the node --test asks, never --exec-runs; absent, true or a string keeps all (SW-842)", () => {
+test("only workspace_ask_rules: true adds the node --test asks; absent, false, a string or bad YAML adds none; --exec-runs always (SW-842, SW-828)", () => {
   const root = workspace();
-  const asks = withConfig(null, () => workspaceAskRules(root));
-  assert.equal(asks.length, 6);
-  assert.deepEqual(
-    withConfig("workspace_ask_rules: false\n", () => workspaceAskRules(root)),
-    [],
-  );
-  for (const yaml of ["workspace_ask_rules: true\n", 'workspace_ask_rules: "false"\n', "{{bad"]) {
+  assert.equal(withConfig("workspace_ask_rules: true\n", () => workspaceAskRules(root)).length, 6);
+  for (const yaml of [
+    null,
+    "workspace_ask_rules: false\n",
+    'workspace_ask_rules: "true"\n',
+    "{{bad",
+  ]) {
     assert.deepEqual(
       withConfig(yaml, () => workspaceAskRules(root)),
-      asks,
-      yaml,
+      [],
+      String(yaml),
     );
   }
   const cli = path.join(root, "werkmeister", "apps", "cli");
   fs.mkdirSync(cli, { recursive: true });
   fs.mkdirSync(path.join(root, "werkmeister", ".git"));
   fs.writeFileSync(path.join(cli, "werkmeister"), "");
-  const off = withConfig("workspace_ask_rules: false\n", () => workspaceAskRules(root));
-  assert.equal(off.length, 4);
+  const off = withConfig(null, () => workspaceAskRules(root));
+  assert.equal(off.length, 6);
   assert.ok(
     off.every((r) => r.includes("--exec-runs")),
     off.join("\n"),
@@ -1075,26 +1070,26 @@ test("workspace_ask_rules: false drops the node --test asks, never --exec-runs; 
 
 test("turning the asks off drops the ones werkmeister wrote and keeps the person's (SW-842)", () => {
   const root = workspace({});
-  withConfig(null, () => writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)));
+  withConfig("workspace_ask_rules: true\n", () =>
+    writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)),
+  );
   const settings = readSettings(root);
   settings.permissions.ask.push("mine");
   fs.writeFileSync(settingsPath(root), JSON.stringify(settings, null, 2));
-  withConfig("workspace_ask_rules: false\n", () =>
-    writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)),
-  );
+  withConfig(null, () => writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)));
   assert.deepEqual(readSettings(root).permissions, { allow: ["a"], ask: ["mine"] });
   assert.deepEqual(readRecord(root), { allow: ["a"] });
 });
 
 test("off, a rewrite after the ask block was deleted does not restore it (SW-842, SW-835)", () => {
   const root = workspace({});
-  withConfig(null, () => writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)));
+  withConfig("workspace_ask_rules: true\n", () =>
+    writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)),
+  );
   const settings = readSettings(root);
   delete settings.permissions.ask;
   fs.writeFileSync(settingsPath(root), JSON.stringify(settings, null, 2));
-  withConfig("workspace_ask_rules: false\n", () =>
-    writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)),
-  );
+  withConfig(null, () => writeWorkspacePermissions(root, ["a"], [], workspaceAskRules(root)));
   assert.deepEqual(readSettings(root).permissions, { allow: ["a"] });
 });
 
@@ -1284,6 +1279,35 @@ const claudeDenies = (rules, cmd) =>
     const re = m[1].split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&"));
     return new RegExp(`^${re.join(".*")}$`).test(cmd);
   });
+
+test("SW-828: the core fast route asks under no generated rule; the container --exec-runs form does", () => {
+  const root = workspace();
+  const cli = path.join(root, "werkmeister", "apps", "cli");
+  fs.mkdirSync(cli, { recursive: true });
+  fs.mkdirSync(path.join(root, "werkmeister", ".git"));
+  fs.writeFileSync(path.join(cli, "werkmeister"), "");
+  const bin = path.join(dotDir(root), "bin");
+  const ask = workspaceAskRules(root);
+  // Claude Code asks when any part of a compound line matches an ask rule.
+  const asks = (cmd) => cmd.split(/\s*(?:&&|\|\||;|\|)\s*/).some((p) => claudeDenies(ask, p));
+  const core = "docker exec -w /app/packages/werkmeister-core feat-werkmeister-core";
+  const fast = `${core} ${bin}/with-temp-home --no-wait node --test test/a.test.mjs`;
+  for (const cmd of [
+    fast,
+    `${core} ${bin}/with-temp-home --no-wait node --test --test-name-pattern=x test/a.test.mjs`,
+    `${core} ${bin}/with-temp-home node --test test/a.test.mjs`,
+    `${core} ${bin}/with-temp-home --no-wait pnpm run build && ${fast}`,
+    `${fast} | grep -c ok`,
+  ])
+    assert.ok(!asks(cmd), cmd);
+  for (const cmd of [
+    `docker exec -w /app feat-werkmeister-core ${bin}/with-fixture-workspace --exec-runs feature up`,
+    `docker exec -w /app feat-werkmeister-core ${bin}/with-fixture-workspace --no-wait --exec-runs feature up`,
+    `${bin}/with-fixture-workspace --exec-runs feature up`,
+    `${bin}/with-temp-home ${cli}/werkmeister internal fixture --exec-runs x`,
+  ])
+    assert.ok(asks(cmd), cmd);
+});
 
 test("SW-626: git is an allow-list; `-C` reaches only the workspace's own repos", async () => {
   const { withSandboxHome } = await import("./fixtures.mjs");

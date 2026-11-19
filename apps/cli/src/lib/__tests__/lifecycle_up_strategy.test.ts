@@ -15,7 +15,6 @@ import {
   buildPrGuardEntry,
   SESSION_START_COMMAND,
   workspaceAllowRules,
-  workspaceAskRules,
 } from "werkmeister-core/hooks_gen";
 import type { Reporter } from "werkmeister-core/reporter";
 import { withReporter } from "werkmeister-core/reporter";
@@ -89,7 +88,7 @@ describe("lifecycle.up in an icm workspace", () => {
     );
     expect(settings).toEqual({
       hooks: withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
-      permissions: { allow: workspaceAllowRules(root), ask: workspaceAskRules(root) },
+      permissions: { allow: workspaceAllowRules(root) },
     });
   });
 
@@ -117,7 +116,7 @@ describe("lifecycle.up in an icm workspace", () => {
     );
     expect(settings).toEqual({
       hooks: withAgentState({ SessionStart: [hand], PreToolUse: [buildPrGuardEntry()] }),
-      permissions: { allow: workspaceAllowRules(root), ask: workspaceAskRules(root) },
+      permissions: { allow: workspaceAllowRules(root) },
     });
   });
 });

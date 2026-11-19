@@ -457,15 +457,15 @@ A tier with no model for the workspace's harness fails create, and init of a wor
 
 ### ~/.werkmeister/config.yaml: workspace_ask_rules
 
-Every Claude workspace's `.claude/settings.json` gets `permissions.ask` rules (`workspaceAskRules` in `hooks_gen.ts`), so these commands stop for the person even in auto mode: `with-temp-home … node --test*` and its `docker exec *` form (they run any file, one the agent just wrote too), and, in a repo with a built CLI, the `--exec-runs` forms of `with-fixture-workspace` and `internal fixture`, which run the registry's rows on the host. That is 10 rules in the werkmeister repo, 6 elsewhere. A workspace missing them while they are on is repaired by its next `feature up`, `feature up --service` or `machine migrate`.
+A Claude workspace in a repo with a built CLI gets `permissions.ask` rules (`workspaceAskRules` in `hooks_gen.ts`) for the `--exec-runs` forms of `with-fixture-workspace` (on the host and through `docker exec *`) and `internal fixture`, which run the registry's rows on the host, so they stop for the person even in auto mode. That is 6 rules in the werkmeister repo, none elsewhere. A workspace missing them is repaired by its next `feature up`, `feature up --service` or `machine migrate`.
 
-To turn the six `node --test` asks off on this machine:
+`with-temp-home … node --test*` and its `docker exec *` form run any file, one the agent just wrote too. They are never pre-approved, but by default nothing forces them to prompt: auto mode decides, under the threat model in [context-strategies.md](context-strategies.md). Forcing a prompt on every core test run slowed autonomous runs. To make the six `node --test` forms ask on this machine:
 
 ```yaml
-workspace_ask_rules: false     # default true
+workspace_ask_rules: true      # default false
 ```
 
-The `--exec-runs` asks always stay: with no ask, the pre-approved `with-fixture-workspace:*` and built-CLI allow rules would run the registry's rows on the host with no prompt at all. Only the YAML boolean `false` turns the `node --test` asks off. A missing key, `true`, a string such as `"false"` or `off`, or an unparseable file keeps them on. Each workspace's next `workspace init`, `feature up`, `feature up --service` or `machine migrate` then removes the `node --test` asks werkmeister recorded writing (`.werkmeister/claude-permissions.json`) and keeps any you added by hand, and none of those commands writes them back. With them off, `node --test` through the wrapper is no longer forced to prompt: auto mode decides, under the threat model in [context-strategies.md](context-strategies.md). `machine setup` and `machine config` keep the key when they rewrite config.yaml. There is no per-workspace override: `.werkmeister/workspace.yml` is in the agent-editable record folder, so the agent could turn its own asks off.
+The `--exec-runs` asks always stay: with no ask, the pre-approved `with-fixture-workspace:*` and built-CLI allow rules would run the registry's rows on the host with no prompt at all. Only the YAML boolean `true` turns the `node --test` asks on. A missing key, `false`, a string such as `"true"` or `on`, or an unparseable file leaves them off. Each workspace's next `workspace init`, `feature up`, `feature up --service` or `machine migrate` then adds or removes them to match, removing only the ones werkmeister recorded writing (`.werkmeister/claude-permissions.json`) and keeping any you added by hand. `machine setup` and `machine config` keep the key when they rewrite config.yaml. There is no per-workspace override: `.werkmeister/workspace.yml` is in the agent-editable record folder, so the agent could turn its own asks off.
 
 ### Optional integrations
 
