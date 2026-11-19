@@ -124,7 +124,7 @@
     "quickpickle": "^1.11.2",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^3.0.0",
+    "vitest": "^3.1.0",
     "werkmeister-core": "workspace:*",
     "werkmeister-dashboard": "workspace:*",
     "werkmeister-mcp": "workspace:*",
