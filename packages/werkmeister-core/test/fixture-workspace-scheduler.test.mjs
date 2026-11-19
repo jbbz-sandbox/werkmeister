@@ -22,6 +22,18 @@ test("config adds keys to the fixture's config.yaml, and any key but budget is r
     assert.throws(() => fixturePreset({ config: { [key]: {} } }), /--config may not set/);
 });
 
+// SW-900: --workspace's keys land in workspace.yml from a pre-approved wrapper, so only listed ones pass.
+test("fixturePreset refuses a --workspace key outside its allowlist and keeps the listed ones", async () => {
+  const { fixturePreset } = await import("../dist/fixture_workspace.js");
+  for (const key of ["feature", "services", "slot", "project", "bogus"])
+    assert.throws(
+      () => fixturePreset({ workspace: { [key]: "x" } }),
+      new RegExp(`--workspace may not set ${key}: only `),
+    );
+  const listed = { group: ["SW-2"], context_strategy: "icm", work_type: "bugfix", repos: "app" };
+  assert.deepEqual(fixturePreset({ workspace: listed }).workspace, listed);
+});
+
 test("containers and queue seed what the scheduler reads from Docker and queue.json (SW-685)", async () => {
   const { runningLeases } = await import("../dist/lifecycle.js");
   const { readQueue } = await import("../dist/scheduler_state.js");
