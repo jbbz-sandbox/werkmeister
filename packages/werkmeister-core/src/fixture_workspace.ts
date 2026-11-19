@@ -83,6 +83,9 @@ export interface FixtureOptions {
   worktrees?: boolean;
   /** JIRA_BASE_URL for the fixture (a fake Jira's URL, `startFakeJira`). Default: blank Jira credentials. */
   jira?: string;
+  /** CLAUDE_BIN / CODEX_BIN for the fixture, a fake a test sets on purpose (SW-911). In-process only: the wrapper has no flag for them. Default: blank, the failing stub. */
+  claudeBin?: string;
+  codexBin?: string;
 }
 
 /** One running container as `docker inspect` reports it to the scheduler. */
@@ -495,6 +498,14 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
       KUBECONFIG: "",
       GH_TOKEN: "",
       GITHUB_TOKEN: "",
+      // Blank, claude and codex are the failing stubs, so the Jira fallback to `claude -p` never
+      // reaches the real tracker; a caller's workspace config would aim init at a real issue (SW-911).
+      CLAUDE_BIN: opts.claudeBin ?? "",
+      CODEX_BIN: opts.codexBin ?? "",
+      OPENCODE_BIN: "",
+      WERKMEISTER_WORKSPACE_CONFIG: "",
+      // Read before sandboxHome(): a caller's would take the fixture's issue briefings.
+      WERKMEISTER_CACHE_FILE: "",
       // Dead even when the caller's shell exports the real daemon's address (SW-264, SW-426).
       WERKMEISTER_HOST: opts.daemon ?? closedPortUrl(),
       // A refused daemon is retried for a restart gap (15 s default): each fixture step would wait it out (SW-708).
