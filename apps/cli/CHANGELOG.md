@@ -1,5 +1,13 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.96.3
+
+### Patch Changes
+
+- f49540b: Capacity admission no longer lets three kinds of start past the budget. A plain `feature up` beside a running on-demand service prices every `up` service it starts, not its set less what runs. A running feature costs at least what its compose reserves for its running services, so a container started with no or lower limits no longer reads as free. An admitted start is reserved in `~/.werkmeister/scheduler/starting.json` until its containers run (or for 10 minutes), so two admits before either one's containers exist can't both take the same room (SW-907).
+- 3d2e1a6: A `werkmeister feature up` of a feature that already runs no longer queues it when the rest of its set doesn't fit: its containers keep running, it exits 75 with "rerun", and its session is not held. Before, the wait wrote `waiting.json` over live containers, and the capacity hook denied every docker, pnpm and node call until a grant re-upped it. The hook's "Waiting for capacity" message now says to confirm with `docker ps` and wait for the grant notice rather than stop (SW-909).
+- c0fc52f: Preemption no longer stops a feature whose session shows a tool-permission prompt: that prompt is mid-turn (often for a `docker exec` into the same container), so it ranks like the turn it sits in, working in an autonomous workspace and a person's otherwise. A question or plan prompt still counts as waiting on a person (SW-910).
+
 ## 0.96.2
 
 ### Patch Changes
