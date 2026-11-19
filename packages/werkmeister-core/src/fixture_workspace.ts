@@ -7,6 +7,7 @@
 
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import YAML from "yaml";
 
@@ -76,6 +77,12 @@ export interface FixtureOptions {
    * `since` is that many minutes back (and `services`, a service start), so admission prices and ages it (SW-809).
    */
   queue?: string[];
+  /** A `postmortem.md` at the workspace root, on the record branch, so close-out runs without `--skip-postmortem` (SW-896). */
+  postmortem?: boolean;
+  /** Each repo a worktree of its source clone, as init makes them, on `<os user>/demo`, so `pr push` takes it (SW-896). */
+  worktrees?: boolean;
+  /** JIRA_BASE_URL for the fixture (a fake Jira's URL, `startFakeJira`). Default: blank Jira credentials. */
+  jira?: string;
 }
 
 /** One running container as `docker inspect` reports it to the scheduler. */
@@ -242,6 +249,8 @@ export function fixturePreset({
     throw new Error(
       `--queue: bad entry ${JSON.stringify(badEntry)}: <feature>[:<waitedMin>[:<service>,...]], lowercase names and whole minutes`,
     );
+  // A worktree shares its source's origin/main, so it can't stay behind until a fetch.
+  if (opts.worktrees && opts.behind) throw new Error("--worktrees and --behind don't combine");
   const libChange = "packages/lib/index.js";
   const gateChange = change ?? (opts.fragmentChange === undefined ? libChange : undefined);
   if (gate && opts.services && gateChange === libChange) {
@@ -318,6 +327,8 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
     (Object.keys(prFields).length ? YAML.stringify(prFields) : "") +
     (opts.prLines ?? []).map((l) => `${l}\n`).join("");
   let applyFragmentChange: (() => void) | undefined;
+  // pr push takes only the workspace's own <os user>/<workspace> branch (pushOne); the clone keeps me/demo.
+  const branch = opts.worktrees ? `${os.userInfo().username}/${FIXTURE_FEATURE}` : FIXTURE_BRANCH;
   for (const { name, change } of repos) {
     // Ends in owner/repo.git so originSlug matches the PR file's repo: (SW-381).
     const remote = path.join(root, "remotes", "o", `${name}.git`);
@@ -334,7 +345,9 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
       write(path.join(source, FRAGMENT_FILE), opts.fragment);
 
     const repo = path.join(workspace, name);
-    git(workspace, "clone", "-q", remote, name);
+    // Detached: the source still has main checked out until it moves to fixture-source below.
+    if (opts.worktrees) git(source, "worktree", "add", "-q", "--detach", repo);
+    else git(workspace, "clone", "-q", remote, name);
     const frag = name === repos[0]?.name ? opts.fragmentChange : undefined;
     const changed = [change, frag === undefined ? undefined : FRAGMENT_FILE].filter(Boolean);
     if (changed.length) {
@@ -342,9 +355,10 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
       if (frag !== undefined) write(path.join(repo, FRAGMENT_FILE), opts.fragment ?? BASE_FRAGMENT);
       git(repo, "add", ".");
       git(repo, "commit", "-q", "-m", "base");
-      git(repo, "push", "-q", "origin", "main");
+      // HEAD:main, since a detached worktree's `main` is the source's, still at init.
+      git(repo, "push", "-q", "origin", "HEAD:main");
     }
-    git(repo, "switch", "-q", "-c", FIXTURE_BRANCH);
+    git(repo, "switch", "-q", "-c", branch);
     if (opts.behind) {
       // Pushed from the source clone, so the workspace clone's origin/main stays stale until a fetch.
       git(source, "fetch", "-q", "origin", "main");
@@ -372,10 +386,12 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
     if (opts.prFile && changed.length)
       write(
         path.join(notes, `pr-${name}.md`),
-        `---\nrepo: o/${name}\nbranch: ${FIXTURE_BRANCH}\nbase: main\nstatus: ${status}\n${extra}---\n# feat: fixture change\n\n${PASS}`,
+        `---\nrepo: o/${name}\nbranch: ${branch}\nbase: main\nstatus: ${status}\n${extra}---\n# feat: fixture change\n\n${PASS}`,
       );
   }
   if (opts.prFile) write(path.join(notes, "exercise.md"), PASS);
+  if (opts.postmortem)
+    write(path.join(workspace, "postmortem.md"), "# Post-mortem\n\nseeded by the fixture\n");
 
   // The workspace folder is a git repo with its own local origin, like a real one, so `pr open`
   // commits and pushes the record (its code clones are ignored).
@@ -468,10 +484,11 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
       // dockerode honours DOCKER_HOST before any context, so no engine call reaches the host (SW-164).
       // A fixed short path: one under a deep temp root passes macOS's 104-byte socket limit and crashes with EINVAL.
       DOCKER_HOST: "unix:///nonexistent/werkmeister-fixture-docker.sock",
-      // jiraCreds() reads these before config; blank, the fixture config's missing `jira:` wins.
-      JIRA_BASE_URL: "",
-      JIRA_EMAIL: "",
-      JIRA_API_TOKEN: "",
+      // jiraCreds() reads these before config; blank, the fixture config's missing `jira:` wins, so
+      // only the fake Jira (`jira`) is ever reached.
+      JIRA_BASE_URL: opts.jira ?? "",
+      JIRA_EMAIL: opts.jira ? "fixture@example.invalid" : "",
+      JIRA_API_TOKEN: opts.jira ? "fixture" : "",
       // A fixture step must not act as the caller on Anthropic, a cluster or GitHub (SW-424).
       ANTHROPIC_API_KEY: "",
       CLAUDE_CODE_OAUTH_TOKEN: "",
@@ -501,7 +518,7 @@ const SCRIPT = `#!/bin/sh
 # Generated by \`werkmeister workspace init\` (SW-292); rerun it to regenerate.
 # Runs this workspace's own built werkmeister CLI against a seeded fixture workspace, removed on exit:
 # temp HOME and registry, a local bare origin, logging fakes for gh and docker, dead Docker and daemon.
-# usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...
+# usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...
 # It only ever runs that CLI, never another command, so one allow rule can cover it (SW-172, SW-231);
 # --exec-runs, given first, also runs the registry's rows on the host, so the workspace asks before it (SW-473).
 ws=$(cd "$(dirname "$0")/../.." && pwd -P) || exit 1

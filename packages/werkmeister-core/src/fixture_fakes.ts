@@ -169,6 +169,69 @@ export async function startFakeDaemon(tools: Record<string, unknown> = {}): Prom
     }
     reply(404, { error: `fake daemon: unhandled ${req.method} ${req.url}`, code: "FAKE_DAEMON" });
   });
+  return listening(server, calls);
+}
+
+const JIRA_STATUSES = ["To Do", "In Progress", "In Review", "Done"];
+
+/**
+ * A stand-in for the Jira REST paths jira-rest.ts calls (SW-896): every issue starts `To Do`,
+ * `POST …/transitions` moves it, `POST …/comment` is taken. Any other path fails 501, so a path
+ * the fake doesn't cover fails loudly. Point JIRA_BASE_URL at `url` with any email and token.
+ */
+export async function startFakeJira(): Promise<FakeDaemon> {
+  const calls: string[] = [];
+  const status = new Map<string, string>();
+  const statusOf = (key: string) => status.get(key) ?? "To Do";
+  const issue = (key: string) => ({
+    key,
+    fields: {
+      summary: "fixture issue",
+      status: { name: statusOf(key) },
+      issuetype: { name: "Task" },
+      comment: { comments: [] },
+    },
+  });
+  const server = http.createServer(async (req, res) => {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    const url = new URL(req.url ?? "/", "http://fake");
+    calls.push(`${req.method} ${url.pathname}${body ? ` ${body}` : ""}`);
+    const reply = (code: number, json?: unknown) =>
+      res
+        .writeHead(code, { "content-type": "application/json" })
+        .end(json === undefined ? "" : JSON.stringify(json));
+    const m = /^\/rest\/api\/2\/issue\/([A-Z][A-Z0-9]*-\d+)(\/transitions|\/comment)?$/.exec(
+      url.pathname,
+    );
+    const key = m?.[1] ?? "";
+    if (m && req.method === "GET" && !m[2]) return reply(200, issue(key));
+    if (m?.[2] === "/transitions" && req.method === "GET")
+      return reply(200, {
+        transitions: JIRA_STATUSES.map((name, i) => ({ id: String(i + 1), name, to: { name } })),
+      });
+    if (m?.[2] === "/transitions" && req.method === "POST") {
+      const id = Number(JSON.parse(body || "{}").transition?.id);
+      const to = JIRA_STATUSES[id - 1];
+      if (!to) return reply(400, { errorMessages: [`fake jira: no transition ${id}`] });
+      status.set(key, to);
+      return reply(204);
+    }
+    if (m?.[2] === "/comment" && req.method === "POST") return reply(201, {});
+    if (req.method === "GET" && url.pathname === "/rest/api/2/search/jql") {
+      const keys = /key in \(([^)]*)\)/.exec(url.searchParams.get("jql") ?? "")?.[1] ?? "";
+      const found = keys
+        .split(",")
+        .map((k) => k.trim())
+        .filter(Boolean);
+      return reply(200, { issues: found.map(issue) });
+    }
+    reply(501, { errorMessages: [`fake jira: unhandled ${req.method} ${url.pathname}`] });
+  });
+  return listening(server, calls);
+}
+
+async function listening(server: http.Server, calls: string[]): Promise<FakeDaemon> {
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const { port } = server.address() as { port: number };
   return {
