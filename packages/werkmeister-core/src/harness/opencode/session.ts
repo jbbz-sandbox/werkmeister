@@ -2,12 +2,14 @@
 import os from "node:os";
 import path from "node:path";
 import { type AgentState, agentOf, readSessions } from "../../agent_state.js";
-import { isExecutable, shellQuote } from "../../tool_bins.js";
+import { isFixture } from "../../config.js";
+import { fixtureOpencodeBin, isExecutable, shellQuote } from "../../tool_bins.js";
 import { runTurn, turnStatus } from "../turn.js";
 import type { SessionSignal, TurnOptions, TurnResult } from "../types.js";
 
 /** $OPENCODE_BIN → the usual install locations → bare `opencode` (resolved on childEnv's PATH). */
 export async function resolveOpencodeBin(): Promise<string> {
+  if (isFixture()) return fixtureOpencodeBin();
   const candidates = [
     process.env.OPENCODE_BIN,
     path.join(os.homedir(), ".opencode", "bin", "opencode"),

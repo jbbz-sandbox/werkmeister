@@ -220,8 +220,7 @@ test("under the fixture, claude and kubectl are not the caller's, and its creden
       mode: 0o755,
     });
   const creds = ["ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN", "KUBECONFIG", "GH_TOKEN"];
-  const prev = Object.fromEntries(["PATH", "CLAUDE_BIN", ...creds].map((k) => [k, process.env[k]]));
-  delete process.env.CLAUDE_BIN;
+  const prev = Object.fromEntries(["PATH", ...creds].map((k) => [k, process.env[k]]));
   process.env.PATH = `${bin}:${process.env.PATH}`;
   for (const k of creds) process.env[k] = "caller-secret";
   try {

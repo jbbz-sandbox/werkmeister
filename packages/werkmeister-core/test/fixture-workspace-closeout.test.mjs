@@ -66,3 +66,74 @@ test("postmortem and jira: abandon runs without --skip-postmortem and moves the 
 test("worktrees refuses behind: a worktree shares its source's origin/main", () => {
   assert.throws(() => fixturePreset({ worktrees: true, behind: true }), /don't combine/);
 });
+
+// SW-911: the caller's agent bins, workspace config and issue cache never reach a fixture step, so the
+// Jira fallback to `claude -p` (no --jira) hits the failing stub, never a real claude with the real Atlassian MCP.
+test("the caller's CLAUDE_BIN, CODEX_BIN, OPENCODE_BIN, WERKMEISTER_WORKSPACE_CONFIG and WERKMEISTER_CACHE_FILE are blank under the fixture", async () => {
+  const { resolveClaudeBin } = await import("../dist/harness/claude/cli.js");
+  const { resolveCodexBin } = await import("../dist/harness/codex/cli.js");
+  const { resolveOpencodeBin } = await import("../dist/harness/opencode/session.js");
+  const { toolBin } = await import("../dist/tool_bins.js");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "caller-bins-"));
+  const hits = path.join(dir, "hits");
+  for (const name of ["claude", "codex", "opencode"])
+    fs.writeFileSync(path.join(dir, name), `#!/bin/sh\necho ${name} >> "${hits}"\n`, {
+      mode: 0o755,
+    });
+  fs.writeFileSync(path.join(dir, "workspace.yml"), "issue_id: SW-999\n");
+  const caller = {
+    CLAUDE_BIN: path.join(dir, "claude"),
+    CODEX_BIN: path.join(dir, "codex"),
+    OPENCODE_BIN: path.join(dir, "opencode"),
+    WERKMEISTER_CACHE_FILE: path.join(dir, "issue-cache.json"),
+    WERKMEISTER_WORKSPACE_CONFIG: path.join(dir, "workspace.yml"),
+  };
+  const prev = Object.fromEntries(Object.keys(caller).map((k) => [k, process.env[k]]));
+  Object.assign(process.env, caller);
+  try {
+    await withFixtureWorkspace(
+      async (fx) => {
+        for (const k of Object.keys(caller)) assert.equal(process.env[k], "", k);
+        const bins = [
+          await resolveClaudeBin(),
+          await resolveCodexBin(),
+          await resolveOpencodeBin(),
+        ];
+        for (const bin of [...bins, toolBin("codex"), toolBin("opencode")]) {
+          assert.ok(!bin.startsWith(dir), bin);
+          try {
+            execFileSync(bin, ["-p", "hi"], { stdio: "ignore" });
+          } catch {}
+        }
+        await withReporter(collectingReporter(), () =>
+          initWorkspace({}, fx.workspace, { build: false }),
+        );
+        await startIssue(fx.workspace);
+        await closeOut("demo", { abandon: "fixture probe" });
+      },
+      { postmortem: true, workspace: { issue_id: "SW-2" } },
+    );
+    assert.equal(fs.existsSync(hits) ? fs.readFileSync(hits, "utf8") : "", "", "caller's bins ran");
+    assert.equal(
+      fs.existsSync(caller.WERKMEISTER_CACHE_FILE),
+      false,
+      "caller's issue cache written",
+    );
+  } finally {
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("withFixtureWorkspace({ claudeBin, codexBin }) sets a fake on purpose", async () => {
+  await withFixtureWorkspace(
+    async () => {
+      assert.equal(process.env.CLAUDE_BIN, "/fake/claude");
+      assert.equal(process.env.CODEX_BIN, "/fake/codex");
+    },
+    { claudeBin: "/fake/claude", codexBin: "/fake/codex" },
+  );
+});

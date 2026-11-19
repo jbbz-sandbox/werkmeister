@@ -75,18 +75,23 @@ export const fixtureClaudeBin = () => process.env["CLAUDE_BIN"] || fixtureStub("
 /** `codex`, the same way: under WERKMEISTER_FIXTURE $CODEX_BIN or a stub that fails (SW-384). */
 export const fixtureCodexBin = () => process.env["CODEX_BIN"] || fixtureStub("codex");
 
+/** `opencode`, the same way: under WERKMEISTER_FIXTURE $OPENCODE_BIN or a stub that fails (SW-911). */
+export const fixtureOpencodeBin = () => process.env["OPENCODE_BIN"] || fixtureStub("opencode");
+
 /** `docker`, or $WERKMEISTER_DOCKER_BIN (tests and fixture exercises point it at a fake; SW-208). */
 export const dockerBin = () => envVar("DOCKER_BIN") || "docker";
 
 /**
  * *bin*, with `gh` and `docker` resolved through their overrides: childEnv()'s PATH would beat a fake
- * (SW-148, SW-208). Under WERKMEISTER_FIXTURE `claude` and `kubectl` are stubs too (SW-424).
+ * (SW-148, SW-208). Under WERKMEISTER_FIXTURE the agent CLIs and `kubectl` are stubs too (SW-424, SW-911).
  */
 export function toolBin(bin: string): string {
   if (bin === "gh") return ghBin();
   if (bin === "docker") return dockerBin();
   if (!isFixture()) return bin;
   if (bin === "claude") return fixtureClaudeBin();
+  if (bin === "codex") return fixtureCodexBin();
+  if (bin === "opencode") return fixtureOpencodeBin();
   return bin === "kubectl" ? fixtureStub("kubectl") : bin;
 }
 
