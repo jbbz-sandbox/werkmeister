@@ -38,6 +38,7 @@ import { updateNoteStatus } from "./graduate.js";
 import { eachIssue, type IssueStatuses, issueStatuses, moveIssue } from "./issue_status.js";
 import { groupOf, issueIdOf, issueRefsOf, issueTracker, projectOf } from "./issue_tracker.js";
 import type { IssueTrackerStrategy } from "./issue_trackers/types.js";
+import { checkForwardHealth } from "./k8s.js";
 import {
   GATE_CAPACITY_WAIT_MS,
   grantWaiters,
@@ -156,8 +157,8 @@ export type Run = (
 export interface Deps {
   /** Runs a host command and resolves with its output and exit code; never rejects. */
   run: Run;
-  /** HTTP status of a GET, or 0 when unreachable. */
-  httpStatus: (url: string) => Promise<number>;
+  /** Runs the probe a `health_endpoint` names on a host port: a path, `redis`/`postgres`, or `""` for TCP. */
+  probe: (port: number, health: string) => Promise<{ ok: boolean; detail: string }>;
   /** The machine's service registry (`~/.werkmeister/services.yaml`). */
   services: ServicesConfig;
   /** The archetypes services build on. */
@@ -276,20 +277,12 @@ const execRun: Run = (bin, args, cwd) =>
     );
   });
 
-async function httpStatus(url: string): Promise<number> {
-  try {
-    return (await fetch(url, { redirect: "manual", signal: AbortSignal.timeout(5000) })).status;
-  } catch {
-    return 0;
-  }
-}
-
 export function defaultDeps(): Deps {
   // Built once per command, so the wait is a total across its starts, not per start (SW-869).
   const capacityDeadline = Date.now() + GATE_CAPACITY_WAIT_MS;
   return {
     run: execRun,
-    httpStatus,
+    probe: checkForwardHealth,
     services: loadServices(),
     archetypes: loadArchetypes(),
     repos: loadReposConfig(),
@@ -1741,9 +1734,13 @@ async function gateChecks(
       add(`baseline ${svc}`, false, "container not running — run `werkmeister feature up`");
       continue;
     }
-    const url = `http://localhost:${getServicePort(slot, def["port_offset"] ?? 0)}${def["health_endpoint"] ?? "/"}`;
-    const code = await deps.httpStatus(url);
-    add(`baseline ${svc}`, code > 0 && code < 400, `GET ${url} → ${code || "unreachable"}`);
+    const port = getServicePort(slot, def["port_offset"] ?? 0);
+    const health: string = def["health_endpoint"] ?? "/";
+    const what = health.startsWith("/")
+      ? `GET http://localhost:${port}${health}`
+      : `${health || "tcp"} localhost:${port}`;
+    const r = await deps.probe(port, health);
+    add(`baseline ${svc}`, r.ok, `${what} → ${r.detail}`);
   }
 
   // Only when no container could run it before the tests (SW-638).
