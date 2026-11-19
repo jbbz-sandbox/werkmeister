@@ -1,6 +1,6 @@
 {
   "name": "werkmeister-mcp",
-  "version": "0.9.68",
+  "version": "0.9.69",
   "license": "Apache-2.0",
   "type": "module",
   "private": true,

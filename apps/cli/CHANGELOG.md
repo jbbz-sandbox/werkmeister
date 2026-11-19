@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.95.4
+
+### Patch Changes
+
+- bdc564c: A whole-feature `werkmeister feature up` of a feature that already runs part of its set is now priced for what it adds, so it waits, preempts or never fits like any other start instead of being admitted over the capacity budget (SW-889).
+- 0c65559: A starved queue head that fits only once a person's workspace stops no longer holds every waiter behind it: later starts that fit run past it, and it holds the room again once it can fit without that person stopping (SW-903).
+
 ## 0.95.3
 
 ### Patch Changes
