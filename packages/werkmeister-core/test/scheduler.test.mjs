@@ -438,3 +438,20 @@ test("only a busy feature's service start that fits passes a holding head (SW-69
   // Busy but does not fit: waits, and takes nothing (only the head preempts).
   assert.deepEqual(admit(eight, busy, head, docs("a", 2)), { kind: "wait", position: 2 });
 });
+
+// SW-903, the 2026-11-18 stall: a person's workspace holds 3 of 8 CPUs and is never preempted, so a
+// starved 6-CPU head fits only once that person stops. Waiting can't help it, so it must not hold.
+test("a starved head that only a person's stop could fit does not hold a start behind it (SW-903)", () => {
+  const eight = { memory: 16 * G, cpus: 8, preempt: true };
+  const head = { ...w("permissions-group", 30), cost: { memory: 2 * G, cpus: 6 } };
+  const service = { ...req("sw-856-scheduler-group", 1, 1), services: ["werkmeister-core"] };
+  const person = [lease("workspace-group", 2, 3, "person")];
+  assert.deepEqual(admit(eight, person, [head], service), { kind: "admit" });
+  // Room that will free without a person (an agent's lease, idle or working) still makes it hold (SW-675).
+  for (const rank of ["idle", "working"]) {
+    assert.deepEqual(admit(eight, [lease("agent", 2, 3, rank, true)], [head], service), {
+      kind: "wait",
+      position: 2,
+    });
+  }
+});

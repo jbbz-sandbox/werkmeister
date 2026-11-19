@@ -105,7 +105,14 @@ import { type RunResult, run } from "./proc.js";
 import { workspaceServices } from "./registry_sync.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { withStartRecord } from "./resources.js";
-import { type Cost, type Lease, queueOrder, type Rank, STARVE_MS } from "./scheduler.js";
+import {
+  type Cost,
+  headCanWaitOut,
+  type Lease,
+  queueOrder,
+  type Rank,
+  STARVE_MS,
+} from "./scheduler.js";
 import { schedulerOp, waitingQueue } from "./scheduler_client.js";
 import {
   dequeue,
@@ -688,7 +695,8 @@ export async function capacityWait(
     const need = ws ? featureCost(ws, readWaiting(ws)?.services) : null;
     lines.push(
       `behind ${head.feature}${need ? ` (needs ${cpus(need.cpus)}, ${gib(need.memory)})` : ""}` +
-        (head.waitedMs >= STARVE_MS && !head.parked // a parked head never holds (SW-701)
+        // A parked head never holds (SW-701), nor one only a person's stop could fit (SW-903).
+        (head.waitedMs >= STARVE_MS && !head.parked && headCanWaitOut(budget, running, head)
           ? `, which has waited ${Math.round(head.waitedMs / 60_000)} min and gets the next free room`
           : ""),
     );

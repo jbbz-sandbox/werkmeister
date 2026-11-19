@@ -278,8 +278,8 @@ test("a starved whole-feature head that fits passes a service start on an idle h
     writeWaiting(head, { position: 1, reason: "waiting for capacity", since });
     const budget = { memory: 8 * G, cpus: 4, preempt: false };
     const start = { services: ["api"] };
-    // 3 of 4 CPUs taken: the head (3 CPUs) can't fit, so it keeps the room.
-    const busy = [{ feature: "x", cost: { memory: G, cpus: 3 }, rank: "person", busy: false }];
+    // 3 of 4 CPUs taken by a run that ends by itself: the head (3 CPUs) can't fit, so it keeps the room.
+    const busy = [{ feature: "x", cost: { memory: G, cpus: 3 }, rank: "working", busy: false }];
     assert.deepEqual(await requestAdmission("mine", mine, false, busy, budget, start), {
       kind: "wait",
       position: 2,

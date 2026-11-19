@@ -8,7 +8,7 @@
 import os from "node:os";
 import { readWaiting } from "werkmeister-core/agent_state";
 import { describeLease, runningLeases } from "werkmeister-core/lifecycle";
-import { queueOrder, STARVE_MS } from "werkmeister-core/scheduler";
+import { headCanWaitOut, queueOrder, STARVE_MS } from "werkmeister-core/scheduler";
 import { waitingQueue } from "werkmeister-core/scheduler_client";
 import {
   featureCost,
@@ -39,7 +39,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     const ws = leases[w.feature]?.workspace;
     const services = (ws && readWaiting(ws)?.services) || null;
     const cost = ws ? featureCost(ws, services ?? undefined) : null;
-    return { ...w, position: i + 1, services, cost };
+    // The head the queue holds for: as admit() and capacityWait have it (SW-701, SW-903).
+    const holds =
+      i === 0 && w.waitedMs >= STARVE_MS && !w.parked && headCanWaitOut(budget, running ?? [], w);
+    return { ...w, position: i + 1, services, cost, holds };
   });
 
   if (args.json) {
@@ -94,7 +97,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       ? ` (${Number(w.cost.cpus.toFixed(1))} CPUs, ${(w.cost.memory / GIB).toFixed(1)} GiB)`
       : "";
     const waited = w.waitedMs
-      ? `  waited ${Math.round(w.waitedMs / 60_000)} min${w.position === 1 && w.waitedMs >= STARVE_MS ? ", gets the next free room" : ""}`
+      ? `  waited ${Math.round(w.waitedMs / 60_000)} min${w.holds ? ", gets the next free room" : ""}`
       : "";
     console.log(`  ${w.position}. ${w.feature}  ${what}${need}${waited}`);
   }
