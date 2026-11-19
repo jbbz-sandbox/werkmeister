@@ -52,9 +52,9 @@ repo:
     workspace: workspace create/init/close, issue commands, PR lifecycle
     ui: VS Code extension, dashboard, workspaces pane
     infra: containers, Caddy, shared infra, daemon, MCP proxy
-    core: werkmeister-core internals: import structure, error types, shared readers
-    harness: harness adapters (OpenCode, Codex): hooks, tool names, lifecycle tests
-    project: non-code work: legal, trademark, launch
+    core: werkmeister-core internals, import structure, error types, shared readers
+    harness: harness adapters (OpenCode, Codex), hooks, tool names, lifecycle tests
+    project: non-code work, legal, trademark, launch
 
 services:
   # --- The werkmeister repo's own workspaces (self-hosting) -----------------------
