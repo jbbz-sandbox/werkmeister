@@ -252,9 +252,15 @@ export async function up(
     await waitForSetupLoad(workspace, undefined);
     const waiting = await admitOrQueue(feature, workspace, byPerson ?? startsAsPerson(workspace));
     if (waiting !== null) {
-      warn(`Waiting for capacity, position ${waiting} — it starts when another feature stops`);
+      // Unqueued: a re-up of a running feature, which keeps running and is rerun, not granted (SW-909).
+      const queued = readWaiting(workspace) !== null;
+      warn(
+        queued
+          ? `Waiting for capacity, position ${waiting} — it starts when another feature stops`
+          : `'${feature}' keeps running; no capacity yet to start the rest of its set`,
+      );
       return {
-        waitingNote: await capacityWait(feature, waiting, true, featureCost(workspace)),
+        waitingNote: await capacityWait(feature, waiting, queued, featureCost(workspace)),
         feature,
         slot,
         portRange: [portStart, portEnd],
@@ -706,9 +712,11 @@ export async function capacityWait(
       ? "It starts by itself when room frees, and the session is told to continue. Exit 75: queued, not a failure."
       : "Exit 75: no capacity yet, not a failure of the change. Rerun the same command; nothing to ask a person.",
   );
-  if (running.length && running.every((l) => l.rank === "person"))
+  // Never *feature* itself: a re-up of a running one waits here too, and its own stop frees nothing for it (SW-909).
+  const others = running.filter((l) => l.feature !== feature);
+  if (others.length && others.every((l) => l.rank === "person"))
     lines.push(
-      `Only a person can free room: werkmeister feature stop ${running.map((l) => l.feature).join(" or ")}.`,
+      `Only a person can free room: werkmeister feature stop ${others.map((l) => l.feature).join(" or ")}.`,
     );
   return lines.join("\n");
 }
@@ -1227,6 +1235,8 @@ async function admitOrQueueHere(
           `Could not stop '${victim}' to make room (${(e as Error).message}); waiting instead` +
             (stillRuns ? `, and '${victim}' keeps running` : ""),
         );
+        // A re-up of a running feature waits unqueued, as requestAdmission has it (SW-909).
+        if (!starting && running.some((l) => l.feature === feature)) return 1;
         return requeueFirst(feature, workspace, starting);
       }
       if (victimWs) await enqueue(victim, victimWs);
