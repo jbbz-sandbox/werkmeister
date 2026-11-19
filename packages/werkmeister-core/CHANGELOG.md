@@ -1,5 +1,13 @@
 # sandbox-core
 
+## 0.95.5
+
+### Patch Changes
+
+- 55bc3c0: `with-fixture-workspace` gains `--postmortem` (seeds `postmortem.md`, so `workspace abandon` and `close` run without `--skip-postmortem`), `--worktrees` (each repo a worktree of its source clone on `<user>/demo`, as init makes them, so `pr push` takes it) and `--jira` (a fake Jira for Jira keys, its calls printed as `--- jira calls`). `withFixtureWorkspace` takes `postmortem`, `worktrees` and `jira: true` (calls in `fx.jiraCalls`) (SW-896).
+- 4a8f03e: The fixture workspace's ports (`with-fixture-workspace`, `withFixtureWorkspace`) start at 29100 instead of 39100. 39100 is inside Linux's ephemeral range, so a test server or client socket could land on it and fail the gate fixture's port check with `port 39100 held by a host process` (SW-899).
+- 1b7e7d2: `with-fixture-workspace --workspace <file>` (and `withFixtureWorkspace`'s `workspace` option) now takes only `auto_stop`, `autonomous`, `context_strategy`, `description`, `group`, `issue_id`, `labels`, `model`, `repos`, `starting_prompt`, `task` and `work_type`. Any other key is refused with exit 2, as `--config` already does, since the wrapper is pre-approved and its arguments are its only limit (SW-900).
+
 ## 0.95.4
 
 ## 0.95.3
