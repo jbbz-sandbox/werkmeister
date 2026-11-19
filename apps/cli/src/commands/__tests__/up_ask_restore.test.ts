@@ -42,7 +42,8 @@ function cli(
 it("feature up --service restores an ask block deleted after init", async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "up-ask-")));
   roots.push(root);
-  const fx = seedFixture(root);
+  // SW-828: a fixture without a built CLI gets asks only with the opt-in.
+  const fx = seedFixture(root, { config: { workspace_ask_rules: true } });
   const env: NodeJS.ProcessEnv = { ...process.env, ...fx.env };
   const settingsFile = path.join(fx.workspace, ".claude", "settings.json");
   const read = () => JSON.parse(fs.readFileSync(settingsFile, "utf8"));

@@ -408,6 +408,7 @@ test("SW-510: migrate moves the node --test rules from allow to ask", async () =
   );
   const { tempHomeWrapper } = await import("../dist/temp_home.js");
   movedHome();
+  fs.appendFileSync(path.join(target, "config.yaml"), "workspace_ask_rules: true\n");
   const ws = path.join(features, "demo");
   write(path.join(ws, ".werkmeister", "workspace.yml"), "feature: demo\n");
   write(path.join(ws, ".env"), "FEATURE=demo\n");
@@ -628,17 +629,20 @@ test("SW-842: workspace_ask_rules: false leaves a workspace without asks as it i
   assert.deepEqual(perms(), before);
 });
 
-// SW-842: asks werkmeister recorded before the opt-out was set are stale; migrate removes them.
-test("SW-842: after workspace_ask_rules: false, migrate removes the node --test asks it wrote", async () => {
+// SW-842, SW-828: asks werkmeister recorded while they were on are stale once they are off; migrate removes them.
+test("SW-828: once the node --test asks are off by default, migrate removes the ones a workspace recorded", async () => {
   const { writeWorkspaceSettings } = await import("../dist/harness/claude/hooks_gen.js");
   movedHome();
+  const config = path.join(target, "config.yaml");
+  const before = fs.readFileSync(config, "utf8");
+  fs.appendFileSync(config, "workspace_ask_rules: true\n");
   const ws = path.join(features, "demo");
   write(path.join(ws, ".werkmeister", "workspace.yml"), "feature: demo\n");
   write(path.join(ws, ".env"), "FEATURE=demo\n");
   writeWorkspaceSettings(ws);
   const settingsFile = path.join(ws, ".claude", "settings.json");
   assert.equal(JSON.parse(fs.readFileSync(settingsFile, "utf8")).permissions.ask.length, 6);
-  fs.appendFileSync(path.join(target, "config.yaml"), "workspace_ask_rules: false\n");
+  fs.writeFileSync(config, before);
 
   const steps = await run();
   assert.ok(

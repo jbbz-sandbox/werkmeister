@@ -10,11 +10,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
-import {
-  buildPrGuardEntry,
-  workspaceAllowRules,
-  workspaceAskRules,
-} from "../dist/harness/claude/hooks_gen.js";
+import { buildPrGuardEntry, workspaceAllowRules } from "../dist/harness/claude/hooks_gen.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { leftoverPaths, reportLeftovers, strategyById } from "../dist/strategies/index.js";
 import { initWorkspace } from "../dist/workspace_init.js";
@@ -224,7 +220,7 @@ test("initWorkspace after a switch to icm removes jit's managed hooks even witho
       after,
       {
         hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
-        permissions: { allow: workspaceAllowRules(root), ask: workspaceAskRules(root) },
+        permissions: { allow: workspaceAllowRules(root) },
         model: "opus", // SW-577: init always records the default-tier model
       },
       "only the PR guard and the allow rules are left",
@@ -258,7 +254,7 @@ test("initWorkspace --prune-context removes tracked jit leftovers after a switch
       JSON.parse(fs.readFileSync(path.join(root, ".claude", "settings.json"), "utf8")),
       {
         hooks: await withAgentState({ PreToolUse: [buildPrGuardEntry()] }),
-        permissions: { allow: workspaceAllowRules(root), ask: workspaceAskRules(root) },
+        permissions: { allow: workspaceAllowRules(root) },
         model: "opus", // SW-577: init always records the default-tier model
       },
       "jit-tracked settings pruned; icm wrote back only the PR guard and the allow rules",
