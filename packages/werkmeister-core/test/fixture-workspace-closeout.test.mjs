@@ -9,7 +9,7 @@ import { test } from "node:test";
 
 import { fixturePreset } from "../dist/fixture_workspace.js";
 import { startIssue } from "../dist/issue_status.js";
-import { closeOut, openPrs, pushPrs } from "../dist/pr_lifecycle.js";
+import { closeOut, openPrs, pushPrs, readPrFiles, writePrFields } from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { initWorkspace } from "../dist/workspace_init.js";
 import { pinWerkmeisterRoot, withFixtureWorkspace } from "./fixtures.mjs";
@@ -29,12 +29,39 @@ test("worktrees: pr open, then pr push sends a new commit to the fixture's bare 
       );
       const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
       assert.equal(open.ok, true, open.lines.join("\n"));
+      const remote = path.join(fx.root, "remotes/o/app.git");
+      // What the conflict wake records (SW-890): the PR head it saw.
+      writePrFields(readPrFiles(fx.workspace)[0], {
+        conflict_head: git(remote, "rev-parse", branch),
+      });
       fs.writeFileSync(path.join(fx.repo, "packages/lib/index.js"), "pushed\n");
       git(fx.repo, "commit", "-qam", "follow-up");
       const push = await pushPrs(fx.workspace);
       assert.equal(push.ok, true, push.lines.join("\n"));
-      const remote = path.join(fx.root, "remotes/o/app.git");
       assert.equal(git(remote, "rev-parse", branch), git(fx.repo, "rev-parse", "HEAD"));
+      assert.equal(
+        readPrFiles(fx.workspace)[0].fm.conflict_head,
+        git(fx.repo, "rev-parse", "HEAD"),
+      );
+
+      // SW-890: a reviewer pushes to the PR, the agent's full fetch moves origin/<branch> onto it, and pr push refuses.
+      const reviewer = path.join(fx.root, "reviewer");
+      git(fx.root, "clone", "-q", "--branch", branch, remote, reviewer);
+      fs.writeFileSync(path.join(reviewer, "suggestion.txt"), "commit suggestion\n");
+      git(reviewer, "add", "suggestion.txt");
+      git(reviewer, "-c", "user.name=r", "-c", "user.email=r@x", "commit", "-qm", "suggestion");
+      git(reviewer, "push", "-q", "origin", branch);
+      const theirs = git(reviewer, "rev-parse", "HEAD");
+      git(fx.repo, "fetch", "-q", "origin");
+      git(fx.repo, "commit", "-q", "--amend", "-m", "follow-up, amended");
+      const refused = await pushPrs(fx.workspace);
+      assert.equal(refused.ok, false, refused.lines.join("\n"));
+      assert.match(refused.lines[0], /the head the conflict wake saw/);
+      assert.equal(
+        git(remote, "rev-parse", branch),
+        theirs,
+        "the reviewer's commit is still on origin",
+      );
     },
     { gate: true, worktrees: true },
   );

@@ -2651,8 +2651,8 @@ const conflictSteps = (e: Extract<WakeEvent, { kind: "conflict" }>) =>
     `  Rebase, never merge ${e.base} in (GitHub can't rebase-merge a branch with a merge from its base):`,
     `    git -C ${e.dir} fetch origin ${e.base} && git -C ${e.dir} rebase origin/${e.base}`,
     `  A conflict in a generated file (a snapshot, a lockfile): take ${e.base}'s copy and regenerate it; never hand-merge it.`,
-    // SW-717: the lease is origin/<branch> as last fetched, so the session pushes its own branch.
-    "  Then push it (a lease on origin's head; refuses anything but this workspace's own clean branch):",
+    // SW-890: the lease is the head this wake saw (conflict_head), so a fetch can't move it.
+    "  Then push it (a lease on the PR head this message saw; refuses anything but this workspace's own clean branch):",
     `    werkmeister pr push ${path.basename(e.dir)}`,
     "  and rerun the gate's tests.",
   ].join("\n");
@@ -2826,7 +2826,9 @@ async function wakeEvents(
   }
 
   const flagged = reason(f.fm["notified_conflict"]) === "true";
-  if (view.mergeable === "CONFLICTING" && !flagged) {
+  // A conflict flagged before SW-890 has no conflict_head: wake again so `pr push` has one.
+  const headless = !reason(f.fm["conflict_head"]) && !!view.headRefOid;
+  if (view.mergeable === "CONFLICTING" && (!flagged || headless)) {
     const base = view.baseRefName ?? String(f.fm["base"] ?? "main");
     const dir = path.join(ws, f.dir);
     const fetched = await deps.run("git", ["-C", dir, "fetch", "-q", "origin", base]);
@@ -2843,7 +2845,12 @@ async function wakeEvents(
       head: view.headRefOid ?? "",
     });
     claim["notified_conflict"] = "true";
-  } else if (view.mergeable === "MERGEABLE" && flagged) claim["notified_conflict"] = undefined;
+    // SW-890: `pr push` leases on the head the wake saw, not on whatever the agent fetched since.
+    claim["conflict_head"] = view.headRefOid || undefined;
+  } else if (view.mergeable === "MERGEABLE" && flagged) {
+    // conflict_head stays: the rebase makes it mergeable before a re-push; a stale head only refuses.
+    claim["notified_conflict"] = undefined;
+  }
 
   return { events, claim, lines };
 }
@@ -2938,6 +2945,7 @@ export async function claimCallbacks(
                 notified_queue: undefined,
                 notified_review: undefined,
                 notified_conflict: undefined,
+                conflict_head: undefined,
               }
             : { notified: status };
         } else {
@@ -3514,11 +3522,12 @@ export async function mergesFromBase(dir: string, base: string, run: Run): Promi
 
 /**
  * Force-pushes each open PR's rebased branch with a lease, so a session can finish rule 5's
- * conflict fix without the person. The lease is `origin/<branch>` as last fetched, never
- * typed by the agent. Refuses, and pushes nothing for that file, unless: the worktree is one of
+ * conflict fix without the person. The lease is the PR file's `conflict_head:`, the PR head the
+ * conflict wake saw (a fetch can't move it), and becomes the pushed head after a push. Refuses,
+ * and pushes nothing for that file, unless: the worktree is one of
  * this workspace's own (checked without git); the branch is this workspace's own (the PR file's `branch:`, checked out, `<user>/<workspace>[-<slug>]`, not the
- * base); the worktree is clean; it holds no merge commit from its base; and origin still has the
- * leased head.
+ * base); the worktree is clean; it holds no merge commit from its base; the PR file has a
+ * `conflict_head:`; and origin's branch is still that head.
  *
  * @param ws - The workspace folder.
  * @param only - A code worktree's directory name or a PR file's name, as for `pr gate`.
@@ -3605,15 +3614,24 @@ async function pushOne(ws: string, all: PrFile[], f: PrFile, deps: Deps): Promis
   const merges = await mergesFromBase(dir, base, deps.run);
   if (merges !== 0)
     return `refused: ${merges === null ? "cannot count" : merges} merge commit(s) from origin/${base} — rebase instead: git -C ${f.dir} rebase origin/${base}`;
-  const lease = (
-    await git("rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`)
-  ).stdout.trim();
+  // SW-890: never origin/<branch>: a full fetch moves it onto a reviewer's commit, and the lease then drops it.
+  const lease = reason(f.fm["conflict_head"]);
   if (!lease)
-    return `refused: no origin/${branch} to lease against — \`werkmeister pr open\` pushes a new branch`;
+    return `refused: ${f.stem} has no conflict_head — \`pr push\` only finishes a conflict \`pr watch\` flagged (it records the PR head it saw); push new commits with \`git push\``;
   const remote = await git("ls-remote", "origin", `refs/heads/${branch}`);
   const live = remote.stdout.split(/\s/)[0] ?? "";
   if (remote.code || live !== lease)
-    return `refused: origin's ${branch} is ${live || "unreadable"}, not the leased ${lease} — someone pushed since your fetch; \`git -C ${f.dir} fetch origin ${branch}\`, check what changed, rebase onto it, rerun`;
+    return `refused: origin's ${branch} is ${live || "unreadable"}, not ${lease}, the head the conflict wake saw — someone pushed to the PR since. \`git -C ${f.dir} fetch origin ${branch}\`, rebase keeping their commits (\`git -C ${f.dir} log ${lease}..origin/${branch}\` lists them), then ask the person to push: \`git -C ${f.dir} push --force-with-lease=${branch}:${live || "<origin's head>"} origin ${branch}\``;
+  // A commit pushed before the wake is in the lease but was never in this branch, so the rebase lacks it.
+  // shortcut: reads the newest 500 reflog entries; a branch rewritten more often than that refuses, push by hand.
+  const held = await git("log", "-g", "-n", "500", "--format=%H", `refs/heads/${branch}`);
+  const entries = held.code ? [] : held.stdout.split("\n").filter(Boolean);
+  const unseen = entries.length
+    ? await git("rev-list", "-n", "1", lease, "--not", ...entries)
+    : null;
+  if (!unseen || unseen.code || unseen.stdout.trim())
+    return `refused: origin's ${branch} is ${lease}, which ${f.dir}'s ${branch} never held — someone pushed to the PR before the conflict, and your rebase would drop it. \`git -C ${f.dir} fetch origin ${branch} && git -C ${f.dir} rebase origin/${branch}\` (keeps their commits), rebase onto origin/${base} again, then rerun`;
+  const pushed = (await git("rev-parse", "HEAD")).stdout.trim();
   const push = await git(
     "push",
     "--no-verify",
@@ -3621,9 +3639,11 @@ async function pushOne(ws: string, all: PrFile[], f: PrFile, deps: Deps): Promis
     "origin",
     branch,
   );
-  return push.code
-    ? `failed: ${(push.stderr || push.stdout).trim()}`
-    : `pushed ${branch} (lease ${lease.slice(0, 12)}); rerun the gate's tests (rule 5)`;
+  if (push.code) return `failed: ${(push.stderr || push.stdout).trim()}`;
+  // A second push in the same fix (the gate's tests failed, amend) leases on what this push put there.
+  writePrFields(f, { conflict_head: pushed });
+  await deps.commitRecord(ws, "chore: record pushed PR head", [path.relative(ws, f.path)]);
+  return `pushed ${branch} (lease ${lease.slice(0, 12)}); rerun the gate's tests (rule 5)`;
 }
 
 /** `--abandon`: record *why* on every unsettled PR file and in closeout.md. */
