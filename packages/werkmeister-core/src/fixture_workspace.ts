@@ -98,6 +98,22 @@ const QUEUE_ENTRY =
 
 // The only config.yaml keys --config may add: others (jira, github_ingest, paths…) reach real services or repos from a pre-approved run.
 const CONFIG_KEYS = ["budget", "workspace_ask_rules"];
+// The only workspace.yml keys --workspace may set (SW-900): text and flags the fixture's own files take, and
+// `repos`, whose names init keeps under repos_root. Tracker refs reach the fake gh or blank/fake Jira creds.
+const WORKSPACE_KEYS = [
+  "auto_stop",
+  "autonomous",
+  "context_strategy",
+  "description",
+  "group",
+  "issue_id",
+  "labels",
+  "model",
+  "repos",
+  "starting_prompt",
+  "task",
+  "work_type",
+];
 
 export interface FixturePresets {
   /** An approved PR for a one-file change in packages/lib, with `demo-lib` running, for `pr gate`. */
@@ -203,6 +219,11 @@ export function fixturePreset({
   const refused = Object.keys(opts.config ?? {}).filter((k) => !CONFIG_KEYS.includes(k));
   if (refused.length)
     throw new Error(`--config may not set ${refused.join(", ")}: only ${CONFIG_KEYS.join(", ")}`);
+  const unlisted = Object.keys(opts.workspace ?? {}).filter((k) => !WORKSPACE_KEYS.includes(k));
+  if (unlisted.length)
+    throw new Error(
+      `--workspace may not set ${unlisted.join(", ")}: only ${WORKSPACE_KEYS.join(", ")}`,
+    );
   for (const c of opts.containers ?? []) {
     const bad = !NAME.test(c.feature)
       ? c.feature

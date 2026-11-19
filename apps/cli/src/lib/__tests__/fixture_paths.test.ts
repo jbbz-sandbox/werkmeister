@@ -248,3 +248,18 @@ it("--workspace takes only a YAML mapping under the current folder (SW-464)", as
     process.exitCode = 0;
   }
 });
+
+it("--workspace refuses a key outside its allowlist with exit 2 (SW-900)", async () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmp);
+  fs.writeFileSync(path.join(tmp, "feature.yml"), "group: [SW-2]\nfeature: ../x\n");
+  try {
+    await run(["--workspace", "feature.yml", "--version"]);
+    expect(process.exitCode).toBe(2);
+    expect(error.mock.calls[0]?.[0]).toMatch(/--workspace may not set feature: only /);
+  } finally {
+    cwd.mockRestore();
+    error.mockRestore();
+    process.exitCode = 0;
+  }
+});
