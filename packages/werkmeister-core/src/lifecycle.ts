@@ -1133,7 +1133,8 @@ async function grantedNudge(feature: string, last: LastStop | null): Promise<str
  * can't be read.
  *
  * A non-autonomous workspace is a person's and is never preempted, unless its
- * session is parked on a question, permission or plan prompt (SW-546); nor is the shared infra.
+ * session is parked on a question or plan prompt (SW-546); a permission prompt is mid-turn (SW-910).
+ * Nor is the shared infra.
  */
 export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | null {
   const found = runningFeatures(runCmd);
@@ -1142,15 +1143,18 @@ export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | 
   const gateCutoff = Date.now() - Math.max(idleStopMinutes(), 2) * 60_000;
   return found
     .map((f) => {
-      const state = agentOf(readSessions(f.workspace));
+      const sessions = readSessions(f.workspace);
+      const state = agentOf(sessions);
+      // A permission prompt is mid-turn, often on a `docker exec` into this feature: it ranks as its turn (SW-910).
+      const prompted = Object.values(sessions).some((s) => s.ask?.kind === "permission");
       const rank: Rank =
         f.feature === "infra"
           ? "person"
-          : state?.agent === "needs-you"
+          : state?.agent === "needs-you" && !prompted
             ? "human-check"
             : !readAutonomous(f.workspace)
               ? "person"
-              : state?.agent === "working"
+              : state?.agent === "working" || prompted
                 ? "working"
                 : "idle";
       // A running `docker exec` (a session's test run, not only the gate's) is never stopped (SW-856).
