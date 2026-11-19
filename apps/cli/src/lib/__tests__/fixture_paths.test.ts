@@ -249,6 +249,12 @@ it("--workspace takes only a YAML mapping under the current folder (SW-464)", as
   }
 });
 
+it("--postmortem, --worktrees and --jira are fixture options, not werkmeister args (SW-896)", () => {
+  const p = parse(["--postmortem", "--worktrees", "--jira", "pr", "push"]);
+  expect(p.opts).toMatchObject({ postmortem: true, worktrees: true, jira: true });
+  expect(p.steps).toEqual([["pr", "push"]]);
+});
+
 it("--workspace refuses a key outside its allowlist with exit 2 (SW-900)", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmp);

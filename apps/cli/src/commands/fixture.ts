@@ -1,9 +1,9 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <args> [--then <args>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
- * failure), prints each `--print` file and the fake gh/docker (and, with --daemon, daemon) calls,
+ * failure), prints each `--print` file and the fake gh/docker (and, with --daemon, daemon; with --jira, Jira) calls,
  * then deletes the folder.
  * main.ts hands it raw argv, so a werkmeister flag like `--services` never reaches commander here.
  */
@@ -12,7 +12,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { startFakeDaemon } from "werkmeister-core/fixture_fakes";
+import { startFakeDaemon, startFakeJira } from "werkmeister-core/fixture_fakes";
 import {
   type FixtureContainer,
   fixturePreset,
@@ -21,7 +21,7 @@ import {
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /** PR-file keys the pre-approved wrapper may set: none reaches a git or Claude call (SW-514). */
 const PR_KEYS = "skip_release|skip_exercise|skip_review|release|status";
@@ -50,6 +50,9 @@ export function parse(argv: string[]) {
     merged: false,
     behind: false,
     slotsFull: false,
+    postmortem: false,
+    worktrees: false,
+    jira: false,
     issue: undefined as string | undefined,
     prFields: undefined as Record<string, string> | undefined,
     prLines: undefined as string[] | undefined,
@@ -77,6 +80,9 @@ export function parse(argv: string[]) {
     else if (a === "--merged") opts.merged = true;
     else if (a === "--behind") opts.behind = true;
     else if (a === "--slots-full") opts.slotsFull = true;
+    else if (a === "--postmortem") opts.postmortem = true;
+    else if (a === "--worktrees") opts.worktrees = true;
+    else if (a === "--jira") opts.jira = true;
     else if (a === "--stale-compose") opts.staleCompose = true;
     else if (a === "--queue" && argv[i + 1] !== undefined) {
       // An entry with a wait is one waiter whose commas list its services (SW-809).
@@ -207,7 +213,7 @@ export async function run(argv: string[]): Promise<void> {
   const { opts, print, steps } = parsed;
   let seed: ReturnType<typeof fixturePreset>;
   try {
-    seed = fixturePreset({ ...opts, daemon: undefined });
+    seed = fixturePreset({ ...opts, daemon: undefined, jira: undefined });
     // Only --gate seeds a PR file, so the fields would otherwise vanish silently.
     if (opts.prFields && !seed.prFile) throw new Error("--pr-field needs --gate");
     if (opts.prLines && !seed.prFile) throw new Error("--pr-line needs --gate");
@@ -226,8 +232,9 @@ export async function run(argv: string[]): Promise<void> {
   }
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-fixture-")));
   const daemon = opts.daemon ? await startFakeDaemon() : null;
+  const jira = opts.jira ? await startFakeJira() : null;
   try {
-    const fx = seedFixture(root, { ...seed, daemon: daemon?.url });
+    const fx = seedFixture(root, { ...seed, daemon: daemon?.url, jira: jira?.url });
     const env = {
       ...process.env,
       ...fx.env,
@@ -255,9 +262,14 @@ export async function run(argv: string[]): Promise<void> {
       process.stdout.write(
         `--- daemon calls\n${daemon.calls.map((c) => `${c}\n`).join("") || "(none)\n"}`,
       );
+    if (jira)
+      process.stdout.write(
+        `--- jira calls\n${jira.calls.map((c) => `${c}\n`).join("") || "(none)\n"}`,
+      );
     process.exitCode = code;
   } finally {
     await daemon?.close();
+    await jira?.close();
     fs.rmSync(root, { recursive: true, force: true });
   }
 }

@@ -203,12 +203,17 @@ export async function withAgentState(hooks) {
 export async function withFixtureWorkspace(fn, opts = {}) {
   const { fixturePreset, seedFixture } = await import("../dist/fixture_workspace.js");
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-fixture-")));
-  const fx = seedFixture(root, fixturePreset(opts));
+  // jira: true starts a fake Jira (SW-896); its calls are fx.jiraCalls.
+  const { startFakeJira } = await import("../dist/fixture_fakes.js");
+  const jira = opts.jira ? await startFakeJira() : null;
+  const fx = seedFixture(root, { ...fixturePreset({ ...opts, jira: undefined }), jira: jira?.url });
+  fx.jiraCalls = jira?.calls;
   const prev = Object.fromEntries(Object.keys(fx.env).map((k) => [k, process.env[k]]));
   Object.assign(process.env, fx.env);
   try {
     return await fn(fx);
   } finally {
+    await jira?.close();
     for (const [k, v] of Object.entries(prev)) {
       if (v === undefined) delete process.env[k];
       else process.env[k] = v;
