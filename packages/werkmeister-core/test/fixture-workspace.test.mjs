@@ -27,7 +27,7 @@ test("the fixture seeds a registry, a workspace and a code repo with a local ori
     for (const key of ["repos_root", "workspaces_root", "services_yaml", "ports_yaml"])
       assert.match(config, new RegExp(`${key}: ${fx.root}/`));
     assert.equal(fs.lstatSync(path.join(fx.root, "services.yaml")).isSymbolicLink(), false);
-    assert.match(fs.readFileSync(path.join(fx.root, "ports.yaml"), "utf8"), /base_port: 39100/);
+    assert.match(fs.readFileSync(path.join(fx.root, "ports.yaml"), "utf8"), /base_port: 29100/);
     assert.match(
       fs.readFileSync(path.join(fx.workspace, ".werkmeister", "workspace.yml"), "utf8"),
       /^feature: demo$/m,
@@ -43,6 +43,22 @@ test("the fixture seeds a registry, a workspace and a code repo with a local ori
     );
   });
   assert.equal(process.env.WERKMEISTER_FIXTURE, undefined, "env restored");
+});
+
+// SW-899: a listen(0) server or client socket on the gate's probed port fails the gate as "held by a host process".
+test("the fixture's port block sits below the kernel's ephemeral range", {
+  skip: process.platform !== "linux" && "reads /proc/sys/net/ipv4/ip_local_port_range",
+}, async () => {
+  const range = fs.readFileSync("/proc/sys/net/ipv4/ip_local_port_range", "utf8");
+  const low = Number(range.trim().split(/\s+/)[0]);
+  await withFixtureWorkspace(async (fx) => {
+    const ports = fs.readFileSync(path.join(fx.root, "ports.yaml"), "utf8");
+    const [base, count, per] = ["base_port", "count", "ports_per_slot"].map((k) =>
+      Number(new RegExp(`${k}: (\\d+)`).exec(ports)?.[1]),
+    );
+    // Slots run 1..count, so the block ends below base + (count + 1) * per.
+    assert.ok(base + (count + 1) * per <= low, `${base}+ reaches the ephemeral ${low}+`);
+  });
 });
 
 test("a bare fixture has no feature, so close-out skips teardown (SW-114)", async () => {
