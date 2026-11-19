@@ -763,3 +763,29 @@ test("a re-up of a running feature that must wait leaves no waiting.json and no 
     assert.equal(fs.existsSync(waitingPath(ws)), false);
   });
 });
+
+// SW-910: a session on a tool-permission prompt is mid-turn (the prompted command is often a
+// `docker exec` into this very feature), not a session handed to the person: preemption must skip it.
+test("preemption rank: a permission prompt mid-turn is working; a question is human-check (SW-910)", async () => {
+  await withHome(async (home) => {
+    const ws = path.join(home, "features", "auto");
+    const sessions = path.join(ws, ".werkmeister", "sessions");
+    fs.mkdirSync(sessions, { recursive: true });
+    fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "autonomous: true\n");
+    const at = new Date(Date.now() - 60_000).toISOString();
+    const run = (cmd) =>
+      cmd[1] === "ps"
+        ? { status: 0, stdout: "id1\n" }
+        : { status: 0, stdout: `auto\t${ws}\t2026-10-29T10:00:00Z\t0\t0\t0` };
+    const rank = (kind) => {
+      const ask = { kind, what: "Approve Bash?", at, source: "session" };
+      fs.writeFileSync(
+        path.join(sessions, "s.json"),
+        JSON.stringify({ status: "busy", at, last: at, ask }),
+      );
+      return runningLeases(run).find((l) => l.feature === "auto").rank;
+    };
+    assert.equal(rank("permission"), "working");
+    assert.equal(rank("question"), "human-check");
+  });
+});

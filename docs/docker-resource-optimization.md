@@ -17,7 +17,7 @@ The defaults come from `docker info`, so a new machine needs no setup:
 |---|---|
 | `memory` | the Docker engine's memory minus 1G |
 | `cpus` | the engine's CPU count |
-| `preempt` | `true`: a start that doesn't fit may stop features whose session is idle or waiting on a person; a person's `up` may also stop a working autonomous one |
+| `preempt` | `true`: a start that doesn't fit may stop features whose session is idle or waiting on a person (a question or plan, not a permission prompt mid-turn); a person's `up` may also stop a working autonomous one |
 | `host_load` | twice the host's CPU count: while the host's 1-minute load is above it, `with-temp-home` waits up to 90 s before its command, and `feature up` and the gate's container starts wait up to 90 s before a setup service (the install) starts, then fail with the load (`HOST_LOAD`); none of them wait on macOS, whose load average is neither the test VM's nor usable; `0` turns the wait off |
 | `free_memory` | `15`: while available memory is under this percentage of the total (macOS: `kern.memorystatus_level`; Linux: MemAvailable), `with-temp-home` and a setup start wait up to 90 s as for `host_load`, then exit 75 or fail `HOST_LOAD`, on macOS too; `pr gate` and `pr open` don't wait, they exit 75 with `low memory` before starting a container. Claude Code stops an idle background shell when the Mac runs low; `0` turns it off |
 
