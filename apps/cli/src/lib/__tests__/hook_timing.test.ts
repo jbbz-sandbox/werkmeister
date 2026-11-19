@@ -60,19 +60,43 @@ const payload = JSON.stringify({
 
 // Under load (a shared CI runner, a machine running a wave) spawn time swings by more than the
 // budget, so the check only runs where it means something: locally, on a machine not overloaded.
-const overloaded = os.loadavg()[0] > os.cpus().length;
-describe.skipIf(Boolean(process.env.CI) || overloaded)("hook entry cold start (SW-223)", () => {
+// HOOK_TIMING_MAX_LOAD=0 forces the over-load path, so it can be shown without loading the host.
+const MAX_LOAD = Number(process.env.HOOK_TIMING_MAX_LOAD || os.cpus().length);
+
+/** Why a cold-start time can't be judged at this load, or "" when it can. */
+function loadNote(load: number[], max: number): string {
+  return load[0] > max
+    ? `host load ${load.map((l) => l.toFixed(1)).join(" / ")} (1, 5, 15 min) is over ${max}: cold-start budget not judged`
+    : "";
+}
+
+describe.skipIf(Boolean(process.env.CI))("hook entry cold start (SW-223)", () => {
   for (const entry of ["gate", "pr_guard", "agent_state"]) {
-    it(`dist/lib/${entry}.js adds < ${BUDGET_MS} ms to node's own start`, async () => {
+    it(`dist/lib/${entry}.js adds < ${BUDGET_MS} ms to node's own start`, async (ctx) => {
+      // Read per test, not once at import: the gate row's own workers raise the load after collection (SW-868).
+      const busy = loadNote(os.loadavg(), MAX_LOAD);
+      ctx.skip(Boolean(busy), busy);
       const file = path.join(CLI_DIR, "dist", "lib", `${entry}.js`);
       let { bare, hook } = await measure(file, payload);
       // Load stretches both medians and their gap with them (SW-834): one re-measure, so a real regression still fails twice.
       if (hook - bare >= BUDGET_MS) ({ bare, hook } = await measure(file, payload));
+      // The load can rise during the 44 spawns too; a breach under it is the host's, not the entry's.
+      if (hook - bare >= BUDGET_MS) {
+        const note = loadNote(os.loadavg(), MAX_LOAD);
+        ctx.skip(Boolean(note), `${note}; bare ${bare.toFixed(0)} ms, hook ${hook.toFixed(0)} ms`);
+      }
       expect(hook - bare, `bare ${bare.toFixed(0)} ms, hook ${hook.toFixed(0)} ms`).toBeLessThan(
         BUDGET_MS,
       );
     }, 120_000);
   }
+});
+
+it("a 1-minute load over the limit turns a breach into a load note (SW-868)", () => {
+  expect(loadNote([22.8, 20.7, 13.4], 12)).toBe(
+    "host load 22.8 / 20.7 / 13.4 (1, 5, 15 min) is over 12: cold-start budget not judged",
+  );
+  expect(loadNote([12, 30, 30], 12)).toBe("");
 });
 
 it("a missing hook entry fails the measurement instead of timing fast", async () => {
