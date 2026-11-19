@@ -153,10 +153,13 @@ repo:
 
 const FRAGMENT_FILE = path.join(".werkmeister", "services.yaml");
 
-// High base_port, so a real `up` from a fixture (SW-284) can't clash with real workspaces' slots.
+// Above real workspaces' slots, so a real `up` from a fixture (SW-284) can't clash, and below every
+// OS's ephemeral range (Linux 32768+) and k8s NodePorts (30000+), where listen(0) servers and client
+// sockets land: one on the gate's port probe read as "held by a host process" (SW-899).
+// shortcut: every fixture shares this block, so two parallel gate probes can still meet for under a ms; give each fixture its own block if that flakes.
 const PORTS = `feature_slots:
   count: 4
-  base_port: 39100
+  base_port: 29100
   ports_per_slot: 20
 `;
 
