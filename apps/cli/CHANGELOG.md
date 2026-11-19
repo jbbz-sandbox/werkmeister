@@ -1,5 +1,16 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.95.3
+
+### Patch Changes
+
+- 96aa738: `budget status` labels the host-load figure `host load limit N`, since it is the ceiling and not a reading, and adds `(not enforced on macOS)` there (SW-728).
+- 27d4ef6: A feature with a `docker exec` running in its containers (a session's test run, not only the gate's) is busy: preemption never picks it and the idle reaper never stops it. `budget status` shows it as `run in flight`. When werkmeister does stop a workspace on its own (preempted, or idle), its session's nudge names each command the stop killed and says to rerun it (SW-856).
+
+  `with-fixture-workspace --running` takes an optional 6th column, the running `docker exec`s, so an exercise can show a busy holder.
+
+- ddc7d5f: The services `pr gate` and `pr open` start now share one 30-minute wait for room in the budget, keeping their queue place, instead of 10 minutes each that ended by dropping the place (SW-869).
+
 ## 0.95.2
 
 ## 0.95.1

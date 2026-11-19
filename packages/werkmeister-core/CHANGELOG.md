@@ -1,5 +1,20 @@
 # sandbox-core
 
+## 0.95.3
+
+### Patch Changes
+
+- f6bfd16: When werkmeister stops a workspace on its own (preempted, or idle), it records why in `.werkmeister/last-stop.json`, and the "Capacity freed" nudge that brings the session back says who stopped it and which commands that killed (SW-702).
+- 27d4ef6: A feature with a `docker exec` running in its containers (a session's test run, not only the gate's) is busy: preemption never picks it and the idle reaper never stops it. `budget status` shows it as `run in flight`. When werkmeister does stop a workspace on its own (preempted, or idle), its session's nudge names each command the stop killed and says to rerun it (SW-856).
+
+  `with-fixture-workspace --running` takes an optional 6th column, the running `docker exec`s, so an exercise can show a busy holder.
+
+- 0270f6f: An allocate inside a workspace container no longer prunes the other workspaces' leases: it sees only its own folder, so every other lease looked gone. Leases are pruned from the host only (SW-860).
+- 8977cdb: A start that fails in compose now says `werkmeister feature logs <feature>` shows why, not "see the compose output above": when the grant starts a waiter, that output goes to another process, and the session's nudge carried the dead pointer (SW-861).
+- 740bdaa: `feature up` leaves the waiting queue and clears `waiting.json` once its containers start. An admit that returned early (Docker unreadable, or a zero-cost start) left both, so the hook kept saying "queued" over a running feature (SW-863).
+- ddc7d5f: The services `pr gate` and `pr open` start now share one 30-minute wait for room in the budget, keeping their queue place, instead of 10 minutes each that ended by dropping the place (SW-869).
+- 7c27198: The grant pass no longer stops a parked `--service` waiter's own running containers: with no wait it could not park again, so the workspace was left with nothing running and no queue place. Any other way a parked waiter leaves the queue now tells its session why (SW-873).
+
 ## 0.95.2
 
 ### Patch Changes
