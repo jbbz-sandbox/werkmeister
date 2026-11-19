@@ -625,7 +625,14 @@ test("waiting gate: denies a container command with the queue position", () => {
   const pre = pauseGate(DOCKER_EXEC, dir);
   assert.equal(pre.continue, false);
   assert.match(pre.stopReason, /Waiting for capacity \(position 2\)/);
+  // SW-909: an agent read the old text as "not admitted" and stopped over running containers.
+  assert.match(pre.stopReason, /docker ps --filter label=com\.werkmeister\.feature=/);
+  assert.match(pre.stopReason, /grant/);
   assert.equal(pre.hookSpecificOutput.permissionDecision, "deny");
+  // The check the text names must pass the hook; a chained or other docker command still waits.
+  assert.equal(pauseGate(bash("docker ps --filter label=com.werkmeister.feature=demo"), dir), null);
+  assert.equal(pauseGate(bash("docker ps; docker exec demo-core pnpm test"), dir)?.continue, false);
+  assert.equal(pauseGate(bash("docker ps $(docker run x)"), dir)?.continue, false);
   writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: false });
   assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).stopReason, PAUSED_REASON);
 });

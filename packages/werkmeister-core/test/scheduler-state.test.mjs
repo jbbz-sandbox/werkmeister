@@ -745,3 +745,21 @@ test("a start drops a stop record no grant reported, so a later grant can't repo
     await withReporter(collectingReporter().reporter, () => up("big", ws, { byPerson: false }));
     assert.equal(fs.existsSync(record), false);
   }));
+
+// SW-909: a plain `up` of a feature that already runs priced its exited setup one-shot, so it could wait
+// behind a holding head; the wait wrote a whole-feature waiting.json and queued it over live containers,
+// and the hook then held every docker/pnpm/node call of its session.
+test("a re-up of a running feature that must wait leaves no waiting.json and no queue entry (SW-909)", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, COMPOSE);
+    const budget = { memory: 4 * G, cpus: 4, preempt: true };
+    // `api` runs (1 CPU); `setup` exited, so the re-up adds 2 CPUs on a host with 1 free.
+    const running = [
+      { feature: "f", cost: { memory: 128 * 2 ** 20, cpus: 1 }, rank: "working", busy: false },
+      { feature: "x", cost: { memory: G, cpus: 2 }, rank: "person", busy: false },
+    ];
+    await requestAdmission("f", ws, false, running, budget);
+    assert.deepEqual(readQueue(), []);
+    assert.equal(fs.existsSync(waitingPath(ws)), false);
+  });
+});

@@ -714,15 +714,19 @@ export function deliverWake(input: Record<string, any>, root: string): object | 
 // scheduler_state's queuePath; not imported, since that module loads Docker and this hook runs on every tool call.
 const queuePath = () => path.join(sandboxHome(), "scheduler", "queue.json");
 
+/** The workspace's FEATURE from its `.env`, or undefined. */
+function featureOf(root: string): string | undefined {
+  try {
+    return /^FEATURE=(.+)$/m.exec(fs.readFileSync(path.join(root, ".env"), "utf8"))?.[1]?.trim();
+  } catch {
+    return undefined;
+  }
+}
+
 function leftOver(root: string): boolean {
   const at = fs.statSync(waitingPath(root), { throwIfNoEntry: false })?.mtimeMs ?? Date.now();
   if (Date.now() - at < 5_000) return false;
-  let feature: string | undefined;
-  try {
-    feature = /^FEATURE=(.+)$/m.exec(fs.readFileSync(path.join(root, ".env"), "utf8"))?.[1]?.trim();
-  } catch {
-    return false;
-  }
+  const feature = featureOf(root);
   if (!feature) return false;
   try {
     const queue: unknown = JSON.parse(fs.readFileSync(queuePath(), "utf8"));
@@ -748,6 +752,8 @@ function needsCapacity(input: Record<string, any>): boolean {
     /(\s(?:-m|--message)[= ]?\s*)('[^']*'|"[^"]*")/g,
     "$1''",
   );
+  // A lone `docker ps` reads, starts nothing: the deny text tells a held agent to run it (SW-909 review).
+  if (tool === "Bash" && /^\s*docker\s+ps(\s[^;&|`$()<>\n]*)?$/.test(command)) return false;
   if (tool === "Bash") return NEEDS_CAPACITY.test(command);
   return NEEDS_CAPACITY_TOOL.test(tool) && input["tool_input"]?.["action"] !== "status";
 }
@@ -771,9 +777,12 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
   // Queued, only what needs this workspace's containers or the CPUs waits: the record, git and
   // `feature stop` (which frees room) go on, and so do prompts (SW-768).
   if (waiting && !needsCapacity(input)) return null;
+  // An agent read the older text as "not admitted" and stopped over running containers (SW-909).
   const reason = waiting
-    ? `Waiting for capacity (position ${waiting.position}): containers and tests wait until this workspace starts, ` +
-      "and the session is told to continue then. Edits and git still work; end your turn if nothing else is left."
+    ? `Waiting for capacity (position ${waiting.position}): this workspace is queued, so containers and ` +
+      `tests wait until it starts. Not a failure: \`docker ps --filter label=com.werkmeister.feature=${featureOf(root) ?? "<feature>"}\` ` +
+      "shows its containers; when they are not up, a grant notice tells this session to continue once room " +
+      "frees, and edits and git still work meanwhile. If they are up, the queue entry is stale: tell the person."
     : PAUSED_REASON;
   switch (input["hook_event_name"]) {
     case "PreToolUse": {

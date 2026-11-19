@@ -32,7 +32,8 @@ function printSummary(result: UpResult): void {
   if (result.waiting !== undefined) {
     console.log(
       `\n${Colors.CYAN}${Colors.BOLD}=== Feature '${feature}' is waiting for capacity (position ${result.waiting}) ===${Colors.RESET}\n` +
-        "  It starts when another feature stops; `werkmeister feature status` shows the queue.\n" +
+        // The note says whether it starts by itself or is rerun: a re-up of a running feature isn't queued (SW-909).
+        "  `werkmeister feature status` shows the queue.\n" +
         (result.waitingNote ? `${result.waitingNote.replace(/^/gm, "  ")}\n` : ""),
     );
     // Nothing started: a 0 here read as success through `| tail` (SW-675).

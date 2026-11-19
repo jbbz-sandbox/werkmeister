@@ -535,7 +535,10 @@ export function requestAdmission(
         ...(starting?.gate && { gate: true }),
       });
       let next = queue;
-      if (d.kind === "wait") {
+      // A whole `up` of a feature that runs keeps its containers when it waits: queued, the hook would
+      // hold its session over them (SW-909). It leaves the queue, as an admit does; the caller reruns.
+      const reup = !starting && running.some((l) => l.feature === feature);
+      if (d.kind === "wait" && !reup) {
         // waiting.json first: if it can't be written, the queue must not move (SW-246).
         writeWaiting(workspace, {
           position: d.position,
