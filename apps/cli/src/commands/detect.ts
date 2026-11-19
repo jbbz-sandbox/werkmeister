@@ -169,7 +169,7 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
     success(`${rendered.path} is up to date — nothing to add.`);
     return 0;
   }
-  const errors = validateFragment(rendered, plan, deps.reposRoot);
+  const errors = validateFragment(rendered, plan, deps.reposRoot, undefined, deps.localPath);
   if (errors.length) {
     for (const e of errors) warn(e);
     warn("Not written: the generated fragment failed validation.");

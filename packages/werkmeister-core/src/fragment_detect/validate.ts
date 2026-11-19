@@ -6,9 +6,15 @@ import * as path from "node:path";
 import AjvModule from "ajv";
 import { parse as parseYaml } from "yaml";
 
-import { sandboxHome, sandboxRoot } from "../config.js";
+import { sandboxHome, sandboxRoot, servicesLocalYamlPath } from "../config.js";
 import { loadIngress } from "../global_config.js";
-import { discoverFragments, mergeRegistry, RegistryError } from "../registry_sync.js";
+import {
+  applyDisabled,
+  discoverFragments,
+  mergeRegistry,
+  RegistryError,
+  readLocalOverlay,
+} from "../registry_sync.js";
 import type { Plan } from "./plan.js";
 import type { Rendered } from "./render.js";
 
@@ -23,13 +29,15 @@ export function defaultSchemaPath(): string {
 /**
  * Checks a rendered fragment before you write it: first against the fragment JSON
  * Schema, then by trial-merging it with every other repo's fragment under `reposRoot`,
- * which catches clashes such as a duplicate service name. Runs in-process and writes
- * nothing.
+ * which catches clashes such as a duplicate service name. Repos the machine overrides
+ * file lists under `disabled_fragments` are left out, as `werkmeister registry sync`
+ * leaves them out. Runs in-process and writes nothing.
  *
  * @param rendered - The fragment from {@link renderFragment}.
  * @param plan - The plan it was rendered from. The file at its `fragmentPath` is left out of the merge, so the old copy can't clash with the new one.
  * @param reposRoot - Directory holding every registered repo.
  * @param schemaPath - The fragment JSON Schema file. Defaults to the one in the werkmeister install.
+ * @param localPath - The machine overrides file whose `disabled_fragments` names the repos to leave out. Defaults to `services.local.yaml` beside the registry.
  * @returns The problems found, one sentence each. Empty means the fragment is safe to write.
  * @throws `Error` when the schema file can't be read, or when the merge fails for a reason other than a registry conflict.
  *
@@ -60,6 +68,7 @@ export function validateFragment(
   plan: Plan,
   reposRoot: string,
   schemaPath = defaultSchemaPath(),
+  localPath = servicesLocalYamlPath(),
 ): string[] {
   let doc: Record<string, any>;
   try {
@@ -74,9 +83,11 @@ export function validateFragment(
     ? []
     : (validate.errors ?? []).map((e) => `${e.instancePath || "/"} ${e.message ?? "is invalid"}`);
   try {
-    const others = discoverFragments(reposRoot).filter(
+    const discovered = discoverFragments(reposRoot).filter(
       (f) => path.resolve(f.path) !== path.resolve(plan.fragmentPath),
     );
+    // A repo this machine disabled never reaches the registry, so its clashes are not this fragment's.
+    const others = applyDisabled(discovered, readLocalOverlay(localPath), localPath).fragments;
     mergeRegistry([...others, { repo: plan.repo, path: plan.fragmentPath, doc }], {
       defaults: {},
       local: {},
