@@ -137,3 +137,11 @@ test("withFixtureWorkspace({ claudeBin, codexBin }) sets a fake on purpose", asy
     { claudeBin: "/fake/claude", codexBin: "/fake/codex" },
   );
 });
+
+// SW-915: a preset that refuses must fail the test, not leave the fake Jira listening and hang the file.
+test("withFixtureWorkspace with jira rejects a refused preset and closes the fake Jira", async () => {
+  await assert.rejects(
+    withFixtureWorkspace(() => {}, { jira: true, workspace: { bogus: 1 } }),
+    /--workspace may not set bogus/,
+  );
+});

@@ -206,11 +206,16 @@ export async function withFixtureWorkspace(fn, opts = {}) {
   // jira: true starts a fake Jira (SW-896); its calls are fx.jiraCalls.
   const { startFakeJira } = await import("../dist/fixture_fakes.js");
   const jira = opts.jira ? await startFakeJira() : null;
-  const fx = seedFixture(root, { ...fixturePreset({ ...opts, jira: undefined }), jira: jira?.url });
-  fx.jiraCalls = jira?.calls;
-  const prev = Object.fromEntries(Object.keys(fx.env).map((k) => [k, process.env[k]]));
-  Object.assign(process.env, fx.env);
+  let prev = {};
   try {
+    // Inside the try: a refused preset closes the fake Jira instead of hanging the file (SW-915).
+    const fx = seedFixture(root, {
+      ...fixturePreset({ ...opts, jira: undefined }),
+      jira: jira?.url,
+    });
+    fx.jiraCalls = jira?.calls;
+    prev = Object.fromEntries(Object.keys(fx.env).map((k) => [k, process.env[k]]));
+    Object.assign(process.env, fx.env);
     return await fn(fx);
   } finally {
     await jira?.close();
