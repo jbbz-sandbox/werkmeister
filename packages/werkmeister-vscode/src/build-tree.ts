@@ -32,6 +32,18 @@ export interface WorkspaceEntryLike {
 
 export type ServiceHealthLike = ServiceHealth;
 
+/**
+ * Each workspace's PR files (`lifecycleOf().prs`) as one string: it changes when `pr open` records
+ * a URL or a PR file's status moves, so the view refetches PRs then, not only on ↻ (SW-818).
+ */
+export function prFilesKey(
+  prs: Map<string, { dir: string; status: string; url: string | null }[]>,
+): string {
+  return JSON.stringify(
+    [...prs].map(([ws, files]) => [ws, files.map((f) => [f.dir, f.status, f.url])]),
+  );
+}
+
 export interface WorkspaceStatusLike extends DisplayInput {
   name: string;
   project: string | null;

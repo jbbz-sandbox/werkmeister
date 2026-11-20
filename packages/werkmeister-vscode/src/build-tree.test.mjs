@@ -663,3 +663,14 @@ test("a daemon that is down is an error row naming setup and connect", () => {
   assert.match(node.tooltip, /127\.0\.0\.1:3002/);
   assert.deepEqual(node.children, []);
 });
+
+// SW-818: a PR opened after the view loaded stayed hidden until ↻ Refresh PRs.
+test("prFilesKey: changes when a PR file gains a url or a new status, so the view refetches PRs", async () => {
+  const { prFilesKey } = await import("../out/build-tree.js");
+  const draft = new Map([["a", [{ dir: "werkmeister", status: "draft", url: null }]]]);
+  const open = new Map([
+    ["a", [{ dir: "werkmeister", status: "open", url: "https://github.com/o/r/pull/892" }]],
+  ]);
+  assert.equal(prFilesKey(draft), prFilesKey(new Map(draft)));
+  assert.notEqual(prFilesKey(draft), prFilesKey(open));
+});
