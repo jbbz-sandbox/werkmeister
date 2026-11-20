@@ -11,7 +11,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "changeset:version": "changeset version && pnpm install --lockfile-only",
-    "release": "pnpm run build && changeset publish",
+    "release": "pnpm run build && node scripts/check-npm-packages.mjs && changeset publish",
     "licenses": "unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR && node --test 'scripts/*.test.mjs' && node scripts/check-licenses.mjs",
     "docs:gen": "node scripts/gen-docs.mjs",
     "docs:check": "node scripts/check-docs.mjs",
