@@ -36,6 +36,31 @@ const cmp = (a: string, b: string): number => {
   return 0;
 };
 
+/**
+ * SW-719: is this `git log -p` only what a changesets "version packages" commit writes? Judged by
+ * the files, not the message: CHANGELOG.md files, deleted `.changeset/*.md`, and package.json
+ * files whose only changed lines are `"version"`.
+ */
+function versionOnly(patch: string): boolean {
+  const blocks = patch.split(/^diff --git /m).slice(1);
+  return (
+    blocks.length > 0 &&
+    blocks.every((b) => {
+      const file = b.slice(0, b.indexOf("\n")).split(" b/").pop() ?? "";
+      if (/(^|\/)CHANGELOG\.md$/.test(file)) return true;
+      if (/^\.changeset\/[^/]+\.md$/.test(file)) return /^deleted file mode /m.test(b);
+      if (!/(^|\/)package\.json$/.test(file)) return false;
+      const at = b.search(/^@@/m);
+      if (at < 0) return false; // a mode change, no hunk
+      const hunks = b.slice(at);
+      return hunks
+        .split("\n")
+        .filter((l) => /^[+-]/.test(l))
+        .every((l) => /^[+-]\s*"version": "[^"]*",?$/.test(l));
+    })
+  );
+}
+
 export function checkCliCurrent(deps: CurrencyDeps = {}): CliCurrency {
   const sh: Run = deps.run ?? ((cmd, o) => procRun(cmd, o));
   const safe = (cmd: string[], timeout: number) => {
@@ -68,8 +93,14 @@ export function checkCliCurrent(deps: CurrencyDeps = {}): CliCurrency {
         text: `stale: linked checkout ${repo} is on '${branch}', not main. Fix: ${fix}`,
       };
     const behind = git("rev-list", "--count", "HEAD..origin/main")?.stdout.trim();
-    return git("merge-base", "--is-ancestor", "origin/main", "HEAD")?.status === 0
-      ? { current: true, text: `current: linked checkout ${repo} contains origin/main` }
+    if (git("merge-base", "--is-ancestor", "origin/main", "HEAD")?.status === 0)
+      return { current: true, text: `current: linked checkout ${repo} contains origin/main` };
+    const log = git("log", "-p", "--format=", "HEAD..origin/main");
+    return log?.status === 0 && versionOnly(log.stdout)
+      ? {
+          current: true,
+          text: `current: linked checkout ${repo} is ${behind || "some"} commits behind origin/main, only version bumps (no code change)`,
+        }
       : {
           current: false,
           text: `stale: linked checkout ${repo} is ${behind || "some"} commits behind origin/main. Fix: ${fix}`,

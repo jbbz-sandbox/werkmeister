@@ -36,6 +36,63 @@ describe("checkCliCurrent", () => {
     expect(r.text).toMatch(/&& git -C \S+ pull --ff-only origin main,/);
   });
 
+  // SW-719: every release puts a `chore: version packages` commit on main; its gap is no code change.
+  const versionPackages = [
+    "diff --git a/.changeset/brave-cats.md b/.changeset/brave-cats.md",
+    "deleted file mode 100644",
+    "index 1111111..0000000",
+    "--- a/.changeset/brave-cats.md",
+    "+++ /dev/null",
+    "@@ -1,5 +0,0 @@",
+    "----",
+    '-"werkmeister": patch',
+    "----",
+    "-cli: a fix",
+    "diff --git a/apps/cli/CHANGELOG.md b/apps/cli/CHANGELOG.md",
+    "index 2222222..3333333 100644",
+    "--- a/apps/cli/CHANGELOG.md",
+    "+++ b/apps/cli/CHANGELOG.md",
+    "@@ -1,3 +1,9 @@",
+    " # werkmeister",
+    "+## 0.96.5",
+    "diff --git a/apps/cli/package.json b/apps/cli/package.json",
+    "index 4444444..5555555 100644",
+    "--- a/apps/cli/package.json",
+    "+++ b/apps/cli/package.json",
+    "@@ -1,6 +1,6 @@",
+    ' {"name": "werkmeister",',
+    '-  "version": "0.96.4",',
+    '+  "version": "0.96.5",',
+    '   "license": "Apache-2.0",',
+    "",
+  ].join("\n");
+  const behindBy = (log: string) =>
+    checkCliCurrent({
+      cliDir: "/r",
+      run: fake({
+        ...linked,
+        "rev-list": { status: 0, stdout: "1\n" },
+        "merge-base": { status: 1 },
+        log: { status: 0, stdout: log },
+      }),
+    });
+
+  it("behind only by a version-packages commit is current (SW-719)", () => {
+    const r = behindBy(versionPackages);
+    expect(r.current).toBe(true);
+    expect(r.text).toMatch(/^current: .*1 commits behind origin\/main, only version bumps/);
+  });
+
+  it("behind by a source change, or a package.json change beyond its version, is stale (SW-719)", () => {
+    const source = `${versionPackages}diff --git a/apps/cli/src/main.ts b/apps/cli/src/main.ts\n--- a/apps/cli/src/main.ts\n+++ b/apps/cli/src/main.ts\n@@ -1 +1 @@\n-a\n+b\n`;
+    expect(behindBy(source).current).toBe(false);
+    const dep = versionPackages.replace('+  "version": "0.96.5",', '+  "dockerode": "^6.0.0",');
+    expect(behindBy(dep).current).toBe(false);
+    const added = versionPackages.replace("deleted file mode", "new file mode");
+    expect(behindBy(added).current).toBe(false);
+    expect(behindBy("").current).toBe(false);
+  });
+
   it("linked on a feature branch is stale", () => {
     const r = checkCliCurrent({
       cliDir: "/r",
