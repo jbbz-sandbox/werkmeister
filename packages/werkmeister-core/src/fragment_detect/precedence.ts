@@ -89,6 +89,7 @@ const ORDER: Record<string, FindingKind[]> = {
   health_endpoint: ["k8s", "compose"],
   setup_service: ["package"],
   image: ["dockerfile", "package"],
+  dockerfile: ["dockerfile"],
   command: ["package", "compose", "dockerfile"],
   memory_limit: ["k8s"],
   memory_reservation: ["k8s"],
@@ -138,9 +139,16 @@ export function resolveService(group: ServiceGroup): ResolvedService {
     if (also.length) conflicts.push({ service: group.name, key, chosen, also });
   }
 
+  // SW-928: with no port, or a command that only idles, nothing serves: guess an idle type.
+  const idles = /(^|&& )(exec )?sleep infinity$/.test(String(fields.command?.value ?? ""));
+  const idleWhy = idles
+    ? "the command is `sleep infinity`"
+    : !fields.internal_port && "no port in any source";
   fields.internal_port ??= guessed(3000, "no port in any source — default 3000");
   fields.health_endpoint ??= guessed("", "no readiness probe or healthcheck — TCP-only");
-  fields.type ??= guessed("api", "no package.json — assumed a service");
+  fields.type ??= idleWhy
+    ? guessed("cli", `${idleWhy} — assumed idle; a person must confirm the type`)
+    : guessed("api", "no package.json — assumed a service");
   fields.image ??= guessed("alpine:3", "no usable FROM and no package.json — set the dev image");
   if (!fields.feature_router && fields.type.value === "web") {
     fields.feature_router = guessed({}, "type: web — routed through Caddy");

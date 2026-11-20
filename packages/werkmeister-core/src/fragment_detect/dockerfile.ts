@@ -39,13 +39,23 @@ export function detectDockerfiles(ctx: DetectContext): Finding[] {
     .sort((a, b) => Number(isDev(b)) - Number(isDev(a)) || a.localeCompare(b));
   return files.map((file) => {
     const dir = path.posix.dirname(file);
+    const name = dir === "." ? path.basename(ctx.root) : path.posix.basename(dir);
     const ins = dockerInstructions(readText(ctx, file));
     const fields: Finding["fields"] = {};
 
     // The first stage is the build stage, which carries the toolchain a dev container needs.
     const from = ins.find(([k]) => k === "FROM");
     const image = from?.[1].split(/\s+/).find((t) => !t.startsWith("--"));
-    if (image && !image.includes("$")) fields.image = stated(image, `${file} → FROM`);
+    const stages = ins.filter(([k]) => k === "FROM").length;
+    // SW-928: a single-stage file that installs or copies something is the dev image itself;
+    // its FROM alone would lose those steps. A multi-stage file's last stage is a production image.
+    if (stages === 1 && ins.some(([k]) => k === "RUN" || k === "COPY" || k === "ADD")) {
+      fields.dockerfile = stated(path.posix.basename(file), `${file} → build steps after FROM`);
+      // Docker image names are lowercase; a repo folder may not be.
+      fields.image = stated(`${name.toLowerCase()}:local`, `${file} → built locally`);
+    } else if (image && !image.includes("$")) {
+      fields.image = stated(image, `${file} → FROM`);
+    }
 
     const expose = ins.find(([k]) => k === "EXPOSE");
     const port = Number(/(\d+)/.exec(expose?.[1] ?? "")?.[1]);
@@ -62,7 +72,7 @@ export function detectDockerfiles(ctx: DetectContext): Finding[] {
     }
     return {
       kind: "dockerfile",
-      name: dir === "." ? path.basename(ctx.root) : path.posix.basename(dir),
+      name,
       dir,
       file,
       fields,

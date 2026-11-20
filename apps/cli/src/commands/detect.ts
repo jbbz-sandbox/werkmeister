@@ -26,7 +26,7 @@ import {
 } from "werkmeister-core/fragment_detect";
 import type { Runner } from "werkmeister-core/machine_setup";
 import { RegistryError } from "werkmeister-core/registry_sync";
-import { Colors, info, success, warn } from "../lib/config.js";
+import { Colors, error, info, success, warn } from "../lib/config.js";
 import { claudeResolver, SdkMissingError } from "../lib/harness/claude/assist_resolver.js";
 import { confirm } from "../lib/wizard.js";
 
@@ -171,8 +171,8 @@ export async function runDetect(args: DetectArgs, deps: DetectDeps): Promise<num
   }
   const errors = validateFragment(rendered, plan, deps.reposRoot, undefined, deps.localPath);
   if (errors.length) {
-    for (const e of errors) warn(e);
-    warn("Not written: the generated fragment failed validation.");
+    error("Not written: the generated fragment failed validation:");
+    for (const e of errors) error(`  ${e}`);
     return 1;
   }
   console.log(

@@ -70,13 +70,28 @@ test("environment merges per key, compose winning; only k8s-only keys are rewrit
   assert.deepEqual(r.k8sEnvKeys, ["DB"]);
 });
 
-test("fallbacks are guesses: port 3000, TCP-only health, type api", () => {
+test("fallbacks are guesses: port 3000, TCP-only health, type cli with no port (SW-928)", () => {
   const r = resolveService({ name: "x", dir: "x", findings: [finding("dockerfile", {})] });
   assert.deepEqual(r.fields.internal_port, gu(3000, "no port in any source — default 3000"));
   assert.equal(r.fields.health_endpoint.value, "");
   assert.equal(r.fields.health_endpoint.confidence, "guessed");
-  assert.equal(r.fields.type.value, "api");
+  assert.deepEqual(
+    r.fields.type,
+    gu("cli", "no port in any source — assumed idle; a person must confirm the type"),
+  );
   assert.equal(r.fields.image.confidence, "guessed");
+});
+
+test("a stated port guesses api; a sleep infinity command guesses cli even with one", () => {
+  const resolve = (fields) =>
+    resolveService({ name: "x", dir: "x", findings: [finding("dockerfile", fields)] }).fields.type;
+  const port = st(8080, "EXPOSE");
+  assert.equal(resolve({ internal_port: port }).value, "api");
+  const idle = resolve({ internal_port: port, command: gu("cd x && exec sleep infinity", "CMD") });
+  assert.deepEqual(
+    idle,
+    gu("cli", "the command is `sleep infinity` — assumed idle; a person must confirm the type"),
+  );
 });
 
 test("feature_router: an Ingress states it, type web guesses it, an api gets none", () => {

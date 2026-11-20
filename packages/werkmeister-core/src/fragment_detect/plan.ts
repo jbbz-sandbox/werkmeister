@@ -217,6 +217,14 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
       for (const c of s.conflicts) c.service = name;
     }
   }
+  // SW-928: a service with no test command leaves the PR gate nothing to run, so say so.
+  for (const s of services) {
+    if (s.fields.test || existingDoc?.services?.[s.name]?.test !== undefined) continue;
+    ctx.skipped.push({
+      item: `services.${s.name}.test`,
+      reason: 'no test command found — set `test: <command>`, or `test: "none: <reason>"`',
+    });
+  }
   const hosts = new Map(infrastructure.map((i) => [i.name, i.name]));
   for (const i of infrastructure) {
     const name = adopt("infrastructure", "k8s_pod_prefix", i.fields.k8s_pod_prefix.value);

@@ -32,6 +32,7 @@ const SERVICE_KEYS = [
   "health_endpoint",
   "setup_service",
   "image",
+  "dockerfile",
   "command",
   "memory_limit",
   "memory_reservation",
