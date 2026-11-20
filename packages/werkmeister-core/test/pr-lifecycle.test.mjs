@@ -5401,7 +5401,7 @@ test("deliverHeadless: the wake can commit, push and read checks in a non-autono
         const argv = (await calls(2)).at(-1);
         // Without these the turn edits files, then every commit, push and check read is refused.
         // SW-560: it tests only through a registered test command, and this fixture registers none.
-        for (const rule of ["Bash(git commit:*)", "Bash(gh pr checks:*)"])
+        for (const rule of ["Bash(git commit -m:*)", "Bash(gh pr checks:*)"])
           assert.ok(argv.includes(rule), `wake argv lacks ${rule}: ${argv}`);
         assert.ok(argv.includes("--disallowedTools"), "AUTONOMOUS_DENY still applies");
       }),

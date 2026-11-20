@@ -444,7 +444,13 @@ const GIT_PREFIXES = [
   "log",
   "show",
   "add",
-  "commit",
+  // SW-893: not `commit:*`, whose `-F <file>` reads any host file into a message `pr open` pushes. git refuses
+  // `-F`/`--file`/`-c`/`-C` beside `-m`, and `-F` beside `--fixup`; `--squash` takes `-F`.
+  "commit -m",
+  "commit -qm",
+  "commit -q -m",
+  "commit --amend -m",
+  "commit --fixup",
   "restore",
   "branch",
   "rev-parse",
@@ -462,6 +468,8 @@ const GIT_EXACT = [
   "rebase origin/main",
   "rebase --continue",
   "rebase --abort",
+  // SW-893: exact, since `--amend --no-edit -F <file>` takes the file's text as the message.
+  "commit --amend --no-edit",
   "fetch",
   "fetch origin",
   "fetch origin main",
