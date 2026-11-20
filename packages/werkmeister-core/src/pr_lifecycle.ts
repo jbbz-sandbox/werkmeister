@@ -94,7 +94,7 @@ import { TEMP_HOME_SCRIPT } from "./temp_home.js";
 import { childEnv, toolBin } from "./tool_bins.js";
 // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 import { writeUsageSnapshot } from "./usage_snapshot.js";
-import { loadConfigFile } from "./workspace_prompts.js";
+import { loadConfigFile, readAutonomous } from "./workspace_prompts.js";
 
 export type PrStatus =
   | "draft"
@@ -2516,7 +2516,8 @@ const readText = (file: string): string | null =>
  */
 async function syncRegistryOnMerge(ws: string, f: PrFile, deps: Deps): Promise<string[]> {
   const state = f.fm["registry_sync"];
-  const auto = deps.repos[f.dir]?.["sync_on_merge"] === "auto";
+  // SW-892: an autonomous run can write this PR file, so the pull and sync wait for the person (as `warn`).
+  const auto = deps.repos[f.dir]?.["sync_on_merge"] === "auto" && !readAutonomous(ws);
   if (state !== "pending" && !(state === "needed" && auto)) return [];
   const url = String(f.fm["url"] ?? "");
   const notice = `registry sync needed: ${f.dir} fragment changed in ${url}`;

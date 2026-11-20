@@ -6357,3 +6357,28 @@ test("pr push runs no git outside this workspace's own worktrees, pushes a follo
     clean(ws);
   }
 });
+
+// SW-892: the PR file is agent-editable, so an autonomous run's pr status never pulls or syncs.
+test("SW-892: in an autonomous workspace pr status leaves the sync to the person, auto or not", async () => {
+  const ws = openPr();
+  fs.appendFileSync(path.join(dotDir(ws), "workspace.yml"), "autonomous: true\n");
+  try {
+    await withAppRegistry(async ({ registry, sync, ship }) => {
+      ship();
+      const d = deps([mergedWith(FRAGMENT_CHANGED), ...sourceGit()], {
+        repos: autoRepos,
+        syncRegistry: sync,
+      });
+      const r = await refreshPrStatus(ws, d);
+      assert.ok(!d.calls.some((c) => c.includes("pull --ff-only")), d.calls.join("\n"));
+      assert.match(registry(), /node src\/server\.js/);
+      assert.equal(readPrFiles(ws)[0].fm.registry_sync, "needed");
+      assert.ok(
+        r.lines.some((l) => l.startsWith("registry sync needed: app")),
+        r.lines.join("\n"),
+      );
+    });
+  } finally {
+    clean(ws);
+  }
+});
