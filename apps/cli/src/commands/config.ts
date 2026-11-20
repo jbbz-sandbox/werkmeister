@@ -21,6 +21,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { sharedProxySkipReason } from "werkmeister-core/config";
 import type { PromptSpec } from "werkmeister-core/global_config";
 import * as gc from "werkmeister-core/global_config";
 import { modelTiers } from "werkmeister-core/model_tiers";
@@ -161,12 +162,17 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   const saved = gc.save(newCfg);
   const envSh = gc.writeEnvSh(newCfg);
-  const zshChanged = gc.ensureZshenvSources();
+  // SW-866: a WERKMEISTER_CONFIG_FILE or fixture home is a scratch run; the person's shell files aren't its own.
+  const shellSkip = sharedProxySkipReason();
+  const zshChanged = !shellSkip && gc.ensureZshenvSources();
   const desktopChanged = gc.patchDesktopConfig();
 
   success(`Wrote ${saved}`);
   info(`Regenerated ${envSh}`);
-  info(`${gc.zshenvPath()}: ${zshChanged ? "updated" : "already sources env.sh"}`);
+  info(
+    `${gc.zshenvPath()}: ` +
+      (shellSkip ? `left alone (${shellSkip})` : zshChanged ? "updated" : "already sources env.sh"),
+  );
   const desktopPath = gc.desktopConfigPath();
   if (fs.existsSync(desktopPath)) {
     info(
