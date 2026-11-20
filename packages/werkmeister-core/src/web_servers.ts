@@ -353,11 +353,28 @@ export function isRunning(app: WebApp = DASHBOARD): [boolean, number | null] {
   return [false, null];
 }
 
+/**
+ * One of werkmeister's host web servers, such as the MCP server
+ * (`mcp_web_server` in {@link StatusSnapshot}).
+ *
+ * @example
+ * ```ts
+ * import { statusSnapshot, type WebServerStatus } from "werkmeister-core/sdk";
+ *
+ * const mcp: WebServerStatus = (await statusSnapshot()).mcp_web_server;
+ * if (mcp.running && !mcp.healthy) console.warn(`pid ${mcp.pid} doesn't answer on ${mcp.url}`);
+ * ```
+ */
 export interface WebServerStatus {
+  /** True when its process is alive. */
   running: boolean;
+  /** Its process ID; null when it isn't running. */
   pid: number | null;
+  /** The port it serves on. */
   port: number;
+  /** Its local URL. */
   url: string;
+  /** True when it is running and answers on its port. */
   healthy: boolean;
 }
 

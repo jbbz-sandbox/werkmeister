@@ -11,6 +11,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { GraduationError, graduateNote } from "werkmeister-core/graduate";
+import type { Note } from "werkmeister-core/notes";
 
 let tmp: string;
 let standardsDir: string;
@@ -27,7 +28,7 @@ function writeDomain(): void {
 }
 
 /** A `decision` note in the shape `lib/notes.parseNote()` produces. */
-function note(): Record<string, unknown> {
+function note(): Note {
   const notePath = path.join(tmp, "003-decision-widget-sizing.md");
   fs.writeFileSync(notePath, "---\ntype: decision\nstatus: open\n---\n\n# Widget sizing\n");
   return {
@@ -36,6 +37,7 @@ function note(): Record<string, unknown> {
     number: 3,
     slug: "widget-sizing",
     frontmatter: { status: "open" },
+    body: "\n# Widget sizing\n",
   };
 }
 

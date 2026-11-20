@@ -15,6 +15,7 @@ import * as path from "node:path";
 
 import { sandboxHome } from "./config.js";
 import { dotDir } from "./dot_dir.js";
+import { WorkspaceError } from "./errors.js";
 
 export const WORKSPACE_TOKEN_FILE = "token";
 
@@ -79,7 +80,7 @@ export function revokeWorkspaceToken(name: string): void {
  * @param workspacesRoot - The folder that holds your workspaces (the
  *   `paths.workspaces_root` setting in your werkmeister config).
  * @returns The stale token names, sorted; empty when there are none.
- * @throws `Error` when `workspacesRoot` can't be read, or holds no workspace
+ * @throws {@link WorkspaceError} when `workspacesRoot` can't be read, or holds no workspace
  *   folder while tokens exist: a wrong root would otherwise make every live
  *   token look stale.
  *
@@ -94,9 +95,16 @@ export function revokeWorkspaceToken(name: string): void {
  * ```
  */
 export function staleTokens(workspacesRoot: string): string[] {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(workspacesRoot, { withFileTypes: true });
+  } catch (e) {
+    throw new WorkspaceError(
+      `can't read workspaces root ${workspacesRoot}: ${(e as Error).message}`,
+    );
+  }
   const live = new Set(
-    fs
-      .readdirSync(workspacesRoot, { withFileTypes: true })
+    entries
       .filter(
         (e) => e.isDirectory() || (e.isSymbolicLink() && isDir(path.join(workspacesRoot, e.name))),
       )
@@ -109,7 +117,7 @@ export function staleTokens(workspacesRoot: string): string[] {
     // no tokens folder: nothing is stale
   }
   if (names.length && !live.size) {
-    throw new Error(`no workspace folders found under ${workspacesRoot}`);
+    throw new WorkspaceError(`no workspace folders found under ${workspacesRoot}`);
   }
   return names.filter((n) => !live.has(n)).sort();
 }

@@ -11,13 +11,49 @@ import type { AgentState } from "../agent_state.js";
 
 /** First entry is the default; a workspace.yml without `harness:` reads as claude. */
 export const HARNESS_IDS = ["claude", "mcp", "codex", "opencode"] as const;
+/**
+ * The name of an agent harness, as `harness` in `workspace.yml` spells it:
+ * `claude` (the default), `mcp`, `codex` or `opencode`.
+ *
+ * @example
+ * ```ts
+ * import { type HarnessId, harnessLayoutFor } from "werkmeister-core/sdk";
+ *
+ * const id: HarnessId = harnessLayoutFor("/home/me/features/my-workspace").id;
+ * if (id !== "claude") console.log(`runs under ${id}`);
+ * ```
+ */
 export type HarnessId = (typeof HARNESS_IDS)[number];
 
-/** `true`: Claude-shaped hook files (`.claude/settings.json`, `.codex/hooks.json`). `"own"`: the harness writes its own hook files. */
+/**
+ * Whether a harness runs werkmeister's hooks ({@link HarnessLayout.hooks}). `true`: it
+ * reads Claude-shaped hook files (`.claude/settings.json`, `.codex/hooks.json`).
+ * `false`: it has none, and `reason` says why. `"own"`: it has its own hook files,
+ * which `write` writes.
+ *
+ * @example
+ * ```ts
+ * import { harnessLayoutFor, type HooksSupport } from "werkmeister-core/sdk";
+ *
+ * const ws = "/home/me/features/my-workspace";
+ * const hooks: HooksSupport = harnessLayoutFor(ws).hooks;
+ * if (hooks.available === "own") console.log(`wrote ${hooks.write(ws)}; missing: ${hooks.missing}`);
+ * else if (!hooks.available) console.warn(hooks.reason);
+ * ```
+ */
 export type HooksSupport =
-  | { available: true }
-  | { available: false; reason: string }
   | {
+      /** It reads Claude-shaped hook files. */
+      available: true;
+    }
+  | {
+      /** It runs no hooks. */
+      available: false;
+      /** Why not, for the printed line. */
+      reason: string;
+    }
+  | {
+      /** It has its own hook files. */
       available: "own";
       /** Writes the harness's hook files; returns the main one's path. */
       write(workspaceRoot: string): string;

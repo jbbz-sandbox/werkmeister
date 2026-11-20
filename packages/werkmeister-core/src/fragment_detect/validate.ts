@@ -45,7 +45,9 @@ export function defaultSchemaPath(): string {
  * ```ts
  * import {
  *   planFragment,
+ *   portsPerSlot,
  *   renderFragment,
+ *   stdoutRunner,
  *   validateFragment,
  *   writeFragment,
  * } from "werkmeister-core/sdk";
@@ -53,9 +55,9 @@ export function defaultSchemaPath(): string {
  * const reposRoot = "/home/me/repos";
  * const plan = planFragment(`${reposRoot}/my-app`, {
  *   reposRoot,
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const rendered = renderFragment(plan);
  * const problems = validateFragment(rendered, plan, reposRoot);
@@ -117,13 +119,19 @@ export function validateFragment(
  *
  * @example
  * ```ts
- * import { planFragment, renderFragment, writeFragment } from "werkmeister-core/sdk";
+ * import {
+ *   planFragment,
+ *   portsPerSlot,
+ *   renderFragment,
+ *   stdoutRunner,
+ *   writeFragment,
+ * } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const rendered = renderFragment(plan);
  * if (rendered.changed) writeFragment(rendered);

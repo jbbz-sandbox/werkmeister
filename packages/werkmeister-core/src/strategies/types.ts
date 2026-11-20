@@ -14,14 +14,49 @@ import type { Note } from "../notes.js";
 
 /** First entry is the default for new workspaces; a workspace.yml without the key still reads as jit (pre-field layouts). */
 export const STRATEGY_IDS = ["icm", "jit"] as const;
+/**
+ * The name of a context strategy, as `context_strategy` in `workspace.yml` spells it:
+ * `icm` (staged pipeline folders, the default) or `jit`.
+ *
+ * @example
+ * ```ts
+ * import { type StrategyId, strategyFor } from "werkmeister-core/sdk";
+ *
+ * const id: StrategyId = strategyFor("/home/me/features/my-workspace").id;
+ * console.log(id === "icm" ? "staged pipeline" : "just-in-time standards");
+ * ```
+ */
 export type StrategyId = (typeof STRATEGY_IDS)[number];
 
-/** Everything init has resolved before the context layer is written. */
+/**
+ * Everything `werkmeister workspace init` has resolved before a context strategy
+ * writes the context layer; the argument to {@link ContextStrategy.init}.
+ *
+ * @example
+ * ```ts
+ * import { type InitContext, strategyFor } from "werkmeister-core/sdk";
+ *
+ * const root = "/home/me/features/my-workspace";
+ * const ctx: InitContext = {
+ *   workspaceRoot: root,
+ *   workspaceName: "my-workspace",
+ *   repos: [["my-app", "me/my-workspace"]],
+ *   task: "Add a health endpoint",
+ *   meta: { FEATURE: "my-workspace" },
+ *   inputs: {},
+ *   configOverride: null,
+ * };
+ * strategyFor(root).init(ctx);
+ * ```
+ */
 export interface InitContext {
+  /** The workspace folder's absolute path. */
   workspaceRoot: string;
+  /** The workspace folder's name. */
   workspaceName: string;
   /** [name, branch] per repo worktree, as `discoverRepos` returns them. */
   repos: Array<[string, string]>;
+  /** The task text the context layer states. */
   task: string;
   /** FEATURE, SERVICES, ... — the .env metadata map. */
   meta: Record<string, string>;
@@ -75,13 +110,27 @@ export interface ContextStrategy {
   readonly decisions: DecisionSource;
 }
 
-/** A strategy's decisions, as the graduate.ts scaffold path consumes them. */
+/**
+ * Where a workspace's recorded decisions live: listed, marked as graduated, and
+ * cited from the standards. Each {@link ContextStrategy} has one; pass it to
+ * {@link graduateNote} as `decisions` to graduate a decision it lists.
+ *
+ * @example
+ * ```ts
+ * import { type DecisionSource, graduateNote, strategyFor } from "werkmeister-core/sdk";
+ *
+ * const ws = "/home/me/features/my-workspace";
+ * const decisions: DecisionSource = strategyFor(ws).decisions;
+ * const [first] = decisions.open(ws);
+ * if (first) graduateNote(ws, first, { domain: "testing", kind: "rule", decisions });
+ * ```
+ */
 export interface DecisionSource {
   /** Decisions not yet graduated or superseded (so `graduating` ones too), in sequence order. */
   open(workspaceRoot: string): Note[];
   /** Merge *fields* (`status`, `graduated_to`) into *note*'s recorded state. */
   mark(workspaceRoot: string, note: Note, fields: Record<string, string>): void;
-  /** What a `TODO(graduate)` marker tells the author to fill from: `note 003, see <path>`. */
+  /** What a `TODO(graduate)` marker tells the author to fill from: the decision's number and where it is recorded. */
   cite(workspaceRoot: string, note: Note): string;
 }
 

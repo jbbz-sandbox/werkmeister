@@ -46,8 +46,22 @@ import {
 } from "./telepresence.js";
 import { type WebServerStatus, status as webStatus } from "./web_servers.js";
 
+/**
+ * One running shared-infrastructure container ({@link StatusSnapshot.infrastructure}),
+ * such as the Caddy proxy.
+ *
+ * @example
+ * ```ts
+ * import { type InfraContainer, statusSnapshot } from "werkmeister-core/sdk";
+ *
+ * const infra: InfraContainer[] = (await statusSnapshot()).infrastructure;
+ * for (const c of infra) console.log(`${c.service}: ${c.display}`);
+ * ```
+ */
 export interface InfraContainer {
+  /** The compose service name. */
   service: string;
+  /** Its state: `healthy`, `starting`, `running`, or Docker's own state. */
   display: string;
 }
 
@@ -107,14 +121,32 @@ export function sortedSlots(allSlots: Record<string, SlotEntry>): [string, SlotE
 // Intercepts
 // ---------------------------------------------------------------------------
 
+/**
+ * Whether one running feature's service can be, or is, intercepted from its k8s
+ * Deployment ({@link InterceptsSnapshot.intercepts}, {@link FeatureSnapshot.intercepts}).
+ *
+ * @example
+ * ```ts
+ * import { type InterceptRow, interceptsSnapshot } from "werkmeister-core/sdk";
+ *
+ * const rows: InterceptRow[] = (await interceptsSnapshot()).intercepts;
+ * for (const r of rows.filter((r) => !r.interceptable)) {
+ *   console.log(`${r.feature}/${r.service}: ${r.blocker}`);
+ * }
+ * ```
+ */
 export interface InterceptRow {
+  /** The running feature. */
   feature: string;
+  /** The feature's service. */
   service: string;
   /** The k8s Deployment this service maps to, or null if it has none. */
   deployment: string | null;
+  /** True when the service has the k8s coordinates an intercept needs. */
   interceptable: boolean;
   /** Why not, when `interceptable` is false. */
   blocker: string | null;
+  /** True when its Deployment is intercepted now. */
   intercepted: boolean;
   /**
    * The feature owning the intercept — from its `x-feature` header filter.
@@ -256,10 +288,28 @@ export async function interceptsSnapshot(): Promise<InterceptsSnapshot> {
 // The full snapshot
 // ---------------------------------------------------------------------------
 
+/**
+ * One running feature in {@link StatusSnapshot.features}: its slot, ports,
+ * containers, intercepts and resource use.
+ *
+ * @example
+ * ```ts
+ * import { type FeatureSnapshot, statusSnapshot } from "werkmeister-core/sdk";
+ *
+ * const features: FeatureSnapshot[] = (await statusSnapshot()).features;
+ * for (const f of features.filter((f) => f.crash_loops.length)) {
+ *   console.warn(`${f.name} (slot ${f.slot}): ${f.crash_loops.length} crash-looping`);
+ * }
+ * ```
+ */
 export interface FeatureSnapshot {
+  /** The feature name: `FEATURE` in its workspace's `.env`. */
   name: string;
+  /** Its slot number; a string when the slot can't be read. */
   slot: number | string;
+  /** Its local services. */
   services: string[];
+  /** Its host port range, `start-end`; `?` when the slot can't be read. */
   port_range: string;
   /**
    * The *tallied* containers — finished setup containers are already filtered
@@ -267,14 +317,21 @@ export interface FeatureSnapshot {
    * verbose renderer wants the unfiltered list and fetches its own.
    */
   containers: ContainerStatus[];
+  /** How many of `containers` are running. */
   containers_running: number;
+  /** How many containers it counts. */
   containers_total: number;
+  /** Its services' intercept rows. */
   intercepts: InterceptRow[];
-  /** Null when the stats sweep failed or the feature runs nothing. */
+  /** CPU summed over its containers, percent of one core. Null when the stats sweep failed or the feature runs nothing. */
   cpu_percent: number | null;
+  /** Memory summed over its containers, in MiB. Null when unmeasured, as `cpu_percent`. */
   mem_mib: number | null;
+  /** When it was started (ISO); null when unrecorded. */
   started_at: string | null;
+  /** What started it: `up`, `gate`, `restart` or `person`; null when unrecorded. */
   started_by: StartedBy | null;
+  /** Its containers that keep restarting. */
   crash_loops: CrashLoop[];
 }
 

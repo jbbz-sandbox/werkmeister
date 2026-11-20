@@ -33,8 +33,28 @@ export const KINDS: readonly string[] = ["rule", "example", "anti-pattern"];
 
 const _GOING_DEEPER_HEADER = "## Going deeper\n| When you're doing | Read |\n|---|---|\n";
 
-/** Raised for any graduateNote() precondition failure. */
+/**
+ * What {@link graduateNote} throws when a precondition fails: the note is not an open
+ * decision, the kind or module is unknown, or the standards folder can't be written. A
+ * {@link SandboxError} with code `GRADUATION`.
+ *
+ * @example
+ * ```ts
+ * import { GraduationError, graduateNote, listNotes } from "werkmeister-core/sdk";
+ *
+ * const ws = "/work/my-workspace";
+ * for (const note of listNotes(ws).filter((n) => n.type === "decision")) {
+ *   try {
+ *     graduateNote(ws, note, { domain: "testing", kind: "rule" });
+ *   } catch (e) {
+ *     if (e instanceof GraduationError) console.warn(`skipped ${note.slug}: ${e.message}`);
+ *     else throw e;
+ *   }
+ * }
+ * ```
+ */
 export class GraduationError extends SandboxError {
+  /** @param message - What went wrong, for a person to read. */
   constructor(message: string) {
     super(message, "GRADUATION");
     this.name = "GraduationError";
@@ -222,7 +242,6 @@ export function reconcileGraduating(
   return closed;
 }
 
-// `decisions` is a `DecisionSource` (strategies/types.ts), which the SDK does not export.
 /**
  * Where {@link graduateNote} writes a decision into the coding standards, and
  * in what form.
@@ -286,7 +305,7 @@ export interface GraduateNoteOptions {
  */
 export function graduateNote(
   workspaceRoot: string,
-  note: Record<string, any>,
+  note: Note,
   {
     domain,
     kind,
@@ -327,7 +346,7 @@ export function graduateNote(
   let body = fs.readFileSync(standardPath, "utf8");
 
   const resolvedSlug = slug || note["slug"];
-  const marker = `<!-- TODO(graduate): fill from ${decisions.cite(workspaceRoot, note as Note)} -->`;
+  const marker = `<!-- TODO(graduate): fill from ${decisions.cite(workspaceRoot, note)} -->`;
 
   let scaffoldPath: string;
   if (kind === "rule") {
@@ -389,7 +408,7 @@ export function graduateNote(
   // `reconcileGraduating` closes it for real once the file is tracked; until
   // then the note keeps surfacing as an open decision, which is the point.
   const graduatedTo = path.relative(standardsDir, scaffoldPath);
-  decisions.mark(workspaceRoot, note as Note, { status: "graduating", graduated_to: graduatedTo });
+  decisions.mark(workspaceRoot, note, { status: "graduating", graduated_to: graduatedTo });
 
   return {
     standard_path: standardPath,

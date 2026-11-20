@@ -43,15 +43,41 @@ export interface ProjectHealth {
   crashLoops: CrashLoop[];
 }
 
+/**
+ * One workspace's CPU and memory, summed over its containers
+ * ({@link WorkspaceResources.projects}).
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceResources, type Usage } from "werkmeister-core/sdk";
+ *
+ * const usage: Usage | undefined = (await getWorkspaceResources()).projects["werkmeister-my-app"];
+ * if (usage) console.log(`${usage.cpuPercent.toFixed(0)}% CPU, ${usage.memMib.toFixed(0)} MiB`);
+ * ```
+ */
 export interface Usage {
   /** Percent of one core, summed over the project's containers, as `docker stats` reports it. */
   cpuPercent: number;
+  /** Memory in MiB, summed over the project's containers. */
   memMib: number;
 }
 
+/**
+ * The machine's load and how much of it the workspaces cause
+ * ({@link WorkspaceResources.host}, `host` in {@link StatusSnapshot}).
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceResources, type HostSummary } from "werkmeister-core/sdk";
+ *
+ * const host: HostSummary = (await getWorkspaceResources()).host;
+ * if (host.load[0] > host.cores) console.warn(`load ${host.load[0]} on ${host.cores} cores`);
+ * ```
+ */
 export interface HostSummary {
   /** `os.loadavg()`: 1, 5 and 15 minutes. */
   load: [number, number, number];
+  /** The machine's CPU cores. */
   cores: number;
   /** Every feature container's CPU summed, shared infra excluded. */
   featureCpuPercent: number;

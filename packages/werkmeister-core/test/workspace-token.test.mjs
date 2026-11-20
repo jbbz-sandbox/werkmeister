@@ -10,6 +10,7 @@ import { test } from "node:test";
 
 const { mintWorkspaceToken, revokeWorkspaceToken, staleTokens, tokensDir, workspaceTokenFile } =
   await import("../dist/workspace_token.js");
+const { WorkspaceError } = await import("../dist/errors.js");
 
 function withHome(fn) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), "ws-token-"));
@@ -98,7 +99,10 @@ test("staleTokens: no tokens folder is empty; an unreadable root throws", () => 
     fs.mkdirSync(path.join(home, "features"));
     assert.deepEqual(staleTokens(path.join(home, "features")), []);
     mintWorkspaceToken("x", path.join(home, "x"));
-    assert.throws(() => staleTokens(path.join(home, "missing")));
-    assert.throws(() => staleTokens(path.join(home, "features")), /no workspace folders/);
+    assert.throws(() => staleTokens(path.join(home, "missing")), WorkspaceError);
+    assert.throws(
+      () => staleTokens(path.join(home, "features")),
+      (e) => e instanceof WorkspaceError && /no workspace folders/.test(e.message),
+    );
   });
 });

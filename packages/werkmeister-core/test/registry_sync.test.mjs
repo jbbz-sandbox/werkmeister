@@ -440,6 +440,17 @@ test("generatedOnly leaves a hand-written registry alone and still refreshes a g
   assert.equal(parse(readFileSync(registryPath(), "utf8")).services.backend.port_offset, 1);
 });
 
+test("a target syncRegistry can't read is a failing step, not a throw", () => {
+  writeFragment("demo", "services:\n  backend: {}\n");
+  const target = path.join(home, "unreadable");
+  mkdirSync(target); // a directory: existsSync passes, readFileSync throws EISDIR, even as root
+  for (const generatedOnly of [true, false]) {
+    const [step] = syncRegistry({ reposRoot: repos, target, generatedOnly });
+    assert.equal(step.ok, false);
+    assert.match(step.detail, /could not read .*unreadable/);
+  }
+});
+
 test("syncRegistry seeds services.local.yaml when absent so k8s_context is never dropped", () => {
   writeFragment("demo", "services:\n  backend: {}\n");
   const localPath = path.join(home, "services.local.yaml");

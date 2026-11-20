@@ -535,8 +535,8 @@ export function workspaceServices(
  *   whether the registry was generated, already up to date, or could not be
  *   built (`ok: false`, with the reason in `detail`). Any further lines name
  *   fragments your local overlay disabled.
- * @throws Nothing for a bad fragment or a service name collision; those come
- *   back as a failing step.
+ * @throws Nothing: a bad fragment, a service name collision or a file it can't read
+ *   or write comes back as a failing step.
  *
  * @example
  * ```ts
@@ -552,11 +552,14 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   const reposRoot = opts.reposRoot ?? getReposRoot();
   const target = opts.target ?? servicesYamlPath();
   const localPath = servicesLocalYamlPath();
-  if (
-    opts.generatedOnly &&
-    fs.existsSync(target) &&
-    !isGenerated(fs.readFileSync(target, "utf8"))
-  ) {
+  // Read once, inside a try: an unreadable target is a failing step, not a throw.
+  let existing: string | null;
+  try {
+    existing = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : null;
+  } catch (e) {
+    return [{ label, ok: false, detail: `could not read ${target}: ${e}` }];
+  }
+  if (opts.generatedOnly && existing !== null && !isGenerated(existing)) {
     return [
       {
         label,
@@ -635,7 +638,6 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
 
   const count = split.fragments.length;
   const sources = `${count} fragment${count === 1 ? "" : "s"}`;
-  const existing = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : null;
   if (existing === text) {
     return report({
       label,
@@ -658,7 +660,12 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
   if (existing !== null && !isGenerated(existing)) {
     const stamp = Math.floor((opts.now ?? Date.now)() / 1000);
     const backup = `${target}.bak-${stamp}`;
-    fs.copyFileSync(target, backup);
+    try {
+      fs.copyFileSync(target, backup);
+    } catch (e) {
+      // No backup, no overwrite: the hand-written registry stays as it is.
+      return report({ label, ok: false, detail: `could not back up ${target}: ${e}` });
+    }
     note = `; hand-written registry backed up to ${backup}`;
     // Entries the fragments do not carry vanish from the active registry; name
     // them so the developer knows what to move into a fragment (or the overlay).

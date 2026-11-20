@@ -548,19 +548,40 @@ export interface Archetype {
   [key: string]: unknown;
 }
 
-/** One entry under services.yaml `caches:` (SW-69); resolved in build_caches.ts. */
+// Resolved in build_caches.ts.
+/**
+ * One build or package cache under `caches:` in `services.yaml`: where it mounts,
+ * which repos use it, and how {@link pruneCaches} frees it.
+ *
+ * @example
+ * ```ts
+ * import type { CacheEntry } from "werkmeister-core/sdk";
+ *
+ * const pnpm: CacheEntry = {
+ *   path: "/pnpm-store",
+ *   env: { npm_config_store_dir: "/pnpm-store" },
+ *   detect: ["pnpm-lock.yaml"],
+ *   prune: "pnpm store prune",
+ * };
+ * console.log(pnpm.volume ?? "werkmeister-pnpm");
+ * ```
+ */
 export interface CacheEntry {
+  /** The mount point inside a service's container. */
   path: string;
+  /** Env vars that point the tool at `path`. */
   env?: Record<string, string>;
+  /** Files whose presence in a repo means its services get this cache. */
   detect?: string[];
-  /** Default `werkmeister-<key>`. */
+  /** The shared Docker volume. Default `werkmeister-<key>`. */
   volume?: string;
   /** Bind this host dir instead of a shared volume. */
   host?: string;
-  /** `<N>d` */
+  /** Prune deletes files older than this, written `<N>d`. */
   max_age?: string;
+  /** The command prune runs in the cache instead, when there is no `max_age`. */
   prune?: string;
-  /** Default node:22. */
+  /** The image that command runs in. Default node:22. */
   image?: string;
 }
 
@@ -592,6 +613,28 @@ export interface PortsConfig {
   [key: string]: unknown;
 }
 export type ArchetypeRegistry = Record<string, Archetype>;
+/**
+ * The `caches:` section of `services.yaml`: each {@link CacheEntry} by its key
+ * (`caches` in {@link PruneDeps}).
+ *
+ * @example
+ * ```ts
+ * import { type CacheRegistry, pruneCaches } from "werkmeister-core/sdk";
+ *
+ * const caches: CacheRegistry = { turbo: { path: "/turbo-cache", max_age: "14d" } };
+ * console.log(
+ *   await pruneCaches(
+ *     { dryRun: true },
+ *     {
+ *       caches,
+ *       snapshots: async () => [],
+ *       busy: async () => [],
+ *       run: () => ({ status: 0, stdout: "", stderr: "" }),
+ *     },
+ *   ),
+ * );
+ * ```
+ */
 export type CacheRegistry = Record<string, CacheEntry>;
 export type ReposConfig = Record<string, RepoEntry>;
 

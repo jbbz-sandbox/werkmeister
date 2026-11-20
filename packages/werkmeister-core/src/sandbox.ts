@@ -36,11 +36,16 @@ import {
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
 import { extractJson, extractResult } from "./harness/claude/cli.js";
 import { type ClaudeSessionSignal, claudeOpenIn } from "./harness/claude/session.js";
-import type { ClaudeTranscript } from "./harness/claude/transcript.js";
 import type { WorkspaceUsage } from "./harness/claude/usage.js";
 import { type HarnessAdapter, type HarnessId, harness } from "./harness/index.js";
 import { harnessFor, harnessIdOf } from "./harness/layout.js";
-import type { SessionMessage, TurnOptions, TurnResult } from "./harness/types.js";
+import type {
+  SessionMessage,
+  SessionTranscript,
+  TurnOptions,
+  TurnResult,
+  TurnStatus,
+} from "./harness/types.js";
 import { claudeLauncher, claudeLaunchUri, type Launcher, reconcileLaunchUri } from "./launcher.js";
 import { buildStartArgs, deferMachineSteps, type StartArgs } from "./run_start.js";
 import { isExecutable, isFile, runCapture, shellQuote, stripAnsi } from "./tool_bins.js";
@@ -3886,7 +3891,7 @@ export async function getClaudeTranscript(
   name: string,
   limit = 20,
   sessionId?: string,
-): Promise<ClaudeTranscript> {
+): Promise<SessionTranscript> {
   const dir = await resolveSessionDir(name);
   return harnessFor(dir).transcript(dir, limit, sessionId);
 }
@@ -3967,12 +3972,13 @@ export async function sendToClaudeSession(
   };
 }
 
-// Reads the machine harness's in-memory turn table (`turnStatus`).
+// Reads the workspace harness's in-memory turn table (`turnStatus`), which sendToClaudeSession fills.
 /**
  * Reports the state of the latest headless turn that
  * {@link sendToClaudeSession} started for a workspace in this same process.
  * Runs in-process and only reads memory: a turn started by another process, or
- * before a restart, reads as `idle`.
+ * before a restart, reads as `idle`. To see a turn the daemon started, ask the
+ * daemon: its `claude-turn-status` tool calls this in the daemon's process.
  *
  * @param name - The workspace's folder name, or a reconcile `sessionKey`.
  * @returns The {@link TurnStatus}: `state` (`idle`, `running`, `done` or
@@ -3988,11 +3994,8 @@ export async function sendToClaudeSession(
  * if (status.state === "failed") console.error(status.error);
  * ```
  */
-export async function getClaudeTurnStatus(
-  name: string,
-): Promise<ReturnType<HarnessAdapter["turnStatus"]>> {
-  await resolveSessionDir(name); // validates the session key
-  return harness().turnStatus(name);
+export async function getClaudeTurnStatus(name: string): Promise<TurnStatus> {
+  return harnessFor(await resolveSessionDir(name)).turnStatus(name);
 }
 
 // ---------------------------------------------------------------------------

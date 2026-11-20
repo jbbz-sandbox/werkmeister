@@ -17,7 +17,21 @@ export interface Taken {
   forwards: Set<number>;
 }
 
-/** `feature_slots.ports_per_slot` from ports.yaml; 20 when unreadable. */
+/**
+ * How many port offsets one feature slot has: `feature_slots.ports_per_slot`
+ * in the machine's `ports.yaml`. Pass it as `portsPerSlot` in {@link PlanOptions}.
+ * Runs in-process and reads the file; never throws.
+ *
+ * @param file - The `ports.yaml` to read. Defaults to the machine's.
+ * @returns The value, or 20 when the file or key is missing or not a positive integer.
+ *
+ * @example
+ * ```ts
+ * import { portsPerSlot } from "werkmeister-core/sdk";
+ *
+ * console.log(`each feature slot has ${portsPerSlot()} port offsets`);
+ * ```
+ */
 export function portsPerSlot(file = portsYamlPath()): number {
   try {
     const n = parseYaml(fs.readFileSync(file, "utf8"))?.feature_slots?.ports_per_slot;

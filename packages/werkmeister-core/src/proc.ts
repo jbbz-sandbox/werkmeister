@@ -39,9 +39,27 @@ export interface RunOptions {
   timeout?: number;
 }
 
+/**
+ * A finished command's exit status and output, as the runner in
+ * `run` in {@link PruneDeps} returns it.
+ *
+ * @example
+ * ```ts
+ * import type { PruneDeps, RunResult } from "werkmeister-core/sdk";
+ *
+ * const dryRun: PruneDeps["run"] = (argv): RunResult => {
+ *   console.log(`would run: ${argv.join(" ")}`);
+ *   return { status: 0, stdout: "", stderr: "" };
+ * };
+ * console.log(dryRun(["docker", "volume", "ls"]).status);
+ * ```
+ */
 export interface RunResult {
+  /** The exit code. */
   status: number;
+  /** What it printed on stdout. */
   stdout: string;
+  /** What it printed on stderr. */
   stderr: string;
 }
 

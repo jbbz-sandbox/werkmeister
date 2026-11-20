@@ -132,8 +132,33 @@ export function featureUrl(urlPath: string): string | null {
   return `https://${hosts[0]}${urlPath.startsWith("/") ? urlPath : `/${urlPath}`}`;
 }
 
-/** `dns.promises.lookup(host, { all: true })`, injectable so tests never touch the resolver. */
-export type HostLookup = (host: string) => Promise<{ address: string }[]>;
+/**
+ * Resolves a hostname to its addresses, as `dns.promises.lookup(host, { all: true })`
+ * does. `lookup` in {@link ProxyOps} takes one, so a test never touches the resolver.
+ *
+ * @example
+ * ```ts
+ * import { type HostLookup, type ProxyOps, reloadProxy } from "werkmeister-core/sdk";
+ *
+ * const lookup: HostLookup = async () => [{ address: "127.0.0.1" }];
+ * const ops: ProxyOps = {
+ *   generate: async () => undefined,
+ *   slots: async () => ({}),
+ *   running: async () => true,
+ *   reload: async () => true,
+ *   start: () => true,
+ *   hosts: () => ["my-app.local.example.com"],
+ *   lookup,
+ * };
+ * console.log(await reloadProxy({}, ops));
+ * ```
+ */
+export type HostLookup = (host: string) => Promise<
+  {
+    /** One address the host resolves to. */
+    address: string;
+  }[]
+>;
 const platformLookup: HostLookup = (host) => dns.lookup(host, { all: true });
 
 /**

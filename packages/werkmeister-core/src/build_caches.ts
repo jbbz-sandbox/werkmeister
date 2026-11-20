@@ -133,12 +133,34 @@ export function applyCaches(
   return [outServices, outSetups];
 }
 
+/**
+ * One build or package cache from the registry's `caches:`, and what it holds on
+ * disk now (`caches` in {@link StatusSnapshot}).
+ *
+ * @example
+ * ```ts
+ * import { type CacheSnapshot, statusSnapshot } from "werkmeister-core/sdk";
+ *
+ * const caches: CacheSnapshot[] = (await statusSnapshot()).caches;
+ * for (const c of caches.filter((c) => c.exists)) {
+ *   console.log(
+ *     `${c.name} (${c.kind} ${c.source}): ${((c.size_bytes ?? 0) / 2 ** 20).toFixed(0)} MiB`,
+ *   );
+ * }
+ * ```
+ */
 export interface CacheSnapshot {
+  /** The cache's key under `caches:`. */
   name: string;
+  /** `volume` for a shared Docker volume, `host` for a bound host folder. */
   kind: "volume" | "host";
+  /** The volume name or host folder. */
   source: string;
+  /** False when the volume or folder hasn't been created yet. */
   exists: boolean;
+  /** Its size in bytes; null when it doesn't exist or Docker didn't report one. */
   size_bytes: number | null;
+  /** When it was created (ISO); null when it doesn't exist or is unknown. */
   created_at: string | null;
 }
 

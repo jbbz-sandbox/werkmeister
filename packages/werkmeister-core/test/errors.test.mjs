@@ -45,3 +45,13 @@ test("WorkspaceInitError is a WorkspaceError", async () => {
   assert.ok(e instanceof WorkspaceError);
   assert.equal(e.name, "WorkspaceInitError");
 });
+
+// So an SDK caller of initWorkspace catches "not inside a workspace" with the SDK's classes;
+// the CLI checks WorkspaceRootError first, so its printing is unchanged.
+test("WorkspaceRootError is a WorkspaceError", async () => {
+  const { WorkspaceRootError } = await import("../dist/workspace_init.js");
+  const e = new WorkspaceRootError("not inside a workspace");
+  assert.ok(e instanceof WorkspaceError);
+  assert.equal(e.code, "WORKSPACE");
+  assert.equal(e.name, "WorkspaceRootError");
+});

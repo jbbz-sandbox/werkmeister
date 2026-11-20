@@ -27,13 +27,13 @@ export type Confidence = "stated" | "guessed" | "inferred";
  *
  * @example
  * ```ts
- * import { type FieldValue, planFragment } from "werkmeister-core/sdk";
+ * import { type FieldValue, planFragment, portsPerSlot, stdoutRunner } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const command: FieldValue | undefined = plan.services[0]?.fields.command;
  * if (command) console.log(command.value, command.confidence, command.source);
@@ -72,13 +72,13 @@ export interface Finding {
  *
  * @example
  * ```ts
- * import { planFragment, type Skipped } from "werkmeister-core/sdk";
+ * import { planFragment, portsPerSlot, type Skipped, stdoutRunner } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const skipped: Skipped[] = plan.skipped;
  * for (const s of skipped) console.warn(`skipped ${s.item}: ${s.reason}`);

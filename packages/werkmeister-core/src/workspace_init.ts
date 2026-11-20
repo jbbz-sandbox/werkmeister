@@ -206,8 +206,14 @@ export async function resolveIssueCopy(
   return readIssueRef(root, issueId, opts.project);
 }
 /** Thrown by {@link findWorkspaceRoot}; the CLI's print paths and
- *  `init-workspace` adapter catch it and print the (pre-rendered) message. */
-export class WorkspaceRootError extends Error {}
+ *  `init-workspace` adapter catch it and print the (pre-rendered) message.
+ *  A `WorkspaceError`, so an SDK caller of `initWorkspace` catches it with the SDK's classes. */
+export class WorkspaceRootError extends WorkspaceError {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkspaceRootError";
+  }
+}
 
 function isDir(p: string): boolean {
   try {
@@ -718,8 +724,9 @@ function logMeta(task: string, meta: Record<string, string>): void {
  * @throws {@link WorkspaceError} when init stops on a problem (no
  *   `workspace.yml` and no `feature`, a bad input, an issue that can't be
  *   fetched, a worktree with uncommitted changes). The message has already
- *   been printed through the reporter. `Error` when no root is given and the
- *   current directory isn't inside a workspace. {@link SandboxError} with
+ *   been printed through the reporter. Also a `WorkspaceError`, not yet
+ *   printed, when no root is given and the current directory isn't inside a
+ *   workspace. {@link SandboxError} with
  *   code `UNKNOWN_CONTEXT_STRATEGY` or `UNKNOWN_HARNESS` for an unknown
  *   `context_strategy` or `harness`.
  *
