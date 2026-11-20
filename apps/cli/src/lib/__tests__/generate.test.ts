@@ -78,7 +78,8 @@ function writeWorkspaceYml(workspace: string, mapping: string): void {
 // worktree admin dir bind-mounted into the container) is covered below.
 
 describe("worktree gitdir mounting", () => {
-  it("mounts a linked worktree's admin dir", () => {
+  // SW-785: read-write, so in-container `git checkout -- <f>` / `git reset` can write the index.
+  it("mounts a linked worktree's admin dir read-write", () => {
     const admin = path.join(tmp, "mainrepo", ".git", "worktrees", "wt");
     fs.mkdirSync(admin, { recursive: true });
     // backend's repo is `demo-services`; the checkout is {workspace}/demo-services.
@@ -87,7 +88,7 @@ describe("worktree gitdir mounting", () => {
     fs.writeFileSync(path.join(repoDir, ".git"), `gitdir: ${admin}\n`);
     const outPath = generateFeatureCompose("myfeat", 1, ["backend"], null, tmp);
     const content = fs.readFileSync(outPath, "utf8");
-    expect(content).toContain(`- ${admin}:${admin}:ro`);
+    expect(content).toContain(`- ${admin}:${admin}\n`);
   });
 });
 

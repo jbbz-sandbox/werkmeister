@@ -91,7 +91,7 @@ services:{% if not local_services | length %} {}{% endif %}
     volumes:
       - {{ workspace_path }}/{{ setup.repo }}:/app
 {% if setup.worktree_gitdir %}
-      - {{ setup.worktree_gitdir }}:{{ setup.worktree_gitdir }}:ro
+      - {{ setup.worktree_gitdir }}:{{ setup.worktree_gitdir }}
 {% endif %}
 {% if setup.node_modules_volume %}
       - {{ feature_name }}-{{ setup.node_modules_volume }}:/app/node_modules
@@ -182,7 +182,7 @@ services:{% if not local_services | length %} {}{% endif %}
       - {{ workspace_path }}/{{ svc.repo }}:/app
 {% endif %}
 {% if svc.repo and svc.worktree_gitdir %}
-      - {{ svc.worktree_gitdir }}:{{ svc.worktree_gitdir }}:ro
+      - {{ svc.worktree_gitdir }}:{{ svc.worktree_gitdir }}
 {% endif %}
 {% if svc.node_modules_volume %}
       - {{ feature_name }}-{{ svc.node_modules_volume }}:/app/node_modules
