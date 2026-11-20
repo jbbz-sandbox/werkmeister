@@ -52,7 +52,7 @@ import { withReporter } from "../dist/reporter.js";
 import { removeWorkspace, WorkspaceError } from "../dist/sandbox.js";
 import { lowMemory as lowMemoryNote } from "../dist/scheduler_state.js";
 import { TEMP_HOME_SCRIPT } from "../dist/temp_home.js";
-import { withFakeGh, withSandboxHome } from "./fixtures.mjs";
+import { withFakeGh, withSandboxHome, writeSessions } from "./fixtures.mjs";
 
 // The host-load wait tests need it to wait; a caller exporting it for a quick run would skip it (SW-425).
 delete process.env.WERKMEISTER_NO_WAIT;
@@ -5031,10 +5031,7 @@ test("claimCallbacks: a PR that merged sends the merged message, not a wake", as
 // The session's hooks record, which is what makes it open rather than just recently written.
 const openSession = (ws) => {
   const at = new Date().toISOString();
-  fs.writeFileSync(
-    path.join(dotDir(ws), "agent-state.json"),
-    JSON.stringify({ state: "working", at, sessions: { "s-1": { status: "busy", at } } }),
-  );
+  writeSessions(ws, { "s-1": { status: "busy", at } });
 };
 
 test("claimCallbacks: a wake for an open session is claimed and left as its nudge, never sent headless (SW-418)", async () => {
@@ -5425,10 +5422,7 @@ test("sessionBusy: an open terminal session is busy even when idle at its prompt
   try {
     await withSandboxHome(async () => {
       const at = new Date().toISOString();
-      fs.writeFileSync(
-        path.join(dotDir(ws), "agent-state.json"),
-        JSON.stringify({ state: "done", at, sessions: { "s-open": { status: "idle", at } } }),
-      );
+      writeSessions(ws, { "s-open": { status: "idle", at } });
       const { sessionBusy } = defaultDeps();
       assert.equal(await sessionBusy(ws, "s-open", ws), true);
       assert.equal(await sessionBusy(ws, "s-closed", ws), false);

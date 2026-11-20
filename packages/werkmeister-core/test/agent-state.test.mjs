@@ -36,7 +36,13 @@ function workspace(name, last, ageMs = 0) {
 }
 
 const byName = async () =>
-  Object.fromEntries((await getWorkspaceStatuses()).statuses.map((s) => [s.name, s.claude]));
+  Object.fromEntries(
+    (await getWorkspaceStatuses()).statuses.map(({ name, workspaceState: st }) => [
+      name,
+      // The card's agent word and its first need, where `claude.agent` used to carry them (SW-558).
+      { agent: st.agent.id, at: st.agent.since, question: st.needs[0]?.what ?? null },
+    ]),
+  );
 
 test("no state file: the transcript tail tells done, needs-you, working and idle apart", async () => {
   workspace("a-done", ["assistant", "Shipped: PR #12 is open and the gate passed."]);
@@ -50,7 +56,6 @@ test("no state file: the transcript tail tells done, needs-you, working and idle
   assert.equal(c["c-live"].agent, "working");
   assert.equal(c["d-stale"].agent, "idle", "a turn nobody has touched in hours is not live");
   assert.equal(c["e-none"].agent, "idle");
-  assert.equal("waiting" in c["a-done"], false, "agent replaces claude.waiting");
 });
 
 test("the hooks' session record wins over the transcript tail", async () => {
@@ -267,6 +272,7 @@ test("hooks: a second session or a subagent can't wipe a session's ask", async (
   const { workspaceState } = await import("../dist/workspace_state.js");
   const blank = {
     now: new Date(),
+    signal: { agent: "idle", at: null },
     turnRunning: false,
     processOpen: null,
     paused: null,
@@ -433,10 +439,6 @@ test("readSessions: a busy record with no ask, silent for STALE_SESSION_MS, is d
   write(file("asking"), JSON.stringify({ status: "busy", at: old, last: old, ask }));
   write(file("idle"), JSON.stringify({ status: "idle", at: old, last: old }));
   write(file("junk-date"), JSON.stringify({ status: "busy", at: "not a date" }));
-  write(
-    path.join(dir, ".werkmeister", "agent-state.json"),
-    JSON.stringify({ sessions: { legacy: { status: "busy", at: old } } }),
-  );
   assert.deepEqual(Object.keys(readSessions(dir, now)).sort(), ["asking", "idle", "recent"]);
   assert.equal(fs.existsSync(file("dead")), false, "the stale file is deleted");
   assert.equal(fs.existsSync(file("junk-date")), false);
@@ -451,31 +453,6 @@ test("readSessions: a busy record with no ask, silent for STALE_SESSION_MS, is d
   } finally {
     fs.chmodSync(sessions, 0o755);
   }
-});
-
-test("readSessions: pre-SW-487 agent-state.json sessions still count until their own file exists", () => {
-  const dir = workspace("i-legacy", null);
-  // Recent: SW-559 drops records older than STALE_SESSION_MS.
-  const at = new Date().toISOString();
-  write(
-    path.join(dir, ".werkmeister", "agent-state.json"),
-    JSON.stringify({
-      state: "working",
-      at,
-      sessions: { old: { status: "busy", at }, both: { status: "busy", at } },
-    }),
-  );
-  record({ hook_event_name: "Stop", cwd: dir, session_id: "both" });
-  assert.equal(readSessions(dir).old.status, "busy");
-  assert.equal(readSessions(dir).both.status, "idle", "its own file wins");
-  record({ hook_event_name: "SessionEnd", cwd: dir, session_id: "both" });
-  assert.equal(
-    readSessions(dir).both,
-    undefined,
-    "an ended session doesn't come back from the old file",
-  );
-  record({ hook_event_name: "SessionEnd", cwd: dir, session_id: "old" });
-  assert.equal(readSessions(dir).old, undefined, "ending removes it from the old file");
 });
 
 test("nextSession: PermissionRequest asks with the tool's description, else the tool name", () => {
@@ -1069,4 +1046,15 @@ test("notices: raised and cleared by their owner, never by a hook event", async 
   assert.equal(readNotices(dir)["autofix-app"].url, "https://x/pr/1");
   clearNotice(dir, "autofix-app");
   assert.deepEqual(readNotices(dir), {});
+});
+
+// SW-558: the one-release read of the pre-SW-487 file is gone (SW-487 shipped in werkmeister@0.83.0).
+test("readSessions: agent-state.json sessions{} no longer count", () => {
+  const dir = workspace("i-legacy-gone", null);
+  const at = new Date().toISOString();
+  write(
+    path.join(dir, ".werkmeister", "agent-state.json"),
+    JSON.stringify({ sessions: { old: { status: "busy", at } } }),
+  );
+  assert.deepEqual(readSessions(dir), {});
 });

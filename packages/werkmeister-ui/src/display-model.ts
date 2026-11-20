@@ -7,7 +7,6 @@
  */
 
 import type {
-  ClaudeSessionSignal,
   IcmStage,
   Lifecycle,
   NeedItem,
@@ -19,7 +18,7 @@ import type {
 /** `needs` is the solid-amber chip, used only for Needs you. */
 export type Tone = "ok" | "warn" | "err" | "off" | "pr" | "needs";
 
-export type AgentState = ClaudeSessionSignal["agent"];
+export type AgentState = WorkspaceState["agent"]["id"];
 export type ServiceHealth = WorkspaceStatus["services"][number]["state"];
 
 /** The fields read from a `WorkspaceStatus`; a full one satisfies it. */
@@ -28,7 +27,6 @@ export interface DisplayInput {
   running: number;
   total: number;
   services: { name: string; state: ServiceHealth }[];
-  claude: Pick<ClaudeSessionSignal, "agent" | "at" | "question">;
   stage: IcmStage | null;
   phase: string | null;
   autonomous: boolean;
@@ -38,7 +36,7 @@ export interface DisplayInput {
   /** SW-70; optional so a core older than it still renders. */
   paused?: { at: string; containers: string[] } | null;
   crashLoops?: { service: string; restarts: number; lastLog: string | null }[];
-  /** SW-487; optional so a core older than it still renders. */
+  /** SW-487; optional so a core older than it still renders (as Idle, with no list). The agent word is its `agent` (SW-558). */
   workspaceState?: WorkspaceState | null;
   /** SW-577: the model the workspace runs; optional so a core older than it still renders. */
   model?: string | null;
@@ -211,8 +209,10 @@ export function ago(iso: string | null, now: Date): string {
   return `${d} ${d === 1 ? "day" : "days"} ago`;
 }
 
+const NO_AGENT = { id: "idle", since: null } as const;
+
 function agentTime(ws: DisplayInput, now: Date): string {
-  const { agent, at } = ws.claude;
+  const { id: agent, since: at } = ws.workspaceState?.agent ?? NO_AGENT;
   if (agent === "needs-you") return `asked a question ${ago(at, now)}`.trim();
   if (agent === "working") return `last activity ${ago(ws.lastActivity ?? at, now)}`.trim();
   if (agent === "done") return `idle since ${ago(at ?? ws.lastActivity, now)}`.trim();
@@ -312,9 +312,7 @@ function primary(
   const cont = { action: "continue", label: `↗ Continue in ${where}`, destructive: false } as const;
   if (ws.paused) return { action: "resume", label: "▶ Resume", destructive: false };
   // The session is what answers; a gate or PR item alone doesn't make Continue the next step.
-  const asked = ws.workspaceState
-    ? ws.workspaceState.needs.some((n) => n.source === "session" || n.source === "text")
-    : ws.claude.agent === "needs-you";
+  const asked = ws.workspaceState?.needs.some((n) => n.source === "session" || n.source === "text");
   if (asked) return cont;
   if (lifecycle === "shipped")
     return { action: "close-out", label: "✓ Close out", destructive: true };
@@ -347,10 +345,10 @@ function needRows(ws: DisplayInput, opts: DisplayOptions, now: Date): NeedRow[] 
 export function displayModel(ws: DisplayInput, opts: DisplayOptions = {}): WorkspaceDisplay {
   const now = opts.now ?? new Date();
   const lifecycle = opts.lifecycle ?? null;
-  const a = ws.paused ? PAUSED : AGENT[ws.claude.agent];
-  const needsList = needRows(ws, opts, now);
-  const needs = !ws.paused && (ws.claude.agent === "needs-you" || needsList.length > 0);
   const st = ws.workspaceState;
+  const a = ws.paused ? PAUSED : AGENT[(st?.agent ?? NO_AGENT).id];
+  const needsList = needRows(ws, opts, now);
+  const needs = !ws.paused && (st?.agent?.id === "needs-you" || needsList.length > 0);
   const withPr = (opts.prs ?? []).filter((p): p is PrInput & { url: string } => p.url !== null);
   return {
     agent: {
@@ -359,7 +357,7 @@ export function displayModel(ws: DisplayInput, opts: DisplayOptions = {}): Works
       time: ws.paused ? `paused ${ago(ws.paused.at, now)}` : agentTime(ws, now),
     },
     needs,
-    question: needs ? (needsList[0]?.what ?? ws.claude.question) : null,
+    question: needs ? (needsList[0]?.what ?? null) : null,
     needsList,
     phase: st
       ? {

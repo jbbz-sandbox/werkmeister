@@ -468,7 +468,8 @@ export function WorkspaceList({
 
   const shown = useMemo(() => {
     if (!all) return [];
-    const needs = (w: WorkspaceEntry) => statuses?.[w.name]?.claude.agent === "needs-you";
+    const needs = (w: WorkspaceEntry) =>
+      statuses?.[w.name]?.workspaceState?.agent?.id === "needs-you";
     const base = all.filter(
       (w) => (!needsOnly || needs(w)) && (!focusOnly || w.labels.includes("focus")),
     );
@@ -480,7 +481,7 @@ export function WorkspaceList({
       : base;
   }, [all, statuses, prs, needsOnly, focusOnly, query]);
   const needCount =
-    all?.filter((w) => statuses?.[w.name]?.claude.agent === "needs-you").length ?? 0;
+    all?.filter((w) => statuses?.[w.name]?.workspaceState?.agent?.id === "needs-you").length ?? 0;
 
   const header = (
     <TopBar
@@ -633,7 +634,6 @@ const UNREACHABLE: DisplayInput = {
   running: 0,
   total: 0,
   services: [],
-  claude: { agent: "idle", at: null, question: null },
   stage: null,
   phase: null,
   autonomous: false,

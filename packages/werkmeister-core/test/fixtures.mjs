@@ -272,3 +272,11 @@ export function writeSessionState(
   fs.mkdirSync(sessions, { recursive: true });
   fs.writeFileSync(path.join(sessions, `${id}.json`), JSON.stringify(rec));
 }
+
+/** Write each `{ id: record }` as its own `.werkmeister/sessions/<id>.json`, as the hooks do (SW-487). */
+export function writeSessions(dir, sessions) {
+  const d = path.join(dir, ".werkmeister", "sessions");
+  fs.mkdirSync(d, { recursive: true });
+  for (const [id, rec] of Object.entries(sessions))
+    fs.writeFileSync(path.join(d, `${id}.json`), JSON.stringify(rec));
+}

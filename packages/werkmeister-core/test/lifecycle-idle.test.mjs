@@ -8,6 +8,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import { idleFeatures, idleStopMinutes, liveSessions, stopIdle } from "../dist/lifecycle.js";
+import { writeSessions } from "./fixtures.mjs";
 
 process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
 
@@ -19,7 +20,7 @@ const WS = "/ws/demo";
 function workspaceWith(sessions) {
   const ws = fs.mkdtempSync(path.join(os.tmpdir(), "idle-ws-"));
   fs.mkdirSync(path.join(ws, ".werkmeister"));
-  fs.writeFileSync(path.join(ws, ".werkmeister", "agent-state.json"), JSON.stringify({ sessions }));
+  writeSessions(ws, sessions);
   return ws;
 }
 

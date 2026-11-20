@@ -34,6 +34,6 @@ test("a codex workspace's status row carries harness and its hooks' agent state"
       (w) => w.name === path.basename(workspace),
     );
     assert.equal(row.harness, "codex");
-    assert.equal(row.claude.agent, "needs-you");
-    assert.equal(row.claude.question, "Ship it?");
+    assert.equal(row.workspaceState.agent.id, "needs-you");
+    assert.equal(row.workspaceState.needs[0]?.what, "Ship it?");
   }));

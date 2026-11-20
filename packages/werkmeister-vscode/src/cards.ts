@@ -137,8 +137,9 @@ function workspaceCard(n: WsNode, active: boolean): string {
     `<div class="row">${name}<span class="${colorClass(n.icon.color)}">${esc(card.state)}</span>${active ? CHIP : ""}</div>`,
     line("dim", card.meta),
     stagesBar(card.pips),
+    line("dim", card.phase),
     line(colorClass(card.activity?.color), card.activity?.text),
-    card.question ? `<blockquote>“${esc(card.question)}”</blockquote>` : "",
+    ...card.needs.map((n) => line(colorClass(TONE_COLORS.needs), n)),
     line(colorClass(TONE_COLORS.err), card.crash),
     links.map((l) => `<div>${l}</div>`).join(""),
     services.length

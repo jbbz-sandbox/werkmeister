@@ -55,6 +55,8 @@ export interface WorkspaceStatusLike extends DisplayInput {
 export interface TreeExtras {
   /** Per workspace name. Undefined until the first `getWorkspacePRs` lands; null when it failed. */
   prs?: Map<string, PrInput[]> | null;
+  /** Per workspace name, from the same fetch: what its PRs need and the phase note (SW-558). */
+  prNeeds?: Map<string, Pick<DisplayOptions, "prNeeds" | "phaseDetail">>;
   lifecycles?: Map<string, DisplayOptions["lifecycle"]>;
   now?: Date;
   /** Per compose project, from the slower resources sweep; undefined until it lands. */
@@ -68,7 +70,10 @@ export interface WsCard {
   state: string;
   /** `Thinking · 25 min ago`, with its theme colour id. */
   activity: { text: string; color: string } | null;
-  question: string | null;
+  /** `Stage 2 of 4 · spec`, `PR open · waiting on review`. */
+  phase: string | null;
+  /** The Needs you list, one `● <what> · <since> — <action>` line each, as the pane shows it. */
+  needs: string[];
   crash: string | null;
   /** Model, autonomy, `stage 2/4 implement`, CPU and memory. */
   meta: string;
@@ -411,12 +416,24 @@ function prNode(ws: WorkspaceEntryLike, pr: WorkspaceDisplay["prs"][number]): Ws
  */
 export function sessionAction(s: WorkspaceStatusLike): "start" | "pause" | "resume" | null {
   if (s.state === "paused") return "resume";
-  const agent = s.claude.agent;
-  if (agent === "idle" && !s.claude.at && !s.lastActivity && (s.stage?.index ?? 1) === 1)
+  const agent = s.workspaceState?.agent ?? { id: "idle", since: null };
+  if (agent.id === "idle" && !agent.since && !s.lastActivity && (s.stage?.index ?? 1) === 1)
     return "start";
-  if (agent === "working" || agent === "needs-you" || s.state === "up" || s.state === "partial")
+  if (
+    agent.id === "working" ||
+    agent.id === "needs-you" ||
+    s.state === "up" ||
+    s.state === "partial"
+  )
     return "pause";
   return null;
+}
+
+/** `● <what> · <since> — <action>`, `(guess)` on a reply-text guess: ui-spec § The card, Needs you. */
+function needLines(d: WorkspaceDisplay): string[] {
+  return d.needsList.map(
+    (n) => `● ${n.what}${n.guess ? " (guess)" : ""}${n.since ? ` · ${n.since}` : ""} — ${n.action}`,
+  );
 }
 
 /** The card's rows as a hover: Containers / PRs / Workflow / Agent, the question, then actions. */
@@ -450,7 +467,7 @@ function workspaceTooltip(
         `**Agent** ${escapeMd(agent)}`,
       ].join("  \n"),
     );
-    if (d.question) blocks.push(`> “${escapeMd(d.question)}”`);
+    for (const n of needLines(d)) blocks.push(`> ${escapeMd(n)}`);
     blocks.push(
       [
         commandLink(d.primary.label, PRIMARY_COMMAND[d.primary.action], ws),
@@ -489,6 +506,7 @@ function workspaceNode(
         where: "Terminal",
         now: extra.now,
         usage: status.project ? extra.usage?.[status.project] : null,
+        ...extra.prNeeds?.get(ws.name),
       })
     : null;
 
@@ -513,7 +531,7 @@ function workspaceNode(
     // The icon follows the agent (design data.js `AGENT.vs`); the container state is in the words.
     icon: d
       ? {
-          id: d.agent.codicon + (status?.claude.agent === "working" ? "~spin" : ""),
+          id: d.agent.codicon + (status?.workspaceState?.agent?.id === "working" ? "~spin" : ""),
           color: TONE_COLORS[d.agent.dot],
         }
       : { id: "question", color: TONE_COLORS.off },
@@ -525,7 +543,9 @@ function workspaceNode(
             color: TONE_COLORS[d.activity.tone],
           }
         : null,
-      question: d?.question ?? null,
+      // While building, the phase is the stage, which meta already shows.
+      phase: status?.workspaceState?.phase.id === "building" ? null : d?.phase?.text || null,
+      needs: d ? needLines(d) : [],
       crash: d?.crash?.text ?? null,
       // The card has the room the row lacked, so the stage keeps its name here.
       meta: [
@@ -541,7 +561,7 @@ function workspaceNode(
         .join(" · "),
       pips: d?.workflow.pips ?? [],
       issueId: ws.issueId,
-      needsYou: status?.claude.agent === "needs-you",
+      needsYou: status?.workspaceState?.agent?.id === "needs-you",
       action: status ? sessionAction(status) : null,
     },
     // The `:current` suffix is how the menus hide "switch to workspace" on the

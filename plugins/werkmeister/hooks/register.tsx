@@ -613,12 +613,6 @@ type StatusResult = {
     running: number;
     total: number;
     services: ServiceHealth[];
-    claude: {
-      state: string;
-      agent: "working" | "needs-you" | "done" | "idle";
-      at?: string | null;
-      question?: string | null;
-    };
     phase?: string | null;
     autonomous?: boolean;
     model?: string | null;
@@ -702,11 +696,6 @@ export function buildRows(
       running: s?.running ?? 0,
       total: s?.total ?? 0,
       services: s?.services ?? [],
-      claude: {
-        agent: s?.claude.agent ?? "idle",
-        at: s?.claude.at ?? null,
-        question: s?.claude.question ?? null,
-      },
       phase: s?.phase ?? null,
       autonomous: s?.autonomous ?? false,
       model: s?.model ?? null,
@@ -2002,7 +1991,7 @@ export const register: Register = (on) => {
     const { value: prsPoll } = await $.state.get(PRS_POLL);
     const now = new Date(await $.clock.now());
     const shown = visibleRows(rows, focus).map((r) => withLivePrs(r, prs[r.name] ?? []));
-    const needing = rows.filter((r) => r.claude.agent === "needs-you").length;
+    const needing = rows.filter((r) => r.workspaceState?.agent?.id === "needs-you").length;
     // Mobile draws no Input or Select; there the Create tab hands the form to the model.
     const els = $.ui.resolve(e);
     const Input = "Input" in els ? els.Input : null;

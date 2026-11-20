@@ -998,12 +998,7 @@ export function registerWorkspaceTools(server: McpServer): void {
                 state: z.enum(["healthy", "starting", "unhealthy", "running", "down"]),
               }),
             ),
-            claude: z.object({
-              state: z.enum(["running", "done", "failed", "idle"]),
-              agent: z.enum(["working", "needs-you", "done", "idle"]),
-              at: z.string().nullable(),
-              question: z.string().nullable(),
-            }),
+            claude: z.object({ state: z.enum(["running", "done", "failed", "idle"]) }),
             paused: z.object({ at: z.string(), containers: z.array(z.string()) }).nullable(),
             resumeNudge: z.boolean(),
             heldWakes: z.array(z.object({ session: z.string(), at: z.string() })),
@@ -1028,6 +1023,8 @@ export function registerWorkspaceTools(server: McpServer): void {
                   })
                   .passthrough(),
               ),
+              // SW-558: the card's one word (working, needs-you, done, idle), formerly `claude.agent`.
+              agent: z.object({ id: z.string(), since: z.string().nullable() }),
             }),
           }),
         ),
@@ -1045,17 +1042,18 @@ export function registerWorkspaceTools(server: McpServer): void {
           args.detail && !scope
             ? { ...(await statusSnapshot()), telepresence: await interceptsSnapshot() }
             : undefined;
-        const claudeNote = (c: { agent: string }, act?: { id: string; label: string }): string =>
-          c.agent === "idle"
+        type State = (typeof statuses)[number]["workspaceState"];
+        const claudeNote = ({ agent, activity: act }: State): string =>
+          agent.id === "idle"
             ? ""
-            : ` · claude: ${c.agent === "needs-you" ? "needs you" : c.agent}` +
+            : ` · claude: ${agent.id === "needs-you" ? "needs you" : agent.id}` +
               // What keeps it working after its turn ended: a background shell, a queue place (SW-681).
-              (act && act.id !== "idle" && act.id !== "thinking" ? ` · ${act.label}` : "");
+              (act.id !== "idle" && act.id !== "thinking" ? ` · ${act.label}` : "");
         const wsText = statuses
           .map((s) => {
             const counts = s.total ? ` (${s.running}/${s.total})` : "";
             // A held session's last state (needs you, working) is not news while paused.
-            return `${s.name}: ${s.state}${counts}${s.paused ? "" : claudeNote(s.claude, s.workspaceState?.activity)}`;
+            return `${s.name}: ${s.state}${counts}${s.paused ? "" : claudeNote(s.workspaceState)}`;
           })
           .join("\n");
         const text = `infra: ${infra.state}${infra.total ? ` (${infra.running}/${infra.total})` : ""}\n${wsText || "No workspaces."}`;

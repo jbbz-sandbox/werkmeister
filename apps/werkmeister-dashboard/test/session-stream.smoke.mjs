@@ -90,13 +90,13 @@ const { statuses } = await getWorkspaceStatuses();
 const demo = statuses.find((s) => s.name === "demo");
 assert.ok(demo, "demo workspace in status sweep");
 assert.equal(demo.claude.state, "idle", "no server-tracked turn → idle");
-assert.equal(demo.claude.agent, "done", "assistant spoke last, no question → done");
+assert.equal(demo.workspaceState.agent.id, "done", "assistant spoke last, no question → done");
 
 // Flip it: append a user line → a fresh turn → working.
 fs.appendFileSync(sessionFile, userLine("another question"));
 const { statuses: s2 } = await getWorkspaceStatuses();
 assert.equal(
-  s2.find((s) => s.name === "demo").claude.agent,
+  s2.find((s) => s.name === "demo").workspaceState.agent.id,
   "working",
   "user spoke last → working",
 );

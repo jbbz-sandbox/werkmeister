@@ -11,6 +11,26 @@ const { WorkspaceCard, ConfirmFooter, barFor, desktopLink, toolCall } = await im
   "../dist/workspace-card.js"
 );
 
+/** A status whose model says only the agent word (SW-558), plus the session's question when it asked one. */
+const ag = (id, question = null) => ({
+  workspaceState: {
+    phase: { id: "building", label: "Building", stage: null },
+    activity: { id: "idle", label: "Idle", since: null, session: null },
+    needs: question
+      ? [
+          {
+            id: "question:s",
+            kind: "question",
+            what: question,
+            since: null,
+            action: "Answer it",
+            source: "session",
+          },
+        ]
+      : [],
+    agent: { id, since: null },
+  },
+});
 const status = (over = {}) => ({
   state: "up",
   running: 2,
@@ -19,7 +39,7 @@ const status = (over = {}) => ({
     { name: "cli", state: "healthy" },
     { name: "dashboard", state: "unhealthy" },
   ],
-  claude: { agent: "working", at: null, question: null },
+  ...ag("working"),
   stage: { index: 2, total: 4, name: "spec" },
   phase: null,
   autonomous: false,
@@ -55,15 +75,15 @@ const card = ({ ws = {}, prs = [], lifecycle = null, ...props } = {}) =>
     }),
   );
 
-test("Needs you: amber card, solid chip, last question; nothing else is amber", () => {
-  const needs = card({ ws: { claude: { agent: "needs-you", at: null, question: "ICM or JIT?" } } });
+test("Needs you: amber card, solid chip, the needs list; nothing else is amber", () => {
+  const needs = card({ ws: ag("needs-you", "ICM or JIT?") });
   assert.match(needs, /class="ws-card attn"/);
   assert.match(needs, /class="chip t-needs">● Needs you</);
-  assert.match(needs, /Last question/);
+  assert.match(needs, /class="needs-list"/);
   assert.match(needs, /ICM or JIT\?/);
   for (const agent of ["working", "done", "idle"]) {
-    const html = card({ ws: { claude: { agent, at: null, question: "ICM or JIT?" } } });
-    assert.doesNotMatch(html, /attn|t-needs|Last question/, agent);
+    const html = card({ ws: ag(agent) });
+    assert.doesNotMatch(html, /attn|t-needs|needs-list/, agent);
   }
 });
 
@@ -116,7 +136,7 @@ test("loading: skeleton before status, and a PRs row that says loading", () => {
 
 test("Close out primary uses the destructive style; no 'Click again to confirm'", () => {
   const html = card({
-    ws: { claude: { agent: "done", at: null, question: null } },
+    ws: ag("done"),
     lifecycle: "shipped",
   });
   assert.match(html, /class="btn primary destructive"[^>]*>✓ Close out</);
@@ -173,25 +193,14 @@ test("barFor: primary + two secondaries, the rest in ⋯", () => {
     ["↗ Continue in Terminal", "＋ New session"],
     ["↗ Continue in Desktop", ...panels],
   ]);
-  assert.deepEqual(
-    labels(
-      barFor(
-        d({ state: "down", claude: { agent: "needs-you", at: null, question: null } }),
-        "down",
-      ),
-    ),
-    [
-      ["▶ Up", "＋ New session"],
-      ["↗ Continue in Desktop", ...panels],
-    ],
-  );
-  assert.deepEqual(
-    labels(barFor(d({ claude: { agent: "done", at: null, question: null } }, "shipped"), "up")),
-    [
-      ["↻ Restart", "⏻ Down"],
-      ["↗ Continue in Terminal", "↗ Continue in Desktop", "⏸ Pause", "＋ New session", ...panels],
-    ],
-  );
+  assert.deepEqual(labels(barFor(d({ state: "down", ...ag("needs-you", "?") }), "down")), [
+    ["▶ Up", "＋ New session"],
+    ["↗ Continue in Desktop", ...panels],
+  ]);
+  assert.deepEqual(labels(barFor(d(ag("done"), "shipped"), "up")), [
+    ["↻ Restart", "⏻ Down"],
+    ["↗ Continue in Terminal", "↗ Continue in Desktop", "⏸ Pause", "＋ New session", ...panels],
+  ]);
 });
 
 test("SW-54: Abandon goes through close-out with the reason, and never without one", () => {

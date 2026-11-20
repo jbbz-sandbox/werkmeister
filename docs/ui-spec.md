@@ -63,7 +63,7 @@ Every row reads werkmeister-core; no surface computes its own. The shapes and th
 | **Containers** | `getWorkspaceStatuses()` → `state`, `running` / `total`, and per-service health `services[] {name, state}` (`healthy` · `starting` · `unhealthy` · `running` · `down`) |
 | **PRs** | `getWorkspacePRs()` → per repo `url`, `state`, `ci` (`pass` · `running` · `fail` · null = no checks) and `failingChecks` |
 | **Workflow** | `stage {index, total, name}` (ICM) · `phase` (JIT, from the newest note) · `lifecycleOf()` for the lifecycle step |
-| **Agent** | `claude {state, agent, at, question}` (derived from `workspaceState`, kept for older readers), `lastActivity` (newest transcript's mtime), `autonomous`, `autoStop`, `model` |
+| **Agent** | `workspaceState.agent {id, since}` (`working` · `needs-you` · `done` · `idle`; SW-558), `claude.state` (a `claude-send` turn), `lastActivity` (newest transcript's mtime), `autonomous`, `autoStop`, `model` |
 | **Needs you** · activity | `workspaceState {phase, activity, needs[]}` on `WorkspaceStatus` (hooks' `.werkmeister/sessions/<id>.json`, one per session); PR items and `phaseDetail` (`waiting on review`, `behind main`) on `getWorkspacePRs()`'s `needs` |
 
 ### Badges

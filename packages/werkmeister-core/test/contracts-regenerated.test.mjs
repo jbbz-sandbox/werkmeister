@@ -9,6 +9,7 @@ import { test } from "node:test";
 
 import { readNudge } from "../dist/agent_state.js";
 import { CONTRACTS_CHANGED_NUDGE, recordRegeneratedContracts } from "../dist/workspace_init.js";
+import { writeSessions } from "./fixtures.mjs";
 
 const env = {
   ...process.env,
@@ -38,11 +39,7 @@ function workspace(sessions) {
   git(ws, "commit", "-q", "-m", "init");
   for (const f of FILES) fs.writeFileSync(path.join(ws, f), "new\n");
   fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
-  if (sessions)
-    fs.writeFileSync(
-      path.join(ws, ".werkmeister", "agent-state.json"),
-      JSON.stringify({ sessions }),
-    );
+  if (sessions) writeSessions(ws, sessions);
   return ws;
 }
 

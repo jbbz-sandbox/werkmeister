@@ -20,6 +20,27 @@ const ws = (name, over = {}) => ({
   ...over,
 });
 
+/** The model's agent word (SW-558), plus the session's question when it asked one. */
+const ag = (id, since = null, question = null) => ({
+  workspaceState: {
+    phase: { id: "building", label: "Building", stage: null },
+    activity: { id: "idle", label: "Idle", since: null, session: null },
+    needs: question
+      ? [
+          {
+            id: "question:s",
+            kind: "question",
+            what: question,
+            since,
+            action: "Answer it",
+            source: "session",
+          },
+        ]
+      : [],
+    agent: { id, since },
+  },
+});
+
 const st = (name, over = {}) => ({
   name,
   project: `werkmeister-${name}`,
@@ -29,7 +50,8 @@ const st = (name, over = {}) => ({
   slot: null,
   ports: null,
   services: [],
-  claude: { state: null, agent: "idle", at: null, question: null },
+  claude: { state: null },
+  ...ag("idle", null, null),
   stage: null,
   phase: null,
   autonomous: false,
@@ -420,7 +442,8 @@ function sample() {
         { name: "cli", state: "down" },
         { name: "stellwerk-dashboard", state: "down" },
       ],
-      claude: { state: "waiting", agent: "needs-you", at: ago(12 * 60), question: "ICM or JIT?" },
+      claude: { state: "waiting" },
+      ...ag("needs-you", ago(12 * 60), "ICM or JIT?"),
       stage: { index: 2, total: 4, name: "findings" },
     }),
     st(names[206], {
@@ -431,7 +454,8 @@ function sample() {
         { name: "cli", state: "healthy" },
         { name: "stellwerk-dashboard", state: "healthy" },
       ],
-      claude: { state: "busy", agent: "working", at: null, question: null },
+      claude: { state: "busy" },
+      ...ag("working", null, null),
       lastActivity: ago(40),
       stage: { index: 4, total: 5, name: "implement" },
       autonomous: true,
@@ -444,7 +468,8 @@ function sample() {
         { name: "cli", state: "healthy" },
         { name: "stellwerk-dashboard", state: "unhealthy" },
       ],
-      claude: { state: null, agent: "done", at: ago(2 * 86400), question: null },
+      claude: { state: null },
+      ...ag("done", ago(2 * 86400), null),
     }),
     st("bwell", { phase: "implement" }),
   ];
@@ -499,7 +524,7 @@ test("the tree matches VSCode Tree.dc.html for the sample data", () => {
   assert.deepEqual(svc.icon, { id: "warning", color: "errorForeground" });
 });
 
-test("the tooltip carries the card's rows, the question and the primary action", () => {
+test("the tooltip carries the card's rows, the needs list and the primary action", () => {
   const n = sample();
   const tip = n[143].tooltip;
   for (const row of ["**Containers**", "**PRs**", "**Workflow**", "**Agent**"]) {
@@ -507,12 +532,12 @@ test("the tooltip carries the card's rows, the question and the primary action",
   }
   assert.match(tip, /\*\*Workflow\*\* Stage 2 of 4 · findings/);
   assert.match(tip, /asked a question 12 min ago/);
-  assert.match(tip, /> “ICM or JIT\?”/);
+  assert.match(tip, /> ● ICM or JIT\? · 12 min ago — Answer it/);
   assert.match(tip, /\[↗ Continue in Terminal\]\(command:sandbox\.continue\?/);
   assert.doesNotMatch(tip, /Autonomous/);
 
   assert.match(n[206].tooltip, /◌ Working · ⚙ Autonomous · last activity 40 s ago/);
-  assert.doesNotMatch(n[206].tooltip, /> “/, "the question is shown only for Needs you");
+  assert.doesNotMatch(n[206].tooltip, /> ●/, "needs are listed only when there are some");
   assert.match(n[151].tooltip, /\[✓ Close out\]\(command:sandbox\.closeOut\?/);
   assert.match(n.bwell.tooltip, /\[▶ Up\]\(command:sandbox\.up\?/);
   assert.match(n.bwell.tooltip, /no issue/);
@@ -551,7 +576,8 @@ test("user text cannot inject Markdown into the tooltip", () => {
     [ws("a", { labels: ["[x](command:evil)"] })],
     [
       st("a", {
-        claude: { state: null, agent: "needs-you", at: null, question: "*bold* [y](http://z)" },
+        claude: { state: null },
+        ...ag("needs-you", null, "*bold* [y](http://z)"),
       }),
     ],
     null,
@@ -673,4 +699,40 @@ test("prFilesKey: changes when a PR file gains a url or a new status, so the vie
   ]);
   assert.equal(prFilesKey(draft), prFilesKey(new Map(draft)));
   assert.notEqual(prFilesKey(draft), prFilesKey(open));
+});
+
+// SW-558: the card lists every need, the PR poll's too, and the phase past building, as the pane does.
+test("card: the phase, the activity and every need, PR items included", () => {
+  const need = (id, what, source = "gate") => ({
+    id,
+    kind: "gate",
+    what,
+    since: null,
+    action: "Read it",
+    source,
+  });
+  const state = {
+    phase: { id: "pr-open", label: "PR open", stage: null },
+    activity: { id: "testing", label: "Running tests", since: null, session: "s" },
+    needs: [need("gate:a", "Approve a.md"), need("question:s", "Ship?", "text")],
+    agent: { id: "needs-you", since: null },
+  };
+  const prNeeds = new Map([
+    ["a", { prNeeds: [need("ci-failed:r", "CI failed on r#1", "pr")], phaseDetail: "behind main" }],
+  ]);
+  const [node] = buildTree([ws("a")], [st("a", { workspaceState: state })], null, [], { prNeeds });
+  assert.equal(node.card.phase, "PR open · behind main");
+  assert.equal(node.card.activity.text, "Running tests");
+  assert.deepEqual(node.card.needs, [
+    "● Approve a.md — Read it",
+    "● Ship? (guess) — Read it",
+    "● CI failed on r#1 — Read it",
+  ]);
+  assert.equal(node.card.needsYou, true);
+  const building = {
+    ...state,
+    phase: { id: "building", label: "Stage 2 of 4 · spec", stage: null },
+  };
+  const [b] = buildTree([ws("a")], [st("a", { workspaceState: building })], null, []);
+  assert.equal(b.card.phase, null, "while building, meta already shows the stage");
 });
