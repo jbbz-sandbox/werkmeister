@@ -12,6 +12,8 @@
   "files": [
     "dist",
     "!dist/*.tsbuildinfo",
+    "!dist/fixture_fakes.*",
+    "!dist/fixture_workspace.*",
     "README.md",
     "CHANGELOG.md",
     "LICENSE",
@@ -26,6 +28,7 @@
   },
   "main": "dist/sandbox.js",
   "types": "dist/sandbox.d.ts",
+  "//exports": "SW-714: ./fixture_fakes and ./fixture_workspace are test scaffolding. files leaves them out of the tarball, so they fail to import from the published package; the entries stay because the CLI bundles them from this monorepo. No published module may import them: test/pack-files.test.mjs checks.",
   "exports": {
     ".": "./dist/sandbox.js",
     "./agent_gen": "./dist/agent_gen.js",

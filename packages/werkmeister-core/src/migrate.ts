@@ -27,7 +27,6 @@ import {
 } from "./config.js";
 import { docker } from "./docker.js";
 import { DOT_DIR, dotDir } from "./dot_dir.js";
-import { writeFixtureWrapper } from "./fixture_workspace.js";
 import {
   ensureZshenvSources,
   ensureZshrcCompletion,
@@ -60,7 +59,12 @@ import {
 } from "./machine_setup.js";
 import { resolveModel } from "./model_tiers.js";
 import { syncRegistry } from "./registry_sync.js";
-import { TEMP_HOME_SCRIPT, tempHomeWrapper, writeTempHomeWrapper } from "./temp_home.js";
+import {
+  TEMP_HOME_SCRIPT,
+  tempHomeWrapper,
+  writeFixtureWrapper,
+  writeTempHomeWrapper,
+} from "./temp_home.js";
 import { writeWorkspaceConfig } from "./workspace_init.js";
 import { readModel, readWorkspaceField } from "./workspace_prompts.js";
 

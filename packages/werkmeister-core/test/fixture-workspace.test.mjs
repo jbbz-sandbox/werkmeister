@@ -298,7 +298,7 @@ test("callTool still calls the daemon when the build-header lookup throws", asyn
 // SW-548: inside a werkmeister container the worktree is mounted at /app and at its host path, but its
 // node_modules is a volume at /app/node_modules only, so the host-path CLI fails ERR_MODULE_NOT_FOUND.
 test("with-fixture-workspace runs /app's CLI when /app is its worktree, and says why on a host with no node_modules (SW-548)", async () => {
-  const { writeFixtureWrapper } = await import("../dist/fixture_workspace.js");
+  const { writeFixtureWrapper } = await import("../dist/temp_home.js");
   const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fixture-wrapper-")));
   try {
     const ws = path.join(tmp, "ws");
