@@ -52,6 +52,7 @@ base: main
 status: draft            # draft | approved | open | merged | shipped | closed | abandoned
 url:                     # written by werkmeister pr open
 merge_sha:               # written by werkmeister pr status
+release_packages:        # written by werkmeister pr status at merge (changesets repos only): the public packages the PR's release entries name; shipped needs a <pkg>@* tag for each, else "partially released"
 release:                 # release tag that shipped it, written by werkmeister pr status; \`none\` for a merged skip_release PR with no changeset (changesets repos), else set it yourself for a change that ships nothing
 reason: ""              # required for closed / abandoned
 skip_tests: {}           # <service>: <reason> — for a service with no test command or no running container (a service that has no tests says \`test: none: <reason>\` in its registry entry instead); tests: <reason> when no service maps to the changed files

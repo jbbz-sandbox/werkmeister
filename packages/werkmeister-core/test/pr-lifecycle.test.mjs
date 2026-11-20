@@ -2656,6 +2656,74 @@ test("refreshPrStatus: ship: merge ships on merge", async () => {
   }
 });
 
+// SW-712: a changesets release can publish one package and fail another; shipped needs them all.
+test("refreshPrStatus: shipped only once every public package its changesets name is tagged (SW-712)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) },
+  });
+  try {
+    const view = {
+      state: "MERGED",
+      mergeCommit: { oid: "abc123" },
+      headRefOid: "h1",
+      files: [{ path: ".changeset/a.md" }, { path: ".changeset/README.md" }, { path: "src/x.ts" }],
+    };
+    const changeset = '---\n"app": patch\n"app-core": minor\napp-ui: patch\n---\n\nfix\n';
+    await refreshPrStatus(
+      ws,
+      deps([
+        [/^gh pr view/, { stdout: JSON.stringify(view) }],
+        [/show h1:\.changeset\/a\.md$/, { stdout: changeset }],
+        [/grep -l -F "name": "app-ui" h1/, { stdout: "h1:packages/ui/package.json\n" }],
+        [/show h1:packages\/ui\/package\.json$/, { stdout: '{"name": "app-ui", "private": true}' }],
+        [/tag --contains/, { stdout: "" }],
+      ]),
+    );
+    assert.equal(
+      readPrFiles(ws)[0].fm.release_packages,
+      "app, app-core",
+      "private app-ui left out",
+    );
+    // A monorepo: changesets tags <pkg>@<version>, and release_tag names the lead package.
+    const mono = { repos: { app: { ...REGISTRY.repos.app, release_tag: "app@*" } } };
+    const tags = (core) =>
+      deps(
+        [
+          [/tag --contains abc123 --list app@\*/, { stdout: "app@1.2.0\n" }],
+          [/tag --contains abc123 --list app-core@\*/, { stdout: core }],
+        ],
+        mono,
+      );
+    const partial = await refreshPrStatus(ws, tags(""));
+    assert.equal(readPrFiles(ws)[0].fm.status, "merged", partial.lines.join("\n"));
+    assert.ok(
+      partial.lines.includes("app: partially released: app-core missing"),
+      partial.lines.join("\n"),
+    );
+    const full = await refreshPrStatus(ws, tags("app-core@1.2.0\n"));
+    assert.equal(readPrFiles(ws)[0].fm.status, "shipped", full.lines.join("\n"));
+    assert.equal(readPrFiles(ws)[0].fm.release, "app@1.2.0");
+  } finally {
+    clean(ws);
+  }
+});
+
+test("refreshPrStatus: a single-package changesets repo (v* tags) ships on its v* tag, release_packages or not (SW-712)", async () => {
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({ status: "merged", extra: "merge_sha: abc123\nrelease_packages: app\n" }),
+    },
+  });
+  try {
+    const d = deps([[/tag --contains abc123 --list v\*/, { stdout: "v1.2.0\n" }]]);
+    const r = await refreshPrStatus(ws, d);
+    assert.equal(readPrFiles(ws)[0].fm.status, "shipped", r.lines.join("\n"));
+    assert.ok(!d.calls.some((c) => c.includes("--list app@")), "no <pkg>@* tag to wait for");
+  } finally {
+    clean(ws);
+  }
+});
+
 // --- SW-340: sync the machine registry when a merged PR changes its repo's fragment ----------
 const FRAGMENT_CHANGED = [{ path: ".werkmeister/services.yaml" }, { path: "src/server.ts" }];
 const mergedWith = (files) => [
