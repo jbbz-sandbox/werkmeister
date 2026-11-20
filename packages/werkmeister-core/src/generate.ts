@@ -581,6 +581,26 @@ export function onDemandServices(
 }
 
 /**
+ * SW-942: *localServices* plus the checked-out services they `depends_on`, transitively.
+ * Compose refuses a non-profiled service that depends on a profiled one, so such a
+ * dependency is local: it renders, gets its env file and starts with them.
+ */
+function withLocalDeps(
+  localServices: string[],
+  servicesConfig: Record<string, unknown>,
+  workspaceRoot: string,
+): string[] {
+  const candidates = onDemandServices(servicesConfig, localServices, workspaceRoot);
+  const out = [...localServices];
+  for (let i = 0; i < out.length; i++) {
+    const def = servicesConfig[out[i] as string];
+    const deps = isDict(def) && Array.isArray(def["depends_on"]) ? def["depends_on"] : [];
+    for (const dep of deps) if (candidates.includes(dep) && !out.includes(dep)) out.push(dep);
+  }
+  return out;
+}
+
+/**
  * SW-110: two checked-out repos whose fragments share a `node_modules_volume`
  * name would mount one volume, and one repo's install breaks the other's tree.
  * On such a clash the name gets the repo (`<repo>-<vol>`); otherwise it is
@@ -624,7 +644,7 @@ export function repoScopedNodeModules(
 function renderFeatureCompose(
   feature: string,
   slot: number,
-  localServices: string[],
+  requested: string[],
   config: RegistryConfig | null,
   workspaceOverride: string | null,
   source: string,
@@ -643,6 +663,7 @@ function renderFeatureCompose(
   );
   const devLinks = loadDevLinks(workspaceRoot);
   const header = composeHeader(feature, source);
+  const localServices = withLocalDeps(requested, servicesConfig, workspaceRoot);
 
   // Try template first
   const jinjaEnv = getNunjucksEnv();
@@ -1116,12 +1137,14 @@ function avoidComposeEnvShadowing(
 export function generateFeatureEnv(
   feature: string,
   slot: number,
-  localServices: string[],
+  requested: string[],
   config: RegistryConfig | null = null,
   workspaceOverride: string | null = null,
 ): string {
   const [servicesConfig, portsConfig] = resolveServicesAndPorts(config);
   const workspaceRoot = resolveWorkspace(feature, workspaceOverride);
+  // The URL vars must point where compose runs each dependency (renderFeatureCompose).
+  const localServices = withLocalDeps(requested, servicesConfig, workspaceRoot);
   fs.mkdirSync(workspaceRoot, { recursive: true });
   const outPath = path.join(workspaceRoot, ".env");
   const legacyEnv = path.join(workspaceRoot, "docker-compose.env");
@@ -1189,14 +1212,14 @@ export function generateFeatureEnv(
  */
 export function writeServiceSecretEnvs(
   workspaceRoot: string,
-  localServices: string[],
+  requested: string[],
   servicesConfig: ServicesConfig,
 ): void {
   ensureGeneratedIgnored(workspaceRoot);
   const { byService } = resolveSecrets(
     loadSecrets(getSecretsPath()),
     servicesConfig,
-    localServices,
+    withLocalDeps(requested, servicesConfig, workspaceRoot),
     loadWorkspaceEnvVars(workspaceRoot),
   );
   for (const [svcName, secrets] of Object.entries(byService)) {
