@@ -31,6 +31,7 @@ import {
   daemonDownNode,
   inTerminal,
   LEGEND_NODE,
+  prFilesKey,
   type WsNode,
 } from "./build-tree.js";
 import { CARD_COMMANDS, CARD_CSS, findNode, renderCards } from "./cards.js";
@@ -108,6 +109,8 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
   /** Undefined until the first fetch lands; null when it failed (the card's "PRs unavailable"). */
   private prs: Map<string, PrInput[]> | null | undefined;
   private prsRequested = false;
+  /** The last poll's {@link prFilesKey}: a change refetches PRs (SW-818). */
+  private prFiles: string | undefined;
   private legend = false;
   /** Undefined until the first sweep lands; null when it failed. */
   private resources: WorkspaceResources | null | undefined;
@@ -123,8 +126,8 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
   }
 
   /**
-   * One `gh pr list` per repo worktree, so this runs on first load and on
-   * ↻ Refresh PRs only, never on the 5s poll.
+   * One `gh pr list` per repo worktree, so this runs on first load, on ↻ Refresh PRs and when a
+   * PR file changes (SW-818), never on every 5s poll.
    */
   async refreshPrs(): Promise<void> {
     this.prsRequested = true;
@@ -221,6 +224,11 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
         callTool<{ statuses: WorkspaceStatus[] }>("status").then((r) => r.data),
         callTool<InterceptsSnapshot>("intercepts").then((r) => interceptsFromSnapshot(r.data)),
       ]);
+      // Files only, so cheap enough for every poll.
+      const life = new Map(workspaces.workspaces.map((w) => [w.name, lifecycleOf(w.path)]));
+      const prFiles = prFilesKey(new Map([...life].map(([name, l]) => [name, l.prs])));
+      if (this.prFiles !== undefined && prFiles !== this.prFiles) void this.refreshPrs();
+      this.prFiles = prFiles;
       this.roots = buildTree(
         workspaces.workspaces,
         statuses.statuses,
@@ -228,10 +236,7 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
         currentFolderPaths(),
         {
           prs: this.prs,
-          // Files only, so cheap enough for every poll.
-          lifecycles: new Map(
-            workspaces.workspaces.map((w) => [w.name, lifecycleOf(w.path).state]),
-          ),
+          lifecycles: new Map([...life].map(([name, l]) => [name, l.state])),
           usage: this.resources?.projects,
           host: this.resources === undefined ? undefined : (this.resources?.host ?? null),
         },
