@@ -11,7 +11,13 @@ import { test } from "node:test";
 import YAML from "yaml";
 
 import { loadServices } from "../dist/config.js";
-import { GATE_COMPOSE_FILE, generateFeatureCompose, renderGateCompose } from "../dist/generate.js";
+import {
+  GATE_COMPOSE_FILE,
+  generateFeatureCompose,
+  generateFeatureEnv,
+  renderGateCompose,
+  writeServiceSecretEnvs,
+} from "../dist/generate.js";
 import { pinWerkmeisterRoot, withSandboxHome } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
@@ -74,4 +80,69 @@ test("renderGateCompose names only the services a branch's settings change (SW-1
   } finally {
     fs.rmSync(ws, { recursive: true, force: true });
   }
+});
+
+// SW-942: compose refuses a non-profiled service that depends_on a profiled one, so a local
+// service's checked-out dependency renders and starts with it, and an on-demand service keeps
+// its on-demand dependency, which `up -d <svc>` (the gate, `--service`) then starts.
+const DEPENDS = `services:
+  backend:
+    type: api
+    repo: demo-repo
+    port_offset: 2
+    k8s_forward_port: 9052
+  frontend:
+    type: web
+    repo: demo-repo
+    port_offset: 3
+    depends_on: [backend]
+  cluster-only:
+    type: api
+    port_offset: 4
+`;
+
+async function renderWith(services, local) {
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-od-ws-"));
+  fs.mkdirSync(path.join(ws, "demo-repo"));
+  try {
+    return await withSandboxHome(
+      async () => {
+        const compose = YAML.parse(
+          fs.readFileSync(generateFeatureCompose("f", 1, local, null, ws), "utf8"),
+        );
+        writeServiceSecretEnvs(ws, local, loadServices());
+        generateFeatureEnv("f", 1, local, null, ws);
+        const dotenv = fs.readFileSync(path.join(ws, ".env"), "utf8");
+        const envFiles = fs.readdirSync(ws).filter((f) => f.startsWith(".env."));
+        return { compose, envFiles, dotenv };
+      },
+      { services },
+    );
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+}
+
+test("a local service's checked-out dependency is local too, in depends_on and with its env file (SW-942)", async () => {
+  const { compose, envFiles, dotenv } = await renderWith(DEPENDS, ["frontend"]);
+  assert.equal(compose.services.backend.profiles, undefined);
+  assert.ok(compose.services.frontend.depends_on?.backend, "frontend lost its backend dependency");
+  assert.deepEqual(compose.services.backend.env_file, [".env", ".env.backend"]);
+  // .env points the dependency at its container, not at the k8s forward.
+  assert.match(dotenv, /^BACKEND_URL=http:\/\/backend:3000$/m);
+  assert.deepEqual(envFiles.sort(), [".env.backend", ".env.frontend"]);
+});
+
+test("an on-demand service keeps its on-demand dependency (SW-942)", async () => {
+  const { compose } = await renderWith(DEPENDS, []);
+  assert.deepEqual(compose.services.frontend.profiles, ["on-demand"]);
+  assert.deepEqual(compose.services.backend.profiles, ["on-demand"]);
+  assert.ok(compose.services.frontend.depends_on?.backend, "frontend lost its backend dependency");
+});
+
+test("a dependency with no checked-out repo stays out of compose (SW-942)", async () => {
+  const services = DEPENDS.replace("depends_on: [backend]", "depends_on: [cluster-only]");
+  const { compose } = await renderWith(services, ["frontend"]);
+  assert.equal(compose.services["cluster-only"], undefined);
+  assert.equal(compose.services.frontend.depends_on, undefined);
 });

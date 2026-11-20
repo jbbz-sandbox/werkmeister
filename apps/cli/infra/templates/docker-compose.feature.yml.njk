@@ -273,7 +273,7 @@ services:{% if not local_services | length %} {}{% endif %}
       start_period: 120s
 {% endif %}
 {% set local_svc_names = [] %}
-{% for local_svc in local_services | rejectattr('on_demand') %}
+{% for local_svc in local_services %}
 {% do local_svc_names.append(local_svc.name) %}
 {% endfor %}
 {% set svc_deps = [] %}
