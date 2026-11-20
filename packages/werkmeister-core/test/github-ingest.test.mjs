@@ -5,7 +5,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { parse } from "yaml";
 import { githubIngestConfig, parseIngestMessage } from "../dist/github_ingest.js";
+import { save } from "../dist/global_config.js";
 
 const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ingest-cfg-")), "config.yaml");
 process.env.WERKMEISTER_CONFIG_FILE = file;
@@ -61,4 +63,37 @@ test("parseIngestMessage: good, bad JSON, missing fields", () => {
   assert.equal(parseIngestMessage('{"repo":"o/app"}'), null);
   assert.equal(parseIngestMessage('{"delivery":"d1"}'), null);
   assert.equal(parseIngestMessage("null"), null);
+});
+
+// SW-759: the AWS key pair lives in secrets.env (next to config.yaml), never in config.yaml.
+test("githubIngestConfig: reads the key pair from secrets.env", (t) => {
+  const secrets = path.join(path.dirname(file), "secrets.env");
+  t.after(() => fs.rmSync(secrets, { force: true }));
+  fs.writeFileSync(
+    file,
+    "github_ingest:\n  queue_url: https://sqs.us-east-1.amazonaws.com/1/q\n  region: us-east-1\n",
+  );
+  fs.writeFileSync(
+    secrets,
+    "GITHUB_INGEST_ACCESS_KEY_ID=AKIASEC\nGITHUB_INGEST_SECRET_ACCESS_KEY=seksec\n",
+  );
+  assert.equal(githubIngestConfig()?.accessKeyId, "AKIASEC");
+  assert.equal(githubIngestConfig()?.secretAccessKey, "seksec");
+});
+
+test("save moves the key pair out of config.yaml; a key already in secrets.env wins", (t) => {
+  const secrets = path.join(path.dirname(file), "secrets.env");
+  t.after(() => fs.rmSync(secrets, { force: true }));
+  fs.writeFileSync(secrets, "OTHER=keep\nGITHUB_INGEST_ACCESS_KEY_ID=AKIAROTATED\n");
+  save(parse(BLOCK));
+  const yaml = fs.readFileSync(file, "utf8");
+  assert.doesNotMatch(yaml, /AKIAX|sek|access_key/);
+  assert.match(yaml, /queue_url/);
+  assert.equal(
+    fs.readFileSync(secrets, "utf8"),
+    "OTHER=keep\nGITHUB_INGEST_ACCESS_KEY_ID=AKIAROTATED\nGITHUB_INGEST_SECRET_ACCESS_KEY=sek\n",
+  );
+  assert.equal(fs.statSync(secrets).mode & 0o777, 0o600);
+  assert.equal(githubIngestConfig()?.secretAccessKey, "sek");
+  assert.equal(githubIngestConfig()?.accessKeyId, "AKIAROTATED");
 });
