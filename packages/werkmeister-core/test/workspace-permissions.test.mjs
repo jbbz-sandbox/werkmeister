@@ -13,10 +13,12 @@ import {
   AUTONOMOUS_RULES,
   autonomousRules,
   buildAllowRules,
+  COMMIT_RULES,
   READ_ONLY_GIT_RULES,
   removeWorkspacePermissions,
   workspaceAllowRules,
   workspaceAskRules,
+  workspaceDenyRules,
   writeWorkspacePermissions,
 } from "../dist/harness/claude/hooks_gen.js";
 
@@ -122,7 +124,12 @@ for (const [name, body] of [
 test("buildAllowRules: container form + bare prefix per command, then git; no rule invented", () => {
   assert.deepEqual(
     buildAllowRules("feat", ["svc", "nocmd"], { svc: { test: "npm test" }, nocmd: {} }, {}),
-    ["Bash(docker exec feat-svc sh -c 'npm test')", "Bash(npm test:*)", ...READ_ONLY_GIT_RULES],
+    [
+      "Bash(docker exec feat-svc sh -c 'npm test')",
+      "Bash(npm test:*)",
+      ...READ_ONLY_GIT_RULES,
+      ...COMMIT_RULES,
+    ],
   );
 });
 
@@ -188,7 +195,7 @@ test("buildAllowRules: an archetype's {service} template is expanded", () => {
 });
 
 test("workspaceAllowRules: no .env means the git rules alone, without the registry", () => {
-  assert.deepEqual(workspaceAllowRules(workspace()), READ_ONLY_GIT_RULES);
+  assert.deepEqual(workspaceAllowRules(workspace()), [...READ_ONLY_GIT_RULES, ...COMMIT_RULES]);
 });
 
 test("workspaceAllowRules: a werkmeister worktree gets the wrapped built-CLI rule, no .env needed (SW-172)", () => {
@@ -212,7 +219,7 @@ test("jit refresh writes its hooks and the same allow rules", async () => {
   const settings = readSettings(root);
   assert.ok(settings.hooks.SessionStart, "JIT SessionStart hook");
   assert.equal(settings.hooks.PreToolUse.length, 3, "standards gate + PR guard + agent state");
-  assert.deepEqual(settings.permissions.allow, READ_ONLY_GIT_RULES);
+  assert.deepEqual(settings.permissions.allow, [...READ_ONLY_GIT_RULES, ...COMMIT_RULES]);
 });
 
 function setAutonomous(root, on) {
@@ -474,8 +481,9 @@ test("autonomous adds the headless rules on icm refresh, keeps the PR guard, and
   assert.deepEqual(ask, []);
   // SW-807: an icm refresh keeps the stage grants once autonomous is off.
   const allow = workspaceAllowRules(root, false);
-  assert.deepEqual(settings.permissions, { allow: ["Bash(git:*)", ...allow] });
-  assert.deepEqual(readRecord(root), { allow });
+  const deny = workspaceDenyRules(root, false);
+  assert.deepEqual(settings.permissions, { allow: ["Bash(git:*)", ...allow], deny });
+  assert.deepEqual(readRecord(root), { allow, deny });
 });
 
 // The rules before narrowing, as a record from an earlier release holds them.
@@ -761,10 +769,10 @@ test("SW-660: only services.yaml's commands run through the wrapper; validate: a
   for (const blanket of [`Bash(${W660}:*)`, `Bash(${W660} *)`, `Bash(${W660} --no-wait:*)`])
     assert.ok(!rules.includes(blanket), blanket);
   assert.ok(!rules.some((r) => r.includes("sh -c:*")), "no sh -c prefix rule");
-  assert.deepEqual(
-    buildAllowRules("", [], { prose: services.prose }, {}, W660, [], ["prose"]),
-    READ_ONLY_GIT_RULES,
-  );
+  assert.deepEqual(buildAllowRules("", [], { prose: services.prose }, {}, W660, [], ["prose"]), [
+    ...READ_ONLY_GIT_RULES,
+    ...COMMIT_RULES,
+  ]);
 });
 
 test("SW-660: the headless wake passes the workspace's rules, lint and sh -c forms included", async () => {
@@ -870,7 +878,7 @@ test("SW-807: an ICM run pre-approves only its own issue's start and view, exact
   fs.mkdirSync(dotDir(root), { recursive: true });
   const yml = (t) => fs.writeFileSync(path.join(dotDir(root), "workspace.yml"), t);
   yml("context_strategy: jit\nwork_type: bugfix\n");
-  assert.deepEqual(workspaceAllowRules(root, false), READ_ONLY_GIT_RULES);
+  assert.deepEqual(workspaceAllowRules(root, false), [...READ_ONLY_GIT_RULES, ...COMMIT_RULES]);
   yml('context_strategy: "icm "\nwork_type: bugfix\n');
   // SW-717: pr push refuses anything but the workspace's own clean, merge-free branch with a live lease.
   const grants = ["issue start", "issue view", "pr push:*"].flatMap((g) => [
@@ -878,7 +886,10 @@ test("SW-807: an ICM run pre-approves only its own issue's start and view, exact
     `Bash(w9r ${g})`,
   ]);
   const interactive = workspaceAllowRules(root, false);
-  assert.deepEqual(new Set(interactive), new Set([...READ_ONLY_GIT_RULES, ...grants]));
+  assert.deepEqual(
+    new Set(interactive),
+    new Set([...READ_ONLY_GIT_RULES, ...grants, ...COMMIT_RULES]),
+  );
   // Review of SW-807: each of these reaches shared infra, another workspace or the real ~/.werkmeister.
   for (const cmd of [
     "feature up",
@@ -1381,7 +1392,8 @@ test("SW-626: git is an allow-list; `-C` reaches only the workspace's own repos"
 
 // SW-893: a commit rule that reads no file. git refuses -m beside -F/--file/-c/-C, and --fixup beside -F
 // (git 2.53 probe); `--amend --no-edit` and `--squash` take -F, so they are exact or absent.
-test("SW-893: git commit takes its message on the line, own repos only", async () => {
+// SW-912: an interactive workspace gets the same commit rules, so a commit never rests on the classifier.
+test("SW-893, SW-912: git commit takes its message on the line, in both modes, own repos only", async () => {
   const { withSandboxHome } = await import("./fixtures.mjs");
   await withSandboxHome(async () => {
     const root = workspace();
@@ -1389,7 +1401,7 @@ test("SW-893: git commit takes its message on the line, own repos only", async (
     fs.mkdirSync(path.join(root, "repo", ".git"), { recursive: true });
     fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\n");
     const repo = path.join(root, "repo");
-    for (const autonomous of [true]) {
+    for (const autonomous of [true, false]) {
       const allow = workspaceAllowRules(root, autonomous);
       for (const cmd of [
         'git commit -q -m "SW-893 fix"',
@@ -1419,5 +1431,6 @@ test("SW-893: git commit takes its message on the line, own repos only", async (
     "git add --pathspec-from-file=/Users/x/.ssh/id_rsa",
     "git -C /ws/repo restore --pathspec-fr=/Users/x/.ssh/id_rsa",
   ])
-    assert.ok(claudeDenies(AUTONOMOUS_DENY, cmd), cmd);
+    for (const deny of [AUTONOMOUS_DENY, workspaceDenyRules("/ws", false)])
+      assert.ok(claudeDenies(deny, cmd), cmd);
 });

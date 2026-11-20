@@ -18,6 +18,10 @@ export const cli = (rule: string) => CLI_NAMES.map((name) => `Bash(${name} ${rul
 // interactively (`close-out`, `workspace-pr`) are left unallowed, not denied.
 // shortcut: prefix rules — `npm install foo -g`, an agent-edited test script or a repo's own git
 // hook still runs (SW-522); a runner without host mounts is the upgrade if runs need a hard boundary.
+// SW-893: add/commit/restore print a `--pathspec-from-file` file's lines in their error; `--pathspec-fr` is its
+// shortest spelling. SW-912: interactive workspaces get it too, beside their commit rules.
+export const PATHSPEC_DENY = "Bash(git * --pathspec-fr*)";
+
 export const AUTONOMOUS_DENY = [
   // SW-560: the git subcommands a run needs are allowed, and an alias, pager, fsmonitor or hook set through config, or a
   // git-* binary on --exec-path, runs any command. No `* -c *`/`* config *` forms: deny beats allow, and they
@@ -33,8 +37,7 @@ export const AUTONOMOUS_DENY = [
   // `--output`, and `diff --no-index` reads any. git takes no abbreviation of either; `grep -O` and fetch's
   // `--upload-pack` do (`-lO`, `--open`, `--upl`), so grep isn't allowed and fetch is exact instead.
   ...["--output", "--no-index"].map((flag) => `Bash(git * ${flag}*)`),
-  // SW-893: add/commit/restore print a `--pathspec-from-file` file's lines in their error; `--pathspec-fr` is its shortest spelling.
-  "Bash(git * --pathspec-fr*)",
+  PATHSPEC_DENY,
   // SW-521: a registered test chain's bare `node --test` segment (buildAllowRules) runs any file
   // with the real HOME; npx and pnpm exec segments name their tool, so they stay allowed.
   "Bash(node:*)",
