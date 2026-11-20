@@ -2724,6 +2724,67 @@ test("refreshPrStatus: a single-package changesets repo (v* tags) ships on its v
   }
 });
 
+// SW-943: a fixup the person never force-pushed must not ship as done.
+test("refreshPrStatus: local commits the PR head lacks warn while open and hold shipped after merge (SW-943)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) },
+  });
+  const shipOnMerge = { repos: { app: { ...REGISTRY.repos.app, ship: "merge" } } };
+  const onBranch = [/symbolic-ref --short HEAD$/, { stdout: "me/ws\n" }];
+  const ahead = (n) => [
+    /rev-list --count --no-merges h1\.\.HEAD \^origin\/main$/,
+    { stdout: `${n}\n` },
+  ];
+  try {
+    const open = await refreshPrStatus(
+      ws,
+      deps(
+        [
+          [/^gh pr view/, { stdout: JSON.stringify({ state: "OPEN", headRefOid: "h1" }) }],
+          onBranch,
+          ahead(2),
+        ],
+        shipOnMerge,
+      ),
+    );
+    assert.ok(
+      open.lines.some((l) => /^app: warning: me\/ws has 2 local commits PR head h1 lacks/.test(l)),
+      open.lines.join("\n"),
+    );
+    const merged = await refreshPrStatus(
+      ws,
+      deps(
+        [
+          [
+            /^gh pr view/,
+            {
+              stdout: JSON.stringify({
+                state: "MERGED",
+                mergeCommit: { oid: "abc" },
+                headRefOid: "h1",
+              }),
+            },
+          ],
+          onBranch,
+          ahead(2),
+        ],
+        shipOnMerge,
+      ),
+    );
+    const [f] = readPrFiles(ws);
+    assert.equal(f.fm.status, "merged", merged.lines.join("\n"));
+    assert.equal(f.fm.head_sha, "h1");
+    assert.ok(
+      merged.lines.some((l) => /^app: not shipped yet: me\/ws has 2 local commits/.test(l)),
+      merged.lines.join("\n"),
+    );
+    await refreshPrStatus(ws, deps([onBranch, ahead(0)], shipOnMerge));
+    assert.equal(readPrFiles(ws)[0].fm.status, "shipped");
+  } finally {
+    clean(ws);
+  }
+});
+
 // --- SW-340: sync the machine registry when a merged PR changes its repo's fragment ----------
 const FRAGMENT_CHANGED = [{ path: ".werkmeister/services.yaml" }, { path: "src/server.ts" }];
 const mergedWith = (files) => [

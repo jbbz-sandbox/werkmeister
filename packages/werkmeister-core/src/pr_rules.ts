@@ -52,6 +52,7 @@ base: main
 status: draft            # draft | approved | open | merged | shipped | closed | abandoned
 url:                     # written by werkmeister pr open
 merge_sha:               # written by werkmeister pr status
+head_sha:                # the PR head at merge, written by werkmeister pr status; while the worktree is still on this branch, commits past it hold the PR at merged (never pushed to it)
 release_packages:        # written by werkmeister pr status at merge (changesets repos only): the public packages the PR's release entries name; shipped needs a <pkg>@* tag for each, else "partially released"
 release:                 # release tag that shipped it, written by werkmeister pr status; \`none\` for a merged skip_release PR with no changeset (changesets repos), else set it yourself for a change that ships nothing
 reason: ""              # required for closed / abandoned
