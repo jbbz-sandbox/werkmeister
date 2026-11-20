@@ -119,6 +119,31 @@ describe("config command", () => {
     expect(saved.github_ingest.queue_url).toBe("https://sqs/q");
   });
 
+  // SW-866: a WERKMEISTER_CONFIG_FILE home is a scratch run; the person's ~/.zshenv is not its to write.
+  it("a relocated config leaves ~/.zshenv alone", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const zsh = vi.spyOn(gc, "ensureZshenvSources");
+
+    await run(args({ repos_root: tmp, workspaces_root: tmp }));
+
+    expect(zsh).not.toHaveBeenCalled();
+  });
+
+  it("the default home still writes the ~/.zshenv block", async () => {
+    delete process.env.WERKMEISTER_CONFIG_FILE;
+    vi.stubEnv("HOME", tmp);
+    vi.stubEnv("WERKMEISTER_FIXTURE", "");
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const zsh = vi.spyOn(gc, "ensureZshenvSources");
+    try {
+      await run(args({ repos_root: tmp, workspaces_root: tmp }));
+    } finally {
+      vi.unstubAllEnvs();
+    }
+
+    expect(zsh).toHaveBeenCalled();
+  });
+
   it("no arguments prints the config and writes nothing", async () => {
     // Regression (SW-136): the bare form used to rebuild config.yaml, env.sh,
     // ~/.zshenv and the Desktop config from defaults.

@@ -39,6 +39,7 @@ import {
   sandboxHome,
   servicesLocalYamlPath,
   servicesYamlPath,
+  sharedProxySkipReason,
 } from "./config.js";
 import { SandboxError } from "./errors.js";
 // biome-ignore lint/suspicious/noImportCycles: global_config↔projects; SW-411
@@ -851,8 +852,12 @@ export function check(cfg: GlobalConfig): string[] {
     problems.push(`${envPath} is stale — run \`werkmeister machine config --write\` to regenerate`);
   }
 
+  // A relocated home never writes ~/.zshenv (SW-866), so it can't drift there.
   const zpath = zshenvPath();
-  if (!fs.existsSync(zpath) || !fs.readFileSync(zpath, "utf8").includes(_ZSH_BEGIN)) {
+  if (
+    !sharedProxySkipReason() &&
+    (!fs.existsSync(zpath) || !fs.readFileSync(zpath, "utf8").includes(_ZSH_BEGIN))
+  ) {
     problems.push(`${zpath} does not source env.sh — run \`werkmeister machine config --write\``);
   }
 

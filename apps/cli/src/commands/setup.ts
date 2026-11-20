@@ -48,7 +48,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import { BROWSER_PROMPT, BROWSERS, DEFAULT_BROWSER } from "werkmeister-core/browser";
-import { expandUser } from "werkmeister-core/config";
+import { expandUser, sharedProxySkipReason } from "werkmeister-core/config";
 import { ingressHostnames } from "werkmeister-core/feature_routing";
 import type { PromptSpec } from "werkmeister-core/global_config";
 import * as gc from "werkmeister-core/global_config";
@@ -492,17 +492,27 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
 
   const saved = gc.save(newCfg);
   const envSh = gc.writeEnvSh(newCfg);
-  const zshChanged = gc.ensureZshenvSources();
-  const completionChanged = gc.ensureZshrcCompletion();
+  // SW-866: a WERKMEISTER_CONFIG_FILE or fixture home is a scratch run; the person's shell files aren't its own.
+  const shellSkip = sharedProxySkipReason();
+  const zshChanged = !shellSkip && gc.ensureZshenvSources();
+  const completionChanged = !shellSkip && gc.ensureZshrcCompletion();
   const desktopChanged = gc.patchDesktopConfig();
 
   heading("Writing config");
   success(`Wrote ${saved}`);
   info(`Regenerated ${envSh}`);
-  info(`${gc.zshenvPath()}: ${zshChanged ? "updated" : "already sources env.sh"}`);
+  const leftAlone = `left alone (${shellSkip})`;
+  info(
+    `${gc.zshenvPath()}: ` +
+      (shellSkip ? leftAlone : zshChanged ? "updated" : "already sources env.sh"),
+  );
   info(
     `${gc.zshrcPath()}: ` +
-      `${completionChanged ? "installed tab completion" : "tab completion already installed"}`,
+      (shellSkip
+        ? leftAlone
+        : completionChanged
+          ? "installed tab completion"
+          : "tab completion already installed"),
   );
   if (fs.existsSync(gc.desktopConfigPath())) {
     info(
