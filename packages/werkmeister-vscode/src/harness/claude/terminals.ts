@@ -5,6 +5,7 @@ import { CODEX_LAUNCH, listWorkspaces, reconcileLaunch, startArgs } from "werkme
 import { harnessIdOf } from "werkmeister-core/harness_layout";
 import { trackSessionTerminal } from "../../terminal.js";
 import {
+  liveSessionTerminal,
   parseLaunchUri,
   type SessionMode,
   sessionCommand,
@@ -64,15 +65,9 @@ export function registerClaudeUriHandler(): vscode.Disposable {
   });
 }
 
-/**
- * The card's Open terminal: the workspace's session terminal if this window has one, else Continue in a new one.
- * shortcut: found by the name openClaudeTerminal gives, so a renamed terminal, or one whose session
- * has exited to a shell, is not told apart; track pids if that is ever seen.
- */
+/** Continue and the card's Open terminal: the workspace's live session terminal if this window has one, else Continue in a new one. */
 export function focusSessionTerminal(ws: { name: string; path: string }): void {
-  // The second name is the one tabs had before SW-864, for terminals still open across the upgrade.
-  const names = [sessionTabName(ws.name), `${harnessIdOf(ws.path)} ${ws.name}`];
-  const open = vscode.window.terminals.find((t) => names.includes(t.name));
+  const open = liveSessionTerminal(vscode.window.terminals, ws.name, harnessIdOf(ws.path));
   if (open) open.show();
   else openSessionTerminal(ws, "continue");
 }

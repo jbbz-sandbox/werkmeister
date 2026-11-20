@@ -15,6 +15,21 @@ export function sessionTabName(workspace: string): string {
   return m ? `${m[1].toUpperCase()}-${m[2]} · ${m[3]}` : workspace;
 }
 
+/**
+ * The workspace's session terminal in this window, or undefined. An exited one doesn't count, so
+ * Continue opens a new one (SW-693). The second name is the one tabs had before SW-864.
+ * shortcut: found by name, so a renamed terminal, or one whose session exited to a shell, isn't
+ * told apart; track pids if that is ever seen.
+ */
+export function liveSessionTerminal<T extends { name: string; exitStatus: unknown }>(
+  terminals: readonly T[],
+  workspace: string,
+  harness: string,
+): T | undefined {
+  const names = [sessionTabName(workspace), `${harness} ${workspace}`];
+  return terminals.find((t) => t.exitStatus === undefined && names.includes(t.name));
+}
+
 /** POSIX single-quote escaping — the integrated terminal is a shell, not execFile. */
 export function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
