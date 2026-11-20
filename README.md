@@ -167,6 +167,19 @@ Changesets runs `pnpm publish`, which packs the tarball (turning `workspace:*`
 into real versions) and hands it to the npm CLI for the upload, so the OIDC
 exchange is npm's (≥ 11.5.1, bundled with the job's Node 24).
 
+Trusted publishing can't create a package, so before `changeset publish` the
+job runs `scripts/check-npm-packages.mjs`: if any public workspace package is
+not on npm yet, it publishes nothing and prints these steps (SW-711). To
+bootstrap a new package, before merging the version PR that first releases it:
+
+1. Publish a `0.0.0` placeholder by hand: `npm publish --access public` from a
+   copy of the package with `"version": "0.0.0"`.
+2. Make this workflow its trusted publisher:
+   `npm trust github <pkg> --file ci.yml --repo jbbz-sandbox/werkmeister --allow-publish`
+   (npm 11.18 requires a permission flag).
+3. Rerun the release job.
+4. `npm deprecate <pkg>@0.0.0 "placeholder"`.
+
 The version PR is pushed with a GitHub App's token so its own CI runs without
 anyone approving it. The App needs Contents and Pull requests (read and write)
 on this repo, no webhook; its ID goes in the repo variable `RELEASE_APP_ID` and
