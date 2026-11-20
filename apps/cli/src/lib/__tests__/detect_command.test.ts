@@ -10,6 +10,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Answer, Resolver } from "werkmeister-core/fragment_detect";
 import type { Runner } from "werkmeister-core/machine_setup";
 import { type LogEvent, withReporter } from "werkmeister-core/reporter";
+
+let validationErrors: string[] | null = null;
+vi.mock("werkmeister-core/fragment_detect", async (orig) => {
+  const actual = await orig<typeof import("werkmeister-core/fragment_detect")>();
+  return {
+    ...actual,
+    validateFragment: (...a: Parameters<typeof actual.validateFragment>) =>
+      validationErrors ?? actual.validateFragment(...a),
+  };
+});
+
 import { type DetectDeps, runDetect } from "../../commands/detect.js";
 import { SdkMissingError } from "../harness/claude/assist_resolver.js";
 
@@ -171,5 +182,32 @@ describe("sandbox detect", () => {
     const { root, reposRoot } = repo({ "README.md": "hi" });
     expect(await runDetect(args({ yes: true }), deps(reposRoot))).toBe(1);
     expect(fs.existsSync(path.join(root, ".werkmeister"))).toBe(false);
+  });
+
+  // SW-928: the validation errors are the reason nothing was written, so they read as errors under it.
+  it("a fragment that fails validation prints errors under 'Not written'", async () => {
+    const { root, reposRoot } = repo(GO_APP);
+    validationErrors = ["services.api.internal_port: must be a number"];
+    const events: LogEvent[] = [];
+    const reporter = { emit: (e: LogEvent) => void events.push(e), passthrough: false };
+    try {
+      const code = await withReporter(reporter, () =>
+        runDetect(args({ yes: true }), deps(reposRoot)),
+      );
+      expect(code).toBe(1);
+    } finally {
+      validationErrors = null;
+    }
+    const errors = events.flatMap((e) => (e.level === "error" ? [e.msg] : []));
+    expect(errors[0]).toContain("Not written");
+    expect(errors[1]).toContain("services.api.internal_port: must be a number");
+    expect(fs.existsSync(path.join(root, ".werkmeister/services.yaml"))).toBe(false);
+  });
+
+  it("the report says when no test command was found (SW-928)", async () => {
+    const { reposRoot } = repo(GO_APP);
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await runDetect(args({ dryRun: true }), deps(reposRoot));
+    expect(log.mock.calls.flat().join("\n")).toContain("services.api.test: no test command found");
   });
 });

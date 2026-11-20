@@ -94,6 +94,8 @@ pnpm + Vite + plain Node repo with no Dockerfile, it guessed:
 | `image` | `node:22-alpine`, from `engines: >=22` | the Node major the repo is developed on |
 | `test` (no `test` script) | not set, so the archetype's `npm test` applies | a command that can pass |
 
+On a repo with a Dockerfile, a single-stage file that runs `RUN`, `COPY` or `ADD` gives `dockerfile:` and a `<repo>:local` image, so those steps are built. A multi-stage file gives its first `FROM`. A service with no port in any source, or whose command is `sleep infinity`, gets `type: cli`, marked guessed for you to confirm. The report lists each service it found no test command for.
+
 `--assist` asks Claude only about fields it can't read from a file, such as `depends_on`
 and a non-Node service's command. It doesn't fix the guesses above. Re-running detect only
 adds keys the file is missing, so your edits are kept.

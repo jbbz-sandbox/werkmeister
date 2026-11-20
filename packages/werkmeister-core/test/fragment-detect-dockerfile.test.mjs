@@ -77,3 +77,18 @@ test("Dockerfile.md and Dockerfile.dockerignore are not Dockerfiles", () => {
     ["api/Dockerfile"],
   );
 });
+
+// SW-928: a Dockerfile that builds something is the image, not its FROM.
+test("a Dockerfile with a build step gives dockerfile: and a local tag", () => {
+  const [f] = detect(
+    { Dockerfile: "FROM python:3.14-slim\nRUN pip install psycopg2\nCMD sleep infinity\n" },
+    "code-practice-test",
+  );
+  assert.equal(f.fields.dockerfile?.value, "Dockerfile");
+  assert.equal(f.fields.image.value, "code-practice-test:local");
+});
+
+test("the local tag is lowercase, as Docker requires", () => {
+  const [f] = detect({ Dockerfile: "FROM python:3.14-slim\nRUN pip install x\n" }, "MyApp");
+  assert.equal(f.fields.image.value, "myapp:local");
+});

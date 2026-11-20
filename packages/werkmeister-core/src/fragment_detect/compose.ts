@@ -65,7 +65,11 @@ export function detectCompose(ctx: DetectContext): Finding[] {
       if (!raw || typeof raw !== "object") continue;
       const s = raw as Record<string, any>;
       const src = (field: string) => `${file} → services.${name}.${field}`;
-      const context = typeof s.build === "string" ? s.build : s.build?.context;
+      // SW-928: a stock image with the source bind-mounted (`.:/app`) is anchored by the mount.
+      const mount = (s.volumes ?? [])
+        .map((v: unknown) => (typeof v === "string" ? v.split(":")[0] : (v as any)?.source))
+        .find((src: unknown) => typeof src === "string" && /^\.\.?(\/|$)/.test(src));
+      const context = (typeof s.build === "string" ? s.build : s.build?.context) ?? mount;
       const dir =
         context === undefined
           ? null

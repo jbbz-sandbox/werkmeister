@@ -99,3 +99,14 @@ services:
   assert.equal(found.length, 1);
   assert.deepEqual(found[0].fields.environment.value, { A: "1" });
 });
+
+// SW-928: a stock image with the repo bind-mounted is the repo root's service.
+test("a repo-root bind mount anchors to the repo root", () => {
+  const ctx = ctxFor(
+    fixture({
+      "docker-compose.yml":
+        "services:\n  python:\n    image: python:3.14-slim\n    volumes: ['.:/app']\n",
+    }),
+  );
+  assert.equal(detectCompose(ctx)[0].dir, ".");
+});
