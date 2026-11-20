@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { workspaceState, prNeeds, legacyAgent } = await import("../dist/workspace_state.js");
+const { workspaceState, prNeeds } = await import("../dist/workspace_state.js");
 const { SESSION_GONE_MS } = await import("../dist/agent_state.js");
 
 const NOW = new Date("2026-11-06T12:00:00.000Z");
@@ -13,6 +13,7 @@ const MIN = 60_000;
 /** Facts for a quiet building workspace; each test overrides what it is about. */
 const facts = (over = {}) => ({
   now: NOW,
+  signal: { agent: "idle", at: null },
   sessions: {},
   turnRunning: false,
   processOpen: null,
@@ -35,6 +36,8 @@ const facts = (over = {}) => ({
   autonomous: false,
   ...over,
 });
+/** The model's agent word for facts *over* and the session *signal*. */
+const chip = (over, signal) => workspaceState(facts({ ...over, signal })).agent;
 const kinds = (s) => s.needs.map((n) => n.kind);
 const busy = (over = {}) => ({ status: "busy", at: ago(MIN), last: ago(MIN), ...over });
 
@@ -275,19 +278,16 @@ test("prNeeds: phase detail says waiting on review and behind main", () => {
   assert.equal(prNeeds([pr({ behind: true, state: "MERGED" })]).phaseDetail, null);
 });
 
-test("legacyAgent: Needs you whenever the list has an item, else the session signal", () => {
-  const signal = { agent: "working", at: ago(MIN), question: null };
-  const gate = workspaceState(facts({ gates: [{ file: "stages/a/output/x.md", at: ago(MIN) }] }));
-  assert.deepEqual(legacyAgent(gate, signal), {
-    agent: "needs-you",
-    at: ago(MIN),
-    question: "Approve stages/a/output/x.md",
-  });
-  assert.deepEqual(legacyAgent(workspaceState(facts()), signal), signal);
-  const paused = workspaceState(
-    facts({ paused: { at: ago(MIN) }, gates: [{ file: "x", at: ago(MIN) }] }),
+test("agent: Needs you whenever the list has an item, else the session signal", () => {
+  const signal = { agent: "working", at: ago(MIN) };
+  const gates = [{ file: "stages/a/output/x.md", at: ago(2 * MIN) }];
+  assert.deepEqual(chip({ gates }, signal), { id: "needs-you", since: ago(2 * MIN) });
+  assert.deepEqual(chip({}, signal), { id: "working", since: ago(MIN) });
+  assert.deepEqual(
+    chip({ paused: { at: ago(MIN) }, gates }, signal),
+    { id: "working", since: ago(MIN) },
+    "Paused replaces the badge, as before",
   );
-  assert.deepEqual(legacyAgent(paused, signal), signal, "Paused replaces the badge, as before");
 });
 
 // SW-570: a draft gate needs the person only once the agent has handed it over.
@@ -349,37 +349,34 @@ test("needs-you: a gate is not handed over while a background shell, a capacity 
 
 // SW-681: a stopped turn that left a background shell or a capacity wait read "Done" on the card,
 // the VS Code badge, MCP status and the check-in sweep.
-test("legacyAgent: a background shell or a capacity wait reads working, not done", () => {
+test("agent: a background shell or a capacity wait reads working, not done", () => {
   const stopped = { status: "idle", at: ago(MIN), last: ago(MIN), stopped: true };
-  const done = { agent: "done", at: ago(MIN), question: null };
+  const done = { agent: "done", at: ago(MIN) };
   const shell = (command) => ({ s: { ...stopped, shell: { command, at: ago(MIN) } } });
 
-  const prOpen = workspaceState(facts({ sessions: shell("werkmeister pr open --watch") }));
+  const prOpen = workspaceState(
+    facts({ sessions: shell("werkmeister pr open --watch"), signal: done }),
+  );
   assert.equal(prOpen.activity.label, "Running in background: pr open");
-  assert.equal(legacyAgent(prOpen, done).agent, "working");
+  assert.equal(prOpen.agent.id, "working");
 
-  const tests = workspaceState(facts({ sessions: shell("werkmeister pr gate --tests") }));
-  assert.equal(legacyAgent(tests, done).agent, "working");
+  assert.equal(chip({ sessions: shell("werkmeister pr gate --tests") }, done).id, "working");
 
   for (const waiting of [
     { position: 2, reason: "" },
     { position: 2, reason: "", services: ["werkmeister-core"] },
   ]) {
-    const queued = workspaceState(facts({ sessions: { s: stopped }, waiting }));
+    const queued = workspaceState(facts({ sessions: { s: stopped }, waiting, signal: done }));
     assert.equal(queued.activity.label, "Queued for capacity (position 2)");
-    assert.equal(legacyAgent(queued, done).agent, "working");
+    assert.equal(queued.agent.id, "working");
   }
 
-  const sub = workspaceState(facts({ sessions: { s: { ...stopped, subagents: 1 } } }));
-  assert.equal(legacyAgent(sub, done).agent, "working");
-  const starting = workspaceState(
-    facts({ sessions: { s: stopped }, services: [{ name: "core", state: "starting" }] }),
-  );
-  assert.equal(legacyAgent(starting, done).agent, "working");
-  const noAgent = { ...done, agent: "idle" };
+  assert.equal(chip({ sessions: { s: { ...stopped, subagents: 1 } } }, done).id, "working");
+  const starting = { sessions: { s: stopped }, services: [{ name: "core", state: "starting" }] };
+  assert.equal(chip(starting, done).id, "working");
   assert.deepEqual(
-    legacyAgent(starting, noAgent),
-    noAgent,
+    chip(starting, { agent: "idle", at: ago(MIN) }),
+    { id: "idle", since: ago(MIN) },
     "no session: containers starting aren't an agent at work",
   );
   const long = "until gh pr view 12 --json state; do sleep 30; done; echo merged";
@@ -388,11 +385,10 @@ test("legacyAgent: a background shell or a capacity wait reads working, not done
     "Running in background: until gh pr view 12 --json state; do sl…",
   );
   const stale = { s: { ...stopped, shell: { command: "x", at: ago(SESSION_GONE_MS + MIN) } } };
-  assert.deepEqual(legacyAgent(workspaceState(facts({ sessions: stale })), done), done);
+  assert.deepEqual(chip({ sessions: stale }, done), { id: "done", since: ago(MIN) });
 
   // Nothing left running: done stays done.
-  const quiet = workspaceState(facts({ sessions: { s: stopped } }));
-  assert.deepEqual(legacyAgent(quiet, done), done);
+  assert.deepEqual(chip({ sessions: { s: stopped } }, done), { id: "done", since: ago(MIN) });
 });
 
 // SW-690: every code worktree is named `werkmeister`, so a path or an argument read as a subcommand.
@@ -408,4 +404,20 @@ test("activity: a background command names werkmeister only at a segment start, 
   assert.equal(label("werkmeister up sw-681"), "Running in background: up");
   assert.equal(label("cd ws && werkmeister pr open --watch"), "Running in background: pr open");
   assert.equal(label("werkmeister feature up"), "Running in background: feature up");
+});
+
+// SW-558: the card's one-word agent is part of the model; no surface reads `claude.agent`.
+test("agent: Needs you whenever the list has an item, working while the activity is, else the session signal", () => {
+  const stopped = { status: "idle", at: ago(MIN), last: ago(MIN), stopped: true };
+  const done = { agent: "done", at: ago(MIN), question: null };
+  const gate = workspaceState(
+    facts({ signal: done, sessions: { s: stopped }, gates: [{ file: "a.md", at: ago(2 * MIN) }] }),
+  );
+  assert.deepEqual(gate.agent, { id: "needs-you", since: ago(2 * MIN) });
+  const shell = { s: { ...stopped, shell: { command: "werkmeister pr open", at: ago(MIN) } } };
+  assert.equal(workspaceState(facts({ signal: done, sessions: shell })).agent.id, "working");
+  assert.deepEqual(workspaceState(facts({ signal: done, sessions: { s: stopped } })).agent, {
+    id: "done",
+    since: ago(MIN),
+  });
 });

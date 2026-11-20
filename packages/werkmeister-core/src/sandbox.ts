@@ -165,13 +165,7 @@ import {
   readAutonomous,
   resolveInputs,
 } from "./workspace_prompts.js";
-import {
-  legacyAgent,
-  type NeedItem,
-  prNeeds,
-  type WorkspaceState,
-  workspaceState,
-} from "./workspace_state.js";
+import { type NeedItem, prNeeds, type WorkspaceState, workspaceState } from "./workspace_state.js";
 import { revokeWorkspaceToken } from "./workspace_token.js";
 import { hasGit, listRepoWorktrees } from "./worktrees.js";
 
@@ -1639,8 +1633,8 @@ export interface WorkspaceStatus {
   }[];
   /** The agent harness the workspace uses (`harness:` in its `workspace.yml`), e.g. `claude`. */
   harness: HarnessId;
-  /** The agent session's state: whether a turn is running, and whether the agent is working, idle or waiting on you (with its question). */
-  claude: ClaudeSessionSignal;
+  /** Whether a `claude-send` turn this server runs is running, done or failed. The agent's word (working, needs you, done) is `workspaceState.agent`. */
+  claude: Pick<ClaudeSessionSignal, "state">;
   /** The workspace's Claude model; null for Claude Code's default. */
   model: string | null;
   /** The current stage of a staged workspace's run; null for an unstaged workspace or a finished run. */
@@ -1673,9 +1667,14 @@ export interface WorkspaceStatus {
     /** When the wake-up was written (ISO). */
     at: string;
   }[];
-  /** The workspace's phase, current activity and the list of things it needs from you. PR items come from {@link getWorkspacePRs}. */
+  /** The workspace's phase, current activity, agent word (`agent`: working, needs you, done, idle) and the list of things it needs from you. PR items come from {@link getWorkspacePRs}. */
   workspaceState: WorkspaceState;
 }
+
+/** A swept status row before the state model: `claude` still holds the raw session signal, one of the model's facts. */
+type SweptRow = Omit<WorkspaceStatus, "workspaceState" | "claude"> & {
+  claude: ClaudeSessionSignal;
+};
 
 /**
  * Where a staged workspace's run is: its current stage, as {@link icmStage}
@@ -1913,7 +1912,7 @@ export async function getWorkspaceStatuses(): Promise<{
   const portsDoc = await loadPortsDoc();
 
   const rows = await Promise.all(
-    names.map(async (name): Promise<Omit<WorkspaceStatus, "workspaceState">> => {
+    names.map(async (name): Promise<SweptRow> => {
       const dir = path.join(root, name);
       let project = await readEnvValue(dir, "COMPOSE_PROJECT_NAME");
       if (!project) {
@@ -1992,7 +1991,7 @@ export async function getWorkspaceStatuses(): Promise<{
       return {
         ...s,
         workspaceState,
-        claude: { ...s.claude, ...legacyAgent(workspaceState, s.claude) },
+        claude: { state: s.claude.state },
       };
     }),
   );
@@ -2033,9 +2032,10 @@ export async function getWorkspaceStatuses(): Promise<{
 // What a check-in courier can carry to the person and back; PR and lifecycle items need the person themselves.
 const COURIER_KINDS = new Set<NeedItem["kind"]>(["question", "permission", "plan", "gate"]);
 const BUSY_ACTIVITY = new Set(["testing", "tool", "subagent", "thinking"]);
-// Not claude.agent: since SW-487 it reads Needs you whenever the list has an item, even mid-turn.
+// Not only the agent word: it reads Needs you whenever the list has an item, even mid-turn (SW-487).
 const working = (r: CheckInRow) =>
-  r.claude.agent === "working" || BUSY_ACTIVITY.has(r.workspaceState?.activity.id ?? "");
+  r.workspaceState?.agent.id === "working" ||
+  BUSY_ACTIVITY.has(r.workspaceState?.activity.id ?? "");
 
 /** One workspace in a check-in sweep: the facts that decide whether a courier goes to it. */
 export interface CheckInRow {
@@ -2043,7 +2043,7 @@ export interface CheckInRow {
   issueId: string | null;
   labels: string[];
   containers: WorkspaceStatus["state"];
-  claude: ClaudeSessionSignal;
+  claude: WorkspaceStatus["claude"];
   /** `stages/<stage>/output/*.md` files (relative to the workspace) with a line starting `status: proposed`, or a `pr-*.md` at `status: draft`. */
   gates: string[];
   /** mtime (ISO) of the newest session transcript, or null when there is none. */
@@ -2107,10 +2107,7 @@ const mtimeOf = (file: string) =>
   );
 
 /** The facts {@link workspaceState} reads for one swept workspace, beyond its status row. */
-async function stateFor(
-  dir: string,
-  s: Omit<WorkspaceStatus, "workspaceState">,
-): Promise<WorkspaceState> {
+async function stateFor(dir: string, s: SweptRow): Promise<WorkspaceState> {
   const sessions = readSessions(dir);
   const life = lifecycleOf(dir);
   const shipped = life.state === "shipped";
@@ -2119,6 +2116,7 @@ async function stateFor(
   return workspaceState({
     now: new Date(),
     sessions,
+    signal: s.claude,
     turnRunning: s.claude.state === "running",
     // Only when it decides something: it costs a `ps` and an `lsof`.
     processOpen: gone ? await claudeOpenIn(dir, s.harness).catch(() => null) : null,
@@ -2230,7 +2228,7 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
         issueId: w.issueId,
         labels: w.labels,
         containers: status?.state ?? "unknown",
-        claude: status?.claude ?? { state: "idle", agent: "idle", at: null, question: null },
+        claude: status?.claude ?? { state: "idle" },
         gates: await proposedGates(w.path),
         updatedAt,
         changed: sinceMs !== null && updatedAt !== null && Date.parse(updatedAt) > sinceMs,
@@ -2268,8 +2266,8 @@ export async function checkInTriage(deps?: Deps): Promise<CheckInTriage> {
           (r.workspaceState?.needs.some((n) => COURIER_KINDS.has(n.kind)) ||
             // The state decides whether a gate is handed over (SW-570); raw gates only without one.
             (!r.workspaceState && r.gates.length > 0) ||
-            // Not needs-you: legacyAgent reads it for any item, crash loops and notices too (SW-559).
-            (sinceMs === null ? r.claude.agent === "done" : r.changed)),
+            // Not needs-you: the agent word reads it for any item, crash loops and notices too (SW-559).
+            (sinceMs === null ? r.workspaceState?.agent.id === "done" : r.changed)),
       )
       .map((r) => r.name),
     readyToClose,

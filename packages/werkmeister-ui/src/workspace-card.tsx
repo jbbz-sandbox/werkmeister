@@ -1,6 +1,6 @@
 /**
  * The handoff workspace card (docs/design/workspace-card, SW-53): header with the
- * agent chip and last question, the Containers / PRs / Workflow / Agent rows, the
+ * agent chip and needs-you list, the Containers / PRs / Workflow / Agent rows, the
  * action bar with its ⋯ menu, and the inline Close out / Abandon… confirms.
  *
  * Presentational only: data arrives as a display model, every side effect goes out
@@ -266,7 +266,6 @@ export function WorkspaceCard(p: CardProps) {
   const [menu, setMenu] = useState(false);
   const [confirm, setConfirm] = useState<"close-out" | "abandon" | null>(null);
   const [reason, setReason] = useState("");
-  const [questionOpen, setQuestionOpen] = useState(false);
   const [panel, setPanel] = useState<PanelKind | null>(null);
   const d = p.display;
   if (!d) return <CardSkeleton name={p.name} />;
@@ -339,29 +338,6 @@ export function WorkspaceCard(p: CardProps) {
             ))}
           </ul>
         )}
-        {d.needs &&
-          d.question &&
-          d.needsList.length === 0 &&
-          (questionOpen ? (
-            <div className="question open">
-              <div className="q-meta">
-                <span className="q-label">Last question</span>
-                <span className="muted">{d.agent.time}</span>
-                <span className="spacer" />
-                <button type="button" className="q-toggle" onClick={() => setQuestionOpen(false)}>
-                  Hide ▴
-                </button>
-              </div>
-              <p className="q-text">“{d.question}”</p>
-              {primaryBtn}
-            </div>
-          ) : (
-            <button type="button" className="question" onClick={() => setQuestionOpen(true)}>
-              <span className="q-label">Last question</span>
-              <span className="q-clip">“{d.question}”</span>
-              <span className="muted">Show ▾</span>
-            </button>
-          ))}
       </header>
 
       <div className="ws-rows">
@@ -577,19 +553,8 @@ export const CARD_CSS = `${TONES}
   .wsui .ws-title { text-wrap: pretty; overflow-wrap: anywhere; }
   .wsui .ws-row3 { display: flex; align-items: center; gap: 8px; font: 400 12px var(--sd-mono); }
 
-  .wsui .attn .question {
-    all: unset; box-sizing: border-box; display: flex; gap: 10px; align-items: baseline;
-    margin-top: 4px; width: 100%; padding: 8px 12px; border-radius: 6px; cursor: pointer;
-    background: var(--sd-card); border: 1px solid var(--sd-attn-bd); font-size: 13px;
-  }
-  .wsui .attn .question.open { display: block; cursor: default; padding: 12px 14px 14px; }
   .wsui .q-label { color: var(--sd-warn); font-weight: 600; white-space: nowrap; }
-  .wsui .q-clip { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .wsui .question .muted { white-space: nowrap; }
   .wsui .needs-list { margin: 8px 0 0; padding-left: 18px; }
-  .wsui .q-meta { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
-  .wsui .q-toggle { all: unset; cursor: pointer; color: var(--sd-muted); }
-  .wsui .q-text { margin: 6px 0 12px; font-size: 15px; line-height: 1.5; text-wrap: pretty; overflow-wrap: anywhere; }
 
   .wsui .ws-rows { display: grid; grid-template-columns: 92px minmax(0, 1fr); }
   .wsui .ws-rows > .lbl {
@@ -644,7 +609,7 @@ export const CARD_CSS = `${TONES}
   }
   .wsui .btn:hover:not(:disabled) { background: var(--sd-hover); }
   .wsui .btn:disabled { opacity: .5; cursor: default; }
-  .wsui .btn:focus-visible, .wsui .item:focus-visible, .wsui .question:focus-visible {
+  .wsui .btn:focus-visible, .wsui .item:focus-visible {
     outline: 2px solid var(--sd-accent); outline-offset: 2px;
   }
   .wsui .btn.primary {

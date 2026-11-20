@@ -15,13 +15,32 @@ const base = {
   running: 2,
   total: 2,
   services: [],
-  claude: { agent: "idle", at: null, question: null },
   stage: null,
   phase: null,
   autonomous: false,
   lastActivity: null,
 };
 const model = (ws = {}, opts = {}) => displayModel({ ...base, ...ws }, { now: NOW, ...opts });
+/** A status whose model says only the agent word (SW-558), plus the session's question when it asked one. */
+const chipState = (id, since = null, question = null) => ({
+  workspaceState: {
+    phase: { id: "building", label: "", stage: null },
+    activity: { id: "idle", label: "Idle", since: null, session: null },
+    needs: question
+      ? [
+          {
+            id: "question:s",
+            kind: "question",
+            what: question,
+            since,
+            action: "Answer it",
+            source: "session",
+          },
+        ]
+      : [],
+    agent: { id, since },
+  },
+});
 const pr = (over = {}) => ({
   url: "https://github.com/jbbz-sandbox/werkmeister/pull/231",
   state: "OPEN",
@@ -45,7 +64,7 @@ test("agent states", () => {
   };
   for (const [agent, [label, tone, dot, codicon, time]] of Object.entries(cases)) {
     const m = model({
-      claude: { agent, at: minsAgo(12), question: "ICM or JIT?" },
+      ...chipState(agent, minsAgo(12), agent === "needs-you" ? "ICM or JIT?" : null),
       lastActivity: minsAgo(3),
     });
     assert.deepEqual(
@@ -163,7 +182,7 @@ test("workflow: lifecycle, ICM stage, JIT phase, none", () => {
 });
 
 test("primary action", () => {
-  const needs = { claude: { agent: "needs-you", at: null, question: null } };
+  const needs = chipState("needs-you", null, "?");
   assert.deepEqual(model({ ...needs, state: "down" }, { where: "Desktop" }).primary, {
     action: "continue",
     label: "↗ Continue in Desktop",
@@ -183,7 +202,7 @@ test("SW-70: paused overrides the agent state, reads paused, and offers Resume",
   const d = model({
     state: "paused",
     paused: { at: minsAgo(12), containers: ["a-api"] },
-    claude: { agent: "needs-you", at: minsAgo(30), question: "Which fix?" },
+    ...chipState("needs-you", minsAgo(30), "Which fix?"),
   });
   assert.equal(d.agent.label, "⏸ Paused");
   assert.equal(d.agent.tone, "off");
@@ -262,6 +281,7 @@ const wsState = (over = {}) => ({
   phase: { id: "building", label: "Stage 2 of 4 · spec", stage: "Stage 2 of 4 · spec" },
   activity: { id: "testing", label: "Running tests", since: minsAgo(4), session: "s" },
   needs: [],
+  agent: { id: "idle", since: null },
   ...over,
 });
 const need = (over = {}) => ({
@@ -345,7 +365,7 @@ test("SW-487: primary action follows the session's ask, not a gate or lifecycle 
   });
   assert.equal(
     model(
-      { claude: { agent: "needs-you", at: null, question: "Released" }, workspaceState: released },
+      { workspaceState: { ...released, agent: { id: "needs-you", since: null } } },
       { lifecycle: "shipped" },
     ).primary.action,
     "close-out",

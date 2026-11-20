@@ -25,6 +25,27 @@ const ws = (name, over = {}) => ({
   ...over,
 });
 
+/** The model's agent word (SW-558), plus the session's question when it asked one. */
+const ag = (id, since = null, question = null) => ({
+  workspaceState: {
+    phase: { id: "building", label: "Building", stage: null },
+    activity: { id: "idle", label: "Idle", since: null, session: null },
+    needs: question
+      ? [
+          {
+            id: "question:s",
+            kind: "question",
+            what: question,
+            since,
+            action: "Answer it",
+            source: "session",
+          },
+        ]
+      : [],
+    agent: { id, since },
+  },
+});
+
 const st = (name, over = {}) => ({
   name,
   project: `werkmeister-${name}`,
@@ -34,7 +55,8 @@ const st = (name, over = {}) => ({
   slot: null,
   ports: null,
   services: [],
-  claude: { state: null, agent: "idle", at: null, question: null },
+  claude: { state: null },
+  ...ag("idle", null, null),
   stage: null,
   phase: null,
   autonomous: false,

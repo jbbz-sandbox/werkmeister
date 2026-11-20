@@ -19,6 +19,7 @@ import { idleStopFeature } from "../dist/lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { writeWorkspaceConfig } from "../dist/workspace_init.js";
 import { computePromptSpec, readAutoStop } from "../dist/workspace_prompts.js";
+import { writeSessions } from "./fixtures.mjs";
 
 process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
 
@@ -107,7 +108,7 @@ function workspaceWith(...ids) {
   const sessions = Object.fromEntries(ids.map((id) => [id, { status: "idle", at }]));
   sessions.junk = { status: 7 };
   fs.mkdirSync(path.join(ws, ".werkmeister"));
-  fs.writeFileSync(path.join(ws, ".werkmeister", "agent-state.json"), JSON.stringify({ sessions }));
+  writeSessions(ws, sessions);
   return ws;
 }
 

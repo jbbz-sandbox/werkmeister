@@ -77,14 +77,23 @@ export interface NeedItem {
   dismiss?: string;
 }
 
+/** The card's one word for the agent (`◌ Working`, `● Needs you`, `✓ Done`, `Idle`) and since when. */
+export interface AgentChip {
+  id: AgentState;
+  since: string | null;
+}
+
 export interface WorkspaceState {
   phase: Phase;
   activity: Activity;
   needs: NeedItem[];
+  agent: AgentChip;
 }
 
 export interface StateFacts {
   now: Date;
+  /** The harness's session signal (hook records, else the transcript tail): the agent word before the list and activity overrule it. */
+  signal: { agent: AgentState; at: string | null };
   sessions: Record<string, SessionRecord>;
   /** A claude-send turn this process runs. */
   turnRunning: boolean;
@@ -340,7 +349,7 @@ export function workspaceState(f: StateFacts): WorkspaceState {
         ...(n.url && { url: n.url }),
         dismiss: id,
       });
-  return { phase, activity, needs };
+  return { phase, activity, needs, agent: agentChip(f.signal, activity, needs) };
 }
 
 /** The needs-you items and phase detail the PR poll adds, one set per workspace. */
@@ -394,22 +403,17 @@ export function prNeeds(prs: RepoPr[]): { needs: NeedItem[]; phaseDetail: string
 }
 
 /**
- * The one-word badge for readers that predate the model (VS Code, the dashboard, MCP `status`):
  * Needs you whenever the list has an item (SW-487 Q8); a done turn reads working while the activity is (SW-681);
- * else what the sessions say.
+ * else what the sessions say. Paused: the signal, which every surface shows as Paused anyway.
  */
-export function legacyAgent(
-  state: WorkspaceState,
-  signal: { agent: AgentState; at: string | null; question: string | null },
-): { agent: AgentState; at: string | null; question: string | null } {
-  const first = state.needs[0];
-  if (state.activity.id === "paused") return signal;
+function agentChip(signal: StateFacts["signal"], activity: Activity, needs: NeedItem[]): AgentChip {
+  const own = { id: signal.agent, since: signal.at };
+  const first = needs[0];
+  if (activity.id === "paused") return own;
   if (!first)
     // Only a finished turn: an idle signal has no agent, so containers starting aren't its work.
-    return signal.agent === "done" && STILL_ON_IT.has(state.activity.id)
-      ? { agent: "working", at: state.activity.since ?? signal.at, question: null }
-      : signal;
-  return signal.agent === "needs-you"
-    ? signal
-    : { agent: "needs-you", at: first.since, question: first.what };
+    return signal.agent === "done" && STILL_ON_IT.has(activity.id)
+      ? { id: "working", since: activity.since ?? signal.at }
+      : own;
+  return signal.agent === "needs-you" ? own : { id: "needs-you", since: first.since };
 }

@@ -15,6 +15,7 @@ import {
   interceptsFromSnapshot,
   lifecycleOf,
   listWorkspaces,
+  type NeedItem,
   type WorkspaceStatus,
 } from "werkmeister-core";
 import { workspacesRoot } from "werkmeister-core/config";
@@ -53,11 +54,10 @@ body{padding:4px 0;color:var(--vscode-foreground);font-family:var(--vscode-font-
 .card .row:has(.chip) .name{min-width:0}
 .row{display:flex;flex-wrap:wrap;gap:2px 12px;align-items:baseline}
 .name{font-weight:600}
-.card,.name,blockquote{overflow-wrap:anywhere}
+.card,.name{overflow-wrap:anywhere}
 .dim{color:var(--vscode-descriptionForeground)}
 .pre{white-space:pre-wrap}
 .svc{white-space:nowrap}
-blockquote{margin:0;padding:0;border:0;background:none;font-style:italic}
 a{color:var(--vscode-textLink-foreground);text-decoration:none}
 a:hover{color:var(--vscode-textLink-activeForeground);text-decoration:underline}
 button{margin-top:2px;padding:3px 10px;border:1px solid var(--vscode-button-border,transparent);border-radius:2px;background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground);font:inherit;cursor:pointer}
@@ -108,6 +108,7 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
   private loading = false;
   /** Undefined until the first fetch lands; null when it failed (the card's "PRs unavailable"). */
   private prs: Map<string, PrInput[]> | null | undefined;
+  private prNeeds = new Map<string, { prNeeds: NeedItem[]; phaseDetail: string | null }>();
   private prsRequested = false;
   /** The last poll's {@link prFilesKey}: a change refetches PRs (SW-818). */
   private prFiles: string | undefined;
@@ -132,9 +133,15 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
   async refreshPrs(): Promise<void> {
     this.prsRequested = true;
     try {
-      this.prs = new Map((await getWorkspacePRs()).map((w) => [w.name, w.repos]));
+      const all = await getWorkspacePRs();
+      this.prs = new Map(all.map((w) => [w.name, w.repos]));
+      this.prNeeds = new Map(
+        all.map((w) => [w.name, { prNeeds: w.needs, phaseDetail: w.phaseDetail }]),
+      );
     } catch {
       this.prs = null;
+      // No stale PR needs beside "PRs unavailable".
+      this.prNeeds = new Map();
     }
     this.refresh();
   }
@@ -236,6 +243,7 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
         currentFolderPaths(),
         {
           prs: this.prs,
+          prNeeds: this.prNeeds,
           lifecycles: new Map([...life].map(([name, l]) => [name, l.state])),
           usage: this.resources?.projects,
           host: this.resources === undefined ? undefined : (this.resources?.host ?? null),

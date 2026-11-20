@@ -60,7 +60,7 @@ test("first run: skip dropped, gates read, candidates are where Claude spoke las
   assert.equal(r.root, root);
   assert.equal(r.since, null);
   assert.deepEqual(names(r), ["a-gate", "b-decided", "c-waiting", "e-notice"]);
-  assert.equal(r.workspaces[3].claude.agent, "needs-you");
+  assert.equal(r.workspaces[3].workspaceState.agent.id, "needs-you");
   assert.deepEqual(r.dropped, ["d-parked"]);
   assert.deepEqual(r.workspaces[0].gates, [path.join("stages", "02_plan", "output", "plan.md")]);
   assert.deepEqual(r.workspaces[1].gates, []);

@@ -17,6 +17,31 @@ import {
 } from "./register";
 import { edit } from "./textarea";
 
+/** A row whose model says only the agent word (SW-558), plus the session's question when it asked one. */
+const ag = (
+  id: "working" | "needs-you" | "done" | "idle",
+  since: string | null = null,
+  question: string | null = null,
+) => ({
+  workspaceState: {
+    phase: { id: "building", label: "Building", stage: null },
+    activity: { id: "idle", label: "Idle", since: null, session: null },
+    needs: question
+      ? [
+          {
+            id: "question:s",
+            kind: "question",
+            what: question,
+            since,
+            action: "Answer it",
+            source: "session" as const,
+          },
+        ]
+      : [],
+    agent: { id, since },
+  },
+});
+
 // SW-666: the engine's 5 s default timed out cases on a loaded host (SW-492 fixed one, then SW-153/SW-157 hit it).
 // 30 s for every case; a case's own `timeoutMs` wins.
 const test: typeof baseTest = (name, ...rest) => {
@@ -223,7 +248,7 @@ const STATUS = {
       slot: 1,
       ports: null,
       services: [],
-      claude: { state: "idle", agent: "working" },
+      ...ag("working"),
       model: "opus",
     },
     {
@@ -235,7 +260,7 @@ const STATUS = {
       slot: 2,
       ports: null,
       services: [],
-      claude: { state: "idle", agent: "needs-you" },
+      ...ag("needs-you"),
     },
     {
       name: "empty",
@@ -246,7 +271,7 @@ const STATUS = {
       slot: null,
       ports: null,
       services: [],
-      claude: { state: "idle", agent: "idle" },
+      ...ag("idle"),
     },
   ],
 };
@@ -339,15 +364,15 @@ test("workspace data comes from the node child, not an MCP call", async ($, on) 
   ]);
 });
 
-test("buildRows: the card's agent state is core's, with its time and question (SW-46)", () => {
+test("buildRows: the card's agent word is core's model, with its time and question (SW-46, SW-558)", () => {
   const ws = (name: string) => ({ name, path: `/ws/${name}` }) as WorkspaceRow;
-  const st = (name: string, agent: string) => ({
+  const st = (name: string, agent: Parameters<typeof ag>[0]) => ({
     name,
     state: "up" as const,
     running: 1,
     total: 1,
     services: [],
-    claude: { state: "idle", agent: agent as "idle", at: "2026-10-20T11:48:00Z", question: "Q?" },
+    ...ag(agent, "2026-10-20T11:48:00Z", agent === "needs-you" ? "Q?" : null),
     phase: "implement",
     autonomous: true,
     lastActivity: null,
@@ -360,15 +385,18 @@ test("buildRows: the card's agent state is core's, with its time and question (S
     },
     [],
   );
-  expect(rows.map((r) => r.claude.agent)).toEqual(["working", "needs-you", "done", "idle", "idle"]);
-  expect(rows[1]?.claude).toEqual({
-    agent: "needs-you",
-    at: "2026-10-20T11:48:00Z",
-    question: "Q?",
-  });
+  expect(rows.map((r) => r.workspaceState?.agent.id ?? null)).toEqual([
+    "working",
+    "needs-you",
+    "done",
+    "idle",
+    null,
+  ]);
+  expect(rows[1]?.workspaceState?.agent.since).toBe("2026-10-20T11:48:00Z");
+  expect(rows[1]?.workspaceState?.needs[0]?.what).toBe("Q?");
   expect([rows[0]?.phase, rows[0]?.autonomous]).toEqual(["implement", true]);
   // A workspace core reported nothing for reads idle, not working.
-  expect([rows[4]?.claude.question, rows[4]?.phase, rows[4]?.autonomous]).toEqual([
+  expect([rows[4]?.workspaceState, rows[4]?.phase, rows[4]?.autonomous]).toEqual([
     null,
     null,
     false,
@@ -762,7 +790,7 @@ function sample(over: Partial<WorkspaceRow>): WorkspaceRow {
     running: 2,
     total: 2,
     services: [],
-    claude: { agent: "working", at: null, question: null },
+    ...ag("working", null, null),
     phase: null,
     autonomous: false,
     model: null,
@@ -819,7 +847,7 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
           { name: "stellwerk-dashboard", state: "down" },
         ],
         stage: { index: 2, total: 4, name: "findings" },
-        claude: { agent: "needs-you", at: "2026-10-20T11:48:00Z", question: "Q?" },
+        ...ag("needs-you", "2026-10-20T11:48:00Z", "Q?"),
         session: DESKTOP,
       }),
     ),
@@ -850,7 +878,7 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
       sample({
         state: "partial",
         running: 1,
-        claude: { agent: "done", at: null, question: null },
+        ...ag("done", null, null),
         lifecycle: { state: "shipped", prs: [{ dir: "stellwerk", status: "shipped", url: null }] },
         session: DESKTOP,
       }),
@@ -869,7 +897,7 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
     card(
       sample({
         state: "paused",
-        claude: { agent: "needs-you", at: null, question: "Q?" },
+        ...ag("needs-you", null, "Q?"),
         paused: { at: "2026-10-20T11:48:00Z", containers: ["s-api"] },
         session: DESKTOP,
       }),
@@ -892,7 +920,7 @@ test("actionsFor and metaParts give the five Pane View samples their design butt
         issueId: null,
         issueUrl: null,
         phase: "implement",
-        claude: { agent: "idle", at: null, question: null },
+        ...ag("idle", null, null),
         session: DESKTOP,
       }),
       [PR(12, "OPEN", "fail", 2)],
@@ -2763,7 +2791,7 @@ test("SW-41: buildRows carries the start reason and crash loops; a missing statu
           running: 1,
           total: 1,
           services: [],
-          claude: { state: "idle", agent: "idle" },
+          ...ag("idle"),
           started,
           crashLoops,
         },
@@ -3136,9 +3164,12 @@ test("SW-487: a card lists every needs-you item with its action, the activity be
                   dismiss: "autofix-app",
                 }),
               ],
+              agent: { id: "needs-you" as const, since: null },
             },
           }
-        : s,
+        : s.name === "ab"
+          ? { ...s, workspaceState: undefined }
+          : s,
     ),
   };
   const prs = PRS.map((w) =>
@@ -3182,7 +3213,7 @@ test("SW-487: a card lists every needs-you item with its action, the activity be
   expect((await ui.find({ key: "need:ab:merge:sandbox" }))?.text).toBe(
     "● sandbox PR is approved and green — Merge it",
   );
-  // An older core sends no model: the chip's own time stands in (it was computed and never drawn).
-  expect((await ui.find({ key: "activity:ab" }))?.text).toBe("last activity");
+  // An older core sends no model: the chip reads Idle and its own time stands in (SW-558).
+  expect((await ui.find({ key: "activity:ab" }))?.text).toBe("no live turn, nothing asked");
   await ui.unmount();
 });

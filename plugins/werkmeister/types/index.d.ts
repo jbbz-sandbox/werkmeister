@@ -15,11 +15,12 @@ export type NeedItem = {
   dismiss?: string;
 };
 
-/** werkmeister-core `WorkspaceState` (SW-487): phase, activity and the needs-you list. */
+/** werkmeister-core `WorkspaceState` (SW-487): phase, activity, the needs-you list and the agent word (SW-558). */
 export type StateModel = {
   phase: { id: string; label: string; stage: string | null };
   activity: { id: string; label: string; since: string | null; session: string | null };
   needs: NeedItem[];
+  agent: { id: "working" | "needs-you" | "done" | "idle"; since: string | null };
 };
 
 export type WorkspaceRow = {
@@ -53,13 +54,7 @@ export type WorkspaceRow = {
   running: number;
   total: number;
   services: ServiceHealth[];
-  /** The agent state core reports (SW-46): idle with no status, `at` and `question` null when unknown. */
-  claude: {
-    agent: "working" | "needs-you" | "done" | "idle";
-    at: string | null;
-    question: string | null;
-  };
-  /** Core's state model (SW-487); null or absent with a core older than it. */
+  /** Core's state model (SW-487), the agent word included (SW-558); null or absent with a core older than it. */
   workspaceState?: StateModel | null;
   /** JIT phase from the newest live note (SW-47), or null. */
   phase: string | null;

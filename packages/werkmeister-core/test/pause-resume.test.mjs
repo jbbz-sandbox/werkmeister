@@ -11,7 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
-import { useDockerEngine, writeSessionState } from "./fixtures.mjs";
+import { useDockerEngine, writeSessionState, writeSessions } from "./fixtures.mjs";
 
 useDockerEngine();
 
@@ -318,10 +318,7 @@ test("resumeAndNudge: an open codex process in a codex workspace gets a pending 
 
 test("resumeAndNudge: a live session gets a pending nudge, claimed once", async () => {
   paused(true);
-  fs.writeFileSync(
-    path.join(dot, "agent-state.json"),
-    JSON.stringify({ sessions: { "s-1": { status: "idle", at: new Date().toISOString() } } }),
-  );
+  writeSessions(ws, { "s-1": { status: "idle", at: new Date().toISOString() } });
   assert.equal((await resumeAndNudge("demo-ws", ws, "demo")).nudge, "pending");
   assert.equal(readLog(), "", "no second claude on a live transcript");
   assert.equal(await claimResumeNudge("demo-ws"), RESUME_NUDGE);

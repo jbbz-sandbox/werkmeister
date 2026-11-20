@@ -63,7 +63,6 @@ export const STALE_SESSION_MS = 24 * 60 * 60_000;
 
 // The id comes from hook input and names a file.
 const SESSION_ID = /^[\w-]+$/;
-const legacyFile = (root: string) => path.join(dotDir(root), "agent-state.json");
 export const sessionsDir = (root: string) => path.join(dotDir(root), "sessions");
 const sessionPath = (root: string, id: string) => path.join(sessionsDir(root), `${id}.json`);
 
@@ -98,18 +97,12 @@ function sessionOf(s: any): SessionRecord | null {
  * The workspace's sessions by id; empty when there are none. A busy record with no ask, silent
  * for {@link STALE_SESSION_MS}, is a crashed session: left out and its file deleted (SW-559).
  * Idle records and asks stay, since a question can wait on the person past a day.
- * shortcut: also reads the pre-SW-487 `agent-state.json` `sessions{}` for ids with no file of their
- * own, so a session open across the upgrade still counts as live; drop with the VS Code/dashboard migration.
  */
 export function readSessions(root: string, now = Date.now()): Record<string, SessionRecord> {
   const out: Record<string, SessionRecord> = {};
   // `<` is false for an unparseable date, so that record goes as well.
   const fresh = (r: SessionRecord) =>
     r.status === "idle" || r.ask !== undefined || now - lastOf(r) < STALE_SESSION_MS;
-  for (const [id, s] of Object.entries(readJson(legacyFile(root))?.["sessions"] ?? {})) {
-    const r = sessionOf(s);
-    if (r && fresh(r)) out[id] = r;
-  }
   let names: string[] = [];
   try {
     names = fs.readdirSync(sessionsDir(root));
@@ -849,19 +842,12 @@ export function record(input: Record<string, any>, now = new Date()): string | n
   const id = input["session_id"];
   if (!root || typeof id !== "string" || !SESSION_ID.test(id)) return null;
   const file = sessionPath(root, id);
-  const own = sessionOf(readJson(file));
-  const legacy = readJson(legacyFile(root));
-  const current = own ?? sessionOf(legacy?.["sessions"]?.[id]);
+  const current = sessionOf(readJson(file));
   const headless = process.env.CLAUDE_CODE_ENTRYPOINT?.startsWith("sdk") ?? false;
   // `claude -p --resume <id>` shares an open session's id: its busy/idle counts, its end must not end that session.
   const foreign = headless && current !== null && !current.headless;
   const next = nextSession(input, current, now, { headless, foreign });
   if (next === undefined) return null;
-  // A session open across the upgrade moves out of the old file on its first event, so it can't reappear after it ends.
-  if (legacy?.["sessions"]?.[id]) {
-    delete legacy["sessions"][id];
-    writeAtomic(legacyFile(root), legacy);
-  }
   if (next === null) {
     if (!current) return null;
     fs.rmSync(file, { force: true });

@@ -5,6 +5,8 @@
  */
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import type { NeedItem, WorkspaceStatus } from "werkmeister-core";
+import { type DisplayOptions, displayModel } from "werkmeister-ui/display-model";
 import { Css } from "werkmeister-ui/theme";
 import { Usage, type WorkspaceUsage } from "werkmeister-ui/usage-widget";
 import type { HostBridge } from "werkmeister-ui/workspace-ui";
@@ -13,20 +15,9 @@ interface InfraService {
   name: string;
   state: "healthy" | "starting" | "unhealthy" | "running" | "down";
 }
-interface FeatureStatus {
-  name: string;
-  state: "up" | "partial" | "stopped" | "paused" | "down" | "unknown";
-  running: number;
-  total: number;
-  slot: number | null;
-  ports: string | null;
-  services: InfraService[];
-  claude: {
-    state: "running" | "done" | "failed" | "idle";
-    agent: "working" | "needs-you" | "done" | "idle";
-    question: string | null;
-  };
-}
+type FeatureStatus = WorkspaceStatus;
+/** Per workspace: what its PRs need and the phase note, from `workspace-prs` (SW-558). */
+type PrExtra = Record<string, Pick<DisplayOptions, "prNeeds" | "phaseDetail">>;
 interface WorkspaceStatusResult {
   infra: {
     state: "up" | "partial" | "down" | "unknown";
@@ -92,9 +83,10 @@ const CSS = `
   .health .row.sub .name { font-weight: 500; }
   .health .row .slot { color: var(--sd-muted); font-size: 12px; }
   .health .row .claude { margin-left: auto; font-size: 12px; color: var(--sd-muted); }
-  .health .row .claude.working { color: var(--sd-ok); font-weight: 600; }
-  .health .row .claude.needs-you { color: var(--sd-warn); font-weight: 600; }
-  .health .row .claude.done { color: var(--sd-ok); }
+  .health .row .claude.t-ok { color: var(--sd-ok); font-weight: 600; }
+  .health .row .claude.t-needs { color: var(--sd-warn); font-weight: 600; }
+  .health .row.sub .muted { color: var(--sd-muted); }
+  .health .row.sub.need { color: var(--sd-warn); }
   .health .row .claude.failed { color: var(--sd-err); font-weight: 600; }
   .health .row .detail, .health .kube-row .detail { color: var(--sd-err); font-size: 12px; margin-left: auto; }
   .health .kube-row {
@@ -131,17 +123,17 @@ function ServiceRow({ s, nested }: { s: InfraService; nested: boolean }) {
   );
 }
 
-function ClaudeBadge({ c }: { c: FeatureStatus["claude"] }) {
-  if (c.agent === "needs-you")
-    return (
-      <span className="claude needs-you" title={c.question ?? undefined}>
-        ● Needs you
-      </span>
-    );
-  if (c.agent === "working") return <span className="claude working">◌ Working</span>;
-  if (c.state === "failed") return <span className="claude failed">claude: failed</span>;
-  if (c.agent === "done") return <span className="claude done">✓ Done</span>;
-  return null;
+/** The card's agent chip (`◌ Working`, `● Needs you`, `✓ Done`, `⏸ Paused`); nothing for Idle. */
+function ClaudeBadge({ f, d }: { f: FeatureStatus; d: ReturnType<typeof displayModel> }) {
+  const id = f.workspaceState.agent.id;
+  if (f.claude.state === "failed" && id !== "needs-you" && id !== "working")
+    return <span className="claude failed">claude: failed</span>;
+  if (!f.paused && id === "idle") return null;
+  return (
+    <span className={`claude t-${d.agent.tone}`} title={d.question ?? undefined}>
+      {d.agent.label}
+    </span>
+  );
 }
 
 /** On-demand token/model breakdown; its open state survives the 5s poll re-render. */
@@ -180,7 +172,15 @@ function FeatureUsage({ name, bridge }: { name: string; bridge: HostBridge }) {
   );
 }
 
-function Features({ features, bridge }: { features: FeatureStatus[]; bridge: HostBridge }) {
+function Features({
+  features,
+  prs,
+  bridge,
+}: {
+  features: FeatureStatus[];
+  prs: PrExtra;
+  bridge: HostBridge;
+}) {
   // A health view cares about live sandboxes; hide workspaces with no containers.
   const active = features
     .filter((f) => f.total > 0)
@@ -191,25 +191,47 @@ function Features({ features, bridge }: { features: FeatureStatus[]; bridge: Hos
         {"No feature sandboxes up (start one with `werkmeister feature up <feature>`)"}
       </div>
     );
-  return active.map((f) => (
-    <Fragment key={f.name}>
-      <div className="row">
-        <span className={`dot ${FEATURE_DOT[f.state]}`} />
-        <span className="name">{f.name}</span>
-        {f.slot != null && <span className="slot">slot {f.slot}</span>}
-        {f.ports && <span className="port">:{f.ports}</span>}
-        <span className="state">
-          {f.state}
-          {f.total ? ` ${f.running}/${f.total}` : ""}
-        </span>
-        <ClaudeBadge c={f.claude} />
-      </div>
-      {f.services.map((s) => (
-        <ServiceRow key={s.name} s={s} nested />
-      ))}
-      <FeatureUsage name={f.name} bridge={bridge} />
-    </Fragment>
-  ));
+  return active.map((f) => {
+    // The pane's words: phase, activity and every need, PR items included (SW-558).
+    const d = displayModel(f, prs[f.name]);
+    const where = [
+      d.phase?.text,
+      d.activity && [d.activity.text, d.activity.time].filter(Boolean).join(" · "),
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    return (
+      <Fragment key={f.name}>
+        <div className="row">
+          <span className={`dot ${FEATURE_DOT[f.state]}`} />
+          <span className="name">{f.name}</span>
+          {f.slot != null && <span className="slot">slot {f.slot}</span>}
+          {f.ports && <span className="port">:{f.ports}</span>}
+          <span className="state">
+            {f.state}
+            {f.total ? ` ${f.running}/${f.total}` : ""}
+          </span>
+          <ClaudeBadge f={f} d={d} />
+        </div>
+        {where && (
+          <div className="row sub">
+            <span className="muted">{where}</span>
+          </div>
+        )}
+        {d.needsList.map((n) => (
+          <div className="row sub need" key={n.id}>
+            ● {n.what}
+            {n.guess ? " (guess)" : ""}
+            {n.since ? ` · ${n.since}` : ""} — {n.action}
+          </div>
+        ))}
+        {f.services.map((s) => (
+          <ServiceRow key={s.name} s={s} nested />
+        ))}
+        <FeatureUsage name={f.name} bridge={bridge} />
+      </Fragment>
+    );
+  });
 }
 
 function KubeRow({
@@ -260,6 +282,7 @@ export function HealthTab({ bridge, active }: { bridge: HostBridge; active: bool
   const [ws, setWs] = useState<WorkspaceStatusResult | null>(null);
   const [k8s, setK8s] = useState<K8sForwardsResult | null>(null);
   const [kube, setKube] = useState<KubeContextResult | null>(null);
+  const [prs, setPrs] = useState<PrExtra>({});
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ text: "", err: false });
   const inFlight = useRef(false);
@@ -300,10 +323,32 @@ export function HealthTab({ bridge, active }: { bridge: HostBridge; active: bool
     inFlight.current = false;
   }, [bridge]);
 
+  // One `gh pr list` per repo worktree: on show and on Refresh, never on the poll.
+  const loadPrs = useCallback(async () => {
+    try {
+      const d = (await bridge.callTool("workspace-prs", {})) as {
+        workspaces?: { name: string; needs?: NeedItem[]; phaseDetail?: string | null }[];
+      };
+      setPrs(
+        Object.fromEntries(
+          (d.workspaces ?? []).map((w) => [
+            w.name,
+            { prNeeds: w.needs ?? [], phaseDetail: w.phaseDetail ?? null },
+          ]),
+        ),
+      );
+    } catch {
+      // The rows still show the sweep's own needs; the PRs tab reports the failure.
+    }
+  }, [bridge]);
+
   // Load each time the tab is shown (including the first time).
   useEffect(() => {
-    if (active) void load();
-  }, [active, load]);
+    if (active) {
+      void load();
+      void loadPrs();
+    }
+  }, [active, load, loadPrs]);
 
   // Auto-refresh only while the tab is on screen and the browser tab is in front,
   // so we don't hammer docker/kubectl for a view nobody's looking at.
@@ -328,13 +373,21 @@ export function HealthTab({ bridge, active }: { bridge: HostBridge; active: bool
     <div className="health">
       <Css id="health" css={CSS} />
       <div className="controls">
-        <button type="button" className="refresh" disabled={loading} onClick={() => void load()}>
+        <button
+          type="button"
+          className="refresh"
+          disabled={loading}
+          onClick={() => {
+            void load();
+            void loadPrs();
+          }}
+        >
           ↻ Refresh
         </button>
       </div>
       <div className={status.err ? "load-status err" : "load-status"}>{status.text}</div>
       <div className="sec-h">Feature Sandboxes</div>
-      <div>{ws && <Features features={ws.statuses} bridge={bridge} />}</div>
+      <div>{ws && <Features features={ws.statuses} prs={prs} bridge={bridge} />}</div>
       <div className="sec-h">Infra Services</div>
       <div>
         {ws &&

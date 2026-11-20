@@ -12,6 +12,27 @@ const ws = (name, over = {}) => ({
   ...over,
 });
 
+/** The model's agent word (SW-558), plus the session's question when it asked one. */
+const ag = (id, since = null, question = null) => ({
+  workspaceState: {
+    phase: { id: "building", label: "Building", stage: null },
+    activity: { id: "idle", label: "Idle", since: null, session: null },
+    needs: question
+      ? [
+          {
+            id: "question:s",
+            kind: "question",
+            what: question,
+            since,
+            action: "Answer it",
+            source: "session",
+          },
+        ]
+      : [],
+    agent: { id, since },
+  },
+});
+
 const st = (name, over = {}) => ({
   name,
   project: `werkmeister-${name}`,
@@ -21,7 +42,8 @@ const st = (name, over = {}) => ({
   slot: null,
   ports: null,
   services: [],
-  claude: { state: null, agent: "idle", at: null, question: null },
+  claude: { state: null },
+  ...ag("idle", null, null),
   stage: null,
   phase: null,
   autonomous: false,
@@ -41,7 +63,8 @@ const tree = () =>
         services: [{ name: "frontend", state: "healthy" }],
         stage: { index: 2, total: 4, name: "implement" },
         model: "opus",
-        claude: { state: null, agent: "needs-you", at: null, question: '<img src=x onerror="1">' },
+        claude: { state: null },
+        ...ag("needs-you", null, '<img src=x onerror="1">'),
       }),
     ],
     null,
@@ -92,14 +115,14 @@ test("the card's one button acts on the run: start it, hold it, or pick it back 
   assert.equal(button(card({}))[2], "▶ Start work");
   assert.equal(button(card({ stage: { index: 1, total: 4, name: "scope" } }))[1], "startWork");
   // A live run, or containers still running under a finished one.
-  const working = { state: null, agent: "working", at: "2026-10-22T10:00:00Z", question: null };
-  assert.equal(button(card({ claude: working }))[2], "⏸ Pause");
+  const working = ag("working", "2026-10-22T10:00:00Z");
+  assert.equal(button(card(working))[2], "⏸ Pause");
   assert.equal(
     button(card({ state: "up", running: 1, total: 1, lastActivity: "2026-10-22T10:00:00Z" }))[1],
     "pause",
   );
   const paused = { at: "2026-10-22T10:00:00Z", containers: [] };
-  assert.equal(button(card({ state: "paused", paused, claude: working }))[2], "▶ Resume");
+  assert.equal(button(card({ state: "paused", paused, ...working }))[2], "▶ Resume");
   // Past the first stage with nothing live and nothing running: nothing to start or hold.
   assert.equal(button(card({ stage: { index: 3, total: 4, name: "verify" } })), null);
   assert.doesNotMatch(card({ state: "up", running: 1, total: 1 }), /sandbox\.up"/);
@@ -194,15 +217,11 @@ test("exactly one tile gets the cue: the card, or Master control, or none", () =
 });
 
 test("Master control counts what needs you and links each count to its first card", () => {
-  const needs = { state: null, agent: "needs-you", at: null, question: "?" };
+  const needs = ag("needs-you", null, "?");
   const html = renderCards(
-    buildTree(
-      [ws("a"), ws("b"), ws("c")],
-      [st("a"), st("b", { claude: needs }), st("c", { claude: needs })],
-      null,
-      [],
-      { prs: new Map([["a", [{ url: PR, state: "OPEN", ci: null, failingChecks: 0 }]]]) },
-    ),
+    buildTree([ws("a"), ws("b"), ws("c")], [st("a"), st("b", needs), st("c", needs)], null, [], {
+      prs: new Map([["a", [{ url: PR, state: "OPEN", ci: null, failingChecks: 0 }]]]),
+    }),
   );
   assert.match(html, /<a href="#ws-b" class="c-charts-yellow">2 need you<\/a>/);
   assert.match(html, /<a href="#ws-a">1 PR to review<\/a>/);
