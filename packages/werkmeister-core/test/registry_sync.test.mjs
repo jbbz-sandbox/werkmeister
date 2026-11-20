@@ -751,3 +751,15 @@ test("syncRegistry --from fails loud for a checkout without a fragment (SW-281)"
   assert.ok(step.detail.includes(nowhere), step.detail);
   assert.equal(existsSync(path.join(root, "out.yaml")), false);
 });
+
+// SW-891: compose mounts `<ws>/<repo>/<path>/src` read-write, so a fragment's `..` reached another workspace.
+test("mergeRegistry refuses a service path that leaves the repo", () => {
+  for (const p of ["../../other-ws/werkmeister", "apps/../../x", "..\\x"])
+    for (const section of ["services", "setup_services"])
+      assert.throws(
+        () => merge([frag("app", { [section]: { api: { path: p } } })]),
+        (e) => e instanceof RegistryError && /leaves the repo/.test(e.message),
+        `${section} ${p}`,
+      );
+  assert.doesNotThrow(() => merge([frag("app", { services: { api: { path: "apps/..api" } } })]));
+});

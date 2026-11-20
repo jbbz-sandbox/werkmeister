@@ -234,6 +234,16 @@ export function mergeRegistry(fragments: Fragment[], opts: MergeOptions): Merged
             );
           }
           entry = { repo: fragment.repo, ...raw };
+          // SW-891: compose mounts `<ws>/<repo>/<path>/src` read-write, so `..` would reach another workspace.
+          if (
+            String(entry["path"] ?? "")
+              .split(/[\\/]/)
+              .includes("..")
+          ) {
+            throw new RegistryError(
+              `${fragment.path}: ${section}.${name} path ${entry["path"]} leaves the repo (no ..)`,
+            );
+          }
         }
         if (section === "services") {
           if (entry["port_offset"] !== undefined) {

@@ -16,7 +16,7 @@ an unexpected top-level key):
 ```yaml
 services:
   my-api:
-    path: services/my-api         # within the repo; `.` for the whole repo
+    path: services/my-api         # within the repo; `.` for the whole repo; a `..` segment fails the merge
     type: api                     # api | web | library | cli | extension
     archetype: node-service       # optional; node-web | node-service | node-tool | mcp-client
     test: "npm test"
