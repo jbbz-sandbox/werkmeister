@@ -16,6 +16,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { isDeepStrictEqual } from "node:util";
 
 import { parse as parseYaml } from "yaml";
 
@@ -71,6 +72,31 @@ export function hostAccess(entry: ServiceEntry | undefined, workspaceRoot?: stri
       Boolean(own && roots.some((r) => within(host, r)) && !within(host, own)),
   );
 }
+
+// SW-854: what decides the container a start runs; compose runs the branch's (SW-337).
+const START_FIELDS = [
+  "command",
+  "image",
+  "build",
+  "entrypoint",
+  "archetype",
+  "extra_volumes",
+  "environment",
+];
+
+/** The start fields *branch*'s entry for *svc* changes from *registry*'s (SW-854, SW-891). */
+export const changedStartFields = (
+  registry: ServicesConfig,
+  branch: ServicesConfig,
+  svc: string,
+): string[] =>
+  START_FIELDS.filter(
+    (k) =>
+      !isDeepStrictEqual(
+        (registry[svc] as Record<string, unknown> | undefined)?.[k],
+        (branch[svc] as Record<string, unknown> | undefined)?.[k],
+      ),
+  );
 
 /** True when *entry*'s container sees host path *p* at the same path (one of its binds covers it). */
 export function seesHostPath(entry: ServiceEntry | undefined, p: string): boolean {

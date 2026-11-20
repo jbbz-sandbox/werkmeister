@@ -14,7 +14,13 @@ import { isDeepStrictEqual } from "node:util";
 import YAML from "yaml";
 
 import { clearNotice, raiseNotice, writeWakeNudge } from "./agent_state.js";
-import { serviceNoTests, serviceTestCommand } from "./archetypes.js";
+import {
+  changedStartFields,
+  hostAccess,
+  serviceNoTests,
+  serviceTestCommand,
+  withComposeMounts,
+} from "./archetypes.js";
 import { COMPOSE_FILE } from "./compose_file.js";
 import {
   type ArchetypeRegistry,
@@ -1512,9 +1518,30 @@ async function gateChecks(
     } catch (e) {
       add("containers", false, `branch compose: ${e instanceof Error ? e.message : String(e)}`);
     }
+  // SW-891: an agent's gate in an autonomous workspace never starts a host-mounted service with the branch's
+  // start fields. SW-854's allow rules can't stop it: they are written before the agent edits the fragment.
+  // An agent's shell has CLAUDECODE; the daemon (MCP, pane) and wrappers have no TTY. A person's terminal has one.
+  const refused = new Set<string>();
+  if (readAutonomous(ws) && (process.env["CLAUDECODE"] || !process.stdin.isTTY)) {
+    // Branch-only ids too, so a new service's `${WORKSPACE}` mounts are resolved before the check.
+    const mounted = withComposeMounts({ ...services, ...deps.services }, ws, services);
+    for (const svc of changed) {
+      const fields = changedStartFields(deps.services, services, svc);
+      if (!fields.length || !hostAccess(mounted[svc], ws)) continue;
+      refused.add(svc);
+      add(
+        `start ${svc}`,
+        false,
+        `not started with the branch's ${fields.join(", ")}: it mounts the docker socket, the werkmeister home or a workspaces root, and this gate did not run in a person's terminal — run \`werkmeister pr gate\` yourself, in a terminal outside Claude Code`,
+      );
+    }
+    changed = changed.filter((s) => !refused.has(s));
+  }
 
+  // A refused one gets no container or row: a compose.yml start would clear its failed row (SW-891).
   const withCommand = touched.filter(
-    (s) => !reason(skips[s]) && serviceTestCommand(s, services[s], deps.archetypes),
+    (s) =>
+      !reason(skips[s]) && !refused.has(s) && serviceTestCommand(s, services[s], deps.archetypes),
   );
   const covers = coveredRows(
     Object.fromEntries(
@@ -1716,7 +1743,8 @@ async function gateChecks(
   }
 
   for (const svc of touched) {
-    if (covers[svc]) continue;
+    // A refused one's row would test compose.yml's container, not the branch's (SW-891).
+    if (covers[svc] || refused.has(svc)) continue;
     const cmd = serviceTestCommand(svc, services[svc], deps.archetypes);
     const why = reason(skips[svc]);
     const noTests = serviceNoTests(services[svc]);

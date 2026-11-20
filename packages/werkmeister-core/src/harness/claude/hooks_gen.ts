@@ -44,10 +44,10 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { isDeepStrictEqual } from "node:util";
 
 import {
   candidateServiceNames,
+  changedStartFields,
   containerTestCommand,
   hostAccess,
   isPlainChain,
@@ -424,16 +424,6 @@ export const READ_ONLY_GIT_RULES = [
 // `werkmeister:*`, `docker:*`, `npm:*`, `gh:*` or whole MCP server, which reached
 // the shared proxy, other features and the linked CLI. The PR guard is a
 // PreToolUse deny, so `gh pr create` stays blocked.
-// SW-854: what decides the container a start runs; a branch that changes one loses `unattended_start`.
-const START_FIELDS = [
-  "command",
-  "image",
-  "build",
-  "entrypoint",
-  "archetype",
-  "extra_volumes",
-  "environment",
-];
 const WHOLE_FEATURE_STARTS = ["up", "restart", "feature up", "feature restart"];
 
 // SW-626: the git a run needs, not `git:*`, which ran commands through `rebase -x`, `bisect run`,
@@ -728,8 +718,7 @@ export function workspaceAllowRules(
   );
   // `unattended_start` comes from the machine registry (synced from main), never the branch's fragment, and
   // holds only while the branch runs the same container: its fragment's `command:`/`image:` win in compose (SW-337).
-  const unchanged = (svc: string) =>
-    START_FIELDS.every((k) => isDeepStrictEqual(loaded[svc]?.[k], branch[svc]?.[k]));
+  const unchanged = (svc: string) => !changedStartFields(loaded, branch, svc).length;
   const hostMounted = Object.keys(registry).filter(
     (svc) =>
       hostAccess(registry[svc], workspaceRoot) &&
