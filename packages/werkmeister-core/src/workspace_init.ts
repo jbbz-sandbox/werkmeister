@@ -51,7 +51,6 @@ import {
   writeWorkspaceDevcontainer,
 } from "./devcontainer_gen.js";
 import { WorkspaceError } from "./errors.js";
-import { writeFixtureWrapper } from "./fixture_workspace.js";
 import { workspaceUnder } from "./gate.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { candidateWorkspaceRoots, loadPaths, loadWorkspaceRepo } from "./global_config.js";
@@ -90,7 +89,7 @@ import {
   strategyById,
 } from "./strategies/index.js";
 import type { IssueRef } from "./strategies/types.js";
-import { writeTempHomeWrapper } from "./temp_home.js";
+import { writeFixtureWrapper, writeTempHomeWrapper } from "./temp_home.js";
 import {
   _INPUT_FIELDS,
   _WORKSPACE_CONFIG_NAMES,

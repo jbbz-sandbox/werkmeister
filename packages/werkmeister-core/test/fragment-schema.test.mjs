@@ -186,7 +186,7 @@ test("docs-site validate runs in the container and installs nothing on the host 
 
 // SW-684: the validate text's usage line is the script's own, so a new fixture flag shows up in both.
 test("core validate lists with-fixture-workspace's usage as the script prints it (SW-684)", () => {
-  const src = fs.readFileSync(new URL("../src/fixture_workspace.ts", import.meta.url), "utf8");
+  const src = fs.readFileSync(new URL("../src/temp_home.ts", import.meta.url), "utf8");
   const usage = src.match(/# usage: (with-fixture-workspace .*)$/m)[1];
   assert.ok(fragment.services["werkmeister-core"].validate.includes(`Usage: \`${usage}\``));
 });

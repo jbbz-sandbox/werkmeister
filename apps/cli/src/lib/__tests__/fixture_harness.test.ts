@@ -11,8 +11,8 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { writeFixtureWrapper } from "werkmeister-core/fixture_workspace";
-import { writeTempHomeWrapper } from "werkmeister-core/temp_home";
+
+import { writeFixtureWrapper, writeTempHomeWrapper } from "werkmeister-core/temp_home";
 
 const REPO = path.resolve(import.meta.dirname, "../../../../..");
 
