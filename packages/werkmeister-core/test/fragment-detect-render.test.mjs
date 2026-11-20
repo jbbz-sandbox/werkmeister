@@ -281,3 +281,38 @@ test("a section present but empty, null or flow-styled is left alone, and the sk
   const root = fixture(DEMO, "demo-services");
   assert.deepEqual(renderFragment(planFragment(root, opts(root))).skipped, []);
 });
+
+// SW-934: a fragment that runs postgres itself and marks the app idle gets neither back.
+test("a local postgres service and an idle type are not re-proposed", () => {
+  const existing =
+    "services:\n  app:\n    path: .\n    type: cli\n    environment:\n      DATABASE_URL: postgres://u@postgres:5432/db\n  postgres:\n    image: postgres:16\n";
+  const root = fixture(
+    {
+      Dockerfile: "FROM python:3.14-slim\nRUN pip install psycopg2\nCMD sleep infinity\n",
+      "docker-compose.yml":
+        "services:\n  app:\n    build: .\n    command: sleep infinity\n    environment:\n      DATABASE_URL: postgres://u@postgres:5432/db\n  postgres:\n    image: postgres:16\n",
+      ".werkmeister/services.yaml": existing,
+    },
+    "app",
+  );
+  const doc = parse(renderFragment(planFragment(root, opts(root))).yaml);
+  assert.equal(doc.infrastructure, undefined);
+  assert.equal(doc.services.app.command, undefined);
+});
+
+test("a local service the existing DATABASE_URL names covers the compose datastore (SW-934)", () => {
+  const existing =
+    "services:\n  app:\n    path: .\n    environment:\n      DATABASE_URL: postgres://u@db:5432/db\n  db:\n    image: postgres:16\n";
+  const compose =
+    "services:\n  app:\n    build: .\n    environment:\n      DATABASE_URL: postgres://u@postgres:5432/db\n  postgres:\n    image: postgres:16\n";
+  const run = (files) => {
+    const root = fixture({ Dockerfile: "FROM node:22\nEXPOSE 3000\n", ...files }, "app");
+    return parse(renderFragment(planFragment(root, opts(root))).yaml);
+  };
+  assert.equal(
+    run({ "docker-compose.yml": compose, ".werkmeister/services.yaml": existing }).infrastructure,
+    undefined,
+  );
+  // Without the local service, the datastore is still proposed.
+  assert.ok(run({ "docker-compose.yml": compose }).infrastructure.postgres);
+});
