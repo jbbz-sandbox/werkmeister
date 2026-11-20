@@ -143,7 +143,10 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     }
   }
 
+  // SW-852: every section this command never prompts for (ingress, jira, budget, models…)
+  // is carried across as is; only the keys below are rewritten.
   const newCfg = {
+    ...cfg,
     version: 1,
     paths: {
       // werkmeister_root is self-derived; stored only so env.sh can export
@@ -154,17 +157,6 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     },
     // Preserve any hand-added overrides verbatim.
     overrides: cfg.overrides || {},
-    // Same for the sections this command never prompts for: the ingress domains
-    // (owned by `werkmeister machine setup`) and the hand-pasted Jira credentials.
-    // Rebuilding the YAML without them would silently drop a working ingress
-    // config or a live token.
-    ...(cfg.ingress ? { ingress: cfg.ingress } : {}),
-    ...(cfg.jira ? { jira: cfg.jira } : {}),
-    ...(cfg.projects ? { projects: cfg.projects } : {}),
-    // SW-842: the machine opt-out for workspace ask rules; dropping it would bring the asks back.
-    ...(cfg.workspace_ask_rules !== undefined
-      ? { workspace_ask_rules: cfg.workspace_ask_rules }
-      : {}),
   };
 
   const saved = gc.save(newCfg);

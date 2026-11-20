@@ -101,6 +101,24 @@ describe("config command", () => {
     expect(YAML.parse(fs.readFileSync(cfgFile, "utf8")).workspace_ask_rules).toBe(false);
   });
 
+  // SW-852: every top-level section it never prompts for survives, not only a fixed list.
+  it("keeps hand-set budget, models and github_ingest", async () => {
+    gc.save({
+      paths: { repos_root: tmp, workspaces_root: tmp },
+      budget: { host_load: 0.5 },
+      models: { default: "opus" },
+      github_ingest: { queue_url: "https://sqs/q", region: "us-east-1" },
+    });
+    vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await run(args({ repos_root: tmp, workspaces_root: tmp }));
+
+    const saved = YAML.parse(fs.readFileSync(cfgFile, "utf8"));
+    expect(saved.budget).toEqual({ host_load: 0.5 });
+    expect(saved.models).toEqual({ default: "opus" });
+    expect(saved.github_ingest.queue_url).toBe("https://sqs/q");
+  });
+
   it("no arguments prints the config and writes nothing", async () => {
     // Regression (SW-136): the bare form used to rebuild config.yaml, env.sh,
     // ~/.zshenv and the Desktop config from defaults.
