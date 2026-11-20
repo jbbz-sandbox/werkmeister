@@ -27,7 +27,6 @@ test/fragment-detect-package.test.mjs
 test/fragment-detect-precedence.test.mjs
 test/fragment-detect-render.test.mjs
 test/fragment-detect-workspace.test.mjs
-test/gate.test.mjs
 test/handoff-push-error.test.mjs
 test/infra-abort.test.mjs
 test/infra-needs.test.mjs
