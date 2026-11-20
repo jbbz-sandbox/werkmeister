@@ -4,6 +4,7 @@ import * as path from "node:path";
 
 import { parse as parseYaml } from "yaml";
 
+import { IDLE_SERVICE_TYPES } from "../config.js";
 import type { Runner } from "../machine_setup.js";
 import { FRAGMENT_REL } from "../registry_sync.js";
 import { allocateForwards, allocateOffsets, rewriteEnv, takenPorts } from "./allocate.js";
@@ -201,7 +202,7 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
 
   const corr = correlate(findings, repo);
   const services = corr.services.map(resolveService);
-  const infrastructure = corr.infrastructure.map((g) => resolveInfra(g, corr.skipped));
+  let infrastructure = corr.infrastructure.map((g) => resolveInfra(g, corr.skipped));
 
   // An entry the human renamed keeps its name: a service matched by path, infrastructure by pod prefix.
   const adopt = (section: string, key: string, value: unknown) =>
@@ -217,6 +218,34 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
       for (const c of s.conflicts) c.service = name;
     }
   }
+  // SW-934: what the existing fragment already covers isn't proposed again. A datastore it runs
+  // as a local container (`image:`), by name or as the host its env URLs point at, needs no forward.
+  const existingServices: Record<string, any> = existingDoc?.services ?? {};
+  const local = new Set(
+    Object.entries(existingServices)
+      .filter(([, e]) => e?.image)
+      .map(([n]) => n),
+  );
+  const hostOf = (url: unknown) => {
+    try {
+      return new URL(String(url)).hostname;
+    } catch {
+      return "";
+    }
+  };
+  const covered = new Set(local);
+  for (const s of services) {
+    const now = (s.fields.environment?.value ?? {}) as Record<string, string>;
+    for (const [key, url] of Object.entries(existingServices[s.name]?.environment ?? {})) {
+      if (local.has(hostOf(url)) && hostOf(now[key])) covered.add(hostOf(now[key]));
+    }
+    // An idle type already sleeps; `sleep infinity` as its command adds nothing.
+    const type = existingServices[s.name]?.type ?? s.fields.type?.value;
+    const idleCommand = /(^|&& )(exec )?sleep infinity$/.test(String(s.fields.command?.value));
+    if (IDLE_SERVICE_TYPES.includes(type) && idleCommand) delete s.fields.command;
+  }
+  infrastructure = infrastructure.filter((i) => !covered.has(i.name));
+
   // SW-928: a service with no test command leaves the PR gate nothing to run, so say so.
   for (const s of services) {
     if (s.fields.test || existingDoc?.services?.[s.name]?.test !== undefined) continue;
