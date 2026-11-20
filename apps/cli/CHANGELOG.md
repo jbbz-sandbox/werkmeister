@@ -1,5 +1,23 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.96.5
+
+### Patch Changes
+
+- 28e90fe: `werkmeister pr status` in a changesets repo records, at merge, the public packages the PR's own changesets name (`release_packages:`). It marks the PR shipped only once each of those packages has a `<pkg>@*` release tag. Until then it reports `partially released: <pkg> missing`, and neither moves the issue to Done nor prompts a close-out (SW-712).
+- 94be723: The published werkmeister-core package no longer ships the test fixtures `fixture_fakes` and `fixture_workspace`. The `with-fixture-workspace` wrapper writer that init uses moved to `werkmeister-core/temp_home` (SW-714).
+- 8583542: `werkmeister issue start` reads a linked checkout as current when the only commits it lacks from `origin/main` are changesets "version packages" commits (CHANGELOG.md files, deleted `.changeset/*.md`, and `"version"` lines in package.json). A run no longer stops to rebuild a CLI whose code is the same. Any other missing commit still reads stale (SW-719).
+- 66f289d: The `werkmeister-core/sdk` entry now exports the types its public members use, so callers can name them: `Runner`, `Deps`, `InitContext`, `CacheRegistry`, `CacheEntry`, `CacheSnapshot`, `RunResult`, `HostLookup`, `ContainerStats`, `Recommendation`, `ServiceUsage`, `ServiceEndpoint`, `Usage`, `HostSummary`, `FeatureSnapshot`, `InfraContainer`, `ForwardStatus`, `WebServerStatus`, `InterceptRow`, `DecisionSource`, `StrategyId`, `IssueSnapshot`, `QuestionKind`, `ResolvedService`, `ResolvedInfra`, `HooksSupport` and `HarnessId`, plus `stdoutRunner`, `portsPerSlot`, `defaultDeps` and `GraduationError`. Other contract fixes:
+
+  - `infraDown`, `infraStop` and `infraRestart` resolve `true` or `false`, as `infraUp` does, instead of only logging a Docker failure.
+  - `staleTokens` throws `WorkspaceError`, and `initWorkspace`'s "not inside a workspace" error is a `WorkspaceError`.
+  - `syncRegistry` returns a failing step, instead of throwing, when it can't read the registry or back up a hand-written one; with no backup it leaves the hand-written registry in place.
+  - `getClaudeTranscript`, `getClaudeTurnStatus` and `relayPickedUp` are typed `SessionTranscript`, `TurnStatus` and `SessionMessage[]`, and `getClaudeTurnStatus` asks the workspace's own harness.
+  - `graduateNote` takes a `Note`.
+
+- 07721e7: `werkmeister pr open`'s YAML-error hint for a PR file now quotes `skip_release: "no release entry: docs only"`, the wording the generated pr-rules use, instead of naming changesets, which a repo without them doesn't have (SW-877).
+- 3245798: `werkmeister pr status` and `pr watch` compare an open PR's head with the worktree's branch. When the branch holds commits the PR doesn't (a fixup nobody force-pushed), they warn and print the push command. After merge, the PR file records the PR head as `head_sha:`. While the worktree is still on that branch with commits past it, the PR stays `merged` with a "not shipped yet" line naming `werkmeister pr new`, and its issues don't move to Done (SW-943).
+
 ## 0.96.4
 
 ### Patch Changes
