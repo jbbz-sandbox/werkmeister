@@ -228,7 +228,8 @@ above: `~/features` (as the workspace mount) and `~/repos` bound at their host p
 with a `headersHelper` that reads the mounted `.werkmeister/token` at every connect, so a
 re-minted token needs only a reconnect (`/mcp`), not a rebuild. It is regenerated on every
 `init-workspace`; don't edit it. Open the workspace folder in VS Code and pick **Reopen in
-Container**, or run `npx @devcontainers/cli up --workspace-folder ~/features/<workspace>`.
+Container**, or run `npx @devcontainers/cli@latest up --workspace-folder ~/features/<workspace>`
+(0.89.0 or later: 0.80.0 hangs after `startEventSeen` on OrbStack).
 
 `~/.claude` inside is one volume, `werkmeister-claude-home`, shared by every workspace's
 container, so you log in to `claude` once. Or skip the login: export a `claude setup-token`
