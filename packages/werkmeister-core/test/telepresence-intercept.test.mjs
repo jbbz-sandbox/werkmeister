@@ -8,11 +8,13 @@ import { test } from "node:test";
 import { SandboxError } from "../dist/errors.js";
 import {
   dockerDaemonName,
+  leaveFeatureIntercepts,
   leaveIntercept,
   listIntercepts,
   portOpen,
   startIntercept,
 } from "../dist/telepresence.js";
+import { withSandboxHome } from "./fixtures.mjs";
 
 const base = { feature: "demo", localServices: ["backend"] };
 
@@ -140,4 +142,44 @@ test("listIntercepts: with a host daemon beside the docker one, reads the connec
 
 test("dockerDaemonName is the container name connect --docker uses", () => {
   assert.equal(dockerDaemonName("orbstack", "default"), "orbstack-default-cn");
+});
+
+// SW-920: `overrides.telepresence: false` starts no telepresence process on its own.
+const neverRun = () => {
+  throw new Error("telepresence ran while overrides.telepresence is false");
+};
+const telepresenceOff = (fn) =>
+  withSandboxHome(fn, { config: "overrides:\n  telepresence: false\n" });
+
+test("telepresence off: listIntercepts is not installed and runs nothing (SW-920)", async () => {
+  await telepresenceOff(async () => {
+    const s = await listIntercepts(neverRun);
+    assert.deepEqual([s.installed, s.available, s.intercepts.size], [false, false, 0]);
+  });
+});
+
+test("telepresence off: feature down's leave runs nothing (SW-920)", async () => {
+  await telepresenceOff(() => assert.deepEqual(leaveFeatureIntercepts("demo", neverRun), []));
+});
+
+test("telepresence off: startIntercept is TELEPRESENCE_DISABLED and names the config line (SW-920)", async () => {
+  await telepresenceOff(async () => {
+    const err = await startIntercept({ ...base, service: "backend" }).then(
+      () => null,
+      (e) => e,
+    );
+    assert.equal(err?.code, "TELEPRESENCE_DISABLED");
+    assert.match(err.message, /telepresence: false/);
+  });
+});
+
+test("telepresence: true keeps intercepts on (SW-920)", async () => {
+  await withSandboxHome(
+    async () => {
+      const t = fakeTelepresence([127, "telepresence: command not found"]);
+      await listIntercepts(t.runner);
+      assert.deepEqual(t.calls, ["status"]);
+    },
+    { config: "overrides:\n  telepresence: true\n" },
+  );
 });

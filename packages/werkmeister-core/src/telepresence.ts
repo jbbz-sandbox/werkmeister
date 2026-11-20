@@ -16,6 +16,7 @@ import { workspaceForFeature } from "./compose.js";
 import { getK8sContext, isFixture, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
+import { load as loadGlobalConfig } from "./global_config.js";
 import { ProcError, run, runAsync } from "./proc.js";
 import { info, warn } from "./reporter.js";
 import { getServicePort, getSlot } from "./slots.js";
@@ -384,6 +385,17 @@ export interface InterceptState {
 }
 
 /**
+ * `overrides.telepresence` from the global config: `false` keeps werkmeister from starting
+ * telepresence on its own (SW-920); unset or `true` is on. An explicit leave still runs.
+ */
+function telepresenceEnabled(): boolean {
+  return (
+    (loadGlobalConfig()["overrides"] as Record<string, unknown> | undefined)?.["telepresence"] !==
+    false
+  );
+}
+
+/**
  * Read active intercepts. Never throws.
  *
  * No `which()` pre-check: a missing binary is ENOENT, which {@link _run} already
@@ -396,7 +408,7 @@ export async function listIntercepts(
   runner: AsyncRunner = (cmd) => runAsyncRunner(cmd),
 ): Promise<InterceptState> {
   const none = new Map<string, string | null>();
-  if (isFixture()) {
+  if (isFixture() || !telepresenceEnabled()) {
     return { installed: false, available: false, namespace: null, intercepts: none };
   }
   const [rc, out] = await runner(STATUS_ARGS);
@@ -523,7 +535,7 @@ function servicesFromEnv(envPath: string): string[] {
  * the deployments actually left.
  */
 export function leaveFeatureIntercepts(feature: string, runner: Runner = _run): string[] {
-  if (which("telepresence") === null) {
+  if (!telepresenceEnabled() || which("telepresence") === null) {
     return [];
   }
   const workspace = workspaceForFeature(feature);
@@ -752,6 +764,12 @@ export interface InterceptResult {
 export async function startIntercept(a: InterceptArgs): Promise<InterceptResult> {
   if (isFixture()) {
     throw new SandboxError("Intercepts are off under WERKMEISTER_FIXTURE.", "FIXTURE");
+  }
+  if (!telepresenceEnabled()) {
+    throw new SandboxError(
+      "Intercepts are off: remove `telepresence: false` under `overrides:` in ~/.werkmeister/config.yaml to use them.",
+      "TELEPRESENCE_DISABLED",
+    );
   }
   const svcDef = resolveServiceDef(a.service, a.localServices);
   const runner: AsyncRunner = (cmd) => runAsyncRunner(cmd, a.signal);

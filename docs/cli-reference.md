@@ -749,6 +749,10 @@ A service can only be intercepted if it declares `k8s_deployment`, `k8s_namespac
 `k8s_port` in the registry; `werkmeister feature status --intercepts` reports what is interceptable and
 what is currently intercepted.
 
+`overrides.telepresence: false` in `~/.werkmeister/config.yaml` turns intercepts off: this
+command then fails with `TELEPRESENCE_DISABLED`, and werkmeister starts no telepresence process
+on its own. `--leave` still runs, so an intercept left from before can be removed.
+
 #### werkmeister infra connect
 
 Start all shared infrastructure (local + k8s port-forwards)

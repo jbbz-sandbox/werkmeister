@@ -75,5 +75,7 @@ werkmeister infra intercept my\-feature \-\-leave \-s backend
 .fi
 .PP
 A service can only be intercepted if it declares \fBk8s_deployment\fR, \fBk8s_namespace\fR and \fBk8s_port\fR in the registry; \fBwerkmeister feature status \-\-intercepts\fR reports what is interceptable and what is currently intercepted.
+.PP
+\fBoverrides.telepresence: false\fR in \fB~/.werkmeister/config.yaml\fR turns intercepts off: this command then fails with \fBTELEPRESENCE_DISABLED\fR, and werkmeister starts no telepresence process on its own. \fB\-\-leave\fR still runs, so an intercept left from before can be removed.
 .SH SEE ALSO
 \fBwerkmeister\fR(1)
