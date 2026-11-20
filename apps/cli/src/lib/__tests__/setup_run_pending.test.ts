@@ -11,7 +11,7 @@ vi.mock("werkmeister-core/reporter", async (orig) => ({
   ...(await orig<object>()),
   success: (m: string) => said.push(`[ok] ${m}`),
   warn: (m: string) => said.push(`[warn] ${m}`),
-  info: () => {},
+  info: (m: string) => said.push(`[info] ${m}`),
 }));
 vi.mock("werkmeister-core/global_config", async (orig) => ({
   ...(await orig<object>()),
@@ -29,6 +29,19 @@ vi.mock("werkmeister-core/machine_setup", async (orig) => ({
   runSetup: async () => [
     { label: "ingress certificate", ok: false, pending: true, detail: "trust skipped" },
   ],
+}));
+let kubeContext: string | null = null;
+const asked: string[] = [];
+vi.mock("werkmeister-core/sdk", async (orig) => ({
+  ...(await orig<object>()),
+  getKubeContext: async () => ({ context: kubeContext, env: "other" }),
+}));
+vi.mock("../wizard.js", async (orig) => ({
+  ...(await orig<object>()),
+  confirm: async (q: string, dflt: boolean) => {
+    asked.push(q);
+    return dflt;
+  },
 }));
 
 import { run } from "../../commands/setup.js";
@@ -91,4 +104,21 @@ it("keeps hand-set budget, models and github_ingest", async () => {
   expect(saved.at(-1)?.budget).toEqual({ host_load: 0.5 });
   expect(saved.at(-1)?.models).toEqual({ default: "opus" });
   expect(saved.at(-1)?.github_ingest).toEqual({ queue_url: "https://sqs/q" });
+});
+
+// SW-641: the demo apps need k8s-forwards, so with no kube context setup doesn't offer them.
+it("offers the demo apps only with a kube context", async () => {
+  vi.spyOn(process, "exit").mockImplementation((() => {
+    throw new Error("exit");
+  }) as never);
+  vi.spyOn(console, "log").mockImplementation(() => {});
+
+  for (const ctx of [null, "orbstack"]) {
+    kubeContext = ctx;
+    asked.length = 0;
+    said.length = 0;
+    await run({ yes: true });
+    expect(asked.some((q) => q.includes("demo apps"))).toBe(ctx !== null);
+    expect(said.join("\n").includes("Skipping the demo apps")).toBe(ctx === null);
+  }
 });
