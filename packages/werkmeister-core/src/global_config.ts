@@ -44,7 +44,7 @@ import {
 import { SandboxError } from "./errors.js";
 // biome-ignore lint/suspicious/noImportCycles: global_config↔projects; SW-411
 import { projectProblems } from "./projects.js";
-import { warn } from "./reporter.js";
+import { info, warn } from "./reporter.js";
 
 /**
  * One input a command collects. Pure data: it declares what to ask and how to
@@ -594,11 +594,47 @@ function keepStoredRoot(cfg: GlobalConfig): void {
   cfg.paths.werkmeister_root = stored;
 }
 
+/** config.yaml `github_ingest:` key → its secrets.env name (SW-759). */
+export const INGEST_SECRET_KEYS = {
+  access_key_id: "GITHUB_INGEST_ACCESS_KEY_ID",
+  secret_access_key: "GITHUB_INGEST_SECRET_ACCESS_KEY",
+} as const;
+
+/**
+ * SW-759: the github_ingest AWS key pair belongs in secrets.env, not in a file people read
+ * to check a setting. Moves any left in *cfg* there; secrets.env is written before the key
+ * leaves config.yaml, so a failed write loses nothing.
+ */
+function moveIngestKeys(cfg: GlobalConfig): void {
+  const block = cfg.github_ingest;
+  if (!isDict(block)) return;
+  const moved = Object.entries(INGEST_SECRET_KEYS).filter(([key]) => !isEmpty(block[key]));
+  if (!moved.length) return;
+  const file = secretsPath();
+  const lines = fs.existsSync(file)
+    ? fs.readFileSync(file, "utf8").replace(/\n+$/, "").split("\n")
+    : [];
+  for (const [key, name] of moved) {
+    // secrets.env wins, as the reader does: a key rotated there isn't overwritten by the stale one.
+    if (!lines.some((l) => l.trim().startsWith(`${name}=`))) {
+      lines.push(`${name}=${String(block[key]).trim()}`);
+    }
+  }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${lines.join("\n")}\n`, { mode: 0o600 });
+  fs.chmodSync(file, 0o600);
+  cfg.github_ingest = Object.fromEntries(
+    Object.entries(block).filter(([key]) => !(key in INGEST_SECRET_KEYS)),
+  );
+  info(`Moved the github_ingest AWS keys from ${configPath()} to ${file}`);
+}
+
 /** Write the config YAML (creating ~/.werkmeister/ as needed). */
 export function save(cfg: GlobalConfig): string {
   const p = configPath();
   refuseInsideContainer(p);
   keepStoredRoot(cfg);
+  moveIngestKeys(cfg);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, _HEADER + YAML.stringify(cfg));
   // `jira.api_token` is a live Atlassian credential — owner-only, like the

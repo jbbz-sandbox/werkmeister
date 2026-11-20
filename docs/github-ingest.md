@@ -54,14 +54,21 @@ Add this to `~/.werkmeister/config.yaml`:
 github_ingest:
   queue_url: https://sqs.us-east-1.amazonaws.com/123456789012/WerkmeisterGithubIngest-Queue...
   region: us-east-1
-  access_key_id: AKIA...
-  secret_access_key: ...
 ```
+
+and the key pair to `~/.werkmeister/secrets.env` (owner-only, mode 600), not to config.yaml:
+
+```sh
+GITHUB_INGEST_ACCESS_KEY_ID=AKIA...
+GITHUB_INGEST_SECRET_ACCESS_KEY=...
+```
+
+A machine that still has `access_key_id` and `secret_access_key` under `github_ingest:` in config.yaml keeps working. The next `werkmeister machine config --write` or `werkmeister machine setup` moves them to secrets.env; a key secrets.env already holds wins, and the config.yaml copy is dropped.
 
 Then run `werkmeister daemon restart`. The daemon log should show `github ingest: polling …`, or `github ingest: off` without the block. The log is at
 `~/.werkmeister/sandbox-mcp.log`. <!-- name-check: ignore: the daemon's real log file name -->
 
-The keys and region come only from this block. `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `AWS_REGION` in the daemon's environment are ignored, so the poller always runs as the receive/delete-only user. The SDK still honours endpoint and proxy variables such as `AWS_ENDPOINT_URL_SQS`. `werkmeister machine config` masks the two keys when it prints the config.
+The keys come only from secrets.env (or the old config.yaml keys) and the region only from this block. `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` and `AWS_REGION` in the daemon's environment are ignored, so the poller always runs as the receive/delete-only user. The SDK still honours endpoint and proxy variables such as `AWS_ENDPOINT_URL_SQS`. `werkmeister machine config` masks the two keys when it prints the config.
 
 Use only one machine per queue. A second machine polling the same queue would take events meant for the first.
 
