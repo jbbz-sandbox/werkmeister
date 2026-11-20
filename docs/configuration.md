@@ -577,6 +577,23 @@ The dashboard's "Request review" button posts to Slack. Set both
 `WERKMEISTER_REVIEW_SLACK_CHANNEL` (the channel id). Without them the button reports that Slack
 is not configured.
 
+#### Telepresence intercepts
+
+Intercepts are on by default, so the `/workspaces` pane, `feature status` and `feature down`
+run `telepresence` to read or leave them. To keep werkmeister from starting telepresence at all
+(for example, when a process monitor alerts on every start), set:
+
+```yaml
+overrides:
+  telepresence: false   # ~/.werkmeister/config.yaml
+```
+
+The pane, `feature status` and the MCP `intercepts` tool then show no intercepts,
+`feature down` leaves none, and `werkmeister infra intercept` fails with `TELEPRESENCE_DISABLED`.
+An intercept that was live when you turned it off stays in place: remove it with
+`werkmeister infra intercept <feature> --leave -s <service>`, which still runs. Remove the line
+to turn intercepts back on.
+
 #### GraphQL federation
 
 When a service in the registry has a GraphQL type (`graphql-subgraph`, `graphql`, `subgraph`,
