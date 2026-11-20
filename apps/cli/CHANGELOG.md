@@ -1,5 +1,23 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.96.6
+
+### Patch Changes
+
+- 310bb9f: The daemon's `/mcp` keep-alive now follows `WERKMEISTER_DAEMON_HEARTBEAT_MS` (default 60 s, as `/api/tool`) instead of the MCP SDK's own 15 s default, so an SDK update can't drop it and a tool call that is quiet for more than 5 minutes still stays under undici's body timeout (SW-722). Calls never failed this way today; no session needs to reconnect.
+- fabb312: A service's `depends_on` on another checked-out service now starts that dependency (SW-942). A workspace service's dependency is rendered as a workspace container, with its env file and secrets, so `werkmeister feature up` starts it, and so does the PR gate's service start. Before, it sat behind the `on-demand` profile, and the service's test failed with `could not translate host name` until `feature up --service <dep>`. An on-demand service now keeps its on-demand dependencies, so `feature up --service <svc>` starts them too. A dependency outside the workspace's checked-out repos (k8s or baseline) is unchanged.
+- a1d2a99: An `extra_services` sidecar is no longer Redis-only (SW-933). It takes `health_endpoint` (`redis`, the default and today's `redis-cli ping`; `postgres` for `pg_isready`; an HTTP path; or `""` for no healthcheck), `environment` and `extra_volumes`, and `command` is now optional. So a postgres sidecar with a password, a database and a mounted init script can be declared in the registry instead of as a second full service.
+- 2d0ccc1: In an autonomous workspace, `werkmeister pr gate` (and `pr open`, which runs it) run by an agent or through the daemon (the `workspace-pr` MCP tool, the pane), anything but a person's terminal, no longer recreates a service that mounts the docker socket, the werkmeister home or a workspaces root when the branch's fragment changes its `command`, `image`, `build`, `entrypoint`, `archetype`, mounts or `environment`. The gate fails with a `start <service>` row instead, and the person runs `werkmeister pr gate` from their own terminal. Before, a changed `command:` ran as root with those mounts, past SW-854's start rules (SW-891).
+
+  A fragment whose service `path` has a `..` segment now fails the registry merge: compose mounts `<repo>/<path>/src` read-write, so it reached another workspace.
+
+- 62322a9: In an autonomous workspace, `werkmeister pr status` no longer pulls the source checkout and syncs the machine registry for a merged PR under `sync_on_merge: auto`. It prints the `registry sync needed` notice as `warn` does, since the agent can edit the PR file that asks for the sync; run `werkmeister registry sync` yourself (SW-892).
+- 00b7c49: An autonomous workspace's `git commit` rule now takes the message on the command line only: `git commit -m`, `-qm`, `-q -m`, `--amend -m`, `--fixup` and exact `--amend --no-edit`, bare or `-C <own repo>`. `git commit -F <file>` asks, since it read any host file into a commit that the pre-approved `pr open` pushes, and `--pathspec-from-file` is denied, since its error prints the file's lines (SW-893).
+- a3700f1: The edit gate's hook no longer treats your home folder as a workspace because `~/.werkmeister` is there: a session under `~` outside any workspace resolves no workspace (SW-897).
+- d17b618: An interactive workspace now pre-approves the same `git commit` forms as an autonomous one (`-m`, `-qm`, `-q -m`, `--amend -m`, `--fixup`, exact `--amend --no-edit`), bare and `-C <own repo>`, and denies `--pathspec-from-file`. Before, it had only read-only git, so each stage's commit rested on auto mode's classifier, which could refuse it mid-stage. `werkmeister machine migrate` or `werkmeister workspace init` brings an existing workspace's rules up to date (SW-912).
+- 90aeb7c: `overrides.telepresence: false` in `~/.werkmeister/config.yaml` keeps werkmeister from starting `telepresence` on its own (SW-920). The `/workspaces` pane, `feature status` and the `intercepts` tool show no intercepts, `feature down` leaves none, and `werkmeister infra intercept` fails with `TELEPRESENCE_DISABLED`. `infra intercept --leave` still runs, to remove an intercept left from before. Unset or `true` keeps today's behaviour.
+- 1af4607: A workspace container now mounts its git worktree's admin dir (`<repo>/.git/worktrees/<name>`) read-write instead of read-only (SW-785). In a container that also mounts the main checkout (as werkmeister's own werkmeister-core does), a git command that writes the index (`git checkout -- <file>`, `git reset`) now works instead of failing with `index.lock: Read-only file system`. It takes effect once a workspace's compose.yml is regenerated.
+
 ## 0.96.5
 
 ### Patch Changes
