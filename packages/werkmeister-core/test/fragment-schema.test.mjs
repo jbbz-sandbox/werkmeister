@@ -81,6 +81,26 @@ test("cpus: accepted on services, setup services and extra_services; zero and ju
   assert.ok(validate(extra), JSON.stringify(validate.errors));
 });
 
+test("extra_services: a postgres sidecar takes health_endpoint, environment and extra_volumes (SW-933)", () => {
+  const api = {
+    path: "apps/api",
+    type: "api",
+    internal_port: 3000,
+    port_offset: 0,
+    health_endpoint: "/health",
+  };
+  const db = {
+    image: "postgres:16",
+    internal_port: 5432,
+    health_endpoint: "postgres",
+    environment: { POSTGRES_PASSWORD: "pw" },
+    extra_volumes: ["pgdata:/var/lib/postgresql/data"],
+  };
+  const doc = (sidecar) => ({ services: { api: { ...api, extra_services: { db: sidecar } } } });
+  assert.ok(validate(doc(db)), JSON.stringify(validate.errors));
+  assert.equal(validate(doc({ ...db, healthcheck: "x" })), false);
+});
+
 test("caches: a yarn and a cargo entry validate; malformed entries and service lists are rejected", () => {
   const caches = {
     "yarn-cache": {

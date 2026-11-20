@@ -50,6 +50,16 @@ networks:
 {% do volume_names.append(vol_name) %}
 {% endif %}
 {% endfor %}
+{% if svc.extra_services %}
+{% for _extra_name, extra in svc.extra_services.items() %}
+{% for vol in extra.get('extra_volumes', []) %}
+{% set vol_name = vol.split(':')[0] %}
+{% if '/' not in vol_name and vol_name not in volume_names %}
+{% do volume_names.append(vol_name) %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% endif %}
 {% endfor %}
 {% if volume_names %}
 volumes:
@@ -307,18 +317,48 @@ services:{% if not local_services | length %} {}{% endif %}
       com.werkmeister.role: "app"
     ports:
       - "{{ base_port + svc.port_offset + 100 }}:{{ extra.get('internal_port', 6379) }}"
+{% if extra.command %}
     command: {{ extra.command }}
+{% endif %}
+{% if extra.environment %}
+    environment:
+{% for key, value in extra.environment.items() %}
+      - "{{ key }}={{ value }}"
+{% endfor %}
+{% endif %}
+{% if extra.extra_volumes %}
+    volumes:
+{% for vol in extra.extra_volumes %}
+{% if '/' in vol.split(':')[0] %}
+      - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + svc.repo) | replace('${WERKMEISTER_ROOT}', werkmeister_root) }}
+{% elif vol[0] == '^' %}
+      - {{ vol | replace('^', '') }}
+{% else %}
+      - {{ feature_name }}-{{ vol }}
+{% endif %}
+{% endfor %}
+{% endif %}
     restart: unless-stopped
     deploy:
       resources:
         limits:
           cpus: "{{ extra.cpus }}"
+{# SW-933: health_endpoint as for services; unset keeps the Redis probe, "" has none. #}
+{% set probe = extra.get('health_endpoint', 'redis') %}
+{% if probe %}
     healthcheck:
+{% if probe == 'redis' %}
       test: ["CMD", "redis-cli", "ping"]
+{% elif probe == 'postgres' %}
+      test: ["CMD", "pg_isready"]
+{% else %}
+      test: ["CMD-SHELL", "curl -sf http://localhost:{{ extra.get('internal_port', 6379) }}{{ probe }}"]
+{% endif %}
       interval: 5s
       timeout: 5s
       retries: 5
       start_period: 5s
+{% endif %}
     networks:
       - feature-{{ feature_name }}
       - shared-network
