@@ -152,10 +152,27 @@ function phaseOf(f: StateFacts): Phase {
 
 const queuedLabel = (w: WaitingFile) => `Queued for capacity (position ${w.position})`;
 
-/** "pr open" for `werkmeister pr open --watch`; else the command, cut for a card. */
+// The CLI's `<noun>` groups (apps/cli/src/main.ts NOUNS): only these take a second word.
+const CLI_NOUNS = new Set([
+  "feature",
+  "workspace",
+  "ws",
+  "pr",
+  "issue",
+  "infra",
+  "machine",
+  "budget",
+  "daemon",
+  "internal",
+]);
+
+/**
+ * "pr open" for `werkmeister pr open --watch`, "up" for `werkmeister up sw-681`; else the command,
+ * cut for a card. Only at a command's start: every code worktree is named `werkmeister` (SW-690).
+ */
 function backgroundWhat(command: string): string {
-  const sub = command.match(/\bwerkmeister\s+([a-z][\w-]*(?:\s+[a-z][\w-]*)?)/)?.[1];
-  if (sub) return sub;
+  const m = command.match(/(?:^|[;&|])\s*werkmeister\s+([a-z][\w-]*)(?:\s+([a-z][\w-]*))?/);
+  if (m?.[1]) return m[2] && CLI_NOUNS.has(m[1]) ? `${m[1]} ${m[2]}` : m[1];
   return command.length > 40 ? `${command.slice(0, 39)}…` : command;
 }
 

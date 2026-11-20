@@ -394,3 +394,18 @@ test("legacyAgent: a background shell or a capacity wait reads working, not done
   const quiet = workspaceState(facts({ sessions: { s: stopped } }));
   assert.deepEqual(legacyAgent(quiet, done), done);
 });
+
+// SW-690: every code worktree is named `werkmeister`, so a path or an argument read as a subcommand.
+test("activity: a background command names werkmeister only at a segment start, and its second word only for a command group", () => {
+  const stopped = { status: "idle", at: ago(MIN), last: ago(MIN), stopped: true };
+  const label = (command) =>
+    workspaceState(facts({ sessions: { s: { ...stopped, shell: { command, at: ago(MIN) } } } }))
+      .activity.label;
+  assert.equal(
+    label("git -C werkmeister log --oneline -5"),
+    "Running in background: git -C werkmeister log --oneline -5",
+  );
+  assert.equal(label("werkmeister up sw-681"), "Running in background: up");
+  assert.equal(label("cd ws && werkmeister pr open --watch"), "Running in background: pr open");
+  assert.equal(label("werkmeister feature up"), "Running in background: feature up");
+});
