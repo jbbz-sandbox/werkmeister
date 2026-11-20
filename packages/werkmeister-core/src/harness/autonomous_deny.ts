@@ -33,6 +33,8 @@ export const AUTONOMOUS_DENY = [
   // `--output`, and `diff --no-index` reads any. git takes no abbreviation of either; `grep -O` and fetch's
   // `--upload-pack` do (`-lO`, `--open`, `--upl`), so grep isn't allowed and fetch is exact instead.
   ...["--output", "--no-index"].map((flag) => `Bash(git * ${flag}*)`),
+  // SW-893: add/commit/restore print a `--pathspec-from-file` file's lines in their error; `--pathspec-fr` is its shortest spelling.
+  "Bash(git * --pathspec-fr*)",
   // SW-521: a registered test chain's bare `node --test` segment (buildAllowRules) runs any file
   // with the real HOME; npx and pnpm exec segments name their tool, so they stay allowed.
   "Bash(node:*)",

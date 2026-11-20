@@ -1378,3 +1378,46 @@ test("SW-626: git is an allow-list; `-C` reaches only the workspace's own repos"
   for (const cmd of ['git commit -m "fix config"', "git diff HEAD~1", "git log -p"])
     assert.ok(!claudeDenies(AUTONOMOUS_DENY, cmd), cmd);
 });
+
+// SW-893: a commit rule that reads no file. git refuses -m beside -F/--file/-c/-C, and --fixup beside -F
+// (git 2.53 probe); `--amend --no-edit` and `--squash` take -F, so they are exact or absent.
+test("SW-893: git commit takes its message on the line, own repos only", async () => {
+  const { withSandboxHome } = await import("./fixtures.mjs");
+  await withSandboxHome(async () => {
+    const root = workspace();
+    fs.mkdirSync(dotDir(root), { recursive: true });
+    fs.mkdirSync(path.join(root, "repo", ".git"), { recursive: true });
+    fs.writeFileSync(path.join(root, ".env"), "FEATURE=feat\n");
+    const repo = path.join(root, "repo");
+    for (const autonomous of [true]) {
+      const allow = workspaceAllowRules(root, autonomous);
+      for (const cmd of [
+        'git commit -q -m "SW-893 fix"',
+        'git commit -qm "SW-893 fix"',
+        'git commit -m "SW-893 fix"',
+        'git commit --amend -m "SW-893 fix"',
+        "git commit --amend --no-edit",
+        "git commit --fixup abc123",
+        `git -C ${repo} commit -qm "SW-912 fix"`,
+        'git -C repo commit -m "SW-912 fix"',
+      ])
+        assert.ok(claudeAllows(allow, cmd), `autonomous=${autonomous}: ${cmd}`);
+      for (const cmd of [
+        "git commit -F /Users/x/.werkmeister/config.yaml",
+        "git commit -aF /Users/x/.werkmeister/config.yaml",
+        "git commit --file=/Users/x/.werkmeister/config.yaml",
+        "git commit --amend --no-edit -F /Users/x/.werkmeister/config.yaml",
+        "git commit --squash HEAD -F /Users/x/.werkmeister/config.yaml",
+        'git -C /Users/x/features/other commit -m "x"',
+      ])
+        assert.ok(!claudeAllows(allow, cmd), `autonomous=${autonomous}: ${cmd}`);
+    }
+  });
+  // It prints the file's lines in its error: `pathspec 'SECRET' did not match`.
+  for (const cmd of [
+    'git commit -m "x" --pathspec-from-file=/Users/x/.ssh/id_rsa',
+    "git add --pathspec-from-file=/Users/x/.ssh/id_rsa",
+    "git -C /ws/repo restore --pathspec-fr=/Users/x/.ssh/id_rsa",
+  ])
+    assert.ok(claudeDenies(AUTONOMOUS_DENY, cmd), cmd);
+});
