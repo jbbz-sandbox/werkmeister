@@ -43,6 +43,7 @@ const TOOLCHAIN = /\b(pnpm|biome|turbo|changesets?)\b/i;
 const QUALIFIED = [
   "`none` for a merged skip_release PR with no changeset (changesets repos)",
   "`pr status` writes `release: none` (changesets repos only; elsewhere set it yourself beside `skip_release`)",
+  "written by werkmeister pr status at merge (changesets repos only)",
 ];
 const unqualified = (text) =>
   QUALIFIED.reduce((t, s) => t.split(s).join(""), text.replace(/\s+/g, " "));

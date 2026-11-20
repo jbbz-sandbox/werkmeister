@@ -2198,6 +2198,7 @@ export async function refreshPrStatus(
     const reviewBefore = f.fm["review"];
     const registryBefore = f.fm["registry_sync"];
     let notShipped = "";
+    let partial = "";
     if (opts.gh !== false && before === "open" && f.fm["url"]) {
       const v = await deps.run("gh", [
         "pr",
@@ -2218,11 +2219,18 @@ export async function refreshPrStatus(
         (view.latestReviews ?? []).some((r) => r.state === "CHANGES_REQUESTED");
       const url = String(f.fm["url"]);
       if (view.state === "MERGED") {
+        const pkgs = await releasePackages(
+          path.join(ws, f.dir),
+          deps.repos[f.dir] ?? {},
+          view,
+          deps,
+        );
         writePrFields(f, {
           status: "merged",
           merge_sha: view.mergeCommit?.oid ?? "",
           ...(touchesFragment(view) ? { registry_sync: "pending" } : {}),
           ...(shipsNothing(f, deps.repos[f.dir] ?? {}, view) ? { release: "none" } : {}),
+          ...(pkgs ? { release_packages: pkgs } : {}),
         });
         seen.merged.push(url);
       } else if (view.state === "CLOSED") {
@@ -2269,7 +2277,27 @@ export async function refreshPrStatus(
                 .map((t) => t.trim())
                 .find(Boolean)
             : undefined;
-        if (tag) writePrFields(f, { status: "shipped", release: tag });
+        // SW-712: a changesets monorepo release (<pkg>@* tags) can tag one package and fail another.
+        // A single-package repo tags v* only, so it has no per-package tag to wait for.
+        const missing: string[] = [];
+        if (tag && String(repo["release_tag"]).includes("@"))
+          for (const p of String(f.fm["release_packages"] ?? "").split(",")) {
+            const pkg = p.trim();
+            if (!pkg) continue;
+            const sha = String(f.fm["merge_sha"]);
+            const t = await deps.run("git", [
+              "-C",
+              dir,
+              "tag",
+              "--contains",
+              sha,
+              "--list",
+              `${pkg}@*`,
+            ]);
+            if (t.code !== 0 || !t.stdout.trim()) missing.push(pkg);
+          }
+        if (tag && missing.length) partial = `partially released: ${missing.join(", ")} missing`;
+        else if (tag) writePrFields(f, { status: "shipped", release: tag });
         else notShipped = await notShippedWhy(dir, f, String(repo["release_tag"]), deps);
       }
     }
@@ -2285,6 +2313,7 @@ export async function refreshPrStatus(
       `${f.stem}: ${after}${f.fm["release"] ? ` (${f.fm["release"]})` : ""}${f.fm["url"] ? ` ${f.fm["url"]}` : ""}`,
     );
     if (notShipped) lines.push(`${f.stem}: not shipped yet: ${notShipped}`);
+    if (partial) lines.push(`${f.stem}: ${partial}`);
   }
   const moved = await moveIssueForPrs(ws, seen, deps);
   if (moved) lines.push(`issue ${moved}`);
@@ -2326,6 +2355,55 @@ async function notShippedWhy(dir: string, f: PrFile, pattern: string, deps: Deps
   if (reason(f.fm["skip_release"]))
     why += `; if it ships nothing, set \`release: none\` in ${path.basename(f.path)} and rerun \`werkmeister pr status\``;
   return why;
+}
+
+/**
+ * SW-712: the public packages a merged PR's own changesets name, read at its head, comma-joined;
+ * "" outside a changesets `ship: tag` repo or when none can be read. Private packages are left out:
+ * changesets tags only what it publishes.
+ */
+async function releasePackages(
+  dir: string,
+  repo: Record<string, unknown>,
+  v: PrView,
+  deps: Deps,
+): Promise<string> {
+  const head = v.headRefOid;
+  if (repo["ship"] !== "tag" || !String(repo["release_check"] ?? "").includes("changeset") || !head)
+    return "";
+  const names = new Set<string>();
+  for (const { path: p = "" } of v.files ?? []) {
+    if (!/^\.changeset\/(?!README\.md$)[^/]+\.md$/.test(p)) continue;
+    const r = await deps.run("git", ["-C", dir, "show", `${head}:${p}`]);
+    const front = r.code === 0 ? (r.stdout.split(/^---\s*$/m)[1] ?? "") : "";
+    for (const m of front.matchAll(/^\s*["']?([^"':\s]+)["']?\s*:/gm)) names.add(m[1]);
+  }
+  const named: string[] = [];
+  for (const name of names) {
+    // shortcut: matches biome's `"name": "x"` formatting only; a differently spaced private package.json reads public.
+    const hits = await deps.run("git", [
+      "-C",
+      dir,
+      "grep",
+      "-l",
+      "-F",
+      `"name": "${name}"`,
+      head,
+      "--",
+      "*package.json",
+    ]);
+    let priv = false;
+    for (const hit of hits.code === 0 ? hits.stdout.split("\n").filter(Boolean) : []) {
+      try {
+        const pj = JSON.parse((await deps.run("git", ["-C", dir, "show", hit])).stdout);
+        if (pj.name === name && pj.private === true) priv = true;
+      } catch {
+        // unreadable package.json: not this package
+      }
+    }
+    if (!priv) named.push(name);
+  }
+  return named.join(", ");
 }
 
 // skip_release alone also covers a changeset checked on the host (#145), so only a merged diff
