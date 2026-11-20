@@ -61,13 +61,19 @@ const SETUP_KEYS = ["image", "command", "node_modules_volume"];
  *
  * @example
  * ```ts
- * import { planFragment, type Rendered, renderFragment } from "werkmeister-core/sdk";
+ * import {
+ *   planFragment,
+ *   portsPerSlot,
+ *   type Rendered,
+ *   renderFragment,
+ *   stdoutRunner,
+ * } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const rendered: Rendered = renderFragment(plan);
  * if (!rendered.changed) console.log(`${rendered.path} already has everything`);
@@ -173,13 +179,13 @@ function sections(plan: Plan): [string, Entries][] {
  *
  * @example
  * ```ts
- * import { planFragment, renderFragment } from "werkmeister-core/sdk";
+ * import { planFragment, portsPerSlot, renderFragment, stdoutRunner } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const rendered = renderFragment(plan);
  * console.log(rendered.yaml);

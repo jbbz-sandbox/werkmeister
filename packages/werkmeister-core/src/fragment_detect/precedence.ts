@@ -16,18 +16,67 @@ export interface Conflict {
   also: FieldValue[];
 }
 
+/**
+ * One service detection found in a repo, with one value per registry field
+ * (`services` in {@link Plan}). Where sources disagreed, `fields` holds the winner
+ * and `conflicts` the rest.
+ *
+ * @example
+ * ```ts
+ * import {
+ *   planFragment,
+ *   portsPerSlot,
+ *   type ResolvedService,
+ *   stdoutRunner,
+ * } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: stdoutRunner,
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: portsPerSlot(),
+ * });
+ * const web: ResolvedService | undefined = plan.services.find((s) => s.name === "web");
+ * console.log(web?.fields["internal_port"]?.value, web?.conflicts.length);
+ * ```
+ */
 export interface ResolvedService {
+  /** The service name, as the registry keys it. */
   name: string;
+  /** Its source directory, relative to the repo root. */
   dir: string;
+  /** One value per registry field, each with where it came from. */
   fields: Record<string, FieldValue>;
+  /** Fields where sources disagreed: the value chosen and the ones it beat. */
   conflicts: Conflict[];
   /** Environment keys that came from k8s alone: candidates for the tunnel rewrite. */
   k8sEnvKeys: string[];
+  /** Everything the detectors found for this service, before precedence. */
   findings: Finding[];
 }
 
+/**
+ * One datastore detection found, such as a `postgres` its k8s manifests or
+ * compose file run (`infrastructure` in {@link Plan}).
+ *
+ * @example
+ * ```ts
+ * import { planFragment, portsPerSlot, type ResolvedInfra, stdoutRunner } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: stdoutRunner,
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: portsPerSlot(),
+ * });
+ * const infra: ResolvedInfra[] = plan.infrastructure;
+ * console.log(infra.map((i) => `${i.name}: ${String(i.fields["internal_port"]?.value ?? "?")}`));
+ * ```
+ */
 export interface ResolvedInfra {
+  /** The infrastructure name, as the registry keys it. */
   name: string;
+  /** One value per registry field, each with where it came from. */
   fields: Record<string, FieldValue>;
 }
 

@@ -21,6 +21,7 @@ const VARS = [
   "WERKMEISTER_CONFIG_FILE",
   "WERKMEISTER_SERVICES_YAML",
   "WERKMEISTER_ROOT",
+  "WERKMEISTER_DOCKER_BIN",
 ];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 let dir, log;
@@ -34,6 +35,7 @@ beforeEach(() => {
   writeFileSync(path.join(dir, "services.yaml"), "services: {}\ninfrastructure: {}\n");
   process.env.PATH = `${dir}:${SAVED.PATH}`;
   process.env.HOME = dir;
+  delete process.env.WERKMEISTER_DOCKER_BIN; // the PATH stub, never a docker the env points at
   process.env.WERKMEISTER_CONFIG_FILE = path.join(dir, "config.yaml");
   process.env.WERKMEISTER_SERVICES_YAML = path.join(dir, "services.yaml");
   process.env.WERKMEISTER_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "apps", "cli");
@@ -47,10 +49,18 @@ afterEach(() => {
 });
 
 test("down removes every profile's containers, not just the default set", async () => {
-  await withReporter(collectingReporter(), () => down());
+  assert.equal(await withReporter(collectingReporter(), () => down()), true);
   const call = readFileSync(log, "utf8")
     .trim()
     .split("\n")
     .find((l) => l.includes(" down"));
   assert.match(call, /-p w9r-infra --profile \* down$/);
+});
+
+test("down resolves false when docker compose down fails, so an SDK caller can tell", async () => {
+  writeFileSync(
+    path.join(dir, "docker"),
+    `#!/bin/sh\necho "$*" >> "${log}"\ncase "$*" in *" down"*) exit 1;; esac\n`,
+  );
+  assert.equal(await withReporter(collectingReporter(), () => down()), false);
 });

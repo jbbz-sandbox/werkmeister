@@ -1557,6 +1557,8 @@ export async function pause(feature: string): Promise<PauseResult> {
  * What resuming a paused workspace brought back: the containers it unpaused or
  * restarted, and whether its agent was mid-turn when paused.
  * {@link resumeAndNudge} returns it, plus how the session was told to continue.
+ * The SDK has no bare `resume`: it would leave an agent that was mid-turn
+ * waiting, so resume through `resumeAndNudge` or `runWorkspaceAction("resume")`.
  *
  * @example
  * ```ts

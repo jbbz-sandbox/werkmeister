@@ -32,33 +32,55 @@ function sleep(seconds: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-/** Aggregated resource stats for a single container. */
+/**
+ * One container's CPU and memory samples over a {@link runCollection} run, with
+ * their averages and peaks ({@link CollectionRun.stats}).
+ *
+ * @example
+ * ```ts
+ * import { type ContainerStats, runCollection } from "werkmeister-core/sdk";
+ *
+ * const { stats } = await runCollection(1, 5, false);
+ * const peaks: ContainerStats[] = Object.values(stats).sort((a, b) => b.maxMem - a.maxMem);
+ * for (const s of peaks)
+ *   console.log(`${s.name}: peak ${s.maxMem.toFixed(0)} MiB over ${s.samples} samples`);
+ * ```
+ */
 export class ContainerStats {
+  /** The container name. */
   name: string;
+  /** How many samples were taken. */
   samples = 0;
+  /** Each sample's CPU, percent of one core. */
   cpuSamples: number[] = [];
-  memSamples: number[] = []; // in MiB
+  /** Each sample's memory, in MiB. */
+  memSamples: number[] = [];
 
+  /** @param name - The container name. */
   constructor(name: string) {
     this.name = name;
   }
 
+  /** Mean CPU over the samples, percent of one core; 0 with none. */
   get avgCpu(): number {
     return this.cpuSamples.length
       ? this.cpuSamples.reduce((a, b) => a + b, 0) / this.cpuSamples.length
       : 0.0;
   }
 
+  /** Peak CPU, percent of one core; 0 with no samples. */
   get maxCpu(): number {
     return this.cpuSamples.length ? Math.max(...this.cpuSamples) : 0.0;
   }
 
+  /** Mean memory in MiB; 0 with no samples. */
   get avgMem(): number {
     return this.memSamples.length
       ? this.memSamples.reduce((a, b) => a + b, 0) / this.memSamples.length
       : 0.0;
   }
 
+  /** Peak memory in MiB; 0 with no samples. */
   get maxMem(): number {
     return this.memSamples.length ? Math.max(...this.memSamples) : 0.0;
   }
@@ -113,12 +135,31 @@ export function formatMem(mib: number): string {
   return `${(mib * 1024).toFixed(0)}K`;
 }
 
+/**
+ * Compose resource limits for one container, sized from its observed peaks with
+ * 50% headroom ({@link CollectionRun.recommendations}, {@link OptimizeReport.recommendations}).
+ *
+ * @example
+ * ```ts
+ * import { optimizeReport, type Recommendation } from "werkmeister-core/sdk";
+ *
+ * const recs: Recommendation[] = (await optimizeReport(2)).recommendations;
+ * for (const r of recs)
+ *   console.log(`${r.name}: cpus ${r.recommended_cpus}, memory ${r.recommended_memory}`);
+ * ```
+ */
 export interface Recommendation {
+  /** The container name. */
   name: string;
+  /** Its peak CPU, percent of one core. */
   max_cpu_pct: number;
+  /** Its peak memory, in MiB. */
   max_mem_mib: number;
+  /** A compose `cpus:` value: 1.5 times the peak, rounded up to a standard step. */
   recommended_cpus: string;
+  /** A compose memory limit, such as `512M`: 1.5 times the peak, rounded up. */
   recommended_memory: string;
+  /** A compose memory reservation: half the peak, rounded up. */
   recommended_reservation: string;
 }
 
@@ -446,18 +487,36 @@ export function cpuLimitOf(container: string, cpus: Record<string, string>): str
 /** How one container's observed peak compares to the limit it was given. */
 export type UsageStatus = "risk" | "moderate" | "over_provisioned" | "ok" | "no_limit";
 
+/**
+ * One sampled container's peak memory against the limit the registry gives it
+ * ({@link OptimizeReport.usage}).
+ *
+ * @example
+ * ```ts
+ * import { optimizeReport, type ServiceUsage } from "werkmeister-core/sdk";
+ *
+ * const usage: ServiceUsage[] = (await optimizeReport()).usage;
+ * for (const u of usage.filter((u) => u.status === "over_provisioned")) {
+ *   console.log(`${u.service ?? u.container}: ${u.maxMemMib.toFixed(0)} of ${u.limit}`);
+ * }
+ * ```
+ */
 export interface ServiceUsage {
+  /** The container name. */
   container: string;
   /** The services.yaml key this container matched, or null when none did. */
   service: string | null;
+  /** Its peak memory, in MiB. */
   maxMemMib: number;
   /** The configured `memory_limit`, verbatim; null when the container has none. */
   limit: string | null;
+  /** That limit in MiB; 0 when there is none. */
   limitMib: number;
   /** The configured CPU limit (`cpus:` or the default); null when the container matched no entry. */
   cpuLimit: string | null;
   /** Peak as a percentage of the limit; 0 when there is no limit to compare to. */
   usagePct: number;
+  /** `risk` above 85% of the limit, `moderate` above 60%, `over_provisioned` below 20% of a limit over 256M, `ok`, or `no_limit`. */
   status: UsageStatus;
 }
 

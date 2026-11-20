@@ -402,11 +402,30 @@ async function classifyForward(listenPort: number, healthPath: string): Promise<
   return (await checkForwardHealth(listenPort, healthPath)).ok ? "alive" : "dead";
 }
 
+/**
+ * One k8s port-forward the shared `k8s-forwards` container runs, and whether it
+ * answers (`k8s_forwards` in {@link StatusSnapshot}).
+ *
+ * @example
+ * ```ts
+ * import { type ForwardStatus, statusSnapshot } from "werkmeister-core/sdk";
+ *
+ * const forwards: ForwardStatus[] = (await statusSnapshot()).k8s_forwards;
+ * for (const f of forwards.filter((f) => f.status !== "alive")) {
+ *   console.warn(`${f.name} on :${f.listen_port}: ${f.status}`);
+ * }
+ * ```
+ */
 export interface ForwardStatus {
+  /** The forwarded service's registry name. */
   name: string;
+  /** The host port the forward listens on. */
   listen_port: number;
+  /** The port it forwards to in the cluster. */
   remote_port: number;
+  /** The probe its `health_endpoint` names: a path, `redis`/`postgres`, or `""` for TCP. */
   health_path: string;
+  /** `alive`, `dead`, `container_down` (the forwards container should run but doesn't) or `stopped`. */
   status: string;
 }
 

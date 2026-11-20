@@ -9,9 +9,16 @@ import path from "node:path";
 import { runCapture, shellQuote } from "../../tool_bins.js";
 import { signalFrom } from "../sessions.js";
 import { runTurn } from "../turn.js";
-import type { HarnessId, SessionSignal, TurnOptions, TurnResult, TurnState } from "../types.js";
+import type {
+  HarnessId,
+  SessionMessage,
+  SessionSignal,
+  TurnOptions,
+  TurnResult,
+  TurnState,
+} from "../types.js";
 import { resolveClaudeBin } from "./cli.js";
-import { type ClaudeMessage, parseSessionLines } from "./transcript.js";
+import { parseSessionLines } from "./transcript.js";
 
 export type ClaudeSessionSignal = SessionSignal;
 export type ClaudeTurnState = TurnState;
@@ -128,7 +135,7 @@ export function deniedIn(stdout: string): string[] {
  * ```
  */
 export function relayPickedUp(
-  messages: ClaudeMessage[],
+  messages: SessionMessage[],
   relay: { sentAt: string; text: string },
 ): boolean {
   const sentAt = Date.parse(relay.sentAt);

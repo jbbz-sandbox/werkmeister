@@ -153,19 +153,48 @@ export type Run = (
   cwd?: string,
 ) => Promise<{ stdout: string; stderr: string; code: number }>;
 
-/** Everything that leaves the process, so tests stub the seam and keep the logic real. */
+/**
+ * Everything the PR lifecycle does outside the process: commands, the registry,
+ * the tracker, commits and pushes, container stops. {@link gatePrs},
+ * {@link openPrs}, {@link adoptPr}, {@link newPr} and {@link checkInTriage}
+ * take it last and default to {@link defaultDeps}; pass your own to stub a seam,
+ * for example in a test.
+ *
+ * @example
+ * ```ts
+ * import { type Deps, defaultDeps, gatePrs } from "werkmeister-core/sdk";
+ *
+ * const real = defaultDeps();
+ * const deps: Deps = {
+ *   ...real,
+ *   run: async (bin, args, cwd) => {
+ *     console.log(`$ ${bin} ${args.join(" ")}`);
+ *     return real.run(bin, args, cwd);
+ *   },
+ * };
+ * console.log((await gatePrs("/home/me/features/my-workspace", undefined, deps)).ok);
+ * ```
+ */
 export interface Deps {
   /** Runs a host command and resolves with its output and exit code; never rejects. */
   run: Run;
   /** Runs the probe a `health_endpoint` names on a host port: a path, `redis`/`postgres`, or `""` for TCP. */
-  probe: (port: number, health: string) => Promise<{ ok: boolean; detail: string }>;
+  probe: (
+    port: number,
+    health: string,
+  ) => Promise<{
+    /** True when the probe passed. */
+    ok: boolean;
+    /** What it saw, for the gate's row. */
+    detail: string;
+  }>;
   /** The machine's service registry (`~/.werkmeister/services.yaml`). */
   services: ServicesConfig;
   /** The archetypes services build on. */
   archetypes: ArchetypeRegistry;
   /** The registry's `repos:`, keyed by code worktree directory name. */
   repos: ReposConfig;
-  /** Fixed tracker and statuses (tests); absent: the workspace's own, through its project (SW-104). */
+  /** Fixed tracker and statuses (tests); absent: the workspace's own, through its project. */
   tracker?: IssueTrackerStrategy;
   /** Where each lifecycle point moves the issue (issue_status.ts). */
   statuses?: IssueStatuses;
@@ -180,7 +209,7 @@ export interface Deps {
     /** One report line: what was committed and pushed, or why not. */
     message: string;
   }>;
-  /** *abandoned*: don't push a code branch that would hold only the handoff commit (SW-91). */
+  /** *abandoned*: don't push a code branch that would hold only the handoff commit. */
   remove: (
     name: string,
     abandoned: boolean,
@@ -192,11 +221,11 @@ export interface Deps {
   terminals: (ws: string) => Promise<string[]>;
   /** The source clone that owns worktree *dir*; null when it cannot be resolved. */
   sourceOf: (dir: string) => Promise<string | null>;
-  /** The PR file's callback fields for the session running `pr open` (#236). */
+  /** The PR file's callback fields for the session running `pr open`. */
   session: (ws: string) => Promise<Record<string, string>>;
   /**
-   * Whether the terminal session is open (its hooks' record) or wrote its transcript lately (SW-160).
-   * A headless resume beside an open session forks its history: the open one never shows the turn (SW-313).
+   * Whether the terminal session is open (its hooks' record) or wrote its transcript lately.
+   * A headless resume beside an open session forks its history: the open one never shows the turn.
    */
   sessionBusy: (ws: string, session: string, cwd: string | null) => Promise<boolean>;
   /** The registry as built from *worktree*'s own fragment for *repo* (registry_sync.ts), or null. */
@@ -210,18 +239,18 @@ export interface Deps {
     /** Its workspace's local services. */
     services: string[];
   }[];
-  /** Stop the workspace's feature containers (SW-39); one line, never throws. */
+  /** Stop the workspace's feature containers; one line, never throws. */
   stop: (ws: string) => Promise<string>;
-  /** Whether the `pr watch` schedule is installed (SW-437). */
+  /** Whether the `pr watch` schedule is installed. */
   prWatch: () => PrWatchScheduleState;
-  /** `os.loadavg()` and the core count, read before and after each gate check (SW-209). */
+  /** `os.loadavg()` and the core count, read before and after each gate check. */
   hostLoad: () => {
     /** The 1, 5 and 15 minute load averages. */
     load: number[];
     /** Logical CPU count, to scale *load* against. */
     cores: number;
   };
-  /** Bytes available and total, read once before the gate starts anything (SW-620). */
+  /** Bytes available and total, read once before the gate starts anything. */
   hostMemory: () => {
     /** Bytes available now. */
     free: number;
@@ -230,21 +259,21 @@ export interface Deps {
   };
   /** Wait *ms* milliseconds; stubbed so tests don't wait. */
   sleep: (ms: number) => Promise<void>;
-  /** One idle-reaper pass over every workspace (SW-39). */
+  /** One idle-reaper pass over every workspace. */
   reapIdle: () => Promise<{
     /** One report line per workspace stopped or started from the waiting queue; [] when nothing changed. */
     lines: string[];
   }>;
-  /** Start one of the feature's services and wait for it (SW-34); throws on failure. */
+  /** Start one of the feature's services and wait for it; throws on failure. */
   startService: (
     ws: string,
     feature: string,
     service: string,
     composeName?: string,
   ) => Promise<void>;
-  /** Write compose.gate.yml from *services*; the services whose compose.yml entry it changes (SW-118). */
+  /** Write compose.gate.yml from *services*; the services whose compose.yml entry it changes. */
   gateCompose: (ws: string, feature: string, services: ServicesConfig) => string[];
-  /** Host ports *services* would publish that something else binds (SW-173). */
+  /** Host ports *services* would publish that something else binds. */
   portHolders: (
     ws: string,
     feature: string,
@@ -277,6 +306,23 @@ const execRun: Run = (bin, args, cwd) =>
     );
   });
 
+/**
+ * The real {@link Deps}: host commands, the machine's registry, the workspace's
+ * own tracker, git and Docker. Spread it and replace one seam to change only
+ * that.
+ *
+ * @returns A fresh set; the gate's capacity wait counts from this call.
+ * @throws `Error` when the machine's `services.yaml` is missing: it reads the
+ *   registry now, as {@link gatePrs} and the others do when you leave `deps` out.
+ *
+ * @example
+ * ```ts
+ * import { defaultDeps, openPrs } from "werkmeister-core/sdk";
+ *
+ * const deps = { ...defaultDeps(), stop: async () => "kept the containers running" };
+ * console.log((await openPrs("/home/me/features/my-workspace", undefined, deps)).ok);
+ * ```
+ */
 export function defaultDeps(): Deps {
   // Built once per command, so the wait is a total across its starts, not per start (SW-869).
   const capacityDeadline = Date.now() + GATE_CAPACITY_WAIT_MS;

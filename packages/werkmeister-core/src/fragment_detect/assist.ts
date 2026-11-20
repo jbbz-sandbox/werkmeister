@@ -9,6 +9,33 @@ import type { Plan } from "./plan.js";
 import { resolveService } from "./precedence.js";
 import type { FieldValue } from "./types.js";
 
+/**
+ * What a {@link Question} asks, which sets the rule {@link applyAnswers} checks its answer
+ * against: a service's start `command`, its `health_endpoint` path, the `environment` it
+ * needs, which keys are `secrets`, what it `depends_on`, which value wins a `conflict`
+ * between sources, or which service an `unmatched` finding belongs to.
+ *
+ * @example
+ * ```ts
+ * import {
+ *   collectQuestions,
+ *   planFragment,
+ *   portsPerSlot,
+ *   type QuestionKind,
+ *   stdoutRunner,
+ * } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: stdoutRunner,
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: portsPerSlot(),
+ * });
+ * const byKind = new Map<QuestionKind, number>();
+ * for (const q of collectQuestions(plan)) byKind.set(q.kind, (byKind.get(q.kind) ?? 0) + 1);
+ * console.log(Object.fromEntries(byKind));
+ * ```
+ */
 export type QuestionKind =
   | "command"
   | "health_endpoint"
@@ -25,13 +52,19 @@ export type QuestionKind =
  *
  * @example
  * ```ts
- * import { collectQuestions, planFragment, type Question } from "werkmeister-core/sdk";
+ * import {
+ *   collectQuestions,
+ *   planFragment,
+ *   portsPerSlot,
+ *   type Question,
+ *   stdoutRunner,
+ * } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const questions: Question[] = collectQuestions(plan);
  * for (const q of questions) console.log(`${q.id} (${q.kind}): ${q.prompt}`, q.choices ?? "");
@@ -90,13 +123,20 @@ export type Resolver = (repoRoot: string, questions: Question[]) => Promise<Answ
  *
  * @example
  * ```ts
- * import { type Answer, type ApplyResult, applyAnswers, planFragment } from "werkmeister-core/sdk";
+ * import {
+ *   type Answer,
+ *   applyAnswers,
+ *   type ApplyResult,
+ *   planFragment,
+ *   portsPerSlot,
+ *   stdoutRunner,
+ * } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const answers: Answer[] = [
  *   {
@@ -159,13 +199,13 @@ export const ANSWER_SCHEMA = {
  *
  * @example
  * ```ts
- * import { collectQuestions, planFragment } from "werkmeister-core/sdk";
+ * import { collectQuestions, planFragment, portsPerSlot, stdoutRunner } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const questions = collectQuestions(plan);
  * console.log(JSON.stringify(questions, null, 2));
@@ -295,13 +335,19 @@ function applyUnmatched(next: Plan, id: string, value: unknown, reason: string):
  *
  * @example
  * ```ts
- * import { applyAnswers, planFragment, renderFragment } from "werkmeister-core/sdk";
+ * import {
+ *   applyAnswers,
+ *   planFragment,
+ *   portsPerSlot,
+ *   renderFragment,
+ *   stdoutRunner,
+ * } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const { plan: next, accepted } = applyAnswers(plan, [
  *   {

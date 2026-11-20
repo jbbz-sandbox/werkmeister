@@ -44,13 +44,13 @@ export interface SetupPlan {
  *
  * @example
  * ```ts
- * import { type Plan, planFragment } from "werkmeister-core/sdk";
+ * import { type Plan, planFragment, portsPerSlot, stdoutRunner } from "werkmeister-core/sdk";
  *
  * const plan: Plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * console.log(plan.services.map((s) => `${s.name} (${s.dir})`));
  * ```
@@ -151,13 +151,13 @@ function envExampleKeys(ctx: DetectContext, dir: string): string[] {
  *
  * @example
  * ```ts
- * import { planFragment, planSummary } from "werkmeister-core/sdk";
+ * import { planFragment, planSummary, portsPerSlot, stdoutRunner } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * console.log(JSON.stringify(planSummary(plan), null, 2));
  * ```
@@ -346,13 +346,13 @@ export function planFragment(root: string, opts: PlanOptions): Plan {
  *
  * @example
  * ```ts
- * import { planFragment, planSummary } from "werkmeister-core/sdk";
+ * import { planFragment, planSummary, portsPerSlot, stdoutRunner } from "werkmeister-core/sdk";
  *
  * const plan = planFragment("/home/me/repos/my-app", {
  *   reposRoot: "/home/me/repos",
- *   runner: () => [1, ""],
+ *   runner: stdoutRunner,
  *   localPath: "/home/me/.werkmeister/services.local.yaml",
- *   portsPerSlot: 20,
+ *   portsPerSlot: portsPerSlot(),
  * });
  * const summary = planSummary(plan);
  * for (const s of summary.services) console.log(s.name, Object.keys(s.fields));

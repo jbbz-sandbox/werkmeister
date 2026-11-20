@@ -17,13 +17,46 @@ import type { IssueRef } from "./strategies/types.js";
 
 export const issueCopyPath = (root: string) => path.join(dotDir(root), "issue.md");
 
+/**
+ * An issue as fetched for a new workspace, the copy saved as its
+ * `.werkmeister/issue.md`. Pass one as `issue` in {@link CreateOptions} when you have
+ * already fetched it, so {@link createWorkspace} doesn't fetch it again.
+ *
+ * @example
+ * ```ts
+ * import { createWorkspace, type IssueSnapshot, issueTracker } from "werkmeister-core/sdk";
+ *
+ * const tracker = issueTracker({ text: "PROJ-12" });
+ * const issue = await tracker.fetchIssue("PROJ-12");
+ * if (issue) {
+ *   const snapshot: IssueSnapshot = {
+ *     ref: issue.ref,
+ *     url: issue.url ?? null,
+ *     tracker: tracker.id,
+ *     title: issue.title ?? "",
+ *     status: issue.status ?? "",
+ *     body: issue.description ?? "",
+ *     comments: issue.comments ?? [],
+ *     fetchedAt: new Date().toISOString(),
+ *   };
+ *   await createWorkspace({ feature: "proj-12", issue_id: issue.ref }, { issue: snapshot });
+ * }
+ * ```
+ */
 export interface IssueSnapshot {
+  /** The canonical ref: `PROJ-12`, `owner/repo#12`. */
   ref: string;
+  /** The issue's web page; null when the tracker has none. */
   url: string | null;
+  /** The tracker it came from: `jira` or `github`. */
   tracker: TrackerId;
+  /** The summary line; empty when it has none. */
   title: string;
+  /** The tracker's status name at fetch time; empty when unknown. */
   status: string;
+  /** The issue body as text; empty when it has none. */
   body: string;
+  /** The comments, oldest first. */
   comments: IssueComment[];
   /** ISO time the copy was taken. */
   fetchedAt: string;

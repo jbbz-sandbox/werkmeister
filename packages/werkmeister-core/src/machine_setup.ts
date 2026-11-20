@@ -107,8 +107,28 @@ import {
   stop as stopWebServer,
 } from "./web_servers.js";
 
-// A command runner: argv in, [returncode, combined-output] out. Injected in
-// tests; the default shells out with a timeout and never throws.
+// Injected in tests; the default shells out with a timeout and never throws.
+/**
+ * Runs a command synchronously: an argv array in, `[exitCode, output]` out. It
+ * never throws; a command that can't start returns a non-zero code.
+ * `runner` in {@link PlanOptions} takes one; {@link stdoutRunner} is the real one.
+ *
+ * @example
+ * ```ts
+ * import { planFragment, portsPerSlot, type Runner, stdoutRunner } from "werkmeister-core/sdk";
+ *
+ * const logged: Runner = (cmd) => {
+ *   console.log(`$ ${cmd.join(" ")}`);
+ *   return stdoutRunner(cmd);
+ * };
+ * planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: logged,
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: portsPerSlot(),
+ * });
+ * ```
+ */
 export type Runner = (cmd: string[]) => [number, string];
 
 // A runner for commands that must talk to the user directly — `bin/generate-certs.sh`

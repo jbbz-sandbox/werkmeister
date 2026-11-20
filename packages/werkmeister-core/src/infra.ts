@@ -424,7 +424,8 @@ export async function connectK8s(): Promise<boolean> {
  * containers are not touched. Runs in-process with `docker compose down`.
  *
  * @param volumes - Also remove the shared stack's volumes. Defaults to false.
- * @returns Nothing. A failed or timed-out `docker compose` is logged, not thrown.
+ * @returns True when `docker compose down` succeeded; false when it failed or timed
+ *   out, which is also logged.
  * @throws Error when the compose process fails to spawn for a reason other
  *   than docker being missing or timing out.
  *
@@ -433,10 +434,10 @@ export async function connectK8s(): Promise<boolean> {
  * import { infraDown } from "werkmeister-core/sdk";
  *
  * // Tear down the proxy and port-forwards, keeping their volumes.
- * await infraDown();
+ * if (!(await infraDown())) console.error("shared infra is still up");
  * ```
  */
-export async function down(volumes = false): Promise<void> {
+export async function down(volumes = false): Promise<boolean> {
   await stopAll();
   takeDownProject(LEGACY_INFRA_PROJECT, "the pre-rename shared infra", { removeVolumes: volumes });
   // `--profile *`: plain `down` skips an opted-in jaeger/redisinsight (as
@@ -445,13 +446,15 @@ export async function down(volumes = false): Promise<void> {
   if (volumes) {
     args.push("--volumes");
   }
-  if (composeCmd(args)) {
+  const ok = composeCmd(args);
+  if (ok) {
     let msg = "Shared infrastructure stopped";
     if (volumes) {
       msg += " (volumes removed)";
     }
     success(msg);
   }
+  return ok;
 }
 
 /**
@@ -460,25 +463,27 @@ export async function down(volumes = false): Promise<void> {
  * (exported from the SDK as `infraStop`). Runs in-process and talks to Docker
  * directly.
  *
- * @returns Nothing. A Docker failure is logged, not thrown.
+ * @returns True when the containers stopped; false on a Docker failure, which is
+ *   also logged.
  *
  * @example
  * ```ts
  * import { infraStop } from "werkmeister-core/sdk";
  *
- * await infraStop();
+ * if (!(await infraStop())) console.error("shared infra did not stop");
  * ```
  */
-export async function stop(): Promise<void> {
+export async function stop(): Promise<boolean> {
   await stopAll();
   const err = await stopOrRestart("stop", INFRA_PROJECT);
   if (err) {
     error(err);
-    return;
+    return false;
   }
   success(
     "Shared infrastructure stopped (containers preserved, resumable with 'werkmeister infra up')",
   );
+  return true;
 }
 
 /**
@@ -486,20 +491,20 @@ export async function stop(): Promise<void> {
  * restarts the host web servers (exported from the SDK as `infraRestart`). Runs
  * in-process and talks to Docker directly.
  *
- * @returns Nothing. A Docker failure is logged, not thrown, and the web servers
- *   are still restarted.
+ * @returns True when the containers restarted; false on a Docker failure, which is
+ *   also logged. The web servers are restarted either way.
  *
  * @example
  * ```ts
  * import { infraHealth, infraRestart } from "werkmeister-core/sdk";
  *
- * await infraRestart();
- * console.log(await infraHealth(30));
+ * if (await infraRestart()) console.log(await infraHealth(30));
  * ```
  */
-export async function restart(): Promise<void> {
+export async function restart(): Promise<boolean> {
   const err = await stopOrRestart("restart", INFRA_PROJECT);
   if (err) error(err);
   else success("Shared infrastructure restarted");
   await restartAll();
+  return !err;
 }

@@ -415,11 +415,28 @@ export function getServicePort(slot: number, portOffset: number): number {
 // Where a feature's services actually answer
 // ---------------------------------------------------------------------------
 
+/**
+ * Where one registry service answers for a running feature
+ * ({@link FeatureServices.endpoints}): its own container, a shared baseline, a k8s
+ * port-forward, or nowhere.
+ *
+ * @example
+ * ```ts
+ * import { featureServices, type ServiceEndpoint } from "werkmeister-core/sdk";
+ *
+ * const endpoints: ServiceEndpoint[] = (await featureServices("my-feature")).endpoints;
+ * for (const e of endpoints)
+ *   console.log(`${e.service} (${e.source}): ${e.endpoint ?? "not configured"}`);
+ * ```
+ */
 export interface ServiceEndpoint {
+  /** The registry service name. */
   service: string;
+  /** `local` (this feature's container), `baseline`, `k8s` (a port-forward) or `none`. */
   source: "local" | "baseline" | "k8s" | "none";
-  /** `null` when *source* is `"none"` — the CLI renders that as "(not configured)". */
+  /** `host:port` to reach it; `null` when *source* is `"none"`, which the CLI renders as "(not configured)". */
   endpoint: string | null;
+  /** The service's registry `type`; `unknown` when it has none. */
   type: string;
 }
 

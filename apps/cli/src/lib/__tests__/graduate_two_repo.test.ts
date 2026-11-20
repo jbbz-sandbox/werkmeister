@@ -14,7 +14,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { graduateNote, reconcileGraduating } from "werkmeister-core/graduate";
-import { openDecisions, parseNote } from "werkmeister-core/notes";
+import { type Note, openDecisions, parseNote } from "werkmeister-core/notes";
 
 let tmp: string;
 let workspace: string;
@@ -24,13 +24,13 @@ function git(...args: string[]): void {
   execFileSync("git", ["-C", standardsDir, ...args], { stdio: "ignore" });
 }
 
-function seedNote(): Record<string, unknown> {
+function seedNote(): Note {
   const notePath = path.join(workspace, ".werkmeister", "notes", "003-decision-widget-sizing.md");
   fs.writeFileSync(
     notePath,
     "---\ntype: decision\nphase: implement\nauthor: main\nstatus: open\n---\n\n# Widget sizing\n",
   );
-  return parseNote(notePath) as unknown as Record<string, unknown>;
+  return parseNote(notePath) as Note;
 }
 
 beforeEach(() => {

@@ -72,9 +72,22 @@ export function yamlDocs(text: string): unknown[] {
 }
 
 /**
- * A Runner whose output is stdout alone on success. helm and kubectl print
- * warnings on stderr, which must not reach the YAML parser; on failure the
- * output is stderr, for the skipped-item message.
+ * The {@link Runner} detection uses: runs the command with a 120-second
+ * timeout. On success the output is stdout alone, since helm and kubectl print
+ * warnings on stderr that must not reach the YAML parser; on failure it is
+ * stderr, for the skipped-item message. Never throws: a missing command
+ * returns 127 and a timeout 124.
+ *
+ * @param cmd - The command and its arguments.
+ * @returns `[exitCode, output]`.
+ *
+ * @example
+ * ```ts
+ * import { stdoutRunner } from "werkmeister-core/sdk";
+ *
+ * const [code, out] = stdoutRunner(["git", "-C", "/home/me/repos/my-app", "ls-files"]);
+ * if (code === 0) console.log(`${out.split("\n").length} tracked files`);
+ * ```
  */
 export function stdoutRunner(cmd: string[]): [number, string] {
   try {
