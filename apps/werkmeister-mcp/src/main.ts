@@ -264,7 +264,11 @@ async function startHttp(): Promise<void> {
 
   app.all("/mcp", async (req: Request, res: Response) => {
     const server = createServer({ scoped: scopeOfReq(res).scope === "workspace" });
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    // SW-722: our own keep-alive, not the SDK default, keeps a quiet call under undici's 300 s bodyTimeout.
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      keepAliveMs: HEARTBEAT_MS,
+    });
     // Closing the server on disconnect is also the abort: Protocol._onclose()
     // aborts every in-flight request handler's controller, which is the
     // `extra.signal` the six long-running tools pass into core. A client that

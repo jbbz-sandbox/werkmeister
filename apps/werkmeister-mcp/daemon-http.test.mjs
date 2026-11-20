@@ -343,6 +343,23 @@ test("a daemon call that outlasts timeoutMs is still DaemonTimeout (SW-700)", as
   await sleep(2500); // let the daemon finish the call the client left
 });
 
+// SW-722: the session proxy reaches /mcp through the same global fetch. A tool call quiet past
+// bodyTimeout answers only if the SSE stream sends keep-alive comments faster than that.
+test("an /mcp tool call slower than undici's body timeout still answers (SW-722)", async () => {
+  slowListMs = 3500;
+  const r = await withUndiciTimeouts(1000, async () => {
+    const client = await mcp(machineToken);
+    try {
+      return await client.callTool({ name: "status", arguments: {} }, undefined, {
+        timeout: 10_000,
+      });
+    } finally {
+      await client.close();
+    }
+  });
+  assert.ok(!r.isError, JSON.stringify(r.content));
+});
+
 test("a tool error through the daemon client keeps its code (SW-700)", async () => {
   const { callTool } = await daemonClient();
   await assert.rejects(callTool("stop", { workspace: "b" }, { token: machineToken }), {
