@@ -80,7 +80,7 @@ import {
   readWorkspaceField,
 } from "../../workspace_prompts.js";
 // biome-ignore-end lint/suspicious/noImportCycles: SW-188
-import { AUTONOMOUS_DENY, CLI_NAMES, cli, pluginTool } from "../autonomous_deny.js";
+import { AUTONOMOUS_DENY, CLI_NAMES, cli, PATHSPEC_DENY, pluginTool } from "../autonomous_deny.js";
 import { CODEX_HOOKS_FILE, CODEX_LAUNCH, writeCodexConfig } from "../codex/index.js";
 // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
 import { harnessLayoutFor } from "../layout.js";
@@ -482,6 +482,9 @@ export const gitRules = (dirs: string[] = []) =>
     ...GIT_PREFIXES.map((s) => `Bash(git ${c}${s}:*)`),
     ...GIT_EXACT.map((s) => `Bash(git ${c}${s})`),
   ]);
+const isCommit = (rule: string) => /^Bash\(git (-C \S+ )?commit /.test(rule);
+// SW-912: every mode commits each stage's work; with no rule the classifier refused it mid-stage.
+export const COMMIT_RULES = gitRules().filter(isCommit);
 
 export const AUTONOMOUS_RULES = [
   ...gitRules(),
@@ -588,8 +591,9 @@ const permissionsRecord = (workspaceRoot: string) =>
 
 /**
  * Allow rules for each local service's registered test command, then read-only
- * git. Each command gets the container form the agent is told to run, plus the
- * bare command as a prefix, plus the bare command through *tempHome* (the
+ * git and the commit rules (SW-912). Each command gets the container form the
+ * agent is told to run, plus the bare command as a prefix, plus the bare command
+ * through *tempHome* (the
  * form werkmeister-context.md states; never the wrapper alone, which runs anything).
  * A service with no command gets none. Each of *builtClis* (SW-172) also gets
  * the wrapped form: the temp HOME is what makes running it safe to pre-approve.
@@ -645,7 +649,7 @@ export function buildAllowRules(
         .filter((r) => r.startsWith(wrapped))
         .map((r) => `${wrapped}--no-wait ${r.slice(wrapped.length)}`),
     );
-  return [...new Set([...rules, ...READ_ONLY_GIT_RULES])];
+  return [...new Set([...rules, ...READ_ONLY_GIT_RULES, ...COMMIT_RULES])];
 }
 
 function _readEnv(workspaceRoot: string): Record<string, string> {
@@ -710,7 +714,11 @@ export function workspaceAllowRules(
     reposConfig,
   );
   rules.push(...readGrants(workspaceRoot).flatMap(cli));
-  if (!autonomous) return rules;
+  // SW-626: `-C` only into the workspace's own repos, by absolute path or by name from the workspace root.
+  const repoGit = gitRules(repoDirs(workspaceRoot).flatMap((d) => [d, path.basename(d)])).filter(
+    (r) => r.startsWith("Bash(git -C "),
+  );
+  if (!autonomous) return [...rules, ...repoGit.filter(isCommit)];
   // Exact: `--prefix`, `--dir`/`-C` reach another workspace, `--script-shell` runs any file.
   // Read from the main checkout, not the worktree: an agent-written `yarn.lock` + `.yarnrc.yml`
   // `yarnPath` would otherwise grant itself an install that runs its own file.
@@ -726,10 +734,6 @@ export function workspaceAllowRules(
     (svc) =>
       hostAccess(registry[svc], workspaceRoot) &&
       !(registry[svc]?.["unattended_start"] && unchanged(svc)),
-  );
-  // SW-626: `-C` only into the workspace's own repos, by absolute path or by name from the workspace root.
-  const repoGit = gitRules(repoDirs(workspaceRoot).flatMap((d) => [d, path.basename(d)])).filter(
-    (r) => r.startsWith("Bash(git -C "),
   );
   // SW-815: a follow-up the run finds, linked to this workspace's issue; `create` is Jira-only.
   const issueId = String(readWorkspaceField(workspaceRoot, "issue_id") ?? "").trim();
@@ -793,12 +797,12 @@ export function workspaceAskRules(workspaceRoot: string): string[] {
   ];
 }
 
-/** The deny rules this workspace should have: AUTONOMOUS_DENY while `autonomous` is on. */
+/** The deny rules this workspace should have: AUTONOMOUS_DENY while `autonomous` is on, else the one the commit rules need. */
 export function workspaceDenyRules(
   workspaceRoot: string,
   autonomous = readAutonomous(workspaceRoot),
 ): string[] {
-  return autonomous ? AUTONOMOUS_DENY : [];
+  return autonomous ? AUTONOMOUS_DENY : [PATHSPEC_DENY];
 }
 
 interface PermissionsRecord {
