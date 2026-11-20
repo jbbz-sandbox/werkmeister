@@ -855,6 +855,19 @@ describe("generateCaddyfile", () => {
       }
     });
 
+    // SW-706: the built-in renderer (no Caddyfile.njk) must route as the template does.
+    it.each([true, false])(
+      "renders the same site block without the template (local-only %s)",
+      async (localOnly) => {
+        // Comments and blank lines differ between the two copies; directives must not.
+        const directives = (block: string) =>
+          block.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
+        const fromTemplate = directives(await siteBlock(localOnly));
+        process.env.WERKMEISTER_ROOT = fs.mkdtempSync(path.join(tmp, "no-templates-"));
+        expect(directives(await siteBlock(localOnly))).toEqual(fromTemplate);
+      },
+    );
+
     it("leaves a host with a remote_upstream defaulting to the tunnel", async () => {
       const block = await siteBlock(false);
       const rc = loadFeatureRouters()["frontend"];

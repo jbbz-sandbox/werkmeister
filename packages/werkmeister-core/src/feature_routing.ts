@@ -2,9 +2,8 @@
  * Feature routing, sourced from services.yaml + the ingress config.
  *
  * Caddy terminates a service's public hostname directly and reverse-proxies to
- * the running container. When
- * an `X-Feature` cookie is present, Caddy copies its value into an `X-Feature`
- * header on the upstream call so the app can read the selected feature.
+ * the running container. It routes by the `X-Feature` request header, else the
+ * `X-Feature` cookie.
  *
  * A service opts into routing by declaring a `feature_router:` block in
  * services.yaml. Hostnames DERIVE from the base domains in
