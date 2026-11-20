@@ -25,6 +25,7 @@
  */
 
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 
 import { DOT_DIR, dotDir } from "./dot_dir.js";
@@ -117,7 +118,7 @@ function _realpath(p: string): string {
  * (workspace_init's `candidateWorkspaceRoots`), so a temp config never resolves a
  * real workspace (SW-113) and a code worktree's own `.werkmeister/` is stepped over.
  * Without roots — {@link decide}'s hook path, which can't afford the config load —
- * walk up to the nearest directory containing `.werkmeister/`.
+ * walk up to the nearest directory other than HOME containing `.werkmeister/`.
  */
 export function findWorkspaceRoot(start: string, roots?: readonly string[]): string | null {
   if (roots) {
@@ -125,8 +126,10 @@ export function findWorkspaceRoot(start: string, roots?: readonly string[]): str
     return workspace !== null && _isDir(dotDir(workspace)) ? workspace : null;
   }
   let directory = path.resolve(start);
+  // SW-897: HOME's `.werkmeister` is the tool's own home, not a workspace.
+  const home = _realpath(os.homedir());
   while (true) {
-    if (_isDir(dotDir(directory))) {
+    if (_isDir(dotDir(directory)) && _realpath(directory) !== home) {
       return directory;
     }
     const parent = path.dirname(directory);

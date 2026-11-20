@@ -245,3 +245,22 @@ test("gate main: a Codex apply_patch is gated on the paths in the patch, relativ
     assert.match(deny.permissionDecisionReason, /^Phase gate:/);
   });
 });
+
+// SW-897: ~/.werkmeister is the tool's own home, not a workspace marker.
+test("findWorkspaceRoot without roots never resolves HOME, which holds ~/.werkmeister", () => {
+  const home = fs.realpathSync(fs.mkdtempSync("/tmp/home-"));
+  const ws = path.join(home, "features", "ws");
+  fs.mkdirSync(path.join(home, ".werkmeister"));
+  fs.mkdirSync(path.join(home, "notes", "src"), { recursive: true });
+  fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+  const was = process.env.HOME;
+  process.env.HOME = home;
+  try {
+    assert.equal(findWorkspaceRoot(path.join(home, "notes", "src")), null);
+    assert.equal(findWorkspaceRoot(home), null);
+    assert.equal(findWorkspaceRoot(path.join(ws, "repo")), ws);
+  } finally {
+    process.env.HOME = was;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
