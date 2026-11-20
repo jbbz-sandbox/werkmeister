@@ -328,6 +328,57 @@ describe("cpu limits", () => {
   });
 });
 
+// SW-933: a sidecar was Redis-only (redis-cli healthcheck, no environment or volumes).
+describe("extra_services sidecars", () => {
+  it("keeps the Redis probe for a sidecar with no health_endpoint", () => {
+    const { cache } = composeServices();
+    expect(cache.healthcheck.test).toEqual(["CMD", "redis-cli", "ping"]);
+    expect(cache.command).toBe("redis-server");
+  });
+
+  it("renders a postgres sidecar's probe, environment and volumes", () => {
+    const services = composeServices((doc) => {
+      doc.services.backend.extra_services = {
+        db: {
+          image: "postgres:16",
+          internal_port: 5432,
+          health_endpoint: "postgres",
+          environment: { POSTGRES_PASSWORD: "pw", POSTGRES_DB: "app" },
+          extra_volumes: [
+            "${REPO}/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro",
+            "pgdata:/var/lib/postgresql/data",
+          ],
+        },
+      };
+    });
+    const { db } = services;
+    expect(db.healthcheck.test).toEqual(["CMD", "pg_isready"]);
+    expect(db.environment).toEqual(["POSTGRES_PASSWORD=pw", "POSTGRES_DB=app"]);
+    expect(db.volumes).toEqual([
+      `${tmp}/demo-services/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro`,
+      "f-pgdata:/var/lib/postgresql/data",
+    ]);
+    expect(db.command).toBeUndefined();
+    expect(db.ports[0]).toMatch(/:5432$/);
+    const out = generateFeatureCompose("f", 1, ["backend"], null, tmp);
+    expect(Object.keys(YAML.parse(fs.readFileSync(out, "utf8")).volumes)).toContain("f-pgdata");
+  });
+
+  it("probes an HTTP path, and renders no healthcheck for an empty health_endpoint", () => {
+    const services = composeServices((doc) => {
+      doc.services.backend.extra_services = {
+        web: { image: "nginx", internal_port: 80, health_endpoint: "/ping" },
+        tcp: { image: "memcached", internal_port: 11211, health_endpoint: "" },
+      };
+    });
+    expect(services.web.healthcheck.test).toEqual([
+      "CMD-SHELL",
+      "curl -sf http://localhost:80/ping",
+    ]);
+    expect(services.tcp.healthcheck).toBeUndefined();
+  });
+});
+
 // ---- baseline_upstream (SW-102) ------------------------------------------
 
 /** Fixture registry with frontend local and referencing {backend}; *edit* reshapes backend. */
