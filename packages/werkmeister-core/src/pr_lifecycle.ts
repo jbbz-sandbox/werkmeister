@@ -2213,6 +2213,12 @@ export async function refreshPrStatus(
       }
       const view = JSON.parse(v.stdout) as PrView;
       if (view.state === "OPEN") views.set(f.path, view);
+      const ahead =
+        view.state === "OPEN" ? await aheadOfPr(path.join(ws, f.dir), f, view.headRefOid, deps) : 0;
+      if (ahead)
+        lines.push(
+          `${f.stem}: warning: ${f.fm["branch"]} has ${ahead} local commits PR head ${view.headRefOid?.slice(0, 7)} lacks; push them before it merges: git -C ${f.dir} push --force-with-lease=${f.fm["branch"]}:${view.headRefOid} origin ${f.fm["branch"]}`,
+        );
       // reviewDecision stays empty on a repo that requires no review; latestReviews still says it.
       const changesRequested =
         view.reviewDecision === "CHANGES_REQUESTED" ||
@@ -2228,6 +2234,7 @@ export async function refreshPrStatus(
         writePrFields(f, {
           status: "merged",
           merge_sha: view.mergeCommit?.oid ?? "",
+          ...(view.headRefOid ? { head_sha: view.headRefOid } : {}),
           ...(touchesFragment(view) ? { registry_sync: "pending" } : {}),
           ...(shipsNothing(f, deps.repos[f.dir] ?? {}, view) ? { release: "none" } : {}),
           ...(pkgs ? { release_packages: pkgs } : {}),
@@ -2253,12 +2260,16 @@ export async function refreshPrStatus(
     lines.push(...(await syncRegistryOnMerge(ws, f, deps)));
     if (statusOf(f) === "merged") {
       const repo = deps.repos[f.dir] ?? {};
+      const dir = path.join(ws, f.dir);
+      const head = String(f.fm["head_sha"] ?? "");
+      const unsent = await aheadOfPr(dir, f, head, deps);
       // skip_release only skips the gate's release check; a ship: tag repo still ships with its tag (#145).
       // release: none is the gate's finding that nothing needed a release (SW-193).
-      if (repo["ship"] !== "tag" || f.fm["release"] === "none") {
+      if (unsent) {
+        notShipped = `${f.fm["branch"]} has ${unsent} local commits the merged PR never got (its head ${head.slice(0, 7)}); carry them in a follow-up: werkmeister pr new ${f.dir} --slug <slug>, then cherry-pick them`;
+      } else if (repo["ship"] !== "tag" || f.fm["release"] === "none") {
         writePrFields(f, { status: "shipped" });
       } else {
-        const dir = path.join(ws, f.dir);
         await deps.run("git", ["-C", dir, "fetch", "-q", "--tags", "origin"]);
         const tags = await deps.run("git", [
           "-C",
@@ -2355,6 +2366,34 @@ async function notShippedWhy(dir: string, f: PrFile, pattern: string, deps: Deps
   if (reason(f.fm["skip_release"]))
     why += `; if it ships nothing, set \`release: none\` in ${path.basename(f.path)} and rerun \`werkmeister pr status\``;
   return why;
+}
+
+/**
+ * SW-943: commits on the worktree's branch that the PR head lacks, counted only while the worktree
+ * is on the PR's branch (a `pr new` follow-up branch carries them instead). 0 when unknown.
+ */
+async function aheadOfPr(
+  dir: string,
+  f: PrFile,
+  head: string | undefined,
+  deps: Deps,
+): Promise<number> {
+  const branch = String(f.fm["branch"] ?? "");
+  if (!head || !branch) return 0;
+  const on = await deps.run("git", ["-C", dir, "symbolic-ref", "--short", "HEAD"]);
+  if (on.code !== 0 || on.stdout.trim() !== branch) return 0;
+  // Not the base's own commits: a `git pull origin main` after merge is no unpushed fixup.
+  const base = `origin/${String(f.fm["base"] ?? "main")}`;
+  const n = await deps.run("git", [
+    "-C",
+    dir,
+    "rev-list",
+    "--count",
+    "--no-merges",
+    `${head}..HEAD`,
+    `^${base}`,
+  ]);
+  return n.code === 0 ? Number(n.stdout.trim()) || 0 : 0;
 }
 
 /**
