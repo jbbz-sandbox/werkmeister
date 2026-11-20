@@ -73,6 +73,7 @@ import {
   FRAGMENT_REL,
   inheritedK8sContext,
 } from "werkmeister-core/registry_sync";
+import { getKubeContext } from "werkmeister-core/sdk";
 import { Colors, getSandboxRoot, info, success, warn } from "../lib/config.js";
 import { confirm, prompt, runWizard } from "../lib/wizard.js";
 
@@ -262,7 +263,11 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
       "Clone your team's repos there and re-run `werkmeister machine setup`, or try the demo apps.",
     );
   }
-  if (!fragments.includes("demo-services")) {
+  // SW-641: the demo backend reaches postgres and redis only through k8s-forwards.
+  const demoNeedsKube = !fragments.includes("demo-services") && !(await getKubeContext()).context;
+  if (demoNeedsKube) {
+    info("  Skipping the demo apps: they need a Kubernetes cluster, and no kube context is set.");
+  } else if (!fragments.includes("demo-services")) {
     demo = await confirm(
       "  Clone the demo apps (backend, frontend) so there is something to run?",
       false,

@@ -17,7 +17,7 @@ This page takes you from nothing to a closed workspace: what each step does, and
 - Any OCI container manager with Docker Compose v2: Docker Engine, OrbStack, Docker Desktop or another.
 - git.
 - Node.js 22 or later.
-- Kubernetes is optional: see [Without Kubernetes](topology.md#without-kubernetes).
+- Kubernetes is optional: see [Without Kubernetes](topology.md#without-kubernetes). The demo apps `machine setup` offers are the exception: their backend reaches Postgres and Redis through the cluster, so setup offers them only when a kube context is set.
 
 The full list, with licences, is in [Third-party software](third-party.md#required-host-software).
 
