@@ -130,7 +130,10 @@ async function pickRepo(): Promise<string | null> {
 
 async function sessionIn(node: WsNode | undefined, mode: "new" | "continue"): Promise<void> {
   const ws = await pickWorkspace(node);
-  if (ws) openSessionTerminal(ws, mode);
+  // Continue brings a live session terminal forward rather than starting a second Claude (SW-693).
+  if (!ws) return;
+  if (mode === "continue") focusSessionTerminal(ws);
+  else openSessionTerminal(ws, mode);
 }
 
 /** Close out (no reason) or abandon (with one) through the daemon's `close-out` tool. */

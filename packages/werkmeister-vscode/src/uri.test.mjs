@@ -113,3 +113,21 @@ test("a session tab leads with the issue key so it matches the card (SW-864)", (
   assert.equal(sessionTabName("bwell"), "bwell");
   assert.equal(sessionTabName("jit-ws1"), "jit-ws1");
 });
+
+// SW-693: Continue brings a live session terminal forward instead of opening a second one.
+test("liveSessionTerminal: the workspace's open session terminal, never an exited one", async () => {
+  const { liveSessionTerminal } = await import("../out/harness/claude/uri.js");
+  const name = sessionTabName("sw-693-continue");
+  const live = { name, exitStatus: undefined };
+  const exited = { name, exitStatus: { code: 0 } };
+  const other = { name: sessionTabName("sw-1-other"), exitStatus: undefined };
+  assert.equal(liveSessionTerminal([other, live], "sw-693-continue", "claude"), live);
+  assert.equal(liveSessionTerminal([other], "sw-693-continue", "claude"), undefined);
+  assert.equal(liveSessionTerminal([exited], "sw-693-continue", "claude"), undefined);
+  const old = { name: "codex sw-693-continue", exitStatus: undefined };
+  assert.equal(
+    liveSessionTerminal([old], "sw-693-continue", "codex"),
+    old,
+    "a pre-SW-864 tab name",
+  );
+});
