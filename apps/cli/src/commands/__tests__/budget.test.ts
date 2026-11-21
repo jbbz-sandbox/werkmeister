@@ -108,9 +108,10 @@ it("lists slots in slot order and the queue in start order", async () => {
   );
 });
 
-// SW-728: the line showed the limit as `host load 24`, a reading, and on macOS nothing applies it.
-it("labels the host-load limit as a limit, and says macOS doesn't enforce it", () => {
+// SW-728: the line showed the limit as `host load 24`, a reading. SW-888: macOS and Windows apply it to the Docker VM.
+it("labels the host-load limit as a limit, and says where macOS and Windows read it", () => {
   expect(hostLoadText(24, "linux")).toBe("host load limit 24");
-  expect(hostLoadText(24, "darwin")).toBe("host load limit 24 (not enforced on macOS)");
+  expect(hostLoadText(24, "darwin")).toBe("host load limit 24 (Docker VM load on macOS)");
+  expect(hostLoadText(24, "win32")).toBe("host load limit 24 (Docker VM load on Windows)");
   expect(hostLoadText(0, "darwin")).toBe("host load limit off");
 });

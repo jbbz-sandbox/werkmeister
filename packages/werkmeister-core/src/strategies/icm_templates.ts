@@ -210,7 +210,7 @@ const CPU_PROFILE =
 
 // SW-796: sw-752 decided on one "−40% CPU-s" run under host load 4–7; a paired, alternating A/B under the load wait showed it 30% slower.
 const TIMING_CLAIM =
-  "A CPU or wall-time number that a decision or acceptance criterion rests on comes from paired, alternating A/B runs (A1 B1 A2 B2 A3 B3, at least 3 each) through `.werkmeister/bin/with-temp-home` with its load wait on, in a Linux container (on macOS the wrapper waits on free memory only, never on load), never from a single run or `--no-wait`; record every run's numbers and the host load beside them.";
+  "A CPU or wall-time number that a decision or acceptance criterion rests on comes from paired, alternating A/B runs (A1 B1 A2 B2 A3 B3, at least 3 each) through `.werkmeister/bin/with-temp-home` with its load wait on, in a Linux container (on macOS the wrapper waits on the Docker VM's load, not the run's own container), never from a single run or `--no-wait`; record every run's numbers and the host load beside them.";
 
 // SW-810: sw-800's spec promised a byte-for-byte skill copy; the docs checks failed it only at the gate.
 const COPIED_MARKDOWN =
