@@ -147,7 +147,7 @@ export function rateFor(prices: Record<string, ModelRate>, model: string): Model
   return base !== model ? prices[base] : undefined;
 }
 
-// Under ~/.werkmeister/model-pricing.yaml: a file seeded before a model shipped still prices it (SW-773).
+// Built-in rates, the source of current prices; rows in ~/.werkmeister/model-pricing.yaml override them per model (SW-773, SW-836).
 const DEFAULT_PRICES: Record<string, ModelRate> = {
   "claude-fable-5-2": { input: 8, output: 40, cacheWrite: 10, cacheRead: 0.2 },
   "claude-opus-5-5": { input: 4, output: 20, cacheWrite: 5, cacheRead: 0.2 },

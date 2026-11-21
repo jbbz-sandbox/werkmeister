@@ -5,8 +5,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { parse } from "yaml";
 import { rollUpUsage } from "../dist/harness/claude/usage.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
+import { DEFAULT_MODEL_PRICING_YAML } from "../dist/scaffold.js";
 
 const tally = (model) => ({
   sessionId: "s1",
@@ -82,3 +84,31 @@ test("a zero-token model row (Claude Code's <synthetic> turns) does not warn", a
   await withPricing(null, () => withReporter(reporter, () => rollUpUsage("ws", [t])));
   assert.doesNotMatch(reporter.text(), /synthetic/);
 });
+
+// SW-836: the seed holds no rows, so a built-in price change reaches a machine seeded earlier.
+test("the seeded file has no active model rows, and an uncommented example row parses", () => {
+  const rows = parse(DEFAULT_MODEL_PRICING_YAML).models;
+  assert.ok(!rows || Object.keys(rows).length === 0, JSON.stringify(rows));
+  const example = DEFAULT_MODEL_PRICING_YAML.match(/^ {2}# (claude-[\w-]+: \{.*\})$/m);
+  assert.ok(example, "seed lacks a commented example row");
+  assert.ok(parse(`models:\n  ${example[1]}\n`).models);
+});
+
+for (const model of [
+  "claude-fable-5-2",
+  "claude-opus-5-5",
+  "claude-opus-4-8",
+  "claude-sonnet-5-5",
+  "claude-sonnet-5",
+  "claude-haiku-5-5",
+  "claude-haiku-4-5",
+]) {
+  test(`${model} costs the same under the seeded file as under the built-ins`, async () => {
+    const builtIn = await withPricing(null, () => rollUpUsage("ws", [tally(model)]));
+    const seeded = await withPricing(DEFAULT_MODEL_PRICING_YAML, () =>
+      rollUpUsage("ws", [tally(model)]),
+    );
+    assert.ok(seeded.estUsd > 0, `estUsd for ${model}: ${seeded.estUsd}`);
+    assert.equal(seeded.estUsd, builtIn.estUsd);
+  });
+}
