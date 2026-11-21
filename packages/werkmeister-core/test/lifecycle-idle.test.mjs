@@ -217,6 +217,23 @@ test("stopIdle: a session waiting on a person past the cutoff is reaped only whi
   assert.deepEqual(r.lines, ["never-fits: kept (session active)"]);
 });
 
+// SW-919: a tool-permission prompt is mid-turn, often on a `docker exec` into this feature (SW-910).
+// The reaper stopped it as "waiting on a person", and the approved command found no container.
+test("stopIdle: a permission prompt past the cutoff keeps its containers while others queue (SW-919)", async () => {
+  const asked = new Date(NOW - 60 * MIN).toISOString();
+  const ws = workspaceWith({
+    s1: { status: "busy", at: asked, ask: { kind: "permission", what: "Bash", at: asked } },
+  });
+  const r = await stopIdle(10, {
+    now: NOW,
+    run: docker([["prompted", ws, new Date(NOW - 120 * MIN).toISOString()]]),
+    stop: async () => assert.fail("a permission prompt is mid-turn"),
+    queued: true,
+  });
+  assert.deepEqual(r.lines, ["prompted: kept (session active)"]);
+  assert.deepEqual(liveSessions(ws, NOW)[0].asking, false);
+});
+
 // SW-856, SW-702: the reaper stopped a container mid `docker exec` when the session's record read idle
 // (a turn ended over a background run, idle_stop_minutes: 10). A running exec keeps the feature.
 test("idleFeatures: a docker exec in flight keeps the feature (SW-856)", () => {
