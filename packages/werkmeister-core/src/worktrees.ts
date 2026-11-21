@@ -40,6 +40,8 @@ const _RUNTIME_FILES = [
   ".werkmeister/notices.json",
   ".werkmeister/last-exec",
   ".werkmeister/starts.json",
+  // SW-777: which stages already have their stage.done event.
+  ".werkmeister/stage-done/",
   ".werkmeister/token",
   // Held pr watch wakes: SW-418's wake-nudge.json, SW-444's per-session file and its
   // .claimed/.tmp leftovers. A glob; git rm --cached expands it as a pathspec too.

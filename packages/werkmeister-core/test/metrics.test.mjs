@@ -1,16 +1,18 @@
-// SW-775: the metrics event log, and queue.wait / queue.admit at admission. Every line is checked against the schema.
+// SW-775: the metrics event log, and queue.wait / queue.admit at admission; SW-777: stage.done. Every line is checked against the schema.
 
 import assert from "node:assert/strict";
+import { execFileSync, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 import { test } from "node:test";
 
 import { sandboxHome } from "../dist/config.js";
-import { metricsPath, recordEvent } from "../dist/metrics.js";
+import { metricsPath, recordEvent, recordStageDone } from "../dist/metrics.js";
 import { defaultDeps, gatePrs, openPrs, refreshPrStatus } from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { requestAdmission } from "../dist/scheduler_state.js";
+import { stageDirs, templateFor } from "../dist/strategies/icm_templates.js";
 import { initWorkspace } from "../dist/workspace_init.js";
 import { pinWerkmeisterRoot, withFixtureWorkspace } from "./fixtures.mjs";
 
@@ -253,3 +255,84 @@ test("a gate failure that is not a capacity wait writes its exit 1, not 75", asy
     },
   );
 });
+
+// SW-777: stage.done at the record commit that first fills a stage's output/.
+const icmRun = (fx) => {
+  const ws = fx.workspace;
+  const git = (...a) =>
+    execFileSync("git", ["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", ...a], {
+      cwd: ws,
+      encoding: "utf8",
+    }).trim();
+  const commit = (rel, body) => {
+    fs.mkdirSync(path.dirname(path.join(ws, rel)), { recursive: true });
+    fs.writeFileSync(path.join(ws, rel), body);
+    git("add", "-A");
+    git("commit", "-q", "-m", rel);
+    return git("rev-parse", "HEAD");
+  };
+  return { ws, commit, stages: stageDirs(templateFor("feature")) };
+};
+const stageDone = () => lines().filter((e) => e.event === "stage.done");
+
+test("a fixture ICM run gives each stage one stage.done, at the commit that first filled it", () =>
+  withFixtureWorkspace(
+    async (fx) => {
+      const { ws, commit, stages } = icmRun(fx);
+      for (const s of stages) commit(`stages/${s}/output/.gitkeep`, "");
+      recordStageDone(ws);
+      assert.deepEqual(stageDone(), [], ".gitkeep alone fills nothing");
+      const filled = {};
+      for (const s of stages) {
+        filled[s] = commit(`stages/${s}/output/out.md`, s);
+        recordStageDone(ws);
+      }
+      // An earlier stage edited after the last one is done, then more sweeps: no second event.
+      commit(`stages/${stages[0]}/output/out.md`, "edited");
+      recordStageDone(ws);
+      recordStageDone(ws);
+      const done = stageDone();
+      assert.deepEqual(
+        done.map((e) => [e.workspace, e.stage, e.commit]),
+        stages.map((s) => [path.basename(ws), s, filled[s]]),
+      );
+      // The log is the fixture's temp HOME, never the real ~/.werkmeister.
+      assert.ok(metricsPath(new Date().toISOString()).startsWith(fx.root));
+    },
+    { workspace: { context_strategy: "icm" } },
+  ));
+
+test("parallel tool calls' hooks write one stage.done between them", () =>
+  withFixtureWorkspace(
+    async (fx) => {
+      const { ws, commit, stages } = icmRun(fx);
+      const sha = commit(`stages/${stages[0]}/output/inventory.md`, "x");
+      const entry = new URL("../dist/agent_state.js", import.meta.url).href;
+      const input = JSON.stringify({
+        hook_event_name: "PostToolUse",
+        tool_name: "Bash",
+        cwd: ws,
+        session_id: "s",
+      });
+      // Claude Code fires one hook process per tool call, so a batch of calls races on the claim.
+      const hook = () =>
+        new Promise((resolve) => {
+          const c = spawn(process.execPath, [
+            "--input-type=module",
+            "-e",
+            `import { main } from "${entry}"; main();`,
+          ]);
+          let err = "";
+          c.stderr.on("data", (d) => (err += d));
+          c.on("close", (code) => resolve([code, err]));
+          c.stdin.end(input);
+        });
+      for (const [code, err] of await Promise.all([hook(), hook(), hook(), hook()]))
+        assert.equal(code, 0, err);
+      assert.deepEqual(
+        stageDone().map((e) => [e.stage, e.commit]),
+        [[stages[0], sha]],
+      );
+    },
+    { workspace: { context_strategy: "icm" } },
+  ));

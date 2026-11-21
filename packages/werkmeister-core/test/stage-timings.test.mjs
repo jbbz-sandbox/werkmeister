@@ -1,12 +1,18 @@
 // SW-774: a stage's end was its newest output mtime, so re-editing an earlier stage's
-// file later made the next stage's minutes negative.
+// file later made the next stage's minutes negative. SW-777: it is the stage.done event, else that commit.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { after, test } from "node:test";
+import { recordEvent } from "../dist/metrics.js";
 import { stageTimings } from "../dist/usage_snapshot.js";
+
+// stage.done events go to a log of this file's own, never ~/.werkmeister.
+const home = fs.mkdtempSync(path.join(os.tmpdir(), "stages-home-"));
+process.env.WERKMEISTER_CONFIG_FILE = path.join(home, "config.yaml");
+after(() => fs.rmSync(home, { recursive: true, force: true }));
 
 // The host's signing and hooks would make the fixture's commits prompt or fail.
 const git = (cwd, env, ...args) =>
@@ -33,6 +39,7 @@ const commitAt = (ws, iso, file, body) => {
   git(ws, {}, "add", "-A");
   git(ws, { GIT_AUTHOR_DATE: iso, GIT_COMMITTER_DATE: iso }, "commit", "-q", "-m", file);
 };
+const head = (ws) => git(ws, {}, "rev-parse", "HEAD").toString().trim();
 
 test("a stage ends at the commit that first filled its output, not its newest mtime", () => {
   const ws = workspace();
@@ -57,7 +64,7 @@ test("a stage ends at the commit that first filled its output, not its newest mt
   }
 });
 
-test("stages committed together keep their own times from their files", () => {
+test("stages committed together end at that one commit, whatever their files' mtimes", () => {
   const ws = workspace();
   try {
     const at = (file, iso) => {
@@ -73,7 +80,7 @@ test("stages committed together keep their own times from their files", () => {
     const t = stageTimings(ws, "2026-11-01T09:30:00Z");
     assert.deepEqual(
       t.map((s) => s.minutes),
-      [30, 60, null],
+      [150, 0, null],
     );
   } finally {
     fs.rmSync(ws, { recursive: true, force: true });
@@ -98,6 +105,54 @@ test("outside git, or for uncommitted output, a stage ends at its oldest output 
     assert.deepEqual(
       t.map((s) => s.minutes),
       [30, 60],
+    );
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("a stage.done event sets its stage's end; a stage without one falls back to its commit", () => {
+  const ws = workspace();
+  try {
+    commitAt(ws, "2026-11-01T10:00:00Z", "stages/01_reproduce/output/repro.md", "a");
+    const sha = head(ws);
+    commitAt(ws, "2026-11-01T11:00:00Z", "stages/02_fix/output/fix.md", "b");
+    const at = "2026-11-01T09:45:00.000Z";
+    const done = (workspace, stage, commit) =>
+      recordEvent({ event: "stage.done", workspace, stage, commit }, at);
+    done(path.basename(ws), "01_reproduce", sha);
+    // Another workspace's event for the same stage name is not this one's.
+    done("other", "02_fix", sha);
+    // A reused name's earlier run: its commit is not in this history, and 03 has no output here.
+    done(path.basename(ws), "03_exercise", "0".repeat(40));
+
+    const t = stageTimings(ws, "2026-11-01T09:30:00Z");
+    assert.deepEqual(
+      t.map((s) => [s.stage, s.finishedAt, s.minutes]),
+      [
+        ["01_reproduce", at, 15],
+        ["02_fix", "2026-11-01T11:00:00.000Z", 75],
+        ["03_exercise", null, null],
+      ],
+    );
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+});
+
+test("a later stage committed before an earlier one gets 0 minutes, never negative", () => {
+  const ws = workspace();
+  try {
+    commitAt(ws, "2026-11-01T10:00:00Z", "stages/02_fix/output/fix.md", "b");
+    commitAt(ws, "2026-11-01T11:00:00Z", "stages/01_reproduce/output/repro.md", "a");
+    commitAt(ws, "2026-11-01T12:00:00Z", "stages/03_exercise/output/run.md", "c");
+    // Edited after every stage is done: changes nothing.
+    commitAt(ws, "2026-11-01T13:00:00Z", "stages/01_reproduce/output/repro.md", "a2");
+
+    const t = stageTimings(ws, "2026-11-01T09:30:00Z");
+    assert.deepEqual(
+      t.map((s) => s.minutes),
+      [90, 0, 60],
     );
   } finally {
     fs.rmSync(ws, { recursive: true, force: true });

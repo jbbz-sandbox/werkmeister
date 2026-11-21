@@ -14,6 +14,7 @@ import * as path from "node:path";
 import { sandboxHome } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { WRAP_UP } from "./harness/claude/desktop.js";
+import { recordStageDone } from "./metrics.js";
 import { findRecordRoot } from "./pr_guard.js";
 import { childEnv, dockerBin } from "./tool_bins.js";
 
@@ -920,6 +921,9 @@ export function main(): void {
     // A blocked Stop isn't the end of the turn, so it records nothing, like the pause gate.
     if (wake && parsed["hook_event_name"] === "Stop") return;
     record(parsed);
+    // The agent commits stage output itself, so the next tool call is the first werkmeister sees of it (SW-777).
+    if (root && parsed["hook_event_name"] === "PostToolUse" && !parsed["agent_id"])
+      recordStageDone(root);
   } catch {
     // a hook must never break the session
   }
