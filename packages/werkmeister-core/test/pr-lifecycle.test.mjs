@@ -3732,8 +3732,11 @@ test("closeOut writes usage.md + usage.json before removal, and a summary line i
     assert.equal(u.sessionCount, 2);
     assert.equal(u.turns, 3);
     assert.equal(u.firstTurn, "2026-10-30T10:00:00.000Z");
+    // s1: 10:00→10:01 counts, the 29-min gap to 10:30 doesn't; s2 is one message.
+    assert.equal(u.activeMinutes, 1);
     const s1 = u.sessions.find((s) => s.sessionId === "s1");
     assert.equal(s1.lastTurn, "2026-10-30T10:30:00.000Z");
+    assert.equal(s1.activeMinutes, 1);
     assert.deepEqual(s1.models, ["claude-sonnet-5", "claude-mystery"]);
     assert.deepEqual(
       u.byModel.map((m) => [m.model, m.estUsd === null]),
@@ -3754,6 +3757,7 @@ test("closeOut writes usage.md + usage.json before removal, and a summary line i
 
     const md = fs.readFileSync(path.join(ws, "usage.md"), "utf8");
     assert.match(md, /^# Usage\n\nUsage: 2\.3M tokens, ~\$3\.70 across 2 sessions\n/);
+    assert.match(md, /^- Wall clock: .*\n- Active: 1 min$/m);
     for (const h of ["## Tokens by model", "## Sessions", "## Stages"])
       assert.match(md, new RegExp(`^${h}`, "m"));
     assert.match(

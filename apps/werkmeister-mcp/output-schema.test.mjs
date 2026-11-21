@@ -71,6 +71,20 @@ test("every read-only tool's structuredContent matches its outputSchema after to
   await withSandboxHome(
     () =>
       withFakeGh({}, async () => {
+        // A transcript, so workspace-usage's session rows are checked against the schema too.
+        const projects = path.join(process.env.HOME, ".claude", "projects");
+        const proj = path.join(projects, path.join(root, "alpha").replace(/[^a-zA-Z0-9]/g, "-"));
+        fs.mkdirSync(proj, { recursive: true });
+        const turn = (ts) =>
+          JSON.stringify({
+            type: "assistant",
+            timestamp: ts,
+            message: { model: "claude-opus-5-5", usage: { input_tokens: 1, output_tokens: 1 } },
+          });
+        fs.writeFileSync(
+          path.join(proj, "s1.jsonl"),
+          `${turn("2026-11-20T10:00:00.000Z")}\n${turn("2026-11-20T10:02:00.000Z")}\n`,
+        );
         const client = await connect();
         const { tools } = await client.listTools();
         const covered = tools.filter((t) => t.outputSchema && t.annotations?.readOnlyHint);
@@ -87,6 +101,10 @@ test("every read-only tool's structuredContent matches its outputSchema after to
             .catch((e) => assert.fail(`${name}: ${e.message}`));
           // The SDK skips validation on an error result, so an error would hide drift.
           assert.ok(!r.isError, `${name}: ${JSON.stringify(r.content)}`);
+          if (name === "workspace-usage") {
+            assert.equal(r.structuredContent.activeMinutes, 2);
+            assert.equal(r.structuredContent.sessions[0].activeMinutes, 2);
+          }
         }
       }),
     {
