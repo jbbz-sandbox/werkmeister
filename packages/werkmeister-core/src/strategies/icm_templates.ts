@@ -215,6 +215,10 @@ const OPTION_REACH =
 const SERVICE_RESEARCH_RULES =
   "Read the Validation text of each service the change touches in `../../.werkmeister/werkmeister-context.md` § How to validate: a research-stage rule there (for example for a harness-adapter change) applies before any decision reads `decided`.";
 
+// SW-516: sw-484's version-and-command rule for external-tool facts had no check; a run that skipped it passed every gate.
+const TOOL_FACT_CHECK =
+  "Before the check below flips anything, read `decisions.md` once more: every fact about an external tool's behaviour names the tool's version and, beside it, the command that confirmed it, or is marked `unverified`. A fact with neither fails this check: fix it first.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -377,7 +381,7 @@ const feature: Stage[] = [
           COPIED_MARKDOWN,
         "Write `output/inventory.md`: steps 1–3.",
         NAME_HISTORY_STEP,
-        `Write \`output/decisions.md\`: every open question in \`BRIEF.md\`, each as a heading with \`status: proposed\`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference). ${CRITERION_REACH}`,
+        `Write \`output/decisions.md\`: every open question in \`BRIEF.md\`, each as a heading with \`status: proposed\`, your recommended answer, and the evidence from steps 1–3 and 5. Leave the answer blank when only a person can give it (a ticket key, a preference). ${CRITERION_REACH} ${TOOL_FACT_CHECK}`,
       ],
       outputs: ["`output/inventory.md`", "`output/decisions.md`"],
       humanCheck: `Open \`output/decisions.md\`. Edit each answer as needed and change its \`status: proposed\` to \`status: decided\`. The next stage must not start while any question is still \`proposed\`. When every question reads \`decided\`, that is the approval — the next session starts the next stage without asking for confirmation. ${CHAT_APPROVAL}`,
