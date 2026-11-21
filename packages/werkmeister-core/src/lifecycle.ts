@@ -878,7 +878,7 @@ export interface LiveSession {
   status: "busy" | "idle";
   /** Epoch ms of the last status change. */
   statusUpdatedAt: number;
-  /** Parked on a question, permission or plan prompt for a person. */
+  /** Parked on a question or plan prompt for a person; a permission prompt is mid-turn (SW-910, SW-919). */
   asking: boolean;
 }
 
@@ -891,7 +891,7 @@ export function liveSessions(workspaceRoot: string, now = Date.now()): LiveSessi
         sessionId,
         status: s.status,
         statusUpdatedAt: Date.parse(s.last ?? s.at),
-        asking: s.ask !== undefined,
+        asking: s.ask !== undefined && s.ask.kind !== "permission",
       }))
       // readSessions keeps idle records and asks of any age; a day-silent one isn't open.
       .filter((s) => now - s.statusUpdatedAt < STALE_SESSION_MS)
