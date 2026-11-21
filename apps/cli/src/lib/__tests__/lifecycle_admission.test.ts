@@ -183,6 +183,35 @@ it("a victim whose stop fails is queued to come back, and the start waits at the
   expect(readWaiting(mine)).toMatchObject({ position: 1, reason: "waiting for capacity" });
 });
 
+// SW-932: SW-909's branch. A re-up of a running feature whose preemption's stop fails waits unqueued:
+// requeueFirst would write a whole-feature waiting.json over its live containers. The start of a
+// feature that isn't running still goes back to the head (the test above).
+it("a re-up of a running feature whose victim's stop fails leaves no queue entry and no waiting.json", async () => {
+  const victim = workspace("victim", { autonomous: true });
+  const mine = workspace("mine", { autonomous: false });
+  writeLeases({ victim: { slot: 1, workspace: victim }, mine: { slot: 2, workspace: mine } });
+  // `mine` runs an on-demand service only, so its re-up adds `api` (1G) to a 2G budget 1.9G holds.
+  vi.mocked(run).mockImplementation((cmd: string[]) =>
+    cmd[1] === "ps"
+      ? { status: 0, stdout: "id1\nid2\n", stderr: "" }
+      : {
+          status: 0,
+          stdout:
+            `victim\t${victim}\t2026-10-30T10:00:00Z\t${1.5 * G}\t0\t0\tapi\n` +
+            `mine\t${mine}\t2026-10-30T10:00:00Z\t${0.4 * G}\t0\t0\tdocs\n`,
+          stderr: "",
+        },
+  );
+  vi.mocked(composeStop).mockRejectedValueOnce(new Error("daemon hung up"));
+
+  expect(await admitOrQueue("mine", mine, true)).toBe(1);
+
+  expect(composeStop).toHaveBeenCalledWith("victim");
+  // The victim no longer runs, so it is queued to come back; `mine` is not.
+  expect(readQueue()).toEqual(["victim"]);
+  expect(readWaiting(mine)).toBeNull();
+});
+
 // SW-831: a queued victim whose containers still ran had its agent's commands held over them.
 it("a victim whose stop fails while a container still runs is left alone; the start waits at the head", async () => {
   const victim = workspace("victim", { autonomous: true });
