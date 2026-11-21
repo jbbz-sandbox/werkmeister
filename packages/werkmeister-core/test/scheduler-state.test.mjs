@@ -32,6 +32,7 @@ import {
   readVmLoad,
   requestAdmission,
   serviceStarts,
+  sweepVmLoadProbes,
   waitForSetupLoad,
   writeLeases,
 } from "../dist/scheduler_state.js";
@@ -691,12 +692,56 @@ test("readVmLoad: parses the VM's loadavg and nproc; a failed or junk run is nul
         fs.writeFileSync(fake, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
         process.env.WERKMEISTER_DOCKER_BIN = fake;
       };
-      as("printf '0.52 0.40 0.31 2/300 9\\n12\\n'");
+      const argsFile = path.join(home, "args");
+      as(`printf '%s\\n' "$@" > '${argsFile}'\nprintf '0.52 0.40 0.31 2/300 9\\n12\\n'`);
       assert.deepEqual(await readVmLoad(), { load: [0.52, 0.4, 0.31], cores: 12 });
+      // SW-969: dropping --rm, --network none or the label (which machine clean sweeps by) must fail here.
+      const args = fs.readFileSync(argsFile, "utf8").trim().split("\n");
+      assert.deepEqual(args.slice(0, args.indexOf("alpine:3") + 1), [
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--label",
+        "com.werkmeister.role=vm-load",
+        "alpine:3",
+      ]);
       as("exit 1");
       assert.equal(await readVmLoad(), null);
       as("echo nope");
       assert.equal(await readVmLoad(), null);
+    });
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_DOCKER_BIN;
+    else process.env.WERKMEISTER_DOCKER_BIN = prev;
+  }
+});
+
+// SW-969: a probe killed between create and start is left Created on the shared daemon; machine clean sweeps
+// only probes by their label, Created or exited, never a running one.
+test("sweepVmLoadProbes: removes labelled probes left Created or exited; a dry run only lists", async () => {
+  const prev = process.env.WERKMEISTER_DOCKER_BIN;
+  try {
+    await withHome(async (home) => {
+      const fake = path.join(home, "docker");
+      const log = path.join(home, "docker.log");
+      fs.writeFileSync(
+        fake,
+        `#!/bin/sh\necho "$*" >> '${log}'\n[ "$1" = ps ] && printf 'c1\\nc2\\n'\nexit 0\n`,
+        { mode: 0o755 },
+      );
+      process.env.WERKMEISTER_DOCKER_BIN = fake;
+      assert.deepEqual(sweepVmLoadProbes(true), ["c1", "c2"]);
+      assert.doesNotMatch(fs.readFileSync(log, "utf8"), /^rm/m);
+      assert.deepEqual(sweepVmLoadProbes(), ["c1", "c2"]);
+      const calls = fs.readFileSync(log, "utf8").trim().split("\n");
+      assert.equal(
+        calls[0],
+        "ps -aq --filter label=com.werkmeister.role=vm-load --filter status=created --filter status=exited",
+      );
+      assert.equal(calls.at(-1), "rm c1 c2");
+      process.env.WERKMEISTER_DOCKER_BIN = path.join(home, "missing");
+      assert.deepEqual(sweepVmLoadProbes(), []);
     });
   } finally {
     if (prev === undefined) delete process.env.WERKMEISTER_DOCKER_BIN;

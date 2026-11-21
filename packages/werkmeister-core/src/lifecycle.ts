@@ -127,6 +127,7 @@ import {
   type Starting,
   serviceStarts,
   setupsCurrent,
+  sweepVmLoadProbes,
   waiters,
   waitForSetupLoad,
 } from "./scheduler_state.js";
@@ -2298,6 +2299,14 @@ export async function runClean({
       }
     }
   }
+
+  // `docker run --rm` removes only a container that ran: the probe's 4 s cap can kill it in between (SW-969).
+  const probes = sweepVmLoadProbes(dryRun);
+  if (probes.length)
+    raw(
+      `\n  ${dryRun ? `${Colors.DIM}[dry-run] Would remove` : `${Colors.GREEN}Removed`} ` +
+        `${probes.length} leftover load-probe container(s)${Colors.RESET}\n`,
+    );
 
   return {
     activeFeatures,
