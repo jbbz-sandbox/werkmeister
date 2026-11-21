@@ -407,6 +407,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^2\. .*Read the Validation text of each service the change touches .* a research-stage rule there \(for example for a harness-adapter change\) applies before any decision reads `decided`\./m,
             `${wt}/${d}`,
           );
+        // SW-516: research re-reads decisions.md for external-tool facts without a version and a confirming command.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^6\. .*every fact about an external tool's behaviour names the tool's version and, beside it, the command that confirmed it, or is marked `unverified`\. A fact with neither fails this check: fix it first\./m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(
