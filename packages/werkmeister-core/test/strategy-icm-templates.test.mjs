@@ -429,6 +429,19 @@ test("each template renders with no undefined and a route per stage", async () =
             /^\d+\. To show a test red, revert the fix in source without losing it \(an uncommitted fix: save it with `git diff -- <files> > <scratch>\/fix\.patch`, revert with `git apply -R`, restore with `git apply`; a committed one: `git show <its commit>~:<file> > <file>`, restore with `git checkout -- <file>`; never the shared stash\), rebuild with a forced rebuild that reuses no cache \(`--force`\).*Never edit `dist\/` or another build output by hand\./m,
             `${wt}/${d}`,
           );
+        // SW-914: the reproduce probe is formatted, and folded or moved before the fix stage's lint chain.
+        if (d.endsWith("_reproduce"))
+          assert.match(
+            c,
+            /^2\. .*Run the repo's `Format:` command \(`werkmeister-context\.md`\) on it\./m,
+            `${wt}/${d}`,
+          );
+        if (d.endsWith("_fix"))
+          assert.match(
+            c,
+            /^\d+\. Before the lint chain, fold the reproduce stage's failing test into the ticket's committed test, or move it to `stages\/01_reproduce\/output\/`: an untracked file in the worktree fails the lint chain and the gate's clean-worktree check\./m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(

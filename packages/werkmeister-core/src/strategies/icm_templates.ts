@@ -230,6 +230,11 @@ const BASE_BUILD_RED =
 const RED_BY_SOURCE =
   "To show a test red, revert the fix in source without losing it (an uncommitted fix: save it with `git diff -- <files> > <scratch>/fix.patch`, revert with `git apply -R`, restore with `git apply`; a committed one: `git show <its commit>~:<file> > <file>`, restore with `git checkout -- <file>`; never the shared stash), rebuild with a forced rebuild that reuses no cache (`--force`), run the test, then restore the source and force-rebuild again. Never edit `dist/` or another build output by hand.";
 
+// SW-914: sw-899's unformatted, untracked reproduce probe failed the fix stage's lint chain and the clean-worktree check.
+const PROBE_FORMAT = " Run the repo's `Format:` command (`werkmeister-context.md`) on it.";
+const PROBE_HOME =
+  "Before the lint chain, fold the reproduce stage's failing test into the ticket's committed test, or move it to `stages/01_reproduce/output/`: an untracked file in the worktree fails the lint chain and the gate's clean-worktree check.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -506,7 +511,8 @@ const bugfix: Stage[] = [
       process: [
         // SW-392: a grep for a line the reporter never prints read "0/25 failures" for a flake nobody reproduced.
         `Reproduce the failure against the running service or with a test. Record the exact command and its output. Judge each run by its exit code, or by a check you have shown fails on a known-bad run — never by grepping the output for a line that may not be printed. ${PROBE_RULE}`,
-        "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet.",
+        "Write the smallest failing test that captures it, in the style of the nearest existing test. Do not commit it yet." +
+          PROBE_FORMAT,
         "Trace to the root cause: the first place the code does something other than intended. A symptom site is not a root cause.",
         // SW-543: sw-520 grepped one call shape and missed the calls through other helpers; review caught them a round later.
         // SW-566: sw-545's fix changed a return shape its one caller treated as "stop"; only the exercise caught it.
@@ -553,6 +559,7 @@ const bugfix: Stage[] = [
         OPTION_REACH,
         diffCheck("repro.md"),
         RED_BY_SOURCE,
+        PROBE_HOME,
         TEST_STEP,
         `Write \`output/fix.md\`: \`git diff --stat\` per repo, the failing test's name, the test exit code and summary line, ${PER_SERVICE}, and ${SKIPPED}.`,
       ],
