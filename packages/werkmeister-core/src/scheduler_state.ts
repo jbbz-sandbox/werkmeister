@@ -35,6 +35,7 @@ import { docker } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { load as loadGlobalConfig } from "./global_config.js";
 import { sandboxLock } from "./locks.js";
+import { recordEvent } from "./metrics.js";
 import { info } from "./reporter.js";
 import {
   admit,
@@ -617,25 +618,33 @@ export function requestAdmission(
         ...(added && { added }),
       });
       let next = queue;
+      const admitted = d.kind === "admit" || d.kind === "preempt";
       // A whole `up` of a feature that runs keeps its containers when it waits: queued, the hook would
       // hold its session over them (SW-909). It leaves the queue, as an admit does; the caller reruns.
-      if (
-        (d.kind === "admit" || d.kind === "preempt") &&
-        !running.some((l) => l.feature === feature)
-      )
+      if (admitted && !running.some((l) => l.feature === feature))
         writeJson(startingPath(), { ...readReserved(), [feature]: { cost, at: Date.now() } });
+      // A queued feature re-asks on every poll: only the first wait and the admit that ends it are events (SW-775).
+      const prev = readWaiting(workspace);
+      const name = path.basename(workspace);
       if (d.kind === "wait" && !own) {
         // waiting.json first: if it can't be written, the queue must not move (SW-246).
         writeWaiting(workspace, {
           position: d.position,
           reason: "waiting for capacity",
           ...starting,
-          since: readWaiting(workspace)?.since ?? new Date().toISOString(),
+          since: prev?.since ?? new Date().toISOString(),
         });
+        if (!prev)
+          recordEvent({ event: "queue.wait", workspace: name, feature, position: d.position });
         if (!queue.includes(feature)) next = [...queue, feature];
       } else {
         next = queue.filter((f) => f !== feature);
         clearWaiting(workspace);
+        if (prev && admitted) {
+          const waited = Math.round((Date.now() - Date.parse(prev.since ?? "")) / 1000);
+          const waited_s = Number.isNaN(waited) ? 0 : Math.max(0, waited);
+          recordEvent({ event: "queue.admit", workspace: name, feature, waited_s });
+        }
       }
       if (next.join("\n") !== stored.join("\n")) writeQueue(next);
       return d;
