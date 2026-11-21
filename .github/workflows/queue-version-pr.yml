@@ -1,26 +1,27 @@
 name: Queue version PR
 
-# SW-480: once CI is green on the Changesets version PR, put it in the merge
-# queue, so a merge to main reaches npm without a person's merge. The queue
-# still tests the version commit on merge_group, and release still runs only
-# from the push it lands. A later merge to main force-pushes the PR out of the
-# queue; its next green run queues it again. workflow_run always runs main's
-# copy of this file, never the PR's. CI skips its suites on the version PR (the
-# queue is the gate), so a run whose jobs or steps were all skipped counts as green too.
+# SW-480, SW-582: release once a day. At 06:00 UTC the Changesets version PR, which
+# by then carries every merge since the last release, goes into the merge queue if
+# its head has a green CI run and the queue is empty; its merge publishes to npm.
+# Force a release at any time: gh workflow run queue-version-pr.yml
+# The queue still tests the version commit on merge_group, and release still runs
+# only from the push it lands. A run that finds no PR, a queue that is not empty,
+# or a head without a finished green CI run logs why and skips; the next day's run
+# tries again. CI skips its suites on the version PR (the queue is the gate), so a
+# run whose jobs or steps were all skipped counts as green too.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [changeset-release/main]
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
 
 concurrency: queue-version-pr
 
 jobs:
   enqueue:
-    if: >-
-      vars.RELEASE_APP_ID != '' &&
-      contains(fromJSON('["success", "skipped"]'), github.event.workflow_run.conclusion) &&
-      github.event.workflow_run.event == 'pull_request'
+    if: vars.RELEASE_APP_ID != ''
+    # The CI-run lookup below uses the job's token, which a restricted repo default would deny.
+    permissions:
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - id: app-token
@@ -30,9 +31,11 @@ jobs:
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          # The run lookup needs only read access, which the job's own token has.
+          RUNS_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
           OWNER: ${{ github.repository_owner }}
           NAME: ${{ github.event.repository.name }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
           # GraphQL gives a bot author's login as the bare App slug.
           BOT: ${{ steps.app-token.outputs.app-slug }}
         run: |
@@ -42,14 +45,20 @@ jobs:
             --jq '.data.repository | .mergeQueue.entries.totalCount as $q | .pullRequests.nodes[] | select(.author.login == env.BOT) | "\(.number) \(.id) \(.headRefOid) \(.isInMergeQueue) \($q)"')
           read -r number id head queued busy <<<"$out"
           [ -n "${number:-}" ] || { echo "No open version PR by $BOT"; exit 0; }
-          # A push since this run means its checks were another commit's; that push's own run decides.
-          [ "$head" = "$SHA" ] || { echo "#$number moved past $SHA; skipping"; exit 0; }
           [ "$queued" != "true" ] || { echo "#$number already queued"; exit 0; }
           # Sharing a queue group with a PR that carries a changeset would land main with one
           # pending, so release versions again instead of publishing. Each of those merges
-          # force-pushes this PR, and its next green run retries.
-          [ "$busy" = "0" ] || { echo "Merge queue holds $busy entries; #$number waits for its next green run"; exit 0; }
+          # force-pushes this PR, and the next run retries.
+          [ "$busy" = "0" ] || { echo "Merge queue holds $busy entries; #$number waits for the next run"; exit 0; }
+          # A push moves the head and starts a new run, so the latest run for this head is its own.
+          run=$(GH_TOKEN="$RUNS_TOKEN" gh api "repos/$REPO/actions/runs?head_sha=$head&event=pull_request" \
+            --jq '[.workflow_runs[] | select(.path == ".github/workflows/ci.yml")] | sort_by(.created_at) | last // empty | "\(.status) \(.conclusion)"')
+          case "$run" in
+            "") echo "#$number: no CI run for $head; skipping"; exit 0 ;;
+            "completed success" | "completed skipped") ;;
+            *) echo "#$number: CI run for $head is '$run', not green; skipping"; exit 0 ;;
+          esac
           # shellcheck disable=SC2016
           gh api graphql -f id="$id" \
             -f query='mutation($id:ID!){enqueuePullRequest(input:{pullRequestId:$id}){mergeQueueEntry{position}}}'
-          echo "Queued #$number at $SHA"
+          echo "Queued #$number at $head"
