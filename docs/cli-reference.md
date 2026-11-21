@@ -74,6 +74,8 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 
 **If the feature has to wait for capacity**, the command exits 75 without starting containers. It prints `=== Feature '<name>' is waiting for capacity (position N) ===`, who holds the budget, what the start needs against what is free, and the head it waits behind. The feature stays queued and starts by itself when room frees, and its session is told to continue. A `--service` start waits up to 10 minutes, then exits 75 the same way and stays queued: it starts by itself when room frees, and a rerun keeps its place. One that stopped the feature's running containers to wait does not stay queued: `werkmeister feature up` starts the feature again. Exit 75 means no capacity yet, not a failure. `werkmeister budget status` shows the queue.
 
+**If compose gives up with a container left Created** (its 20-minute limit ran out under load, and the container was created but never started), `up` starts that container itself, warns `docker compose gave up with <name> left Created; started it directly`, and carries on. It doesn't when another of the feature's containers failed (exited non-zero or unhealthy), since compose holds its dependents back on purpose: then the compose failure stands. A container that still won't start fails the command, naming it and the `docker start <name>` that starts it by hand.
+
 **If every slot is taken** (12 by default, `feature_slots.count`), the command exits with an error. Free a slot by running `werkmeister feature down` on another feature.
 
 **`--service <name>`** starts only that one service, the way the PR gate starts it, and prints `Started <feature>-<name>`.

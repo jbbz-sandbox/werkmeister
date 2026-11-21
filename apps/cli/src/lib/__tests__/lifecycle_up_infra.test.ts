@@ -32,6 +32,19 @@ vi.mock("werkmeister-core/caddy", () => ({
 vi.mock("werkmeister-core/compose", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   composeUpAsync: vi.fn(async () => true),
+  getContainerStatus: vi.fn(async () => []),
+}));
+const dockerStarted: string[] = [];
+vi.mock("werkmeister-core/docker", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  docker: () => ({
+    getContainer: (name: string) => ({
+      start: async () => {
+        if (name.includes("broken")) throw new Error("no such container");
+        dockerStarted.push(name);
+      },
+    }),
+  }),
 }));
 vi.mock("werkmeister-core/config", async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -81,6 +94,7 @@ import {
   reloadCaddy,
   startCaddy,
 } from "werkmeister-core/caddy";
+import { composeUpAsync, getContainerStatus } from "werkmeister-core/compose";
 import { ensurePortForwardsHealthy, waitForForwards } from "werkmeister-core/k8s";
 import { up } from "werkmeister-core/lifecycle";
 
@@ -154,5 +168,81 @@ describe("lifecycle.up starts shared infra only when needed", () => {
       await withReporter(quiet, () => up("demo", workspace(services)));
     }
     expect(spawned.filter((cmd) => /jaeger|redisinsight/.test(cmd))).toEqual([]);
+  });
+});
+
+// SW-973: compose ran out its 20 minutes with the core container left Created; `docker start` started it.
+describe("lifecycle.up when compose gives up with a container left Created", () => {
+  const box = (name: string, status: string, exitCode = 0) => ({
+    name,
+    status,
+    health: "",
+    ports: "",
+    service: name.replace(/^demo-/, ""),
+    role: name.endsWith("-setup") ? "setup" : "",
+    exitCode,
+  });
+  beforeEach(() => {
+    dockerStarted.length = 0;
+    // What a plain `up` starts: `docs` is on-demand (a profile).
+    fs.writeFileSync(
+      path.join(root, "compose.yml"),
+      "services:\n  install-setup: {}\n  core: {}\n  broken: {}\n  docs:\n    profiles: [docs]\n",
+    );
+  });
+  const fails = async () => {
+    await expect(withReporter(quiet, () => up("demo", workspace(["cli"])))).rejects.toThrow(
+      /Failed to start containers/,
+    );
+    expect(dockerStarted).toEqual([]);
+  };
+
+  it("starts the Created container itself and carries on", async () => {
+    vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      box("demo-install-setup", "exited"),
+      box("demo-core", "created"),
+    ]);
+    const result = await withReporter(quiet, () => up("demo", workspace(["cli"])));
+    expect(dockerStarted).toEqual(["demo-core"]);
+    expect(result.containersStarted).toBe(true);
+  });
+
+  it("fails naming the container and `docker start` when it won't start", async () => {
+    vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([box("demo-broken", "created")]);
+    await expect(withReporter(quiet, () => up("demo", workspace(["cli"])))).rejects.toThrow(
+      /demo-broken.*Created.*docker start demo-broken/s,
+    );
+  });
+
+  it("leaves dependents of a failed container alone: compose's failure stands", async () => {
+    vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      box("demo-install-setup", "exited", 1),
+      box("demo-core", "created"),
+    ]);
+    await fails();
+  });
+
+  // Review: the timeout fires while a slow install still runs; core started then sees half a node_modules.
+  it("leaves it while the install still runs or a dependency is still starting", async () => {
+    for (const other of [
+      box("demo-install-setup", "running"),
+      { ...box("demo-broken", "running"), health: "starting" },
+    ]) {
+      vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
+      vi.mocked(getContainerStatus).mockResolvedValueOnce([other, box("demo-core", "created")]);
+      await fails();
+    }
+  });
+
+  it("never starts an on-demand service a failed `--service` start left Created", async () => {
+    vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      box("demo-core", "running"),
+      box("demo-docs", "created"),
+    ]);
+    await fails();
   });
 });
