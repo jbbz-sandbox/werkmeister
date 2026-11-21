@@ -414,6 +414,14 @@ test("each template renders with no undefined and a route per stage", async () =
             /^6\. .*every fact about an external tool's behaviour names the tool's version and, beside it, the command that confirmed it, or is marked `unverified`\. A fact with neither fails this check: fix it first\./m,
             `${wt}/${d}`,
           );
+        // SW-875: a feature's new tests fail against a build of the unfixed code; refactor's must pass first.
+        if (wt === "feature" && d.endsWith("_implement"))
+          assert.match(
+            c,
+            /^\d+\. A container start can rebuild from the working tree .*see each new test fail against a build of the unfixed code: build before editing source, or park the change and rebuild\. Record which build each fail-first run used\./m,
+            `${wt}/${d}`,
+          );
+        else assert.doesNotMatch(c, /fail against a build of the unfixed code/, `${wt}/${d}`);
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(
