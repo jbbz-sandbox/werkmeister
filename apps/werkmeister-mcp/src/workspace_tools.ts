@@ -1107,7 +1107,7 @@ export function registerWorkspaceTools(server: McpServer): void {
       title: "Workspace Token Usage",
       description:
         "Sum a workspace's Claude Code token usage by model and session, with a " +
-        "rough USD estimate (rates from ~/.werkmeister/model-pricing.yaml). On-demand.",
+        "rough USD estimate (built-in rates, overridable in ~/.werkmeister/model-pricing.yaml). On-demand.",
       inputSchema: { ...WORKSPACE_ARG },
       annotations: { readOnlyHint: true },
       outputSchema: {
