@@ -12,7 +12,9 @@ import { warn } from "./reporter.js";
 
 export type MetricsEvent =
   | { event: "queue.wait"; workspace: string; feature: string; position: number }
-  | { event: "queue.admit"; workspace: string; feature: string; waited_s: number };
+  | { event: "queue.admit"; workspace: string; feature: string; waited_s: number }
+  | { event: "pr.open" | "pr.merged"; workspace: string; ticket?: string; pr: string }
+  | { event: "release"; workspace: string; ticket?: string; pr: string; tag: string };
 
 /** `<sandboxHome()>/metrics/events-YYYY-MM.jsonl`, the UTC month of *at* (an ISO time). */
 export function metricsPath(at: string): string {

@@ -11,8 +11,9 @@ import { setTimeout as sleep } from "node:timers/promises";
 import YAML from "yaml";
 
 import { heldWakes, readNotices } from "../dist/agent_state.js";
-import { dotDir, getReposRoot } from "../dist/config.js";
+import { dotDir, getReposRoot, sandboxHome } from "../dist/config.js";
 import { resolveIssueStatuses } from "../dist/issue_status.js";
+import { metricsPath } from "../dist/metrics.js";
 import {
   abandonWorkspace,
   adoptPr,
@@ -6606,5 +6607,57 @@ test("gate: each SW-891 condition off, the branch's settings still start the ser
     const { g, recreated, calls } = await gateAs(opts);
     assert.ok(recreated, `${why}: ${calls.join("\n")}`);
     assert.deepEqual(failed(g), [], why);
+  }
+});
+
+// SW-779: release is timed by the tag's creatordate (offset normalised to UTC), not the local clock.
+test("refreshPrStatus: a shipped tag writes release at the tag's date", async () => {
+  const ws = icmWorkspace({
+    files: {
+      app: prFile({ status: "merged", extra: "url: https://x/pr/9\nmerge_sha: abc123\n" }),
+    },
+  });
+  try {
+    await withSandboxHome(async () => {
+      const d = deps([
+        [/tag --contains abc123 --list v\*/, { stdout: "v1.2.0\n" }],
+        [/for-each-ref .*refs\/tags\/v1\.2\.0$/, { stdout: "2026-03-04T05:06:07+02:00\n" }],
+      ]);
+      await refreshPrStatus(ws, d);
+      assert.equal(readPrFiles(ws)[0].fm.status, "shipped");
+      const lines = fs.readFileSync(metricsPath("2026-03"), "utf8").trimEnd().split("\n");
+      assert.deepEqual(lines.map(JSON.parse), [
+        {
+          v: 1,
+          at: "2026-03-04T03:06:07.000Z",
+          event: "release",
+          workspace: path.basename(ws),
+          ticket: "o/app#7",
+          pr: "https://x/pr/9",
+          tag: "v1.2.0",
+        },
+      ]);
+    });
+  } finally {
+    clean(ws);
+  }
+});
+
+// SW-779: no GitHub createdAt (here the stub's empty `gh pr view`) drops pr.open instead of using the local clock.
+test("openPrs: no createdAt from gh writes no pr.open, and the PR still opens", async () => {
+  const ws = icmWorkspace();
+  try {
+    await withSandboxHome(async () => {
+      const d = deps([
+        DIFF_API,
+        [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }],
+      ]);
+      const r = await openPrs(ws, undefined, d);
+      assert.ok(r.ok, r.lines.join("\n"));
+      assert.ok(d.calls.includes("gh pr view https://github.com/o/app/pull/9 --json createdAt"));
+      assert.equal(fs.existsSync(path.join(sandboxHome(), "metrics")), false);
+    });
+  } finally {
+    clean(ws);
   }
 });

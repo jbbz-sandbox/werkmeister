@@ -63,6 +63,7 @@ import {
   prWatchScheduleState,
   type Step,
 } from "./machine_setup.js";
+import { recordEvent } from "./metrics.js";
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import {
@@ -72,7 +73,7 @@ import {
   registryChanges,
   syncRegistry,
 } from "./registry_sync.js";
-import { info } from "./reporter.js";
+import { info, warn } from "./reporter.js";
 import { loadNote } from "./resources.js";
 import {
   commitAndPush,
@@ -2226,6 +2227,14 @@ export async function openPrs(
       // Marks where review news starts, so a review before the first pr watch pass still wakes.
       notified_review: new Date().toISOString(),
     });
+    const prView = await deps.run("gh", ["pr", "view", url, "--json", "createdAt"], dir);
+    let createdAt: string | undefined;
+    try {
+      createdAt = (JSON.parse(prView.stdout) as PrView).createdAt;
+    } catch {
+      // A failed or empty view only costs the metric (SW-779).
+    }
+    recordPrEvent(ws, "pr.open", url, createdAt);
     opened.push(path.relative(ws, f.path));
     lines.push(`${f.stem}: open ${url}`);
     if (held) lines.push(`  hold: opened as a draft — run gh pr ready ${url} once: ${hold}`);
@@ -2341,7 +2350,7 @@ export async function refreshPrStatus(
         "view",
         String(f.fm["url"]),
         "--json",
-        "state,mergeCommit,reviewDecision,latestReviews,number,headRefOid,baseRefName,mergeable,statusCheckRollup,reviews,comments,files",
+        "state,mergeCommit,reviewDecision,latestReviews,number,headRefOid,baseRefName,mergeable,statusCheckRollup,reviews,comments,files,createdAt,mergedAt",
       ]);
       if (v.code !== 0) {
         lines.push(`${f.stem}: gh pr view failed — ${v.stderr.trim()}`);
@@ -2375,6 +2384,7 @@ export async function refreshPrStatus(
           ...(shipsNothing(f, deps.repos[f.dir] ?? {}, view) ? { release: "none" } : {}),
           ...(pkgs ? { release_packages: pkgs } : {}),
         });
+        recordPrEvent(ws, "pr.merged", url, view.mergedAt);
         seen.merged.push(url);
       } else if (view.state === "CLOSED") {
         writePrFields(f, {
@@ -2444,8 +2454,17 @@ export async function refreshPrStatus(
             if (t.code !== 0 || !t.stdout.trim()) missing.push(pkg);
           }
         if (tag && missing.length) partial = `partially released: ${missing.join(", ")} missing`;
-        else if (tag) writePrFields(f, { status: "shipped", release: tag });
-        else notShipped = await notShippedWhy(dir, f, String(repo["release_tag"]), deps);
+        else if (tag) {
+          writePrFields(f, { status: "shipped", release: tag });
+          const date = await deps.run("git", [
+            "-C",
+            dir,
+            "for-each-ref",
+            "--format=%(creatordate:iso-strict)",
+            `refs/tags/${tag}`,
+          ]);
+          recordPrEvent(ws, "release", String(f.fm["url"] ?? ""), date.stdout.trim(), tag);
+        } else notShipped = await notShippedWhy(dir, f, String(repo["release_tag"]), deps);
       }
     }
     const after = statusOf(f);
@@ -2468,6 +2487,26 @@ export async function refreshPrStatus(
   if (changed.length)
     lines.push((await deps.commitRecord(ws, "chore: record PR status", changed)).message);
   return { lines, changed: changed.length > 0, views };
+}
+
+/** Logs a PR metrics event at GitHub's or the tag's time *at*; with no time or URL, warns and logs nothing rather than use the local clock (SW-779). */
+function recordPrEvent(
+  ws: string,
+  event: "pr.open" | "pr.merged" | "release",
+  pr: string,
+  at: string | null | undefined,
+  tag?: string,
+): void {
+  if (!pr || !at || Number.isNaN(Date.parse(at))) {
+    warn(`metrics: no ${pr ? "time" : "PR URL"} for ${event} ${pr}`);
+    return;
+  }
+  const ticket = issueRefsOf(loadConfigFile(ws, null))[0];
+  const base = { workspace: path.basename(ws), ...(ticket && { ticket }), pr };
+  recordEvent(
+    event === "release" ? { event, ...base, tag: tag ?? "" } : { event, ...base },
+    new Date(at).toISOString(),
+  );
 }
 
 /** Why a merged `ship: tag` PR has no tag yet: the latest matching tag against the merge date (SW-389). */
@@ -2799,6 +2838,10 @@ export function callbackMessage(status: string, url: string, release?: string): 
 export interface PrView {
   /** `OPEN`, `MERGED` or `CLOSED`. */
   state?: string;
+  /** When the PR was opened, UTC ISO (e.g. `2026-11-21T17:15:49Z`). */
+  createdAt?: string;
+  /** When it merged, UTC ISO; null until then. */
+  mergedAt?: string | null;
   /** The merge commit; null until merged. */
   mergeCommit?: {
     /** Its SHA. */
