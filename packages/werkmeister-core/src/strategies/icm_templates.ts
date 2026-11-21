@@ -207,6 +207,9 @@ const PREAPPROVED_INPUT =
 const KEPT_RULE_PROBES =
   "Every rule the fix keeps on the same command gets the same trailing-argument probes as the changed one (another feature or workspace name, `-w`/`--workspace <path>`, extra positional args), and the failing test covers them.";
 
+// SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
+const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
+
 // SW-789: sw-751 named the build chain as the critical path from task start/end times; the row held all 3 CPUs for ~170 s, so only a CPU cut shortens it.
 const CPU_PROFILE =
   "When the ticket is about gate, test or build speed, sample the container cgroup `cpu.stat` `usage_usec` every 5 s across a cold run and report the cores in use per phase before naming a critical path or any lever. " +
@@ -429,6 +432,7 @@ const feature: Stage[] = [
         baseCheck("spec.md"),
         ...groupStep(v),
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
+        PREAPPROVED_IN_STAGE,
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
         diffCheck("spec.md"),
         HOST_TEST_STEP,
@@ -519,6 +523,7 @@ const bugfix: Stage[] = [
         baseCheck("repro.md"),
         ...groupStep(v),
         "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
+        PREAPPROVED_IN_STAGE,
         diffCheck("repro.md"),
         TEST_STEP,
         `Write \`output/fix.md\`: \`git diff --stat\` per repo, the failing test's name, the test exit code and summary line, ${PER_SERVICE}, and ${SKIPPED}.`,
@@ -632,6 +637,7 @@ const refactor: Stage[] = [
         baseCheck("scope.md"),
         ...groupStep(v),
         "First add a test for each invariant gap `scope.md` named. They must pass before any code moves.",
+        PREAPPROVED_IN_STAGE,
         // SW-460: groupStep commits per ticket; say how scope.md's steps nest so no step gets its own commit.
         `${v.group.length ? "For each ticket, take its `scope.md` steps in order, then commit it before the next ticket; do not commit after every step. After each step" : "Take the steps in order. After each one"}: ${diffCheck("scope.md")} ${HOST_TEST_STEP}`,
         implementReview(v),
