@@ -1939,6 +1939,13 @@ export async function reloadProxy(
   { start = false }: { start?: boolean } = {},
   ops: ProxyOps = REAL_PROXY_OPS,
 ): Promise<ProxyReloadResult> {
+  // SW-555: the Caddyfile routes every workspace, so a branch build under internal branch-cli must not write it.
+  if (process.env.WERKMEISTER_BRANCH_CLI === "1") {
+    warn(
+      "Routing not refreshed under branch-cli: run `werkmeister infra proxy-reload` (installed CLI)",
+    );
+    return { features: [], started: false, ok: true };
+  }
   info(start ? "Regenerating Caddyfile..." : "Updating reverse proxy configuration...");
   await ops.generate();
   await warnUnresolvedHosts(ops.hosts(), ops.lookup);

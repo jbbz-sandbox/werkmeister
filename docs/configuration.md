@@ -458,7 +458,7 @@ A tier with no model for the workspace's harness fails create, and init of a wor
 
 ### ~/.werkmeister/config.yaml: workspace_ask_rules
 
-A Claude workspace in a repo with a built CLI gets `permissions.ask` rules (`workspaceAskRules` in `hooks_gen.ts`) for the `--exec-runs` forms of `with-fixture-workspace` (on the host and through `docker exec *`) and `internal fixture`, which run the registry's rows on the host, so they stop for the person even in auto mode. That is 6 rules in the werkmeister repo, none elsewhere. A workspace missing them is repaired by its next `feature up`, `feature up --service` or `machine migrate`.
+A Claude workspace in a repo with a built CLI gets `permissions.ask` rules (`workspaceAskRules` in `hooks_gen.ts`) for the `--exec-runs` forms of `with-fixture-workspace` (on the host and through `docker exec *`) and `internal fixture`, which run the registry's rows on the host, and for `internal branch-cli` (as `werkmeister` and `w9r`), which runs the worktree's build on the host, so they stop for the person even in auto mode. That is 8 rules in the werkmeister repo, none elsewhere. A workspace missing them is repaired by its next `feature up`, `feature up --service` or `machine migrate`.
 
 `with-temp-home … node --test*` and its `docker exec *` form run any file, one the agent just wrote too. They are never pre-approved, but by default nothing forces them to prompt: auto mode decides, under the threat model in [context-strategies.md](context-strategies.md). Forcing a prompt on every core test run slowed autonomous runs. To make the six `node --test` forms ask on this machine:
 
