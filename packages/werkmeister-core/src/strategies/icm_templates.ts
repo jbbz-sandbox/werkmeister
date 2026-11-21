@@ -251,6 +251,10 @@ const RESOLVER_CALLERS =
 const GATE_ROUTES =
   " For a change that gates or refuses a command, every route that runs it is a caller to check: the CLI, daemon or MCP tools, the pane, headless wakes, and other harnesses.";
 
+// SW-931: sw-909's admit reservation file named one clear point; startService never cleared it.
+const STATE_CLEAR_POINTS =
+  " When the fix adds persisted state (a file, a record field, a marker), list each write and each clear point (every path that ends what the state stands for: success, failure, the other entry points to the same lifecycle) and give each clear point a test.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -537,7 +541,7 @@ const bugfix: Stage[] = [
           RESOLVER_CALLERS +
           GATE_ROUTES,
         // SW-442: sessionBusy had two true cases; stage 01 listed callers, so only review caught the second (sw-418).
-        `When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test. ${PREAPPROVED_INPUT}`,
+        `When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test. ${PREAPPROVED_INPUT}${STATE_CLEAR_POINTS}`,
         NAME_HISTORY_STEP,
         // SW-564: sw-521's root cause was a permission rule; step 4 listed the callers of one builder and missed two other sources of a matching rule.
         "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source. Also `git grep -F` the exact old rule text across the whole repo, tests and `apps/` included, and list each hit as a site the fix must update (SW-820). " +

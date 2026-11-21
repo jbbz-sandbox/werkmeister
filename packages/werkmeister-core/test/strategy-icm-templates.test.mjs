@@ -470,6 +470,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^4\. .* For a change that gates or refuses a command, every route that runs it is a caller to check: the CLI, daemon or MCP tools, the pane, headless wakes, and other harnesses\./m,
             `${wt}/${d}`,
           );
+        // SW-931: new persisted state lists each write and each clear point, with a test per clear point.
+        if (d.endsWith("_reproduce"))
+          assert.match(
+            c,
+            /^5\. .* When the fix adds persisted state \(a file, a record field, a marker\), list each write and each clear point \(every path that ends what the state stands for: success, failure, the other entry points to the same lifecycle\) and give each clear point a test\./m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(
