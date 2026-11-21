@@ -163,6 +163,9 @@ const groupStep = (v: IcmVars) =>
         `This workspace is a grouped PR (\`group\` in \`workspace.yml\`): one commit per ticket, for the workspace's issue and each member, ${keys(v.group)}, so each can be reverted alone. ` +
           "Take the tickets one at a time: make that ticket's changes and tests, run the diff check below on them, then commit on the worktree's branch with a message that starts with its key (`<KEY> <summary>`) before starting the next. " +
           "Each commit builds and passes the host tests on its own. " +
+          // SW-904: sw-856 split nine tickets' mixed diff by hunk afterwards; `git apply --cached -U0` misplaced code.
+          `Commit each ticket as soon as its change, test and release entry pass, before starting the next; a later fix to an earlier ticket goes in as ${FOLD}. ` +
+          "Never split a mixed diff afterwards by hunk (`git apply --cached` with small context, `git add -p`); if a split can't be avoided, stage whole-file versions per commit. " +
           // SW-503: a changeset folded into the lead's commit survives a revert of the member that earned it (sw-481).
           "A ticket that changes a released package carries its release entry in its own commit. " +
           // SW-466: SW-462's brief said to regenerate the snapshot once for the PR, so three commits failed it alone.

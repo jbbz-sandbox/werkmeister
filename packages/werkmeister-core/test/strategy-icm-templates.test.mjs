@@ -853,6 +853,10 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     // SW-497: order across tickets is free; the spec does not fix it.
     assert.match(implement, /Commit order across tickets is free/);
     assert.match(
+      implement,
+      /Commit each ticket as soon as its change, test and release entry pass, before starting the next; a later fix to an earlier ticket goes in as .*Never split a mixed diff afterwards by hunk \(`git apply --cached` with small context, `git add -p`\); if a split can.t be avoided, stage whole-file versions per commit\./,
+    );
+    assert.match(
       on.contracts[1],
       /list one commit per ticket \(`<KEY> …`\) and what each holds, but do not fix their order/,
     );
@@ -927,6 +931,8 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
         work_type: "bugfix",
       });
       assert.match(bug.contracts[1], /one commit per ticket/);
+      // SW-904: commit each ticket as it passes; never split a mixed diff by hunk.
+      assert.match(bug.contracts[1], /Never split a mixed diff afterwards by hunk/);
       assert.match(bug.contracts[2], /commits in `origin\/main\.\.\.HEAD`/);
       for (const c of bug.contracts) assert.doesNotMatch(c, /once,? at the end/);
     } finally {
@@ -941,7 +947,10 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     for (const c of [...on.contracts, ...off.contracts])
       assert.doesNotMatch(c, /once,? at the end/);
     for (const c of off.contracts)
-      assert.doesNotMatch(c, /grouped PR|origin\/main\.\.\.HEAD|each member reads Done/);
+      assert.doesNotMatch(
+        c,
+        /grouped PR|origin\/main\.\.\.HEAD|each member reads Done|split a mixed diff/,
+      );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
     fs.rmSync(standardsDir, { recursive: true, force: true });
