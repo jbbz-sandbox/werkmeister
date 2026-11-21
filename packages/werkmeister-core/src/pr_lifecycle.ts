@@ -6,6 +6,7 @@
  */
 
 import { execFile } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -444,6 +445,27 @@ function touchExecMarker(ws: string): void {
   }
 }
 
+/**
+ * This workspace's gate runs so far, then one more: `gate.start`'s `retry` (SW-778). Kept in the
+ * workspace, not counted from the metrics log, so a re-created workspace of the same name starts at 0.
+ */
+// shortcut: read-then-write, two gates starting together in one workspace get the same retry; lock it if that shows in the data.
+function nextGateRun(ws: string): number {
+  const file = path.join(dotDir(ws), "gate-runs");
+  let n = 0;
+  try {
+    n = Number.parseInt(fs.readFileSync(file, "utf8"), 10) || 0;
+  } catch {
+    // no runs yet
+  }
+  try {
+    fs.writeFileSync(file, `${n + 1}\n`);
+  } catch {
+    // a lost count must not fail the gate
+  }
+  return n;
+}
+
 // ---- PR files --------------------------------------------------------------
 
 /**
@@ -872,6 +894,9 @@ export async function runGate(
   // head preempted its containers mid-run (SW-745, SW-738).
   const beat = setInterval(() => touchExecMarker(ws), EXEC_BEAT_MS);
   beat.unref();
+  const workspace = path.basename(ws);
+  const run = randomUUID();
+  recordEvent({ event: "gate.start", workspace, run, retry: nextGateRun(ws) });
   try {
     result = await gateChecks(ws, file, deps, started, recreated, testsOnly, rebase);
   } finally {
@@ -897,6 +922,9 @@ export async function runGate(
           : `started ${started.join(", ")} for the gate, stopped again`,
       });
     }
+    // The CLI's exit codes (pr.ts exitOf): 75 retry later; no result means gateChecks threw.
+    const exit = result?.ok ? 0 : result?.retry ? 75 : 1;
+    recordEvent({ event: "gate.end", workspace, run, exit });
   }
   return result;
 }
@@ -2275,11 +2303,15 @@ export async function openPrs(
         ? `pr watch: scheduled (${w.where}, every 10 min; log ${w.logFile})`
         : "pr watch: NOT scheduled; a failing check or a conflict will not wake a terminal session. Run `werkmeister pr watch --install`",
     );
-    // SW-401: the gate and pr-open logs are the evidence behind the PR file; keep them on the record.
-    // Only logs that exist: `git add` fails the whole call on a pathspec that matches nothing.
+    // SW-401: the gate and pr-open logs are the evidence behind the PR file; keep them on the record,
+    // with the gate run count (SW-778). Only files that exist: `git add` fails on a pathspec that matches nothing.
     const logs = fs
       .readdirSync(dotDir(ws), { withFileTypes: true })
-      .filter((e) => e.isFile() && (/^gate-.*\.log$/.test(e.name) || e.name === "pr-open.log"))
+      .filter(
+        (e) =>
+          e.isFile() &&
+          (/^gate-.*\.log$/.test(e.name) || e.name === "pr-open.log" || e.name === "gate-runs"),
+      )
       .map((e) => path.join(".werkmeister", e.name));
     lines.push(
       (await deps.commitRecord(ws, "chore: record opened PR(s)", [...opened, ...logs])).message,

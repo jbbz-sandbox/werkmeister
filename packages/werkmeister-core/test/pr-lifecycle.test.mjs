@@ -2276,8 +2276,9 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
         "stages/03_propose/output/pr-app.md",
         ".werkmeister/gate-app-release.log",
         ".werkmeister/gate-app-test-api.log",
+        ".werkmeister/gate-runs",
       ],
-      "the record commit names the PR file and the gate logs (SW-401)",
+      "the record commit names the PR file and the gate logs (SW-401) and the gate run count (SW-778)",
     );
     assert.ok(d.calls.some((c) => c.startsWith("git -C") && c.endsWith("push -u origin me/ws")));
     assert.deepEqual(d.stopped, [ws], "containers stop once the PR is open (SW-39)");
@@ -4470,6 +4471,7 @@ test("spike: a doc PR file in 02_findings passes the gate with skip_exercise and
     assert.deepEqual(recorded, [
       "stages/02_findings/output/pr-app.md",
       ".werkmeister/gate-app-release.log",
+      ".werkmeister/gate-runs",
     ]);
   } finally {
     clean(ws);
@@ -6655,7 +6657,13 @@ test("openPrs: no createdAt from gh writes no pr.open, and the PR still opens", 
       const r = await openPrs(ws, undefined, d);
       assert.ok(r.ok, r.lines.join("\n"));
       assert.ok(d.calls.includes("gh pr view https://github.com/o/app/pull/9 --json createdAt"));
-      assert.equal(fs.existsSync(path.join(sandboxHome(), "metrics")), false);
+      // The gate's own gate.start / gate.end are there (SW-778); no pr.open.
+      const dir = path.join(sandboxHome(), "metrics");
+      const events = fs
+        .readdirSync(dir)
+        .flatMap((f) => fs.readFileSync(path.join(dir, f), "utf8").trimEnd().split("\n"))
+        .map((l) => JSON.parse(l).event);
+      assert.deepEqual(events, ["gate.start", "gate.end"]);
     });
   } finally {
     clean(ws);
