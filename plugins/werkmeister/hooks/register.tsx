@@ -273,6 +273,9 @@ export function formFields(bundle: FormBundle): FormField[] {
               ? "textarea"
               : "text",
       options,
+      labels: Object.fromEntries(
+        ((ui["ui:enumNames"] as string[] | undefined) ?? []).map((l, i) => [options[i], l]),
+      ),
       groups: ((ui["ui:options"] ?? {}) as { groups?: Record<string, string[]> }).groups ?? {},
       refine: refineOf(ui),
       required: required.has(k),
@@ -2157,7 +2160,7 @@ export const register: Register = (on) => {
                     key={`f:${f.key}`}
                     options={[
                       { value: "", label: "Choose…" },
-                      ...f.options.map((o) => ({ value: o })),
+                      ...f.options.map((o) => ({ value: o, label: f.labels[o] ?? o })),
                     ]}
                     value={text(f.key)}
                     onSelect={(v) => void setField($, f.key, v)}

@@ -39,7 +39,7 @@ First instruction for the agent; passed through to init\-workspace.
 Kind of work; selects the ICM stages and seeds the JIT first\-phase handoff note. Passed through to init\-workspace.
 .TP
 \fB\-\-context\-strategy <id>\fR
-Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
+Context layer to generate: icm (staged folders; the supported strategy) or jit (experimental: skills, hooks, notes). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
 .TP
 \fB\-\-harness <id>\fR
 Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).

@@ -2076,6 +2076,21 @@ test("applyFormFields replaces, clears and checks values against the form", () =
   ]);
 });
 
+// SW-518: a select shows ui:enumNames as its labels (jit reads "jit (experimental)"); the value stays the enum's.
+test("a select takes its option labels from ui:enumNames", () => {
+  const bundle = {
+    schema: {
+      properties: { context_strategy: { type: "string", title: "Workflow", enum: ["icm", "jit"] } },
+    },
+    uiSchema: { context_strategy: { "ui:enumNames": ["icm", "jit (experimental)"] } },
+    formData: {},
+  };
+  const [f] = formFields(bundle as never);
+  expect(f?.options).toEqual(["icm", "jit"]);
+  expect(f?.labels).toEqual({ icm: "icm", jit: "jit (experimental)" });
+  expect(formFields(BUNDLE).find((x) => x.key === "work_type")?.labels).toEqual({});
+});
+
 test('a boolean field is a check; workspaces_pane_fill_create_form takes "true" / "false" for it', () => {
   const bundle = {
     schema: { properties: { autonomous: { type: "boolean", title: "Autonomous run" } } },

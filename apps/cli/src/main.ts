@@ -847,7 +847,7 @@ const SPECS: CommandSpec[] = [
         .addOption(
           new Option(
             "--context-strategy <id>",
-            "Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). " +
+            "Context layer to generate: icm (staged folders; the supported strategy) or jit (experimental: skills, hooks, notes). " +
               "(env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).",
           ).choices([...STRATEGY_IDS]),
         )
@@ -1220,7 +1220,7 @@ const SPECS: CommandSpec[] = [
         .addOption(
           new Option(
             "--context-strategy <id>",
-            "Context layer to generate: jit (skills, hooks, notes) or icm (staged folders). " +
+            "Context layer to generate: icm (staged folders; the supported strategy) or jit (experimental: skills, hooks, notes). " +
               "(env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).",
           ).choices([...STRATEGY_IDS]),
         )

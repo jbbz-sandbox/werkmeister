@@ -121,7 +121,7 @@ works from the older events, without subagent activity.
 1. **Create the workspace for Codex:** `werkmeister workspace new my-feature --harness codex …`,
    or `werkmeister workspace init --harness codex` on an existing one (delete the old
    `CLAUDE.md` and `.claude/` by hand). `workspace init` and `werkmeister feature up` write:
-   - `.codex/hooks.json`: session-start notes and the standards gate (jit), the PR guard,
+   - `.codex/hooks.json`: session-start notes and the standards gate (jit, experimental: ICM is the supported strategy), the PR guard,
      agent state and, while `auto_stop` is on, the session-end stop. Hand-added entries
      are kept, like `.claude/settings.json`.
    - `.codex/config.toml`: the werkmeister MCP server at the loopback daemon, with
