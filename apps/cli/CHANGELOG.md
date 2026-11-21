@@ -1,5 +1,15 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.103.1
+
+### Patch Changes
+
+- a4210ff: The idle reaper no longer stops a workspace whose session sits on a tool-permission prompt (SW-919). The prompt is mid-turn, often on a `docker exec` into the same container, so stopping it made the approved command fail with `container … is not running`. A question or plan prompt open for `idle_stop_minutes` still counts as waiting on a person and is reaped while others queue.
+- 69f9351: `werkmeister machine clean` now removes the host-load probe containers a killed `docker run` left Created or exited (SW-969). The probe (macOS and Windows) is labelled `com.werkmeister.role=vm-load`, so its leftovers can be told apart on the shared daemon.
+- dd6136b: `werkmeister feature up` starts a container compose left Created when its 20-minute limit ran out, and carries on (SW-973), instead of failing with the container sitting in Created. It leaves dependents of a failed container alone, and names a container that still will not start with the `docker start` that starts it.
+- 7b9696b: A queued workspace whose containers already run is no longer held (SW-986). Before the hook denies a command as "waiting for capacity", it asks Docker whether the feature runs; if it does, the queue entry is stale and is cleared.
+- d76775a: Queued sessions keep working, and an idle VM no longer queues workspaces (SW-992). A capacity wait denies only container and test commands and no longer ends the turn; `werkmeister feature up` is no longer held, so a queued session can ask again after the budget grows; and the workspaces pane keeps a grant notice it failed to send. CPUs have no default budget limit any more: a CPU limit is a cap, not use, and measured host load already gates installs and test runs. `budget.cpus` still caps the sum when set. A setup whose install stamp is current is no longer priced.
+
 ## 0.103.0
 
 ## 0.102.0
