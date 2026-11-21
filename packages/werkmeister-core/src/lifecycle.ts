@@ -995,7 +995,8 @@ export function runningFeatures(
     }
     if (!list.size) return [];
     const feature = `or (index .Config.Labels "${LABEL_FEATURE}") (index .Config.Labels "${LEGACY_LABEL_FEATURE}")`;
-    const fmt = `{{${feature}}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}\t{{.HostConfig.MemoryReservation}}\t{{.HostConfig.NanoCpus}}\t{{len .ExecIDs}}\t{{index .Config.Labels "com.docker.compose.service"}}`;
+    // `.ExecIDs` is nil with no exec in flight, and `len` of it fails the whole inspect (SW-972).
+    const fmt = `{{${feature}}}\t{{index .Config.Labels "${LABEL_WORKDIR}"}}\t{{.State.StartedAt}}\t{{.HostConfig.MemoryReservation}}\t{{.HostConfig.NanoCpus}}\t{{if .ExecIDs}}{{len .ExecIDs}}{{else}}0{{end}}\t{{index .Config.Labels "com.docker.compose.service"}}`;
     const inspect = runCmd(["docker", "inspect", "--format", fmt, ...list]);
     if (inspect.status !== 0) return null;
     const byFeature = new Map<string, RunningFeature>();
