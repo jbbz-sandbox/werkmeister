@@ -8,7 +8,7 @@ import { test } from "node:test";
 
 import { sandboxHome } from "../dist/config.js";
 import { metricsPath, recordEvent } from "../dist/metrics.js";
-import { openPrs, refreshPrStatus } from "../dist/pr_lifecycle.js";
+import { defaultDeps, gatePrs, openPrs, refreshPrStatus } from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { requestAdmission } from "../dist/scheduler_state.js";
 import { initWorkspace } from "../dist/workspace_init.js";
@@ -174,5 +174,82 @@ test("pr open then pr status write pr.open and pr.merged at the fake gh's times"
       ]);
     },
     { gate: true, merged: true },
+  );
+});
+
+// SW-778: gate.start / gate.end around each runGate, retry counting the workspace's gate runs.
+
+/** Inits the fixture workspace, then runs `gatePrs` once per deps; returns the gate.* lines and each result. */
+async function gateRuns(fx, ...depsList) {
+  assert.ok(
+    metricsPath(new Date().toISOString()).startsWith(process.env.HOME),
+    "metrics outside temp HOME",
+  );
+  await withReporter(collectingReporter(), () => initWorkspace({}, fx.workspace, { build: false }));
+  const results = [];
+  for (const deps of depsList) results.push(await gatePrs(fx.workspace, undefined, deps));
+  const gates = lines().filter((l) => l.event.startsWith("gate."));
+  for (const g of gates) assert.equal(g.workspace, path.basename(fx.workspace));
+  return { gates, results };
+}
+
+test("a gate run writes one gate.start (retry 0) and one gate.end (exit 0) sharing a run id", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const { gates, results } = await gateRuns(fx, defaultDeps());
+      assert.equal(results[0].ok, true, results[0].lines.join("\n"));
+      const [start, end, ...rest] = gates;
+      assert.deepEqual(rest, []);
+      assert.deepEqual(
+        [start.event, start.retry, end.event, end.exit],
+        ["gate.start", 0, "gate.end", 0],
+      );
+      assert.equal(start.run, end.run);
+      assert.ok(end.at >= start.at);
+    },
+    { gate: true },
+  );
+});
+
+test("an exit-75 gate writes exit 75, and the next run in the workspace has retry 1", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      // defaultDeps() reads the fixture's registry, so it is built inside the fixture.
+      const lowMemory = { ...defaultDeps(), hostMemory: () => ({ free: 1, total: 16 * 2 ** 30 }) };
+      const { gates, results } = await gateRuns(fx, lowMemory, defaultDeps());
+      assert.equal(results[0].retry, true, results[0].lines.join("\n"));
+      assert.equal(results[1].ok, true, results[1].lines.join("\n"));
+      assert.deepEqual(
+        gates.map((g) => [g.event, g.retry ?? g.exit]),
+        [
+          ["gate.start", 0],
+          ["gate.end", 75],
+          ["gate.start", 1],
+          ["gate.end", 0],
+        ],
+      );
+      assert.notEqual(gates[0].run, gates[2].run);
+    },
+    { gate: true },
+  );
+});
+
+test("a gate failure that is not a capacity wait writes its exit 1, not 75", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const { gates, results } = await gateRuns(fx, defaultDeps());
+      assert.equal(results[0].ok, false);
+      assert.equal(results[0].retry, undefined);
+      assert.deepEqual(
+        gates.map((g) => g.exit ?? g.event),
+        ["gate.start", 1],
+      );
+    },
+    {
+      gate: true,
+      execRuns: true,
+      services:
+        'services:\n  lib: { type: cli, repo: app, path: packages/lib, test: "false" }\nrepos:\n  app: { services: [lib], lint: "true", path_mappings: { packages/lib: lib } }\n',
+    },
   );
 });

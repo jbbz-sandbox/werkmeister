@@ -14,7 +14,9 @@ export type MetricsEvent =
   | { event: "queue.wait"; workspace: string; feature: string; position: number }
   | { event: "queue.admit"; workspace: string; feature: string; waited_s: number }
   | { event: "pr.open" | "pr.merged"; workspace: string; ticket?: string; pr: string }
-  | { event: "release"; workspace: string; ticket?: string; pr: string; tag: string };
+  | { event: "release"; workspace: string; ticket?: string; pr: string; tag: string }
+  | { event: "gate.start"; workspace: string; run: string; retry: number }
+  | { event: "gate.end"; workspace: string; run: string; exit: number };
 
 /** `<sandboxHome()>/metrics/events-YYYY-MM.jsonl`, the UTC month of *at* (an ISO time). */
 export function metricsPath(at: string): string {
