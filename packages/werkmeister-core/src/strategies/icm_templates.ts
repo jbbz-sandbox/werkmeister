@@ -223,6 +223,10 @@ const TOOL_FACT_CHECK =
 const BASE_BUILD_RED =
   "A container start can rebuild from the working tree (`werkmeister feature up` reruns the install and build), so see each new test fail against a build of the unfixed code: build before editing source, or park the change and rebuild. Record which build each fail-first run used.";
 
+// SW-905: sw-856 showed tests red by editing dist/; an incremental tsc didn't re-emit and the edit leaked into the CLI bundle.
+const RED_BY_SOURCE =
+  "To show a test red, revert the fix in source without losing it (an uncommitted fix: save it with `git diff -- <files> > <scratch>/fix.patch`, revert with `git apply -R`, restore with `git apply`; a committed one: `git show <its commit>~:<file> > <file>`, restore with `git checkout -- <file>`; never the shared stash), rebuild with a forced rebuild that reuses no cache (`--force`), run the test, then restore the source and force-rebuild again. Never edit `dist/` or another build output by hand.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -545,6 +549,7 @@ const bugfix: Stage[] = [
         PREAPPROVED_IN_STAGE,
         OPTION_REACH,
         diffCheck("repro.md"),
+        RED_BY_SOURCE,
         TEST_STEP,
         `Write \`output/fix.md\`: \`git diff --stat\` per repo, the failing test's name, the test exit code and summary line, ${PER_SERVICE}, and ${SKIPPED}.`,
       ],
