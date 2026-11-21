@@ -12,7 +12,7 @@ A docked pane with one compact card per workspace. It opens by itself when an in
 
 - **Line 1:** the name, the agent chip (`◌ Working` · `● Needs you` · `✓ Done` · `Idle`), and `⚙ Auto` for an autonomous run.
 - **Line 2:** work type · task from `workspace.yml`.
-- **Line 3:** `containers 2 of 3 up · PRs repo#12 Open · CI running · stage 4/5 implement`. The last part is the ICM stage, the JIT phase, or the lifecycle step (`Ready to close out`, `Awaiting release`; see [Workspace lifecycle](../../docs/workspace-lifecycle.md)).
+- **Line 3:** `containers 2 of 3 up · PRs repo#12 Open · CI running · stage 4/5 implement`. The last part is the ICM stage, the JIT phase (JIT is experimental; ICM is the supported strategy), or the lifecycle step (`Ready to close out`, `Awaiting release`; see [Workspace lifecycle](../../docs/workspace-lifecycle.md)).
 
 A Needs you card quotes the question its agent asked, and is the only card with an amber border. `?` beside the tabs shows the legend.
 

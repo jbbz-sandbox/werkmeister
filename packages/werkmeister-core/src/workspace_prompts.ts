@@ -538,11 +538,13 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "context_strategy",
     label: "Workflow",
     help:
-      "Which context layer init-workspace generates: jit (w9r-* skills, hooks, notes) " +
-      "or icm (staged folders the agent walks by itself).",
+      "Which context layer init-workspace generates: icm (staged folders the agent walks by itself; " +
+      "the supported strategy) or jit (experimental: w9r-* skills, hooks, notes).",
     pattern: "^(" + STRATEGY_IDS.join("|") + ")$",
     default: STRATEGY_IDS[0],
     choicesFn: () => [...STRATEGY_IDS],
+    // SW-518: JIT is experimental; the stored value stays `jit`.
+    choiceLabelsFn: () => ({ jit: "jit (experimental)" }),
   },
   {
     key: "harness",
@@ -705,6 +707,9 @@ export function promptEntry(
   }
   if (spec.choicesFn) {
     entry["choices"] = spec.choicesFn();
+  }
+  if (spec.choiceLabelsFn) {
+    entry["choice_labels"] = spec.choiceLabelsFn();
   }
   if (spec.choiceGroupsFn) {
     // choice → group inverted to group → choices, groups sorted by name.

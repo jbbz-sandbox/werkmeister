@@ -9,7 +9,7 @@ Each term means one thing here.
 | Term | Meaning |
 |---|---|
 | **icm** | the context strategy built from numbered stages, each a contract plus an `output/`: [ICM workflows and stages](icm-workflows.md) |
-| **jit** | the other context strategy: phases are notes in `.werkmeister/notes/` |
+| **jit** | the other context strategy: phases are notes in `.werkmeister/notes/`. JIT is experimental; ICM is the supported strategy. |
 | **Test** | run each touched service's registry `test:` command; the exit code decides |
 | **Exercise** | observe the change in the workspace's running containers; PASS/FAIL per check |
 | **Gate** | every pre-Open check below passes |

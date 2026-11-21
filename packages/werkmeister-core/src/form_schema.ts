@@ -55,6 +55,7 @@ export type PromptEntry = {
   resolved_value?: unknown;
   choices?: string[];
   choice_groups?: Record<string, string[]>;
+  choice_labels?: Record<string, string>;
 };
 
 /** A prompt spec: `buildPromptSpec`'s output. */
@@ -160,6 +161,9 @@ function _shape(
   }
   if (hasChoices) {
     Object.assign(prop, { type: "string", enum: choices });
+    const labels = prompt["choice_labels"];
+    // RJSF's per-option labels, in enum order.
+    if (labels) fieldUi["ui:enumNames"] = choices.map((c) => labels[c] ?? c);
     return defaultValue || null;
   }
   prop["type"] = "string";

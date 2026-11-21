@@ -70,6 +70,7 @@ export interface PromptSpec {
   defaultFn?: ((workspace: string) => string) | null; // derive a default from the workspace
   choicesFn?: (() => string[]) | null; // enumerate valid values (services)
   choiceGroupsFn?: (() => Record<string, string>) | null; // choice → heading it's listed under (service → repo)
+  choiceLabelsFn?: (() => Record<string, string>) | null; // choice → label a form shows (the value is unchanged)
 }
 
 // ---------------------------------------------------------------------------

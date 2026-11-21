@@ -102,6 +102,17 @@ test("context_strategy is an optional select defaulting to icm", () => {
   assert.ok(!schema.required.includes("context_strategy"));
 });
 
+// SW-518: the form shows jit as experimental; the stored value stays `jit`.
+test("context_strategy labels jit experimental in the form, value unchanged", () => {
+  const spec = computePromptSpec({}, root);
+  const prompt = spec.prompts.find((p) => p.key === "context_strategy");
+  assert.deepEqual(prompt.choice_labels, { jit: "jit (experimental)" });
+  assert.match(prompt.help, /icm \(.*the supported strategy\) or jit \(experimental: /);
+  const { schema, uiSchema } = buildFormSchema(spec);
+  assert.deepEqual(schema.properties.context_strategy.enum, ["icm", "jit"]);
+  assert.deepEqual(uiSchema.context_strategy["ui:enumNames"], ["icm", "jit (experimental)"]);
+});
+
 test("autonomous is an optional checkbox, off by default", () => {
   const { schema, formData } = buildFormSchema(computePromptSpec({}, root));
   assert.equal(schema.properties.autonomous.type, "boolean");

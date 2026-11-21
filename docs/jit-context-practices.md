@@ -1,5 +1,7 @@
 # Using the JIT context system — operating practices
 
+JIT is experimental; ICM is the supported strategy ([context-strategies.md](context-strategies.md)).
+
 > **Not normative.** The binding rules live in the `w9r-*` phase skills
 > (`apps/cli/infra/skills/`), which are what an agent actually loads; this file is
 > the *why* behind them, for whoever maintains those skills. Where the two

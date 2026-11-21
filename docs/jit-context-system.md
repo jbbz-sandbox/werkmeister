@@ -1,5 +1,7 @@
 # JIT Context System
 
+JIT is experimental; ICM is the supported strategy ([context-strategies.md](context-strategies.md)).
+
 Just-in-time context for ephemeral Werkmeister workspaces: coding standards, tools, and working
 notes surface **only when the work matches** — scoped to the workspace's actual services and
 the current phase — instead of one always-on monolithic guide.

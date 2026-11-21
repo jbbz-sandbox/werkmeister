@@ -148,6 +148,8 @@ export type FormField = {
   help: string;
   kind: "text" | "textarea" | "select" | "multi" | "check";
   options: string[];
+  /** A select's shown label per option (`ui:enumNames`); {} shows the values. */
+  labels: Record<string, string>;
   /** A multi-pick's options by group heading (`ui:options.groups`); {} draws them ungrouped. */
   groups: Record<string, string[]>;
   /** A refinable field's instruction for buildRefinePrompt ("" = its default); null when it has no Refine button. */
