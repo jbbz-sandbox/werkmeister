@@ -449,6 +449,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^\d+\. Before fixing a problem outside this run's tickets, find or file its ticket and cite it, as `\.\.\/\.\.\/_shared\/issues-report\.md` § Bugs: new or existing\? says\./m,
             `${wt}/${d}`,
           );
+        // SW-908: step 4 finds the call sites and restated text with one whole-repo grep.
+        if (d.endsWith("_reproduce"))
+          assert.match(
+            c,
+            /^4\. .* Find them, and any user-facing or generated text that restates the rule being changed \(help, docs, man pages, snapshots, expected-text tests\), with one `git grep` across the whole repo \(`apps\/`, `packages\/`, tests\), not one package, and record the command\./m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(

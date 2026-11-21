@@ -239,6 +239,10 @@ const PROBE_HOME =
 const CITE_OUT_OF_SCOPE =
   "Before fixing a problem outside this run's tickets, find or file its ticket and cite it, as `../../_shared/issues-report.md` § Bugs: new or existing? says.";
 
+// SW-908: sw-903 and sw-890 grepped one package for the old wording and missed restatements in apps/ and docs.
+const WHOLE_REPO_GREP =
+  " Find them, and any user-facing or generated text that restates the rule being changed (help, docs, man pages, snapshots, expected-text tests), with one `git grep` across the whole repo (`apps/`, `packages/`, tests), not one package, and record the command.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -520,7 +524,8 @@ const bugfix: Stage[] = [
         "Trace to the root cause: the first place the code does something other than intended. A symptom site is not a root cause.",
         // SW-543: sw-520 grepped one call shape and missed the calls through other helpers; review caught them a round later.
         // SW-566: sw-545's fix changed a return shape its one caller treated as "stop"; only the exercise caught it.
-        "List every other caller of the function at the root cause and what each does with the result (an early return, a printed value, a stored state), so the fix's return shape is checked against every caller before the fix stage — a fix there reaches them too. When the fix belongs in shared code, list its call sites through every helper or entry point that reaches that code, not one argument shape, and record the search commands (greps) you used in `repro.md`.",
+        "List every other caller of the function at the root cause and what each does with the result (an early return, a printed value, a stored state), so the fix's return shape is checked against every caller before the fix stage — a fix there reaches them too. When the fix belongs in shared code, list its call sites through every helper or entry point that reaches that code, not one argument shape, and record the search commands (greps) you used in `repro.md`." +
+          WHOLE_REPO_GREP,
         // SW-442: sessionBusy had two true cases; stage 01 listed callers, so only review caught the second (sw-418).
         `When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test. ${PREAPPROVED_INPUT}`,
         NAME_HISTORY_STEP,
