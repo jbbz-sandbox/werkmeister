@@ -132,3 +132,25 @@ test("an install whose build failed after the stamp runs again", async () => {
 test("a service with a non-setup dependency keeps its deps", async () => {
   assert.equal(await current(workspace({ stamp: want(), extraDep: true })), false);
 });
+
+// SW-992: a whole `up` was priced with the install's 2 CPUs though a current install only checks its stamp,
+// so werkmeister waiters cost 5 CPUs for a set that runs at 3 and seven queued on an idle VM.
+test("admission prices no setup whose install stamp is current", async () => {
+  const { featureCost } = await import("../dist/scheduler_state.js");
+  const limit = (w) => {
+    const file = path.join(w.ws, "compose.yml");
+    fs.writeFileSync(
+      file,
+      fs
+        .readFileSync(file, "utf8")
+        .replace(
+          "    working_dir: /app\n",
+          "    working_dir: /app\n    deploy: { resources: { limits: { cpus: '2' } } }\n",
+        ),
+    );
+    return w.ws;
+  };
+  assert.equal(featureCost(limit(workspace({ stamp: want() }))).cpus, 0);
+  assert.equal(featureCost(limit(workspace())).cpus, 2, "no stamp: the install runs");
+  assert.equal(featureCost(limit(workspace({ stamp: want("v20") }))).cpus, 2, "new Node major");
+});

@@ -155,6 +155,7 @@ export {
   refinePrompt,
   refreshPrStatus,
   resolveWorkspaceDir,
+  restoreResumeNudge,
   resumeAndNudge,
   resumeClaudeInTerminal,
   runWorkspaceAction,

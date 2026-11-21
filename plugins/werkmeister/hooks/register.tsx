@@ -94,6 +94,7 @@ try {
     'list-workspaces': async () => { const r = await core.listWorkspaces(); return { ...r, workspaces: await Promise.all(r.workspaces.map(details)) } },
     'workspace-status': () => core.getWorkspaceStatuses(),
     'claim-resume-nudge': async () => ({ message: await core.claimResumeNudge(args.name) }),
+    'restore-resume-nudge': async () => { await core.restoreResumeNudge(args.name, args.message); return {} },
     'workspace-resources': () => core.getWorkspaceResources(),
     // The same snapshot \`werkmeister feature status --intercepts --json\` prints: the CLI stays the one source of intercept state.
     intercepts: () => core.interceptsSnapshot(),
@@ -1009,7 +1010,8 @@ async function connect($: EngineInterface): Promise<void> {
 
 /**
  * Sends Resume's "continue" (SW-70) to each workspace's Desktop session: only the pane can name it. The claim
- * removes the file first, so a failure is logged, not retried; a row with no Desktop session leaves it be.
+ * removes the file first, so two ticks can't both send it; a failed send puts it back for the next tick, since a
+ * lost grant notice left a session idle over running containers (SW-992). A row with no Desktop session leaves it be.
  */
 async function deliverNudges($: EngineInterface, rows: WorkspaceRow[]): Promise<void> {
   const due = rows.filter((r) => r.resumeNudge && r.session);
@@ -1018,10 +1020,11 @@ async function deliverNudges($: EngineInterface, rows: WorkspaceRow[]): Promise<
     await $.mcp.call("ccd_session_mgmt", "get_session", { session_id: "self" }),
   ).sessionId;
   for (const r of due) {
+    let message: string | null = null;
     try {
-      const { message } = await core<{ message: string | null }>($, "claim-resume-nudge", {
+      ({ message } = await core<{ message: string | null }>($, "claim-resume-nudge", {
         name: r.name,
-      });
+      }));
       if (!message || !r.session) continue;
       // send_message refuses the calling session, so a nudge for this one is its own prompt.
       if (r.session.id === self) await $.prompt.submit({ text: message });
@@ -1035,6 +1038,7 @@ async function deliverNudges($: EngineInterface, rows: WorkspaceRow[]): Promise<
       }
     } catch (e) {
       $.ui.log(`Resume "continue" not delivered to ${r.name}: ${(e as Error).message}`);
+      if (message) await core($, "restore-resume-nudge", { name: r.name, message }).catch(() => {});
     }
   }
 }

@@ -28,6 +28,7 @@ import {
   nudgePath,
   RESUME_NUDGE,
   readNotices,
+  readNudge,
   readPaused,
   readSessions,
   sessionGone,
@@ -3628,6 +3629,28 @@ export async function resumeAndNudge(
  */
 export async function claimResumeNudge(name: string): Promise<string | null> {
   return claimNudge(await resolveWorkspaceDir(name));
+}
+
+/**
+ * Put back a "continue" message {@link claimResumeNudge} took whose send failed, so the next
+ * delivery retries it: a lost grant notice left a queued session idle over running containers.
+ * A newer message already waiting wins. Runs in-process.
+ *
+ * @param name - The workspace's folder name.
+ * @param message - The message the claim returned.
+ * @throws {@link WorkspaceError} when `name` is not a workspace.
+ *
+ * @example
+ * ```ts
+ * import { restoreResumeNudge } from "werkmeister-core/sdk";
+ *
+ * // The message claimResumeNudge returned could not be sent: keep it for the next delivery.
+ * await restoreResumeNudge("my-workspace", "Continue where you left off.");
+ * ```
+ */
+export async function restoreResumeNudge(name: string, message: string): Promise<void> {
+  const ws = await resolveWorkspaceDir(name);
+  if (readNudge(ws) === null) writeNudge(ws, message);
 }
 
 /**

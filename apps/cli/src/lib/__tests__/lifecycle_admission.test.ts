@@ -55,6 +55,7 @@ import {
 import {
   admitOrQueue,
   admitServiceStart,
+  capacityWait,
   GATE_CAPACITY_WAIT_MS,
   restart,
   startsAsPerson,
@@ -210,6 +211,14 @@ it("a re-up of a running feature whose victim's stop fails leaves no queue entry
   // The victim no longer runs, so it is queued to come back; `mine` is not.
   expect(readQueue()).toEqual(["victim"]);
   expect(readWaiting(mine)).toBeNull();
+});
+
+// SW-992 review: with CPUs uncapped by default the needs/free line vanished, though memory still gates.
+it("with no budget.cpus, the queue's needs/free line names memory only", async () => {
+  fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 2G\n");
+  vi.mocked(run).mockImplementation(() => ({ status: 0, stdout: "", stderr: "" }));
+  const text = await capacityWait("mine", 1, true, { cpus: 3, memory: G });
+  expect(text).toContain("this start needs 1.0 GiB; free 2.0 GiB of the budget's 2.0 GiB");
 });
 
 // SW-831: a queued victim whose containers still ran had its agent's commands held over them.

@@ -733,16 +733,18 @@ export async function capacityWait(
   ];
   // What is asked against what is free, so a too-big request reads apart from a busy host (SW-763).
   const budget = await loadBudget();
-  if (Number.isFinite(budget.cpus) && Number.isFinite(budget.memory)) {
+  if (Number.isFinite(budget.memory)) {
     // Admission also counts admitted starts not yet running (SW-907 review).
     const used = [...running, ...reservedLeases(running, feature)].reduce(
       (a, l) => ({ cpus: a.cpus + l.cost.cpus, memory: a.memory + l.cost.memory }),
       { cpus: 0, memory: 0 },
     );
+    // CPUs only when budget.cpus caps them: by default load gates them, not the budget (SW-992).
+    const capped = Number.isFinite(budget.cpus);
     lines.push(
-      `this start needs ${cpus(need.cpus)}, ${gib(need.memory)}; free ` +
-        `${cpus(Math.max(0, budget.cpus - used.cpus))}, ${gib(Math.max(0, budget.memory - used.memory))} ` +
-        `of the budget's ${cpus(budget.cpus)}, ${gib(budget.memory)}`,
+      `this start needs ${capped ? `${cpus(need.cpus)}, ` : ""}${gib(need.memory)}; free ` +
+        `${capped ? `${cpus(Math.max(0, budget.cpus - used.cpus))}, ` : ""}${gib(Math.max(0, budget.memory - used.memory))} ` +
+        `of the budget's ${capped ? `${cpus(budget.cpus)}, ` : ""}${gib(budget.memory)}`,
     );
   }
   const head = position > 1 ? queueOrder(waiters(readQueue(), running))[0] : undefined;
