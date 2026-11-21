@@ -61,6 +61,25 @@ assert.strictEqual(
   "unknown model stays undefined",
 );
 
+// Active time (SW-784): gaps under 5 min count, a long gap and an exactly-5-min gap don't.
+const { reduceSession } = await import("werkmeister-core");
+// Zero-token assistant turns: the sessions get rows without changing the totals below.
+const at = (hhmm) =>
+  JSON.stringify({
+    type: "assistant",
+    timestamp: `2026-11-20T${hhmm}:00.000Z`,
+    message: { model: "claude-opus-4-8", usage: {} },
+  }) + "\n";
+const ms = (hhmm) => Date.parse(`2026-11-20T${hhmm}:00.000Z`);
+const gappy = at("10:00") + at("10:02") + at("10:04") + at("10:30") + at("10:31") + at("10:36");
+assert.deepStrictEqual(reduceSession(gappy).activeSpans, [
+  [ms("10:00"), ms("10:04")],
+  [ms("10:30"), ms("10:31")],
+  [ms("10:36"), ms("10:36")],
+]);
+// A line with no timestamp leaves the spans alone.
+assert.deepStrictEqual(reduceSession(text).activeSpans, []);
+
 // --- getWorkspaceUsage end-to-end over a fabricated workspace + pricing file ---
 import fs from "node:fs";
 import os from "node:os";
@@ -85,6 +104,9 @@ fs.writeFileSync(
     cache_read_input_tokens: 0,
   }),
 );
+// Two sessions: 10:00-10:04 + 10:30-10:31 (5 min), and 10:03-10:08 (5 min) overlapping the first.
+fs.writeFileSync(path.join(projDir, "sess2.jsonl"), gappy);
+fs.writeFileSync(path.join(projDir, "sess3.jsonl"), at("10:03") + at("10:07") + at("10:08"));
 
 const pricingPath = path.join(tmp, "model-pricing.yaml");
 fs.writeFileSync(
@@ -99,6 +121,11 @@ assert.strictEqual(ws.byModel.length, 1);
 assert.strictEqual(ws.byModel[0].model, "claude-opus-4-8");
 assert.deepStrictEqual(ws.totals, { input: 100, output: 200, cacheCreation: 0, cacheRead: 0 });
 assert.ok(Math.abs(ws.estUsd - (100e-6 * 15 + 200e-6 * 75)) < 1e-12, "ws estUsd");
-assert.strictEqual(ws.sessions.length, 1);
+assert.strictEqual(ws.sessions.length, 3);
+const active = Object.fromEntries(ws.sessions.map((s) => [s.sessionId, s.activeMinutes]));
+// sess1's line has no timestamp: unmeasured, so null rather than 0.
+assert.deepStrictEqual(active, { sess1: null, sess2: 5, sess3: 5 });
+// Union: 10:00-10:08 + 10:30-10:31 = 9 min, not the 10 a per-session sum gives.
+assert.strictEqual(ws.activeMinutes, 9);
 
 console.log("harness-claude-usage.smoke OK");

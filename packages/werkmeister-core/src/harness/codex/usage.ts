@@ -3,7 +3,12 @@
  * ~/.werkmeister/model-pricing.yaml; a model with no row there has no USD estimate.
  */
 import fs from "node:fs/promises";
-import { rollUpUsage, type SessionReduction, type SessionTally } from "../claude/usage.js";
+import {
+  activeSpans,
+  rollUpUsage,
+  type SessionReduction,
+  type SessionTally,
+} from "../claude/usage.js";
 import type { UsageTotals, WorkspaceUsage } from "../types.js";
 import { codexSessionsIn, codexSessionTitle } from "./transcript.js";
 
@@ -17,6 +22,7 @@ export function reduceCodexSession(text: string): SessionReduction {
   let firstTurn: string | null = null;
   let lastTurn: string | null = null;
   let turns = 0;
+  const times: number[] = [];
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     let e: { type?: string; timestamp?: string; payload?: Record<string, any> };
@@ -28,6 +34,8 @@ export function reduceCodexSession(text: string): SessionReduction {
     if (typeof e.timestamp === "string") {
       if (!firstTurn || e.timestamp < firstTurn) firstTurn = e.timestamp;
       if (!lastTurn || e.timestamp > lastTurn) lastTurn = e.timestamp;
+      const t = Date.parse(e.timestamp);
+      if (!Number.isNaN(t)) times.push(t);
     }
     const p = e.payload;
     if (e.type === "turn_context" && typeof p?.model === "string") model = p.model;
@@ -46,7 +54,14 @@ export function reduceCodexSession(text: string): SessionReduction {
       cacheRead: cached,
     });
   }
-  return { byModel, firstTurn, lastTurn, turns, models: [...byModel.keys()] };
+  return {
+    byModel,
+    firstTurn,
+    lastTurn,
+    turns,
+    models: [...byModel.keys()],
+    activeSpans: activeSpans(times),
+  };
 }
 
 export async function codexUsageForDir(name: string, dir: string): Promise<WorkspaceUsage> {

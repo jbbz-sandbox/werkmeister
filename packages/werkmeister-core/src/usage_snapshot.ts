@@ -36,6 +36,7 @@ export interface UsageSnapshot {
   closedAt: string;
   firstTurn: string | null;
   wallClockMinutes: number | null;
+  activeMinutes: number | null;
   sessionCount: number;
   turns: number;
   totals: UsageTotals;
@@ -159,6 +160,7 @@ export async function buildUsageSnapshot(
       name,
       totals: { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 },
       estUsd: null,
+      activeMinutes: null,
       byModel: [],
       sessions: [],
     };
@@ -183,6 +185,7 @@ export async function buildUsageSnapshot(
     closedAt,
     firstTurn,
     wallClockMinutes: minutesBetween(firstTurn, closedAt),
+    activeMinutes: usage.activeMinutes,
     sessionCount: usage.sessions.length,
     turns: usage.sessions.reduce((n, s) => n + s.turns, 0),
     totals: usage.totals,
@@ -218,6 +221,7 @@ export function renderUsageMd(s: UsageSnapshot): string {
     `- Closed: ${s.closedAt}`,
     `- First turn: ${cell(s.firstTurn)}`,
     `- Wall clock: ${s.wallClockMinutes == null ? "—" : `${s.wallClockMinutes} min`}`,
+    `- Active: ${s.activeMinutes == null ? "—" : `${s.activeMinutes} min`}`,
     `- Sessions: ${s.sessionCount}`,
     `- Turns: ${s.turns}`,
     ...(s.note ? ["", `Note: ${s.note}`] : []),

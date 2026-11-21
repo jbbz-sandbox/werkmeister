@@ -1119,6 +1119,7 @@ export function registerWorkspaceTools(server: McpServer): void {
           cacheRead: z.number(),
         }),
         estUsd: z.number().nullable(),
+        activeMinutes: z.number().nullable(),
         byModel: z.array(
           z.object({
             model: z.string(),
@@ -1136,6 +1137,10 @@ export function registerWorkspaceTools(server: McpServer): void {
             sessionId: z.string(),
             title: z.string(),
             updatedAt: z.string(),
+            firstTurn: z.string().nullable(),
+            lastTurn: z.string().nullable(),
+            turns: z.number(),
+            models: z.array(z.string()),
             totals: z.object({
               input: z.number(),
               output: z.number(),
@@ -1143,6 +1148,7 @@ export function registerWorkspaceTools(server: McpServer): void {
               cacheRead: z.number(),
             }),
             estUsd: z.number().nullable(),
+            activeMinutes: z.number().nullable(),
           }),
         ),
       },
@@ -1158,7 +1164,8 @@ export function registerWorkspaceTools(server: McpServer): void {
           usage.totals.cacheRead;
         const dollars = usage.estUsd == null ? "" : ` · ~$${usage.estUsd.toFixed(2)}`;
         const models = usage.byModel.map((m) => m.model).join(", ") || "none";
-        const text = `${name}: ${tot.toLocaleString()} tokens${dollars} across ${usage.sessions.length} session(s) [${models}]`;
+        const active = usage.activeMinutes == null ? "" : ` · ${usage.activeMinutes} min active`;
+        const text = `${name}: ${tot.toLocaleString()} tokens${dollars}${active} across ${usage.sessions.length} session(s) [${models}]`;
         return {
           content: [{ type: "text", text }],
           structuredContent: usage as unknown as Record<string, unknown>,

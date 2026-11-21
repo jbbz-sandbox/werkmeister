@@ -271,6 +271,8 @@ export interface SessionUsage {
   models: string[];
   totals: UsageTotals;
   estUsd: number | null;
+  /** Minutes between messages less than 5 min apart; null when the harness reads no timestamps. */
+  activeMinutes: number | null;
 }
 /**
  * A workspace's token usage and estimated cost, summed across its sessions.
@@ -291,6 +293,8 @@ export interface WorkspaceUsage {
   totals: UsageTotals;
   /** Estimated cost in USD over the models with a known price; null when none has one. */
   estUsd: number | null;
+  /** Active minutes over every session, time two sessions share counted once; null when none has timestamps. */
+  activeMinutes: number | null;
   /** Per-model totals, costliest first. */
   byModel: ModelUsage[];
   /** Per-session totals. */

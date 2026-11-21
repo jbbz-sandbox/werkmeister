@@ -33,6 +33,33 @@ export interface SessionReduction {
   lastTurn: string | null;
   turns: number;
   models: string[];
+  /** `[startMs, endMs]` runs of messages less than {@link ACTIVE_GAP_MS} apart. */
+  activeSpans?: Array<[number, number]>;
+}
+
+// A longer gap is idle (waiting on a person, or nobody there): metrics-flow design § Definitions, SW-784.
+export const ACTIVE_GAP_MS = 5 * 60_000;
+
+/** Group message times into spans; a gap of ACTIVE_GAP_MS or more starts a new span. */
+export function activeSpans(times: number[]): Array<[number, number]> {
+  const spans: Array<[number, number]> = [];
+  for (const t of [...times].sort((a, b) => a - b)) {
+    const last = spans.at(-1);
+    if (last && t - last[1] < ACTIVE_GAP_MS) last[1] = t;
+    else spans.push([t, t]);
+  }
+  return spans;
+}
+
+/** Minutes covered by *spans*, overlaps (parallel sessions) counted once. */
+export function activeMinutes(spans: Array<[number, number]>): number {
+  let ms = 0;
+  let end = -Infinity;
+  for (const [s, e] of [...spans].sort((a, b) => a[0] - b[0])) {
+    if (e > end) ms += e - Math.max(s, end);
+    end = Math.max(end, e);
+  }
+  return Math.round(ms / 60_000);
 }
 
 /**
@@ -45,6 +72,7 @@ export function reduceSession(text: string): SessionReduction {
   let firstTurn: string | null = null;
   let lastTurn: string | null = null;
   let turns = 0;
+  const times: number[] = [];
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     let e: {
@@ -61,6 +89,8 @@ export function reduceSession(text: string): SessionReduction {
       // ISO strings in one zone compare as times.
       if (!firstTurn || e.timestamp < firstTurn) firstTurn = e.timestamp;
       if (!lastTurn || e.timestamp > lastTurn) lastTurn = e.timestamp;
+      const t = Date.parse(e.timestamp);
+      if (!Number.isNaN(t)) times.push(t);
     }
     if (e.type !== "assistant") continue;
     const u = e.message?.usage;
@@ -77,7 +107,14 @@ export function reduceSession(text: string): SessionReduction {
     acc.cacheCreation += u.cache_creation_input_tokens ?? 0;
     acc.cacheRead += u.cache_read_input_tokens ?? 0;
   }
-  return { byModel, firstTurn, lastTurn, turns, models: [...byModel.keys()] };
+  return {
+    byModel,
+    firstTurn,
+    lastTurn,
+    turns,
+    models: [...byModel.keys()],
+    activeSpans: activeSpans(times),
+  };
 }
 
 export function reduceUsageLines(text: string): Map<string, UsageTotals> {
@@ -190,6 +227,7 @@ export async function rollUpUsage(name: string, tallies: SessionTally[]): Promis
   }
   const wsByModel = new Map<string, UsageTotals>();
   const sessions: SessionUsage[] = [];
+  const wsSpans: Array<[number, number]> = [];
 
   for (const { sessionId, title, updatedAt, reduction: session } of tallies) {
     const perModel = session.byModel;
@@ -207,6 +245,8 @@ export async function rollUpUsage(name: string, tallies: SessionTally[]): Promis
       const usd = estimateUsd(t, rateFor(prices, model));
       if (usd != null) sessionUsd = (sessionUsd ?? 0) + usd;
     }
+    const spans = session.activeSpans;
+    if (spans) wsSpans.push(...spans);
     sessions.push({
       sessionId,
       title,
@@ -217,6 +257,7 @@ export async function rollUpUsage(name: string, tallies: SessionTally[]): Promis
       models: session.models,
       totals: sessionTotals,
       estUsd: sessionUsd,
+      activeMinutes: spans?.length ? activeMinutes(spans) : null,
     });
   }
 
@@ -237,5 +278,12 @@ export async function rollUpUsage(name: string, tallies: SessionTally[]): Promis
       b.totals.input + b.totals.output - (a.totals.input + a.totals.output),
   );
 
-  return { name, totals, estUsd, byModel, sessions };
+  return {
+    name,
+    totals,
+    estUsd,
+    activeMinutes: wsSpans.length ? activeMinutes(wsSpans) : null,
+    byModel,
+    sessions,
+  };
 }

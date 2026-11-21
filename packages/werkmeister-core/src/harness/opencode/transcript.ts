@@ -131,6 +131,7 @@ export async function usageForDir(name: string, dir: string): Promise<WorkspaceU
     models: [],
     totals: { ...ZERO },
     estUsd: null,
+    activeMinutes: null,
   }));
-  return { name, totals: { ...ZERO }, estUsd: null, byModel: [], sessions };
+  return { name, totals: { ...ZERO }, estUsd: null, activeMinutes: null, byModel: [], sessions };
 }
