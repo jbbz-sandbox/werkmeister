@@ -128,6 +128,7 @@ import {
   serviceStarts,
   setupsCurrent,
   sweepVmLoadProbes,
+  upServices,
   waiters,
   waitForSetupLoad,
 } from "./scheduler_state.js";
@@ -326,7 +327,10 @@ export async function up(
   if (localServices.length) {
     requireSharedNetwork();
     info("Starting containers...");
-    if (!(await withStartRecord(workspace, "up", () => composeUpAsync(feature, signal)))) {
+    if (
+      !(await withStartRecord(workspace, "up", () => composeUpAsync(feature, signal))) &&
+      (signal?.aborted || !(await startLeftCreated(feature, workspace)))
+    ) {
       throw new SandboxError(
         // Not "above": a grant runs this in another process, and its nudge carries this text (SW-861).
         `Failed to start containers: \`werkmeister feature logs ${feature}\` shows why.`,
@@ -650,6 +654,47 @@ export async function admitServiceStart(
     // Room it released, or held as the queue head, is free now and no stop will grant it (SW-737).
     if (!admitted && grant) await grantIfQueued();
   }
+}
+
+/**
+ * After compose gave up (its 20 min ran out), start the containers of a plain `up` it left Created, never
+ * started, as `docker start` did by hand (SW-973). Only once every other container has settled: a setup
+ * exited 0, the rest running and not still `starting`. A running install or a failed one is what its
+ * dependents wait on by design, so compose's failure stands (false). Throws naming any that won't start.
+ */
+async function startLeftCreated(feature: string, workspace: string): Promise<boolean> {
+  const all = await getContainerStatus(feature);
+  // An on-demand service a failed `--service` start left Created was never priced for this `up`.
+  const plain = new Set(upServices(workspace));
+  const created = all.filter((c) => c.status === "created" && plain.has(c.service));
+  const settled = all
+    .filter((c) => c.status !== "created")
+    .every((c) =>
+      c.status === "exited"
+        ? c.exitCode === 0
+        : c.status === "running" &&
+          !isOneShotService(c.service, c.role) &&
+          c.health !== "starting" &&
+          c.health !== "unhealthy",
+    );
+  if (!created.length || !settled) return false;
+  const names = created.map((c) => c.name);
+  const stuck: string[] = [];
+  for (const name of names) {
+    try {
+      await docker().getContainer(name).start();
+    } catch {
+      stuck.push(name);
+    }
+  }
+  if (stuck.length)
+    throw new SandboxError(
+      `docker compose gave up with ${stuck.join(", ")} left Created, and starting it failed. ` +
+        `\`docker start ${stuck.join(" ")}\` starts it by hand; \`werkmeister feature logs ${feature}\` shows why.`,
+      "COMPOSE_UP_FAILED",
+    );
+  warn(`docker compose gave up with ${names.join(", ")} left Created; started it directly`);
+  return true;
 }
 
 /** A grant pass when anyone waits: room can free without a release, and only a grant starts a whole-feature waiter (SW-737). */

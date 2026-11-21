@@ -499,7 +499,7 @@ export function featureCost(workspace: string, services?: string[]): Cost {
 }
 
 /** The services a plain `up` starts: those behind no profile. */
-function upServices(workspace: string): string[] {
+export function upServices(workspace: string): string[] {
   return Object.entries(composeServices(workspace))
     .filter(([, svc]) => isDict(svc) && !svc["profiles"])
     .map(([name]) => name);
