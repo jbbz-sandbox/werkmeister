@@ -42,6 +42,8 @@ test("compose and runtime state are ignored; the record's own files are not", ()
       ".werkmeister/notices.json",
       ".werkmeister/last-exec",
       ".werkmeister/starts.json",
+      // SW-777: the stage.done marker.
+      ".werkmeister/stage-done/02_spec",
       // SW-476: held wakes, before (SW-418) and since (SW-444) one file per session.
       ".werkmeister/wake-nudge.json",
       ".werkmeister/wake-nudge-s-1.json",

@@ -3,11 +3,11 @@
  * `usage.md` for people. The transcripts it reads are keyed by the workspace path, so once the
  * folder is removed these files are the only record of what the run cost.
  */
-import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { sandboxRoot } from "./config.js";
 import { issueIdOf } from "./issue_tracker.js";
+import { firstFill, recordStageDone, stageDoneTimes } from "./metrics.js";
 import {
   type ModelUsage,
   type SessionUsage,
@@ -72,9 +72,9 @@ export function usageSummary(s: UsageSnapshot): string {
 }
 
 /**
- * Each `stages/NN_*` finished at the earlier of its first output commit on the record branch and
- * its oldest output file's mtime. Never the newest: re-editing an earlier stage's file later made
- * the next stage's minutes negative (SW-774).
+ * Each `stages/NN_*` finished at its `stage.done` event, else the record commit that first filled
+ * its output (SW-777); its oldest output mtime only when no commit has. Never the newest mtime:
+ * re-editing an earlier stage's file later made the next stage's minutes negative (SW-774).
  */
 export function stageTimings(ws: string, firstTurn: string | null): StageTiming[] {
   const root = path.join(ws, "stages");
@@ -103,25 +103,17 @@ export function stageTimings(ws: string, firstTurn: string | null): StageTiming[
     }
     return min;
   };
-  const firstCommitted = (stage: string): number => {
-    const out = `stages/${stage}/output`;
-    const r = spawnSync(
-      "git",
-      ["-C", ws, "log", "--diff-filter=A", "--format=%cI", "--", out, `:!${out}/.gitkeep`],
-      { encoding: "utf8" },
-    );
-    const first = r.status === 0 ? r.stdout.trim().split("\n").pop() : ""; // newest first
-    return first ? Date.parse(first) : 0;
-  };
+  const events = stageDoneTimes(ws);
   let prev = firstTurn;
   return dirs.map((stage) => {
-    // The earlier of the two: a commit can bundle several stages, and a checkout resets mtimes.
-    const times = [firstCommitted(stage), oldest(path.join(root, stage, "output"))].filter(Boolean);
-    const ms = times.length ? Math.min(...times) : 0;
+    const mtime = () => oldest(path.join(root, stage, "output"));
+    const at = events.get(stage) ?? firstFill(ws, stage)?.at;
+    const ms = at ? Date.parse(at) : mtime();
     const finishedAt = ms ? new Date(ms).toISOString() : null;
     const minutes = finishedAt ? minutesBetween(prev, finishedAt) : null;
-    if (finishedAt) prev = finishedAt;
-    return { stage, finishedAt, minutes };
+    // A stage committed before the one ahead of it counts 0 minutes, and the clock never runs back.
+    if (finishedAt && (!prev || ms > Date.parse(prev))) prev = finishedAt;
+    return { stage, finishedAt, minutes: minutes == null ? null : Math.max(0, minutes) };
   });
 }
 
@@ -172,6 +164,8 @@ export async function buildUsageSnapshot(
       .map((s) => s.firstTurn)
       .filter((t): t is string => !!t)
       .sort()[0] ?? null;
+  // Catches stage commits no hook saw (made by hand, or with hooks off) before stage times are read.
+  recordStageDone(ws);
   const model =
     typeof cfg["model"] === "string" && cfg["model"].trim() ? cfg["model"].trim() : null;
   return {
@@ -248,7 +242,7 @@ export function renderUsageMd(s: UsageSnapshot): string {
       ),
     ),
     "",
-    "## Stages (from each stage's first output commit or oldest output file, whichever is earlier)",
+    "## Stages (from each stage's stage.done event, else its first output commit)",
     "",
     ...table(
       "| stage | finished | minutes |\n|---|---|---|",
