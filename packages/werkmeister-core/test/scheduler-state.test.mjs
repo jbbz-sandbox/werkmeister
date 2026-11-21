@@ -124,9 +124,15 @@ test("running features' cost comes from Docker inspect rows", () => {
     "a\t/ws/a\t2026-10-29T10:00:01Z\t134217728\t1000000000",
     "b\t/ws/b\t2026-10-29T10:00:02Z\t0\t0",
   ].join("\n");
-  const run = (cmd) =>
-    cmd[1] === "ps" ? { status: 0, stdout: "id1\nid2\n" } : { status: 0, stdout: rows };
+  let format = "";
+  const run = (cmd) => {
+    if (cmd[1] === "ps") return { status: 0, stdout: "id1\nid2\n" };
+    format = cmd[3];
+    return { status: 0, stdout: rows };
+  };
   const found = runningFeatures(run);
+  // SW-972: a bare `len .ExecIDs` fails the inspect for a container with no exec in flight.
+  assert.match(format, /\{\{if \.ExecIDs\}\}\{\{len \.ExecIDs\}\}\{\{else\}\}0\{\{end\}\}/);
   const a = found.find((f) => f.feature === "a");
   assert.equal(a.memory, 640 * 2 ** 20);
   assert.equal(a.cpus, 3);

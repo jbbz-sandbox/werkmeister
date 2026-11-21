@@ -220,7 +220,10 @@ export function registerSchedulerTool(server: McpServer): void {
         workspace: z.string().nullable().optional(),
         preferredSlot: z.number().int().nullable().optional(),
         byPerson: z.boolean().optional(),
-        starting: z.object({ services: z.array(z.string()) }).optional(),
+        // Every field of `Starting`: zod strips a key the schema doesn't name, and a stripped `gate` queues a released gate as a plain waiter.
+        starting: z
+          .object({ services: z.array(z.string()), gate: z.literal(true).optional() })
+          .optional(),
       },
     },
     async (a): Promise<CallToolResult> =>
