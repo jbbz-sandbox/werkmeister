@@ -387,6 +387,19 @@ test("each template renders with no undefined and a route per stage", async () =
             /^\d+\. When this stage adds an allow rule or another pre-approved command: When the change adds or widens an input to a pre-approved command .* Write that list into this stage's output and into the question that asks the person to approve it\./m,
             `${wt}/${d}`,
           );
+        // SW-901: a rule change lists each option that reaches outside the workspace, in every accepted form.
+        if (d.endsWith("_reproduce"))
+          assert.match(
+            c,
+            /^7\. .*unique-prefix long options, bundled short flags.*must-deny case under the real permission matcher/m,
+            `${wt}/${d}`,
+          );
+        if (wt === "bugfix" && d.endsWith("_fix"))
+          assert.match(
+            c,
+            /^\d+\. For any change to an allow or deny rule, .*unique-prefix long options, bundled short flags.*must-deny case under the real permission matcher/m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(
