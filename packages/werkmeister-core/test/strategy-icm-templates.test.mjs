@@ -371,6 +371,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^7\. .*`git grep -F` the exact old rule text across the whole repo/m,
             `${wt}/${d}`,
           );
+        // SW-853: the rules a permission fix keeps get the changed rule's probes too.
+        if (d.endsWith("_reproduce"))
+          assert.match(
+            c,
+            /^7\. .*Every rule the fix keeps on the same command gets the same trailing-argument probes as the changed one \(another feature or workspace name, `-w`\/`--workspace <path>`, extra positional args\), and the failing test covers them\./m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(

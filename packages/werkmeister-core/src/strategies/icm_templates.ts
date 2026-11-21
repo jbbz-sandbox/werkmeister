@@ -203,6 +203,10 @@ const implementReview = (v: IcmVars) => reviewStep("rerun the host test step abo
 const PREAPPROVED_INPUT =
   "When the change adds or widens an input to a pre-approved command (an allow rule, or a wrapper an allow rule covers), the decision defaults to an allowlist of accepted values and lists what each accepted value can reach: files, env vars, network addresses, processes. A blocklist needs a stated reason.";
 
+// SW-853: sw-843 probed only the rule it changed; the kept `feature up <own-feature> --service:*` still let `-w <other workspace>` through.
+const KEPT_RULE_PROBES =
+  "Every rule the fix keeps on the same command gets the same trailing-argument probes as the changed one (another feature or workspace name, `-w`/`--workspace <path>`, extra positional args), and the failing test covers them.";
+
 // SW-789: sw-751 named the build chain as the critical path from task start/end times; the row held all 3 CPUs for ~170 s, so only a CPU cut shortens it.
 const CPU_PROFILE =
   "When the ticket is about gate, test or build speed, sample the container cgroup `cpu.stat` `usage_usec` every 5 s across a cold run and report the cores in use per phase before naming a critical path or any lever. " +
@@ -483,7 +487,8 @@ const bugfix: Stage[] = [
         `When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test. ${PREAPPROVED_INPUT}`,
         NAME_HISTORY_STEP,
         // SW-564: sw-521's root cause was a permission rule; step 4 listed the callers of one builder and missed two other sources of a matching rule.
-        "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source. Also `git grep -F` the exact old rule text across the whole repo, tests and `apps/` included, and list each hit as a site the fix must update (SW-820).",
+        "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source. Also `git grep -F` the exact old rule text across the whole repo, tests and `apps/` included, and list each hit as a site the fix must update (SW-820). " +
+          KEPT_RULE_PROBES,
         `Write \`output/repro.md\`: steps 1–7, and a proposed fix in one paragraph under a \`status: proposed\` line.${noCommitPlan(v.group)} Check the proposed fix against the standards rows above and name any rule that already prescribes it. ${CRITERION_REACH}`,
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
