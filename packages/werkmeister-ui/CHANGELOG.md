@@ -1,5 +1,12 @@
 # werkmeister-ui
 
+## 0.7.75
+
+### Patch Changes
+
+- Updated dependencies [3d5fed3]
+  - werkmeister-core@0.99.0
+
 ## 0.7.74
 
 ### Patch Changes
