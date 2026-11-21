@@ -1,5 +1,12 @@
 # werkmeister-ui
 
+## 0.7.82
+
+### Patch Changes
+
+- Updated dependencies [bbad16f]
+  - werkmeister-core@0.102.0
+
 ## 0.7.81
 
 ### Patch Changes
