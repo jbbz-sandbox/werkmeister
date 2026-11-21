@@ -66,6 +66,11 @@ button.primary:hover{background:var(--vscode-button-hoverBackground)}
 a.name{color:inherit}
 a.name:hover{color:var(--vscode-textLink-activeForeground)}
 a:focus-visible,button:focus-visible{outline:1px solid var(--vscode-focusBorder);outline-offset:2px}
+/* SW-961: one segment per stage; theme colours only, so it follows the theme. */
+.stages{display:flex;gap:3px;margin:3px 0}
+.stages span{flex:1;height:5px;border-radius:3px;background:color-mix(in srgb,var(--vscode-foreground) 18%,transparent)}
+.stages .done{background:var(--vscode-charts-blue)}
+.stages .current{background:color-mix(in srgb,var(--vscode-charts-blue) 40%,transparent)}
 ${CARD_CSS}`;
 
 /** The page is a shell: the host posts the cards, a click posts back a command id and a node id. */
