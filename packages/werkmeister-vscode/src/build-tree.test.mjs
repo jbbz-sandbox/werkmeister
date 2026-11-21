@@ -466,6 +466,12 @@ test("the tree matches VSCode Tree.dc.html for the sample data", () => {
   assert.equal(n[151].description, "✓ Done · 1 of 2 up · Ready to close out · #151");
   assert.equal(n.bwell.description, "Idle · down · JIT · implement");
 
+  // SW-961: the card's stage bar; JIT and a shipped lifecycle have none.
+  assert.deepEqual(n[143].card.pips, ["done", "current", "next", "next"]);
+  assert.deepEqual(n[206].card.pips, ["done", "done", "done", "current", "next"]);
+  assert.deepEqual(n[151].card.pips, []);
+  assert.deepEqual(n.bwell.card.pips, []);
+
   assert.deepEqual(n[143].icon, { id: "circle-filled", color: "charts.yellow" });
   assert.deepEqual(n[206].icon, { id: "sync~spin", color: "charts.green" });
   assert.deepEqual(n[151].icon, { id: "pass", color: "charts.green" });

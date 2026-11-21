@@ -13,6 +13,7 @@ obvious — what a failure looks like.
 |---|---|
 | `pnpm test` → `src/menus.test.mjs` | Which inline action appears on which node (start/stop state gating, switch hidden on the current workspace, the intercept toggle's three cases), that the card verbs (Continue, New session, PRs, Close out, Abandon) show on every workspace and on no service, PR or legend row, that no Remove action exists, and that `Logs` / `Open issue` / `Open PR` / `Toggle Intercept` stay out of the palette. Real `buildTree` nodes fed into the real `when` clauses from `package.json`. |
 | `pnpm test` → `src/build-tree.test.mjs` | The tree against the design's sample data (`VSCode Tree.dc.html`): descriptions, agent icons and colours, PR rows, the Markdown tooltip's rows and command links, Markdown escaping, the board 09 tone map, the legend rows, plus service health, the `current` marker (multi-root included), top-sorting, node id stability. |
+| `pnpm test` → `src/cards.test.mjs` | The stages bar (SW-961): one segment per stage under the meta line, done / current / next classes, `aria-valuenow` = done and `aria-valuemax` = total, and no bar on a JIT or unstaged workspace. |
 | `pnpm test` → `src/terminal-pool.test.mjs` | Terminal reuse: idle-only, per-cwd, closed terminals dropped. |
 | `pnpm test` → `src/poll.test.mjs` | Visibility-gated polling (the retired step 6): a hidden view never ticks, going hidden stops it, returning refetches at once, a duplicate visible event starts no second interval, teardown releases both. |
 | `pnpm run test:integration` → `src/test/extension.test.cjs` | Runs in a real extension host: every declared command is registered, a lifecycle command names its terminal `werkmeister <workspace>`, `⚡ Connect infra` runs in a `werkmeister infra connect` terminal, the config tier order — a `sandbox.*` setting overrides the inherited `WERKMEISTER_*`, and clearing it restores that value instead of deleting it — and that `Configure` actually opens the settings editor. | <!-- name-check: ignore -->
@@ -45,6 +46,13 @@ render, or a live editor.
    - Failure looks like: an empty tree with real workspaces running, or a tree
      showing dozens of raw repo checkouts instead of workspace names — see
      Phase B for the specific regression that indicates.
+
+3a. **Stages bar (SW-961).** A staged workspace's card has a full-width bar
+    under its meta line, one equal segment per `stages/NN_*` folder: the done
+    stages blue, the current one a paler blue, the rest a faint track, like the
+    segmented bar on a GitHub Actions job card. Hover it: `1 of 4 stages done`.
+    A JIT or unstaged workspace, and one whose card shows a PR or ship step,
+    has no bar. Check it in a dark and a light theme.
 
 4. **CLI-not-found recovery.** If the view instead shows "Could not find the
    werkmeister CLI": open Settings in the dev host and set `sandbox.root` (or

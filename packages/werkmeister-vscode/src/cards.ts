@@ -6,7 +6,13 @@
  * No inline styles, since the view's CSP allows only the nonce'd stylesheet;
  * a colour is the class `colorClass` names.
  */
-import { type InTerminal, RELEASED_COLOR, TONE_COLORS, type WsNode } from "./build-tree.js";
+import {
+  type InTerminal,
+  RELEASED_COLOR,
+  TONE_COLORS,
+  type WsCard,
+  type WsNode,
+} from "./build-tree.js";
 
 /** The only commands a click in the view may run; view.ts trusts exactly these. */
 export const CARD_COMMANDS = [
@@ -84,6 +90,15 @@ function line(cls: string, text: string | null | undefined): string {
   return text ? `<div class="${cls}">${esc(text)}</div>` : "";
 }
 
+/** SW-961: one segment per stage, like a GitHub Actions job bar; the count is in the hover and for screen readers. */
+function stagesBar(pips: WsCard["pips"]): string {
+  if (!pips.length) return "";
+  const done = pips.filter((p) => p === "done").length;
+  const label = `${done} of ${pips.length} stages done`;
+  // The pips are the display model's fixed literals, so they need no escaping.
+  return `<div class="stages" role="progressbar" aria-label="Stages" aria-valuemin="0" aria-valuemax="${pips.length}" aria-valuenow="${done}" aria-valuetext="${label}" title="${label}">${pips.map((p) => `<span class="${p}"></span>`).join("")}</div>`;
+}
+
 /** The run's own verb (build-tree's `sessionAction`); containers are left to the right-click menu. */
 const SESSION_BUTTON = {
   start: ["sandbox.startWork", "▶ Start work"],
@@ -121,6 +136,7 @@ function workspaceCard(n: WsNode, active: boolean): string {
     `<article class="card${active ? " in-terminal" : ""}" id="ws-${esc(n.id)}"${context(n)}>`,
     `<div class="row">${name}<span class="${colorClass(n.icon.color)}">${esc(card.state)}</span>${active ? CHIP : ""}</div>`,
     line("dim", card.meta),
+    stagesBar(card.pips),
     line(colorClass(card.activity?.color), card.activity?.text),
     card.question ? `<blockquote>“${esc(card.question)}”</blockquote>` : "",
     line(colorClass(TONE_COLORS.err), card.crash),

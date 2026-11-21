@@ -68,6 +68,22 @@ test("a card carries the stage name, the model, the issue, each PR and each cont
   assert.match(html, /<button type="button" data-cmd="sandbox.dashboard"/);
 });
 
+test("a staged workspace's card shows one segment per stage, the done ones filled (SW-961)", () => {
+  const html = renderCards(tree());
+  // Straight under the meta line, stage 2 of 4: one done, one current, two to go.
+  assert.match(
+    html,
+    /stage 2\/4 implement<\/div><div class="stages" role="progressbar" aria-label="Stages" aria-valuemin="0" aria-valuemax="4" aria-valuenow="1" aria-valuetext="1 of 4 stages done" title="1 of 4 stages done"><span class="done"><\/span><span class="current"><\/span><span class="next"><\/span><span class="next"><\/span><\/div>/,
+  );
+  const card = (over) => renderCards(buildTree([ws("a")], [st("a", over)], null, []));
+  assert.match(
+    card({ stage: { index: 1, total: 3, name: "research" } }),
+    /aria-valuemax="3" aria-valuenow="0"/,
+  );
+  assert.doesNotMatch(card({}), /class="stages"/);
+  assert.doesNotMatch(card({ phase: "implement" }), /class="stages"/);
+});
+
 test("the card's one button acts on the run: start it, hold it, or pick it back up", () => {
   const card = (over) => renderCards(buildTree([ws("a")], [st("a", over)], null, []));
   const button = (html) =>

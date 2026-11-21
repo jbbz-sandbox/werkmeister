@@ -60,6 +60,8 @@ export interface WsCard {
   crash: string | null;
   /** Model, autonomy, `stage 2/4 implement`, CPU and memory. */
   meta: string;
+  /** One entry per ICM stage (SW-961); empty for JIT, unstaged, finished or lifecycle workspaces. */
+  pips: WorkspaceDisplay["workflow"]["pips"];
   issueId: string | null;
   /** The agent asked something: Master control counts it and the card's button reads Answer in terminal. */
   needsYou: boolean;
@@ -525,6 +527,7 @@ function workspaceNode(
       ]
         .filter(Boolean)
         .join(" · "),
+      pips: d?.workflow.pips ?? [],
       issueId: ws.issueId,
       needsYou: status?.claude.agent === "needs-you",
       action: status ? sessionAction(status) : null,
