@@ -13,6 +13,8 @@ const root = path.join(home, "features");
 process.env.HOME = home;
 process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
 process.env.WERKMEISTER_WORKSPACES_ROOT = root;
+// The waiting gate asks Docker before it holds a command (SW-986): never the real daemon here.
+process.env.WERKMEISTER_DOCKER_BIN = "/nonexistent/docker";
 
 const { getWorkspaceStatuses } = await import("../dist/sandbox.js");
 
@@ -707,6 +709,51 @@ test("waiting gate: a waiting.json the queue no longer holds is cleared and hold
   } finally {
     if (was === undefined) delete process.env.WERKMEISTER_CONFIG_FILE;
     else process.env.WERKMEISTER_CONFIG_FILE = was;
+  }
+});
+
+// SW-986: the hook held `pr open` as queued while the workspace's container had been up 39 minutes, so
+// no grant ever came. Before it holds a command it asks Docker; a running container makes the entry stale.
+test("waiting gate: a queued workspace whose containers run is not held, and its record goes", () => {
+  const dir = workspace("j-wait-up", null);
+  write(path.join(dir, ".env"), "FEATURE=upnow\n");
+  const cfg = path.join(root, "up-home", "config.yaml");
+  const queue = path.join(path.dirname(cfg), "scheduler", "queue.json");
+  const fake = path.join(root, "up-home", "docker");
+  const args = path.join(root, "up-home", "docker-args");
+  const as = (body) => {
+    write(fake, `#!/bin/sh\nprintf '%s\\n' "$@" > '${args}'\n${body}\n`);
+    fs.chmodSync(fake, 0o755);
+  };
+  const was = [process.env.WERKMEISTER_CONFIG_FILE, process.env.WERKMEISTER_DOCKER_BIN];
+  process.env.WERKMEISTER_CONFIG_FILE = cfg;
+  process.env.WERKMEISTER_DOCKER_BIN = fake;
+  try {
+    write(queue, JSON.stringify(["upnow"]));
+    writeWaiting(dir, { position: 1, reason: "preempted" });
+    for (const [body, why] of [
+      ["exit 0", "no container runs"],
+      ["exit 1", "Docker unreadable: unsure, so it still holds"],
+    ]) {
+      as(body);
+      assert.equal(
+        pauseGate(DOCKER_EXEC, dir)?.hookSpecificOutput?.permissionDecision,
+        "deny",
+        why,
+      );
+    }
+    assert.match(fs.readFileSync(args, "utf8"), /label=com\.werkmeister\.feature=upnow/);
+    as("echo abc123");
+    assert.equal(pauseGate(DOCKER_EXEC, dir), null);
+    assert.equal(fs.existsSync(waitingPath(dir)), false);
+  } finally {
+    for (const [k, v] of [
+      ["WERKMEISTER_CONFIG_FILE", was[0]],
+      ["WERKMEISTER_DOCKER_BIN", was[1]],
+    ]) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
   }
 });
 

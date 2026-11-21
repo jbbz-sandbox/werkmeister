@@ -588,6 +588,9 @@ function withoutDeadWaiters(queue: string[]): string[] {
   const leases = readLeases();
   return queue.filter((f) => {
     const ws = leases[f]?.workspace;
+    // Every queue write puts waiting.json first (SW-246), so a waiter without one was cleared over its
+    // running containers (the hook, SW-986): it would hold the head for a feature that already runs.
+    if (ws && !fs.existsSync(waitingPath(ws))) return false;
     const w = ws ? readWaiting(ws) : null;
     if (!ws || !w?.services || w.parked) return true; // a parked start has no poll by design (SW-701)
     const at = fs.statSync(waitingPath(ws), { throwIfNoEntry: false })?.mtimeMs ?? 0;
