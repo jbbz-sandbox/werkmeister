@@ -244,6 +244,21 @@ test("docs-site validate checks the built page, not the dev server (SW-617)", ()
   assert.match(fragment.services["docs-site"].validate, /dist\/docs\/<page>\.html/);
 });
 
+// SW-555: the install container runs the worktree's script, and the core row names the host route to the branch's build.
+test("werkmeister-install mounts the worktree's startup script; core's validate names internal branch-cli (SW-555)", () => {
+  const install = fragment.setup_services["werkmeister-install"];
+  assert.equal(install.startup_script, undefined);
+  assert.ok(
+    install.extra_volumes.includes(
+      "${REPO}/apps/cli/infra/compose/scripts/werkmeister-install-startup.sh:/usr/local/bin/startup.sh",
+    ),
+  );
+  assert.match(
+    fragment.services["werkmeister-core"].validate,
+    /internal branch-cli pr gate --tests/,
+  );
+});
+
 // SW-644: docs-site is built from docs/, so a docs change must run its row, not skip it.
 test("docs/ maps to docs-site and is not a no-service path (SW-644)", () => {
   assert.equal(fragment.repo.path_mappings.docs, "docs-site");

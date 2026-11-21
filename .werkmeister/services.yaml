@@ -101,7 +101,9 @@ services:
       Usage: `with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...`. Fixture options come first: the first other argument starts the werkmeister args.
       `--behind` pushes two commits to the code repo's origin/main after the branch is cut, so the branch is behind its base until a fetch (SW-669).
       Each step runs from the fixture workspace and the run stops at the first failure; then it prints each `--print` file (relative to the workspace; a path outside it is not printed) and every fake gh and docker call.
-      Exercise a start path (`startService`, `up`, `prepareSlot`) through `composeUpServiceAsync`/admission with a fake, or through the host CLI, never by calling `startService` in-container: from inside, the werkmeister root is /app and a compose regeneration refuses (SW-554).
+      Exercise a start path (`startService`, `up`, `prepareSlot`) or a host `pr gate` with this branch's code from the host, after the install and build above: `werkmeister internal branch-cli <werkmeister args>` from the workspace, e.g. `werkmeister internal branch-cli pr gate --tests` or `werkmeister internal branch-cli feature up --service werkmeister-core` (SW-555); in-process, through `composeUpServiceAsync`/admission with a fake.
+      It runs the worktree's `apps/cli/dist/main.js` with the installed CLI's root and `node_modules`, so shared infra stays on the installed checkout; it refuses when the dist is missing or was built from another commit (rebuild after each edit: a dirty build at HEAD is not caught). It runs only `pr gate`, `feature up`, `feature stop` and `feature status`, and its `werkmeister`/`w9r` spelling asks before every run (a `node …/main.js` spelling matches no ask rule). It never writes the shared Caddyfile: run `werkmeister infra proxy-reload` after it when the workspace needs routing. Daemon and scheduler code still run the installed build.
+      Never call `startService` in-container: from inside, the werkmeister root is /app and a compose regeneration refuses (SW-554). The install container runs the worktree's `werkmeister-install-startup.sh`.
       `with-temp-home` also unsets `CLAUDECODE` and `CLAUDE_CODE_*` (keeps `CLAUDE_BIN`), so a `claude` run under it sees what CI sees; outside the wrapper use `env -i PATH=… HOME=…`.
       `--services <file>` copies your registry in, from a file under the current folder (pass `workspace init --services <svc>` to pick from it). Keep it minimal, only the services under test (path, type, archetype, test, validate, ports): the repo's own `.werkmeister/services.yaml` fails init on a service that is not local and has no upstream. `--bare` leaves out the feature, so close-out skips teardown and the tracker; close it out with `workspace close --no-pr "<reason>"`;
       `--gate` adds an approved PR file (`--pr-field status=<value>` replaces its `status:` line verbatim, e.g. `"status=approved  # approved via check-in 2026-11-06"`, SW-549; `--pr-field skip_release=<reason>` and the other skip fields add to its front matter, quoted where YAML needs it; `--pr-line 'skip_release: no changeset: test-only'` adds a line as written, so a test can seed the unquoted colon value the gate refuses, SW-851), `origin/main` and a committed one-file change in `packages/lib`, and the fake docker reports `demo-lib` running, so the gate execs `lib`'s test and logs it; with `--services` the registry must keep `lib` in repo `app` at `packages/lib`, or the run exits 2.
@@ -302,7 +304,7 @@ services:
 
 setup_services:
   # The werkmeister repo's install + build + tools download, all in startup.sh
-  # (infra/compose/scripts/werkmeister-install-startup.sh). The build runs so
+  # (the worktree's apps/cli/infra/compose/scripts/werkmeister-install-startup.sh). The build runs so
   # werkmeister-core/dist exists before the app services start; the `tools` volume
   # gets docker/compose/kubectl and the pnpm shim for the host-access services.
   # SW-31: `pnpm install --frozen-lockfile` (`npm ci` for a branch still on
@@ -321,8 +323,9 @@ setup_services:
     image: node:22
     command: "sh /usr/local/bin/startup.sh install"
     node_modules_volume: node-modules
-    startup_script: true
     extra_volumes:
+      # SW-555: the worktree's own script, not the installed CLI's, so a branch's change to it runs in its own install container.
+      - "${REPO}/apps/cli/infra/compose/scripts/werkmeister-install-startup.sh:/usr/local/bin/startup.sh"
       - tools:/opt/werkmeister-tools
       - "{{repos_root}}:{{repos_root}}"
       - "{{werkmeister_home}}/locks:/locks"

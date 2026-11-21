@@ -1,18 +1,19 @@
 #!/bin/sh
-# The werkmeister repo's werkmeister-install setup container (services.yaml
-# `startup_script: true`). With `install`, it installs and builds the repo
+# The werkmeister repo's werkmeister-install setup container, mounted from the
+# workspace's own worktree (`${REPO}/apps/cli/…` in services.yaml, SW-555), so a
+# branch's change to it runs in that branch's containers. With `install`, it installs and builds the repo
 # first; then it installs the host-facing CLIs the werkmeister repo's own services
 # need into the per-feature `tools` volume mounted at /opt/werkmeister-tools.
 # Idempotent: each download is skipped when its binary already exists, so a
 # re-up of the same feature costs nothing.
 #
 # `install` is an argument, not the default, because this file comes from the
-# main checkout while the command comes from ~/.werkmeister/services.yaml: until
-# `werkmeister registry` resyncs, the old `npm ci && npm run build && sh
-# startup.sh` still calls this with no argument and must not install twice.
+# worktree while the command comes from ~/.werkmeister/services.yaml: a registry
+# synced before the `install` argument still calls this with no argument, and it
+# must not install twice.
 #
-# SW-31: the same main checkout serves branches from before and after the pnpm
-# switch, so the lockfile in /app picks the package manager.
+# SW-31: branches from before and after the pnpm switch both run this script, so
+# the lockfile in /app picks the package manager.
 set -eu
 
 TOOLS=${WERKMEISTER_TOOLS_DIR:-/opt/werkmeister-tools}

@@ -1976,13 +1976,21 @@ async function cli(): Promise<void> {
     ["internal", "hooks"].includes(process.argv[2] ?? "") || process.argv.includes("--if-idle");
   if (!parseOnly && !hookCall) {
     const warning = staleBuildWarning(BUILD_STAMP, path.resolve(_REPO_ROOT, "../.."));
-    if (warning) console.error(warning);
+    if (warning) {
+      console.error(warning);
+      // SW-555: under internal branch-cli a stale dist would silently test old code.
+      if (process.env.WERKMEISTER_BRANCH_CLI === "1") process.exit(2);
+    }
     expectDaemonBuild(() => buildOf(appEntryPath(MCP)));
   }
 
   // SW-292: raw argv, so the werkmeister args it runs (`--services`, `--then`…) never meet commander.
   if (process.argv[2] === "internal" && process.argv[3] === "fixture") {
     await (await import("./commands/fixture.js")).run(process.argv.slice(4));
+    return;
+  }
+  if (process.argv[2] === "internal" && process.argv[3] === "branch-cli") {
+    await (await import("./commands/branch_cli.js")).run(process.argv.slice(4));
     return;
   }
 

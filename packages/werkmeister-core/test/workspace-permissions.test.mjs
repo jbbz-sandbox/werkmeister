@@ -621,6 +621,8 @@ test("--exec-runs forms of the fixture wrapper and built CLI ask, host and conta
     `Bash(docker exec * ${bin}/with-fixture-workspace --no-wait --exec-runs*)`,
     `Bash(${bin}/with-temp-home ${cli}/werkmeister internal fixture --exec-runs:*)`,
     `Bash(${bin}/with-temp-home --no-wait ${cli}/werkmeister internal fixture --exec-runs:*)`,
+    "Bash(werkmeister internal branch-cli:*)",
+    "Bash(w9r internal branch-cli:*)",
   ]);
 });
 
@@ -1072,9 +1074,9 @@ test("only workspace_ask_rules: true adds the node --test asks; absent, false, a
   fs.mkdirSync(path.join(root, "werkmeister", ".git"));
   fs.writeFileSync(path.join(cli, "werkmeister"), "");
   const off = withConfig(null, () => workspaceAskRules(root));
-  assert.equal(off.length, 6);
+  assert.equal(off.length, 8);
   assert.ok(
-    off.every((r) => r.includes("--exec-runs")),
+    off.every((r) => r.includes("--exec-runs") || r.includes("internal branch-cli")),
     off.join("\n"),
   );
 });

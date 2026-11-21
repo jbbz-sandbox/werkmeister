@@ -752,6 +752,7 @@ function builtCliWrappers(workspaceRoot: string): string[] {
  * SW-510: `node --test <file>` through the temp-HOME wrapper runs any file, one the agent just wrote too.
  * SW-842, SW-828: the node --test asks only with config.yaml `workspace_ask_rules: true`, since they
  * prompted on every core test run even in auto mode; the --exec-runs ones always stay.
+ * SW-555: `internal branch-cli` runs the branch's build on the host, so it asks too.
  */
 export function workspaceAskRules(workspaceRoot: string): string[] {
   const tempHome = tempHomeWrapper(workspaceRoot);
@@ -782,6 +783,8 @@ export function workspaceAskRules(workspaceRoot: string): string[] {
       `Bash(${tempHome} ${cli} internal fixture --exec-runs:*)`,
       `Bash(${tempHome} --no-wait ${cli} internal fixture --exec-runs:*)`,
     ]),
+    "Bash(werkmeister internal branch-cli:*)",
+    "Bash(w9r internal branch-cli:*)",
     ...nodeTest,
   ];
 }
