@@ -602,16 +602,31 @@ test("waiting gate: denies a container command with the queue position", () => {
   const dir = workspace("j-wait", null);
   writeWaiting(dir, { position: 2, reason: "waiting for capacity" });
   const pre = pauseGate(DOCKER_EXEC, dir);
-  assert.equal(pre.continue, false);
-  assert.match(pre.stopReason, /Waiting for capacity \(position 2\)/);
+  // SW-992: ending the turn left the session idle on a grant notice that could be lost.
+  assert.equal(pre.continue, undefined, "queued, the turn goes on");
+  assert.equal(pre.hookSpecificOutput?.permissionDecision, "deny");
+  assert.match(
+    pre.hookSpecificOutput.permissionDecisionReason,
+    /Waiting for capacity \(position 2\)/,
+  );
   // SW-909: an agent read the old text as "not admitted" and stopped over running containers.
-  assert.match(pre.stopReason, /docker ps --filter label=com\.werkmeister\.feature=/);
-  assert.match(pre.stopReason, /grant/);
+  assert.match(
+    pre.hookSpecificOutput.permissionDecisionReason,
+    /docker ps --filter label=com\.werkmeister\.feature=/,
+  );
+  assert.match(pre.hookSpecificOutput.permissionDecisionReason, /grant/);
   assert.equal(pre.hookSpecificOutput.permissionDecision, "deny");
   // The check the text names must pass the hook; a chained or other docker command still waits.
   assert.equal(pauseGate(bash("docker ps --filter label=com.werkmeister.feature=demo"), dir), null);
-  assert.equal(pauseGate(bash("docker ps; docker exec demo-core pnpm test"), dir)?.continue, false);
-  assert.equal(pauseGate(bash("docker ps $(docker run x)"), dir)?.continue, false);
+  assert.equal(
+    pauseGate(bash("docker ps; docker exec demo-core pnpm test"), dir)?.hookSpecificOutput
+      ?.permissionDecision,
+    "deny",
+  );
+  assert.equal(
+    pauseGate(bash("docker ps $(docker run x)"), dir)?.hookSpecificOutput?.permissionDecision,
+    "deny",
+  );
   writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: false });
   assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).stopReason, PAUSED_REASON);
 });
@@ -625,18 +640,33 @@ test("waiting gate: holds container and test commands only; the record, git and 
     "docker exec demo-core pnpm test",
     "cd /x && pnpm turbo run test",
     "/ws/.werkmeister/bin/with-temp-home --no-wait node --test a.test.mjs",
-    "werkmeister feature up --service core",
+    "werkmeister feature restart",
     "werkmeister pr gate --tests",
     "w9r pr open",
     "sh -c 'docker compose up -d'",
   ])
-    assert.equal(pauseGate(bash(command), dir)?.continue, false, command);
+    assert.equal(
+      pauseGate(bash(command), dir)?.hookSpecificOutput?.permissionDecision,
+      "deny",
+      command,
+    );
+  assert.equal(
+    pauseGate(
+      { hook_event_name: "PreToolUse", tool_name: "mcp__plugin_werkmeister_werkmeister__restart" },
+      dir,
+    )?.hookSpecificOutput?.permissionDecision,
+    "deny",
+  );
+  // SW-992: `feature up` only re-asks admission (exit 75 while there is no room): holding it was the deadlock
+  // that kept a queued session from starting after the budget grew.
+  for (const command of ["werkmeister feature up", "werkmeister feature up --service core"])
+    assert.equal(pauseGate(bash(command), dir), null, command);
   assert.equal(
     pauseGate(
       { hook_event_name: "PreToolUse", tool_name: "mcp__plugin_werkmeister_werkmeister__up" },
       dir,
-    )?.continue,
-    false,
+    ),
+    null,
   );
   // SW-832: the MCP forms of the held Bash commands; `workspace-pr status` passes like `pr status`.
   const mcp = (tool, tool_input = {}) => ({
@@ -650,7 +680,11 @@ test("waiting gate: holds container and test commands only; the record, git and 
     mcp("workspace-pr", { action: "gate" }),
     mcp("workspace-pr", { action: "open" }),
   ])
-    assert.equal(pauseGate(input, dir)?.continue, false, input.tool_name);
+    assert.equal(
+      pauseGate(input, dir)?.hookSpecificOutput?.permissionDecision,
+      "deny",
+      input.tool_name,
+    );
   for (const input of [
     mcp("workspace-pr", { action: "status" }),
     mcp("workspace-prs"),
@@ -694,13 +728,17 @@ test("waiting gate: a waiting.json the queue no longer holds is cleared and hold
     write(queue, JSON.stringify(["stale"]));
     writeWaiting(dir, { position: 2, reason: "waiting for capacity" });
     old(60_000);
-    assert.equal(pauseGate(DOCKER_EXEC, dir).continue, false, "still queued");
+    assert.equal(
+      pauseGate(DOCKER_EXEC, dir).hookSpecificOutput?.permissionDecision,
+      "deny",
+      "still queued",
+    );
 
     write(queue, JSON.stringify(["other"]));
     writeWaiting(dir, { position: 2, reason: "waiting for capacity" });
     assert.equal(
-      pauseGate(DOCKER_EXEC, dir).continue,
-      false,
+      pauseGate(DOCKER_EXEC, dir).hookSpecificOutput?.permissionDecision,
+      "deny",
       "just written: the queue may not have caught up",
     );
     old(60_000);
@@ -775,7 +813,7 @@ test("waiting gate: a service-start wait lets prompts and tools through, naming 
   assert.equal(pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir), null);
   // A whole-feature queue (no services) still holds container commands (SW-768).
   writeWaiting(dir, { position: 1, reason: "waiting for capacity" });
-  assert.equal(pauseGate(DOCKER_EXEC, dir).continue, false);
+  assert.equal(pauseGate(DOCKER_EXEC, dir).hookSpecificOutput?.permissionDecision, "deny");
 });
 
 // SW-701: a parked start has no poll, so an old file is still live and the context says nothing polls.

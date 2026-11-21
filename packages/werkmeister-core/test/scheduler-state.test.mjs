@@ -84,10 +84,11 @@ const COMPOSE = `services:
         reservations: { memory: 1G }
 `;
 
-test("budget defaults come from the engine, minus 1G; config overrides; preempt defaults on", async () => {
+// SW-992: CPUs default to no limit (load gates the CPU-heavy steps); summing limits queued 7 workspaces on an idle VM.
+test("budget memory defaults to the engine's minus 1G, CPUs to no limit; config overrides; preempt on", async () => {
   await withHome(async () => {
     const b = await loadBudget(async () => ({ MemTotal: 8 * G, NCPU: 12 }));
-    assert.deepEqual(b, { memory: 7 * G, cpus: 12, preempt: true });
+    assert.deepEqual(b, { memory: 7 * G, cpus: Infinity, preempt: true });
   });
   await withHome(async () => {
     const b = await loadBudget(async () => ({ MemTotal: 8 * G, NCPU: 12 }));

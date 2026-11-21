@@ -756,11 +756,12 @@ function featureRuns(feature: string): boolean {
 }
 
 // Starts containers or runs tests. A list of what is held, not of what passes: the ticket names the held
-// set, and an allowlist would hold `werkmeister feature stop`, the command that frees room (SW-768).
+// set, and an allowlist would hold `werkmeister feature stop`, the command that frees room (SW-768). Not
+// `feature up`: queued, it only re-asks admission, and holding it kept a session from starting (SW-992).
 const NEEDS_CAPACITY =
-  /(^|[\s;&|(`/'"])(docker|pnpm|npm|npx|node|turbo|vitest|with-temp-home|with-fixture-workspace)(\s|$)|\b(werkmeister|w9r)\s+(feature\s+(up|restart)|pr\s+(gate|open))\b/;
+  /(^|[\s;&|(`/'"])(docker|pnpm|npm|npx|node|turbo|vitest|with-temp-home|with-fixture-workspace)(\s|$)|\b(werkmeister|w9r)\s+(feature\s+restart|pr\s+(gate|open))\b/;
 // The MCP forms of the held commands (SW-832); `workspace-pr` `status` passes like `pr status`.
-const NEEDS_CAPACITY_TOOL = /^mcp__.*werkmeister.*__(up|restart|test|workspace-pr)$/;
+const NEEDS_CAPACITY_TOOL = /^mcp__.*werkmeister.*__(restart|test|workspace-pr)$/;
 
 function needsCapacity(input: Record<string, any>): boolean {
   if (input["hook_event_name"] !== "PreToolUse") return false;
@@ -805,9 +806,10 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
   // An agent read the older text as "not admitted" and stopped over running containers (SW-909).
   const reason = waiting
     ? `Waiting for capacity (position ${waiting.position}): this workspace is queued, so containers and ` +
-      `tests wait until it starts. Not a failure: \`docker ps --filter label=com.werkmeister.feature=${feature ?? "<feature>"}\` ` +
-      "shows its containers; when they are not up, a grant notice tells this session to continue once room " +
-      "frees, and edits and git still work meanwhile. If they are up, the queue entry is stale: tell the person."
+      "tests wait until it starts. Not a failure: `docker ps --filter " +
+      `label=com.werkmeister.feature=${feature ?? "<feature>"}\` showed none of its containers running (or ` +
+      "could not be read). Go on with edits and git, and rerun this command once they run (`werkmeister budget " +
+      "status` shows the queue); or end the turn, and a grant notice tells this session to continue."
     : PAUSED_REASON;
   switch (input["hook_event_name"]) {
     case "PreToolUse": {
@@ -818,8 +820,9 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
           permissionDecisionReason: reason,
         },
       };
+      // Queued, the turn goes on (SW-992): ending it left the session idle on a grant notice that can be lost.
       // Codex fails a PreToolUse hook whose output has continue/stopReason, and the tool then runs.
-      if (process.env.WERKMEISTER_HOOK_HARNESS === "codex") return deny;
+      if (waiting || process.env.WERKMEISTER_HOOK_HARNESS === "codex") return deny;
       return { continue: false, stopReason: reason, ...deny };
     }
     case "UserPromptSubmit":

@@ -188,17 +188,19 @@ export function requeueFirst(
 
 /**
  * The budget: `budget:` in `~/.werkmeister/config.yaml` over defaults from the
- * engine (memory minus 1G for the VM itself, every CPU). An engine that can't
- * be read and no configured value means no limit: the `compose up` after it
- * fails on its own.
+ * engine (memory minus 1G for the VM itself). CPUs have no default limit: a CPU
+ * limit is a cap, not use, so summing them queued workspaces on an idle VM, and
+ * measured load gates the CPU-heavy steps instead (a setup start, with-temp-home;
+ * SW-992). `budget.cpus` still caps the sum. An engine that can't be read and no
+ * configured value means no limit: the `compose up` after it fails on its own.
  */
 export async function loadBudget(
-  info: () => Promise<{ MemTotal?: number; NCPU?: number }> = () => docker().info(),
+  info: () => Promise<{ MemTotal?: number }> = () => docker().info(),
 ): Promise<Budget> {
   const cfg = loadGlobalConfig()["budget"];
   const b = isDict(cfg) ? cfg : {};
-  let engine: { MemTotal?: number; NCPU?: number } = {};
-  if (b["memory"] === undefined || b["cpus"] === undefined) {
+  let engine: { MemTotal?: number } = {};
+  if (b["memory"] === undefined) {
     try {
       engine = await info();
     } catch {
@@ -211,7 +213,7 @@ export async function loadBudget(
       : engine.MemTotal
         ? engine.MemTotal - 2 ** 30
         : Infinity;
-  const cpus = b["cpus"] !== undefined ? Number(b["cpus"]) : (engine.NCPU ?? Infinity);
+  const cpus = b["cpus"] !== undefined ? Number(b["cpus"]) : Infinity;
   return { memory, cpus, preempt: b["preempt"] !== false };
 }
 
@@ -490,6 +492,8 @@ export function featureCost(workspace: string, services?: string[]): Cost {
   const cost = { memory: 0, cpus: 0 };
   for (const [name, svc] of Object.entries(composeServices(workspace))) {
     if (!isDict(svc) || (services ? !services.includes(name) : svc["profiles"])) continue;
+    // A current install only checks its stamp and exits; pricing its build CPUs held 5-CPU waiters for 3-CPU sets (SW-992).
+    if (installStamped(svc)) continue;
     const res = (svc as ComposeService)["deploy"]?.["resources"];
     const mem = res?.["reservations"]?.["memory"];
     if (mem !== undefined) cost.memory += parseSize(mem);

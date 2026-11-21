@@ -37,7 +37,7 @@ budget:
 ### Measured on a 16 GB laptop
 
 Re-measured 2026-10-31 on a 16 GB MacBook with Docker Desktop's engine
-at 7.8 GiB and 12 CPUs, so the default budget is 6.8 GiB and 12 CPUs. Each
+at 7.8 GiB and 12 CPUs, so the default budget is 6.8 GiB and no CPU limit. Each
 service's gate command ran cold (`turbo --force`, nothing cached) in a `node:22`
 container limited to 2G, one after the other, while `anon` in the container's
 `memory.stat` was sampled every 0.5 s. A reservation is the peak plus about 10%,
