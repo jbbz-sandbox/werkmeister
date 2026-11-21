@@ -12,7 +12,7 @@
  * from Docker on every decision, because `up` exits once containers start.
  */
 
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as net from "node:net";
@@ -45,6 +45,7 @@ import {
   parseSize,
   type Waiter,
 } from "./scheduler.js";
+import { dockerBin } from "./tool_bins.js";
 
 export interface SlotLease {
   slot: number;
@@ -213,7 +214,7 @@ export async function loadBudget(
   return { memory, cpus, preempt: b["preempt"] !== false };
 }
 
-/** 1-min host load above which with-temp-home and a setup start wait (SW-209, SW-542, SW-630): `budget.host_load`, else 2 × cores; 0 is off. */
+/** 1-min host load (on macOS and Windows, of the Docker VM) above which with-temp-home and a setup start wait (SW-209, SW-542, SW-630, SW-888): `budget.host_load`, else 2 × cores; 0 is off. */
 export function hostLoadLimit(cores: number): number {
   const cfg = loadGlobalConfig()["budget"];
   const v = isDict(cfg) ? Number(cfg["host_load"] ?? Number.NaN) : Number.NaN;
@@ -265,16 +266,48 @@ const LOAD_PROGRESS_MS = 60_000;
 
 export interface HostLoadDeps {
   hostLoad: () => { load: number[]; cores: number };
+  /** The Docker VM's 1/5/15 min load and cores, read on macOS and Windows in place of hostLoad (SW-888); null when unreadable. */
+  vmLoad: () => Promise<{ load: number[]; cores: number } | null>;
   hostMemory: () => { free: number; total: number };
   sleep: (ms: number) => Promise<unknown>;
 }
 
 export const readHostLoad = () => ({ load: os.loadavg(), cores: os.availableParallelism() });
+
+// 7 reads × 4 s on top of with-temp-home's 90 s stays under an agent's 2 min Bash timeout (SW-469).
+const VM_LOAD_TIMEOUT_MS = 4_000;
+
+/** A container's /proc/loadavg is the VM kernel's, not namespaced; macOS's own loadavg never sees the VM (SW-556, SW-888). */
+export function readVmLoad(): Promise<{ load: number[]; cores: number } | null> {
+  return new Promise((resolve) => {
+    execFile(
+      dockerBin(),
+      ["run", "--rm", "--network", "none", "alpine:3", "sh", "-c", "cat /proc/loadavg; nproc"],
+      { timeout: VM_LOAD_TIMEOUT_MS, encoding: "utf8" },
+      (err, stdout) => {
+        const [avg = "", nproc = ""] = err ? [] : stdout.split("\n");
+        const load = avg.split(" ").slice(0, 3).map(Number);
+        const cores = Number(nproc);
+        const ok = load.length === 3 && [...load, cores].every(Number.isFinite) && cores > 0;
+        resolve(ok ? { load, cores } : null);
+      },
+    );
+  });
+}
+
 const realHostLoad: HostLoadDeps = {
   hostLoad: readHostLoad,
+  vmLoad: readVmLoad,
   hostMemory: readHostMemory,
   sleep: (ms) => delay(ms),
 };
+
+/** The 1-min load and its limit: the Docker VM's on macOS and Windows (whose loadavg is always 0), the host's elsewhere; unreadable is limit 0 (not busy). */
+async function loadNow(deps: HostLoadDeps, platform: NodeJS.Platform) {
+  const vm = platform === "darwin" || platform === "win32";
+  const r = vm ? await deps.vmLoad() : deps.hostLoad();
+  return r ? { load: r.load[0], limit: hostLoadLimit(r.cores) } : { load: 0, limit: 0 };
+}
 
 /** What with-temp-home's wait did: *spent* means a limit was still over when it gave up (SW-716). */
 export interface HostLoadWait {
@@ -290,8 +323,8 @@ const minutes = (ms: number) => Number((ms / 60_000).toFixed(1));
  * saying so up front and printing progress each minute (SW-262). Returns the note for the wrapper's stderr ("" when
  * it did not wait) and whether the wait is *spent* with a limit still over (SW-716).
  * The gate stopped waiting in SW-542.
- * Load not on macOS: its loadavg counts idle daemons in R state (450-550 on a quiet host) and never the
- * Linux VM that runs the tests, so it is no signal to wait on (SW-556). Its memory is: Claude Code
+ * On macOS and Windows the load is the Docker VM's (`readVmLoad`): macOS's own loadavg counts idle daemons
+ * and never the VM, and Windows' is always 0 (SW-556, SW-888). Memory is the host's: Claude Code
  * stops an idle background shell when the Mac runs low (SW-620).
  */
 export async function waitForHostLoadNow(
@@ -302,17 +335,16 @@ export async function waitForHostLoadNow(
   // WERKMEISTER_NO_WAIT skips it inside the command too, not only in with-temp-home's shell (SW-425).
   const none: HostLoadWait = { spent: false, note: "" };
   if (envVar("NO_WAIT")) return none;
-  const read = () => {
-    const { load, cores } = deps.hostLoad();
-    const limit = platform === "darwin" ? 0 : hostLoadLimit(cores);
+  const read = async () => {
+    const { load, limit } = await loadNow(deps, platform);
     return {
-      load: load[0],
+      load,
       limit,
-      loadOver: limit !== 0 && load[0] > limit,
+      loadOver: limit !== 0 && load > limit,
       memory: lowMemory(deps.hostMemory),
     };
   };
-  let now = read();
+  let now = await read();
   if (!now.loadOver && !now.memory) return none;
   const waitedFor = [now.loadOver && "host load", now.memory && "free memory"]
     .filter(Boolean)
@@ -334,7 +366,7 @@ export async function waitForHostLoadNow(
       .join(", ");
   for (let waited = LOAD_POLL_MS; waited <= WRAPPER_LOAD_WAIT_MS; waited += LOAD_POLL_MS) {
     await deps.sleep(LOAD_POLL_MS);
-    now = read();
+    now = await read();
     if (!now.loadOver && !now.memory)
       return { spent: false, note: `waited ${waited / 1000} s for ${waitedFor}` };
     if (waited % LOAD_PROGRESS_MS === 0 && waited < WRAPPER_LOAD_WAIT_MS)
@@ -373,14 +405,12 @@ export async function waitForSetupLoad(
     `starting ${what}; WERKMEISTER_NO_WAIT=1 skips`,
   );
   if (!spent) return;
-  const { load, cores } = deps.hostLoad();
-  const limit = hostLoadLimit(cores);
+  const { load, limit } = await loadNow(deps, platform);
   const memory = lowMemory(deps.hostMemory);
   const over = [
-    platform !== "darwin" &&
-      limit !== 0 &&
-      load[0] > limit &&
-      `host load ${load[0].toFixed(1)} is over ${limit} (budget.host_load)`,
+    limit !== 0 &&
+      load > limit &&
+      `host load ${load.toFixed(1)} is over ${limit} (budget.host_load)`,
     memory && `memory is low (${memory})`,
   ]
     .filter(Boolean)

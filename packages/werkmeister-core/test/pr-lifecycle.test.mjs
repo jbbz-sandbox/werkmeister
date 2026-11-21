@@ -177,6 +177,7 @@ function deps(table, over = {}) {
     gateCompose: () => [],
     portHolders: async () => [],
     hostLoad: () => ({ load: [0.5, 0.5, 0.5], cores: 4 }),
+    vmLoad: async () => ({ load: [0.5, 0.5, 0.5], cores: 4 }),
     hostMemory: () => ({ free: 8 * 2 ** 30, total: 16 * 2 ** 30 }),
     sleep: async () => {},
     ...over,
@@ -2409,12 +2410,14 @@ const plentyMemory = () => ({ free: 8 * 2 ** 30, total: 16 * 2 ** 30 });
 function loaded(loads) {
   const slept = [];
   let i = 0;
+  const read = () => {
+    const l = loads[Math.min(i++, loads.length - 1)];
+    return { load: [l, l, l], cores: 4 };
+  };
   return {
     slept,
-    hostLoad: () => {
-      const l = loads[Math.min(i++, loads.length - 1)];
-      return { load: [l, l, l], cores: 4 };
-    },
+    hostLoad: read,
+    vmLoad: async () => read(), // the Docker VM, read in place of hostLoad on macOS and Windows (SW-888)
     hostMemory: plentyMemory,
     sleep: async (ms) => {
       slept.push(ms);
@@ -2519,7 +2522,7 @@ test("runGate: under low free memory it starts no container and is a retry (SW-6
   }
 });
 
-test("waitForHostLoadNow: low free memory counts on macOS too, where load does not (SW-620)", async () => {
+test("waitForHostLoadNow: low free memory counts on macOS too (SW-620)", async () => {
   const lines = [];
   const host = { ...loaded([0.5]), hostMemory: lowMemory };
   const note = await withSandboxHome(() =>
@@ -2594,11 +2597,15 @@ test("waitForHostLoadNow: with-temp-home's wait stops at 90 s, under an agent's 
 });
 
 // SW-556: macOS's loadavg counts idle daemons in R state (450-550 on a quiet host) and never the
-// Linux VM that runs the tests, so with-temp-home has nothing to wait on there.
-test("waitForHostLoadNow: on macOS it returns at once, whatever loadavg reads (SW-556)", async () => {
-  const stuck = loaded([90]);
-  assert.equal((await withSandboxHome(() => waitForHostLoadNow(stuck, "darwin"))).note, "");
-  assert.deepEqual(stuck.slept, []);
+// Linux VM that runs the tests; SW-888: so with-temp-home waits on the VM's own load there.
+test("waitForHostLoadNow: on macOS it reads the Docker VM, not loadavg (SW-556, SW-888)", async () => {
+  const idleVm = { ...loaded([90]), vmLoad: async () => ({ load: [0.5, 0.5, 0.5], cores: 4 }) };
+  assert.equal((await withSandboxHome(() => waitForHostLoadNow(idleVm, "darwin"))).note, "");
+  assert.deepEqual(idleVm.slept, []);
+  const busyVm = { ...loaded([0.5]), vmLoad: loaded([90, 1]).vmLoad };
+  const { note } = await withSandboxHome(() => waitForHostLoadNow(busyVm, "darwin"));
+  assert.equal(note, "waited 15 s for host load");
+  assert.deepEqual(busyVm.slept, [15_000]);
 });
 
 test("waitForHostLoadNow: prints progress at the minute, not at the end (SW-262)", async () => {

@@ -29,6 +29,7 @@ import {
   loadBudget,
   portHolders,
   readQueue,
+  readVmLoad,
   requestAdmission,
   serviceStarts,
   waitForSetupLoad,
@@ -544,16 +545,18 @@ async function withNoWait(value, fn) {
   }
 }
 
-/** A fake host load reading *loads* in turn (the last repeats) on 4 cores: limit 8. */
+/** A fake host (or, on macOS and Windows, Docker VM) load reading *loads* in turn (the last repeats) on 4 cores: limit 8. */
 function hostLoads(...loads) {
   const slept = [];
   let i = 0;
+  const read = () => {
+    const l = loads[Math.min(i++, loads.length - 1)];
+    return { load: [l, l, l], cores: 4 };
+  };
   return {
     slept,
-    hostLoad: () => {
-      const l = loads[Math.min(i++, loads.length - 1)];
-      return { load: [l, l, l], cores: 4 };
-    },
+    hostLoad: read,
+    vmLoad: async () => read(),
     hostMemory: () => ({ free: 8, total: 16 }),
     sleep: async (ms) => slept.push(ms),
   };
@@ -583,12 +586,16 @@ test("waitForSetupLoad: load still over budget after the wait fails with the loa
   );
 });
 
-// SW-620: on macOS, where load is no signal, low free memory still holds the install back.
+// SW-620: on macOS low free memory holds the install back too, with the Docker VM idle.
 test("waitForSetupLoad: low free memory after the wait fails with the memory, on macOS too (SW-620)", async () => {
   await withNoWait(undefined, () =>
     withHome(async (home) => {
       const ws = workspace(home, SETUP_COMPOSE);
-      const short = { ...hostLoads(500), hostMemory: () => ({ free: 1, total: 16 }) };
+      const short = {
+        ...hostLoads(500),
+        vmLoad: async () => ({ load: [1, 1, 1], cores: 4 }),
+        hostMemory: () => ({ free: 1, total: 16 }),
+      };
       await assert.rejects(
         waitForSetupLoad(ws, serviceStarts(ws, "api"), short, "darwin"),
         (e) =>
@@ -614,13 +621,12 @@ test("waitForSetupLoad: starts once load falls, and at once when under budget (S
   );
 });
 
-test("waitForSetupLoad: no setup among the starts, macOS, or WERKMEISTER_NO_WAIT: no wait (SW-630, SW-556)", async () => {
+test("waitForSetupLoad: no setup among the starts, or WERKMEISTER_NO_WAIT: no wait (SW-630)", async () => {
   await withHome(async (home) => {
     const ws = workspace(home, SETUP_COMPOSE);
     for (const [services, platform, noWait] of [
       [serviceStarts(ws, "db"), "linux", false],
       [["api"], "linux", false], // --no-deps: the install is current, so not started
-      [serviceStarts(ws, "api"), "darwin", false],
       [serviceStarts(ws, "api"), "linux", true],
     ]) {
       const stuck = hostLoads(90);
@@ -630,6 +636,66 @@ test("waitForSetupLoad: no setup among the starts, macOS, or WERKMEISTER_NO_WAIT
       assert.deepEqual(stuck.slept, [], `${services} on ${platform}`);
     }
   });
+});
+
+/** A host whose own loadavg reads *mac* while its Docker VM reads *vm* (null: unreadable) on 12 cores: limit 24. */
+const vmHost = (mac, vm) => ({
+  ...hostLoads(mac),
+  vmLoad: async () => (vm === null ? null : { load: [vm, vm, vm], cores: 12 }),
+});
+
+// SW-888: macOS's loadavg never sees the VM, and Windows' is always 0, so both read the VM's own load.
+for (const platform of ["darwin", "win32"]) {
+  test(`waitForSetupLoad: on ${platform} a busy Docker VM holds back the setup start (SW-888)`, async () => {
+    await withNoWait(undefined, () =>
+      withHome(async (home) => {
+        const ws = workspace(home, SETUP_COMPOSE);
+        const busy = vmHost(0, 90);
+        await assert.rejects(
+          waitForSetupLoad(ws, serviceStarts(ws, "api"), busy, platform),
+          (e) =>
+            e.code === "HOST_LOAD" &&
+            /host load 90\.0 is over 24 \(budget\.host_load\)/.test(e.message),
+        );
+        assert.deepEqual(busy.slept, Array(6).fill(15_000));
+      }),
+    );
+  });
+}
+
+test("waitForSetupLoad: on macOS an idle or unreadable Docker VM admits at once, whatever loadavg reads (SW-888)", async () => {
+  await withNoWait(undefined, () =>
+    withHome(async (home) => {
+      const ws = workspace(home, SETUP_COMPOSE);
+      for (const vm of [1, null]) {
+        const host = vmHost(500, vm); // 500: the SW-556 macOS loadavg on a quiet host
+        await waitForSetupLoad(ws, serviceStarts(ws, "api"), host, "darwin");
+        assert.deepEqual(host.slept, [], `VM ${vm}`);
+      }
+    }),
+  );
+});
+
+test("readVmLoad: parses the VM's loadavg and nproc; a failed or junk run is null (SW-888)", async () => {
+  const prev = process.env.WERKMEISTER_DOCKER_BIN;
+  try {
+    await withHome(async (home) => {
+      const fake = path.join(home, "docker");
+      const as = (body) => {
+        fs.writeFileSync(fake, `#!/bin/sh\n${body}\n`, { mode: 0o755 });
+        process.env.WERKMEISTER_DOCKER_BIN = fake;
+      };
+      as("printf '0.52 0.40 0.31 2/300 9\\n12\\n'");
+      assert.deepEqual(await readVmLoad(), { load: [0.52, 0.4, 0.31], cores: 12 });
+      as("exit 1");
+      assert.equal(await readVmLoad(), null);
+      as("echo nope");
+      assert.equal(await readVmLoad(), null);
+    });
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_DOCKER_BIN;
+    else process.env.WERKMEISTER_DOCKER_BIN = prev;
+  }
 });
 
 // SW-681: an autonomous workspace whose stopped turn left a background shell running (a gate, pr open)

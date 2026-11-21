@@ -92,6 +92,7 @@ import {
   portHolders,
   readHostLoad,
   readHostMemory,
+  readVmLoad,
   waitForHostLoadNow,
 } from "./scheduler_state.js";
 import { getServicePort } from "./slots.js";
@@ -256,6 +257,13 @@ export interface Deps {
     /** Logical CPU count, to scale *load* against. */
     cores: number;
   };
+  /** The Docker VM's load and cores, which the retry's wait reads on macOS and Windows; null when unreadable. */
+  vmLoad: () => Promise<{
+    /** The VM's 1, 5 and 15 minute load averages. */
+    load: number[];
+    /** The VM's CPU count, to scale *load* against. */
+    cores: number;
+  } | null>;
   /** Bytes available and total, read once before the gate starts anything. */
   hostMemory: () => {
     /** Bytes available now. */
@@ -370,6 +378,7 @@ export function defaultDeps(): Deps {
     stop: stopWorkspace,
     prWatch: () => prWatchScheduleState(),
     hostLoad: readHostLoad,
+    vmLoad: readVmLoad,
     hostMemory: readHostMemory,
     sleep: (ms) => delay(ms),
     reapIdle: async () => {

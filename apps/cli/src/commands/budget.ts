@@ -15,6 +15,7 @@ import {
   hostLoadLimit,
   loadBudget,
   readLeases,
+  readVmLoad,
   waiters,
 } from "werkmeister-core/scheduler_state";
 
@@ -22,15 +23,18 @@ const GIB = 2 ** 30;
 const limit = (n: number, unit: string) =>
   Number.isFinite(n) ? `${Number(n.toFixed(1))}${unit}` : "no limit";
 
-/** The host-load *limit* (a ceiling, not a reading), and that macOS doesn't apply it (SW-556, SW-728). */
+/** The host-load *limit* (a ceiling, not a reading), and that macOS and Windows apply it to the Docker VM (SW-728, SW-888). */
 export function hostLoadText(limit: number, platform: NodeJS.Platform = process.platform): string {
   if (!limit) return "host load limit off";
-  return `host load limit ${limit}${platform === "darwin" ? " (not enforced on macOS)" : ""}`;
+  const vm = { darwin: " (Docker VM load on macOS)", win32: " (Docker VM load on Windows)" };
+  return `host load limit ${limit}${vm[platform as keyof typeof vm] ?? ""}`;
 }
 
 export async function run(args: Record<string, unknown>): Promise<void> {
   const budget = await loadBudget();
-  const hostLoad = hostLoadLimit(os.availableParallelism());
+  // macOS and Windows scale the limit by the Docker VM's cores, as the wait does (SW-888).
+  const vm = process.platform === "darwin" || process.platform === "win32";
+  const hostLoad = hostLoadLimit((vm && (await readVmLoad())?.cores) || os.availableParallelism());
   // A snapshot for display: no `allocate` lock, so a lease taken mid-read shows next time.
   const leases = readLeases();
   const waiting = await waitingQueue();
