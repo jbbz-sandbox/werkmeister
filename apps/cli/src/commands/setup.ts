@@ -39,6 +39,9 @@
  *   werkmeister machine setup --check    # report only; no prompts, no writes, nonzero on drift
  *   werkmeister machine setup --yes      # non-interactive; accept defaults, skip optional installs
  *
+ * Every mode first checks a harness, git, Node 22 and Docker + Compose; a miss
+ * exits 1 before any prompt or write (SW-637).
+ *
  * `--check` and `--yes` never prompt, so both are safe in CI. Plugin changes
  * reach only NEW Claude Code sessions — a running session keeps the plugin
  * snapshot it launched with.
@@ -54,6 +57,7 @@ import type { PromptSpec } from "werkmeister-core/global_config";
 import * as gc from "werkmeister-core/global_config";
 import { loadIssueTracker, TRACKER_IDS, trackerById } from "werkmeister-core/issue_tracker";
 import {
+  checkPrerequisites,
   claudeStandardsDirState,
   claudeUserSettingsPath,
   editorSchemaState,
@@ -581,6 +585,7 @@ function report(steps: Step[]): number {
 export async function run(args: Record<string, unknown>): Promise<void> {
   const check = Boolean(args.check);
   const assumeYes = Boolean(args.yes);
+  const prereqs = checkPrerequisites();
 
   // --check is a pure probe: no prompts, no writes, no config wizard.
   if (check) {
@@ -591,12 +596,22 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     for (const p of problems) {
       steps.unshift({ label: "global config", ok: false, detail: p });
     }
+    steps.unshift(...prereqs);
     if (report(steps)) {
       warn("Prerequisites out of date — run `werkmeister machine setup` to converge.");
       process.exit(1);
     }
     success("All required werkmeister prerequisites are in order.");
     return;
+  }
+
+  // Before the wizard: without these it fails partway, after every question is answered.
+  if (prereqs.some((s) => !s.ok)) {
+    report(prereqs);
+    warn(
+      "Install what's missing (✗ above), then re-run `werkmeister machine setup`. Nothing was written.",
+    );
+    process.exit(1);
   }
 
   const interactive = Boolean(process.stdin.isTTY) && !assumeYes;
@@ -627,7 +642,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     installDaemon: answers.installDaemon,
   });
 
-  const failed = report(steps);
+  const failed = report([...prereqs, ...steps]);
   const warned = steps.filter((s) => !s.ok && s.optional).length;
   const pending = steps.filter((s) => s.pending).length;
 

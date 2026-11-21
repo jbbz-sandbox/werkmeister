@@ -15,6 +15,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  checkPrerequisites,
   DEMO_SERVICES_REPO,
   DEMO_SERVICES_REPO_URL,
   defaultWorkspaceRepo,
@@ -834,6 +835,103 @@ describe("syncVscodeExtension from a checkout (SW-378)", () => {
     expect(steps[0]).toMatchObject({ ok: false, optional: true });
     expect(steps[0].detail).toContain("0.36.2");
     expect(steps[0].detail).toContain("0.65.0");
+  });
+});
+
+describe("checkPrerequisites (SW-637)", () => {
+  const ALL: Record<string, [number, string]> = {
+    "claude --version": [0, "2.1.0 (Claude Code)"],
+    "git --version": [0, "git version 2.53.0"],
+    "docker info": [0, "Client:\nServer:"],
+    "docker compose version": [0, "Docker Compose version v5.5.0"],
+  };
+  const without = (prefix: string) =>
+    Object.fromEntries(Object.entries(ALL).filter(([k]) => !k.startsWith(prefix)));
+  const row = (steps: Step[], label: string) => steps.find((s) => s.label === label) as Step;
+
+  it("passes four required rows on a machine that has everything", () => {
+    const steps = checkPrerequisites(fakeRunner(ALL), "22.3.0");
+    expect(steps.map((s) => [s.label, s.ok, s.optional ?? false])).toEqual([
+      ["harness", true, false],
+      ["git", true, false],
+      ["Node.js", true, false],
+      ["docker", true, false],
+    ]);
+  });
+
+  it("names the install link when docker is missing, not the daemon", () => {
+    const docker = row(checkPrerequisites(fakeRunner(without("docker")), "22.3.0"), "docker");
+    expect(docker.ok).toBe(false);
+    expect(docker.detail).toContain("https://docs.docker.com/engine/install/");
+    expect(docker.detail).not.toContain("daemon");
+  });
+
+  it("says the daemon isn't running when docker exists but docker info fails", () => {
+    const runner = fakeRunner({
+      ...ALL,
+      "docker info": [1, "Client:\n Version: 29\nServer:\nfailed to connect to the docker API"],
+    });
+    const docker = row(checkPrerequisites(runner, "22.3.0"), "docker");
+    expect(docker.ok).toBe(false);
+    expect(docker.detail).toContain("daemon isn't running");
+    expect(docker.detail).toContain("failed to connect to the docker API");
+  });
+
+  it("quotes docker 27's stderr error, not its trailing 'errors pretty printing info'", () => {
+    const out =
+      "Client:\n Version: 27\nServer:\nCannot connect to the Docker daemon at unix:///x.sock\nerrors pretty printing info";
+    const docker = row(
+      checkPrerequisites(fakeRunner({ ...ALL, "docker info": [1, out] }), "22.3.0"),
+      "docker",
+    );
+    expect(docker.detail).toContain("Cannot connect to the Docker daemon");
+    expect(docker.detail).not.toContain("pretty printing");
+  });
+
+  it("reports a failing docker compose version as missing Compose v2", () => {
+    const runner = fakeRunner({ ...ALL, "docker compose version": [1, "unknown command"] });
+    const docker = row(checkPrerequisites(runner, "22.3.0"), "docker");
+    expect(docker.ok).toBe(false);
+    expect(docker.detail).toContain("Compose v2");
+  });
+
+  it("gives an install hint for missing git, old Node and no harness", () => {
+    const steps = checkPrerequisites(fakeRunner(without("docker")), "20.11.0");
+    expect(row(checkPrerequisites(fakeRunner(without("git")), "22.3.0"), "git").detail).toContain(
+      "xcode-select --install",
+    );
+    const stub = fakeRunner({
+      ...ALL,
+      "git --version": [1, "xcrun: error: invalid active developer path"],
+    });
+    expect(row(checkPrerequisites(stub, "22.3.0"), "git")).toMatchObject({ ok: false });
+    expect(row(checkPrerequisites(stub, "22.3.0"), "git").detail).toContain("xcrun: error");
+    expect(row(steps, "Node.js")).toMatchObject({ ok: false });
+    expect(row(steps, "Node.js").detail).toContain("nvm install 22");
+    const none = row(checkPrerequisites(fakeRunner(without("claude")), "22.3.0"), "harness");
+    expect(none.ok).toBe(false);
+    expect(none.detail).toContain("https://docs.claude.com/en/docs/claude-code/setup");
+  });
+
+  it("accepts OpenCode or Codex as the harness", () => {
+    const runner = fakeRunner({ ...without("claude"), "opencode --version": [0, "1.0.0"] });
+    expect(row(checkPrerequisites(runner, "22.3.0"), "harness")).toMatchObject({
+      ok: true,
+      detail: "opencode",
+    });
+  });
+
+  it("skips the plugin step with a note, not a failure, when claude is missing", async () => {
+    const steps = await runSetup({
+      checkOnly: true,
+      reposRoot: home.dir,
+      runner: fakeRunner({}),
+      hostnames: [],
+      jira: null,
+      pathDirs: {},
+    });
+    expect(row(steps, "claude CLI")).toMatchObject({ ok: false, optional: true });
+    expect(row(steps, "claude CLI").detail).toContain("skipped");
   });
 });
 
