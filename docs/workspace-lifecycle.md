@@ -218,7 +218,7 @@ One lock file, `~/.werkmeister/pr-callbacks.lock`, lets one pass run at a time.
 
 ## Check-in
 
-From the folder of workspaces, the `check-in` skill shows each workspace waiting on you and relays your answer, and ships merged PRs as it goes.
+From the folder of workspaces, the `check-in` skill shows each workspace waiting on you and relays your answer, and ships merged PRs as it goes. [The foreman's workspace](foreman.md#the-courier-pattern) covers how the answer travels.
 
 <details>
 <summary>How it works</summary>
