@@ -25,7 +25,7 @@ export interface FakeWorld {
   issues?: unknown[];
   /** `gh pr create` prints it. */
   prUrl?: string;
-  /** `gh pr view` reports this state (default `OPEN`); `MERGED` adds a merge commit (SW-482). */
+  /** `gh pr view` reports this state (default `OPEN`); `MERGED` adds a merge commit (SW-482). Every view has `createdAt` 2026-01-02T03:04:05Z, a merged one `mergedAt` 2026-01-02T04:05:06Z (SW-779). */
   prState?: string;
   /** `gh api repos/…/rules/branches/…` prints these (the base's active rules); default none. */
   rules?: unknown[];
@@ -78,10 +78,11 @@ if [ "$tool" = gh ]; then
     "pr view")
       state=$(get prState OPEN)
       merge=null
-      [ "$state" = MERGED ] && merge='{"oid":"0000000000000000000000000000000000000000"}'
+      merged=null
+      [ "$state" = MERGED ] && merge='{"oid":"0000000000000000000000000000000000000000"}' && merged='"2026-01-02T04:05:06Z"'
       url=
       [ $# -ge 3 ] && url=$(printf '%s' "$3" | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g; s/^/"url":"/; s/$/",/')
-      out "{\${url}\\"number\\":1,\\"title\\":\\"fixture\\",\\"state\\":\\"$state\\",\\"headRefName\\":\\"me/demo\\",\\"baseRefName\\":\\"main\\",\\"headRefOid\\":\\"\\",\\"mergeCommit\\":$merge,\\"mergeable\\":\\"MERGEABLE\\",\\"reviewDecision\\":\\"\\",\\"latestReviews\\":[],\\"reviews\\":[],\\"comments\\":[],\\"files\\":[],\\"statusCheckRollup\\":[]}" ;;
+      out "{\${url}\\"number\\":1,\\"title\\":\\"fixture\\",\\"state\\":\\"$state\\",\\"headRefName\\":\\"me/demo\\",\\"baseRefName\\":\\"main\\",\\"headRefOid\\":\\"\\",\\"mergeCommit\\":$merge,\\"createdAt\\":\\"2026-01-02T03:04:05Z\\",\\"mergedAt\\":$merged,\\"mergeable\\":\\"MERGEABLE\\",\\"reviewDecision\\":\\"\\",\\"latestReviews\\":[],\\"reviews\\":[],\\"comments\\":[],\\"files\\":[],\\"statusCheckRollup\\":[]}" ;;
     "repo view") exit "$(get repoView 0)" ;;
     "label create") grep -Fxq -- "$3" "$dir/labels" || printf '%s\\n' "$3" >> "$dir/labels" ;;
     "issue edit")

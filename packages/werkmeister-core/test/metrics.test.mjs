@@ -8,7 +8,10 @@ import { test } from "node:test";
 
 import { sandboxHome } from "../dist/config.js";
 import { metricsPath, recordEvent } from "../dist/metrics.js";
+import { openPrs, refreshPrStatus } from "../dist/pr_lifecycle.js";
+import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { requestAdmission } from "../dist/scheduler_state.js";
+import { initWorkspace } from "../dist/workspace_init.js";
 import { pinWerkmeisterRoot, withFixtureWorkspace } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
@@ -138,5 +141,38 @@ test("never-fits clears a wait without an admit line", async () => {
       assert.deepEqual(lines(), []);
     },
     { queue: ["head:5"] },
+  );
+});
+
+// SW-779: pr.open and pr.merged carry GitHub's createdAt / mergedAt, here the fake gh's fixed 2026-01 times.
+test("pr open then pr status write pr.open and pr.merged at the fake gh's times", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      assert.equal(open.ok, true, open.lines.join("\n"));
+      await refreshPrStatus(fx.workspace);
+      await refreshPrStatus(fx.workspace);
+      const file = metricsPath("2026-01");
+      assert.ok(file.startsWith(fx.root), `${file} is outside the fixture`);
+      const got = fs
+        .readFileSync(file, "utf8")
+        .trimEnd()
+        .split("\n")
+        .map((l) => {
+          const o = JSON.parse(l);
+          assert.ok(validate(o), JSON.stringify(validate.errors));
+          return [o.event, o.at, o.workspace, o.pr];
+        });
+      const ws = path.basename(fx.workspace);
+      const pr = "https://github.com/o/app/pull/1";
+      assert.deepEqual(got, [
+        ["pr.open", "2026-01-02T03:04:05.000Z", ws, pr],
+        ["pr.merged", "2026-01-02T04:05:06.000Z", ws, pr],
+      ]);
+    },
+    { gate: true, merged: true },
   );
 });
