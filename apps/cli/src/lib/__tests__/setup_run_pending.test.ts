@@ -24,12 +24,18 @@ vi.mock("werkmeister-core/global_config", async (orig) => ({
   ensureZshrcCompletion: () => false,
   patchDesktopConfig: () => false,
 }));
-vi.mock("werkmeister-core/machine_setup", async (orig) => ({
-  ...(await orig<object>()),
-  runSetup: async () => [
-    { label: "ingress certificate", ok: false, pending: true, detail: "trust skipped" },
-  ],
-}));
+// SW-637: null passes the prerequisites; a runner runs the real check against it.
+let prereqRunner: ((cmd: string[]) => [number, string]) | null = null;
+vi.mock("werkmeister-core/machine_setup", async (orig) => {
+  const real = await orig<typeof import("werkmeister-core/machine_setup")>();
+  return {
+    ...real,
+    checkPrerequisites: () => (prereqRunner ? real.checkPrerequisites(prereqRunner, "22.3.0") : []),
+    runSetup: async () => [
+      { label: "ingress certificate", ok: false, pending: true, detail: "trust skipped" },
+    ],
+  };
+});
 let kubeContext: string | null = null;
 const asked: string[] = [];
 vi.mock("werkmeister-core/sdk", async (orig) => ({
@@ -77,6 +83,48 @@ it("keeps a hand-set workspace_ask_rules: false", async () => {
     fs.rmSync(path.dirname(file), { recursive: true, force: true });
   }
   expect(saved.at(-1)?.workspace_ask_rules).toBe(false);
+});
+
+/** Everything present except `docker`, which is not on PATH (127). */
+const noDocker = (cmd: string[]): [number, string] =>
+  cmd[0] === "docker" ? [127, "docker: command not found"] : [0, `${cmd[0]} 1.0`];
+
+it("SW-637: without docker it exits 1 before any question and writes nothing", async () => {
+  prereqRunner = noDocker;
+  asked.length = 0;
+  saved.length = 0;
+  const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+    throw new Error("exit");
+  }) as never);
+  const printed: string[] = [];
+  vi.spyOn(console, "log").mockImplementation((m: string) => printed.push(m));
+  try {
+    await expect(run({ yes: true })).rejects.toThrow("exit");
+  } finally {
+    prereqRunner = null;
+  }
+  expect(exit).toHaveBeenCalledWith(1);
+  expect(asked).toEqual([]);
+  expect(saved).toEqual([]);
+  const out = printed.join("\n");
+  expect(out).toContain("docker: not on PATH");
+  expect(out).toContain("https://docs.docker.com/engine/install/");
+});
+
+it("SW-637: --check reports the same docker row and exits 1", async () => {
+  prereqRunner = noDocker;
+  const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+    throw new Error("exit");
+  }) as never);
+  const printed: string[] = [];
+  vi.spyOn(console, "log").mockImplementation((m: string) => printed.push(m));
+  try {
+    await expect(run({ check: true })).rejects.toThrow("exit");
+  } finally {
+    prereqRunner = null;
+  }
+  expect(exit).toHaveBeenCalledWith(1);
+  expect(printed.join("\n")).toContain("docker: not on PATH");
 });
 
 // SW-852: every top-level section setup never asks about survives, not only a fixed list.

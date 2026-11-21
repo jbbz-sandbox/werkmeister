@@ -13,7 +13,9 @@ This page takes you from nothing to a closed workspace: what each step does, and
 
 ## Before you start
 
-- A harness: Claude Code, OpenCode or Codex (see [Harnesses](harnesses.md)). `machine setup` installs werkmeister's plugins into Claude Code, and reports that step as failed if `claude` isn't on your PATH.
+`machine setup` checks the first four of these before its first question. If one is missing, it stops without writing anything and names what to install.
+
+- A harness: Claude Code, OpenCode or Codex (see [Harnesses](harnesses.md)). `machine setup` installs werkmeister's plugins into Claude Code, and skips that step with a note if `claude` isn't on your PATH.
 - Any OCI container manager with Docker Compose v2: Docker Engine, OrbStack, Docker Desktop or another.
 - git.
 - Node.js 22 or later.

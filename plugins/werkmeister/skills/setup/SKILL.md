@@ -15,23 +15,9 @@ In any `--check` output, `✗ global config: no standards tree` is a known bug i
 
 ## 1. Check the prerequisites
 
-Run all four checks, then show the results as one table:
+Run machine setup; it checks the prerequisites. Run `cd ~ && npx werkmeister machine setup --check` and show its first four rows: a harness (`claude`, `opencode` or `codex`), git, Node.js 22 or later, and Docker with Compose v2. Machine setup checks the same four before its first question, and on a miss it stops without writing anything, naming what's missing and how to install it. If one of those four rows shows ✗, help them install what it names, then check again. The other rows and the exit code don't matter yet: step 2 creates what they report. Kubernetes is optional; nothing checks for it.
 
-| Need | Check | Passes when |
-|---|---|---|
-| a harness | `command -v claude opencode codex` | it prints at least one path; judge by the output, not the exit code (the plugin step of machine setup needs `claude`) |
-| git | `git --version` | it prints a version |
-| Node.js 22 or later | `node -v` | the major version is 22 or more |
-| a container manager with Compose v2 | `docker info >/dev/null && docker compose version` | both succeed |
-
-If any row fails, **stop here**. Don't run machine setup: it would fail partway through. For each missing one, say what it is and how to install it:
-
-- Claude Code: <https://docs.claude.com/en/docs/claude-code/setup> (OpenCode and Codex also work, see werkmeister's Harnesses page, docs/harnesses.md)
-- git: `xcode-select --install` on macOS, `sudo apt install git` on Debian/Ubuntu
-- Node.js 22: <https://nodejs.org>, or `nvm install 22`
-- Containers: OrbStack or Docker Desktop on macOS; Docker Engine with the compose plugin on Linux (<https://docs.docker.com/engine/install/>). If `docker` exists but `docker info` fails, the daemon isn't running: start it.
-
-Ask them to run this skill again once they're installed. Kubernetes is optional; don't check for it.
+If `npx` isn't found, Node.js is missing: install Node.js 22 first (<https://nodejs.org>, or `nvm install 22`). If the output has no harness, git, Node.js and docker rows, the release is older than this check: confirm by hand that `command -v claude opencode codex` prints a path, `git --version` and `node -v` (22 or later) work, and `docker info >/dev/null && docker compose version` succeeds.
 
 Also check `gh auth status`, but don't stop on it. Without a signed-in GitHub CLI, machine setup can't find a workspace record repo, and workspaces are plain folders. Recommend <https://cli.github.com> and `gh auth login` before step 2.
 

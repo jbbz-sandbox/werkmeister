@@ -2274,6 +2274,106 @@ export interface RunSetupOptions {
   installDaemon?: boolean;
 }
 
+export const MIN_NODE_MAJOR = 22;
+
+const firstLine = (out: string): string => out.split("\n")[0]?.trim() ?? "";
+
+/**
+ * The tools setup cannot install itself: a harness, git, Node.js and Docker with Compose v2.
+ * Four required rows; `machine setup` stops on any miss before its first question (SW-637).
+ */
+export function checkPrerequisites(
+  runner: Runner = defaultRunner,
+  nodeVersion: string = process.versions.node,
+): Step[] {
+  const found = ["claude", "opencode", "codex"].filter(
+    (bin) => runner([bin, "--version"])[0] !== 127,
+  );
+  const harness: Step = found.length
+    ? { label: "harness", ok: true, detail: found.join(", ") }
+    : {
+        label: "harness",
+        ok: false,
+        detail:
+          "none of claude, opencode, codex on PATH. Install Claude Code: " +
+          "https://docs.claude.com/en/docs/claude-code/setup (OpenCode and Codex also work: " +
+          "see werkmeister's Harnesses page, docs/harnesses.md).",
+      };
+
+  const [gitRc, gitOut] = runner(["git", "--version"]);
+  // rc 0, not "not 127": a fresh Mac's /usr/bin/git is a stub that exits 1 until the Command Line Tools are in.
+  const git: Step =
+    gitRc === 0
+      ? { label: "git", ok: true, detail: firstLine(gitOut) }
+      : {
+          label: "git",
+          ok: false,
+          detail:
+            `${gitRc === 127 ? "not on PATH" : `\`git --version\` failed: ${firstLine(gitOut)}`}. ` +
+            "Install it: `xcode-select --install` on macOS, `sudo apt install git` on Debian/Ubuntu.",
+        };
+
+  const node: Step =
+    Number.parseInt(nodeVersion, 10) >= MIN_NODE_MAJOR
+      ? { label: "Node.js", ok: true, detail: `v${nodeVersion}` }
+      : {
+          label: "Node.js",
+          ok: false,
+          detail:
+            `v${nodeVersion} is too old; werkmeister needs ${MIN_NODE_MAJOR} or later: ` +
+            `https://nodejs.org, or \`nvm install ${MIN_NODE_MAJOR}\`.`,
+        };
+
+  return [harness, git, node, dockerPrerequisite(runner)];
+}
+
+/** The error line of a failed `docker info`: the first line after `Server:` (docker 29 prints it there on stdout; 27 on stderr, which the runner appends, then "errors pretty printing info"). */
+function dockerInfoError(out: string): string {
+  const lines = out
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const server = lines.indexOf("Server:");
+  return (server >= 0 ? lines[server + 1] : undefined) ?? lines.at(-1) ?? "";
+}
+
+function dockerPrerequisite(runner: Runner): Step {
+  const label = "docker";
+  const [infoRc, infoOut] = runner(["docker", "info"]);
+  if (infoRc === 127) {
+    return {
+      label,
+      ok: false,
+      detail:
+        "not on PATH. Install a container manager with Compose v2: OrbStack or Docker Desktop " +
+        "on macOS; Docker Engine with the compose plugin on Linux " +
+        "(https://docs.docker.com/engine/install/).",
+    };
+  }
+  if (infoRc !== 0) {
+    return {
+      label,
+      ok: false,
+      detail:
+        "`docker` is installed but `docker info` failed: the daemon isn't running, or you can't " +
+        "reach its socket. Start it (OrbStack, Docker Desktop, or `sudo systemctl start docker`), " +
+        "or on Linux add yourself to the `docker` group. " +
+        dockerInfoError(infoOut),
+    };
+  }
+  const [composeRc, composeOut] = runner(["docker", "compose", "version"]);
+  if (composeRc !== 0) {
+    return {
+      label,
+      ok: false,
+      detail:
+        "`docker compose version` failed: Compose v2 is missing. Install the compose plugin " +
+        "(https://docs.docker.com/compose/install/).",
+    };
+  }
+  return { label, ok: true, detail: firstLine(composeOut) };
+}
+
 /**
  * Sync every machine prerequisite; the full report, ordered as declared.
  *
@@ -2307,14 +2407,15 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   // PATH — having Claude Code in the editor is not the same as having the CLI.
   const [claudeRc] = runner(["claude", "--version"]);
   if (claudeRc === 127) {
+    // Optional: checkPrerequisites already required some harness, and OpenCode/Codex need no plugin (SW-637).
     steps.push({
       label: "claude CLI",
       ok: false,
+      optional: true,
       detail:
-        "not found on PATH — the Claude Code plugins cannot be " +
-        "installed without it. Install Claude Code from " +
-        "https://claude.com/claude-code (the VS Code extension alone does not " +
-        "put `claude` on PATH), then re-run `werkmeister machine setup`.",
+        "not on PATH — the werkmeister plugins install into Claude Code only, so that step is " +
+        "skipped. Install Claude Code (https://claude.com/claude-code; the VS Code extension alone " +
+        "does not put `claude` on PATH) and re-run `werkmeister machine setup` to add them.",
     });
   } else {
     for (const spec of REQUIRED_PLUGINS) {
