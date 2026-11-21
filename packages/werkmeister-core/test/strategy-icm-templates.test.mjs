@@ -456,6 +456,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^4\. .* Find them, and any user-facing or generated text that restates the rule being changed \(help, docs, man pages, snapshots, expected-text tests\), with one `git grep` across the whole repo \(`apps\/`, `packages\/`, tests\), not one package, and record the command\./m,
             `${wt}/${d}`,
           );
+        // SW-885: a shared root/path resolver change lists its callers outside the workspace.
+        if (d.endsWith("_reproduce"))
+          assert.match(
+            c,
+            /^4\. .* When the fix changes a shared root or path resolver \(a function that picks the tool's root, home or infra folder\), list every caller that writes or starts something outside the workspace .* and settle how the change reaches each before the fix is decided\./m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(
