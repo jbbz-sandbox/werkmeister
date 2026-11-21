@@ -400,6 +400,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^\d+\. For any change to an allow or deny rule, .*unique-prefix long options, bundled short flags.*must-deny case under the real permission matcher/m,
             `${wt}/${d}`,
           );
+        // SW-533: research reads each touched service's How-to-validate text for a research-stage rule.
+        if (d.endsWith("_research"))
+          assert.match(
+            c,
+            /^2\. .*Read the Validation text of each service the change touches .* a research-stage rule there \(for example for a harness-adapter change\) applies before any decision reads `decided`\./m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(

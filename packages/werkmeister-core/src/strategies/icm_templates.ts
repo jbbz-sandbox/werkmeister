@@ -211,6 +211,10 @@ const KEPT_RULE_PROBES =
 const OPTION_REACH =
   "For any change to an allow or deny rule, list each pre-approved command's options that read, write or run anything outside the workspace, in every form the tool accepts (unique-prefix long options, bundled short flags, `--opt=value`). Give each a deny, an exact rule, or a recorded reason it stays open, and check each listed escape as a must-deny case under the real permission matcher (the How-to-validate text in `werkmeister-context.md` names the recipe), not only a model of it.";
 
+// SW-533: the harness-adapter research rule lives in werkmeister-core's validate text, which the research contract never pointed to.
+const SERVICE_RESEARCH_RULES =
+  "Read the Validation text of each service the change touches in `../../.werkmeister/werkmeister-context.md` § How to validate: a research-stage rule there (for example for a harness-adapter change) applies before any decision reads `decided`.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -356,7 +360,7 @@ const feature: Stage[] = [
           'For each module the change adds an export to, grep the tests for whole-module mocks of it (e.g. `vi.mock("<module>"`, `mock.module`) and list every hit as a fixture the change must update. ' +
           // SW-242: "no test covers it" was written without a grep; a test pinned the exact old string.
           "For each value the change alters (a string, a default, a command), grep tests and fixtures for that exact value and list the hits; never write that no test covers it without that grep.",
-        "Find the test command in `../../.werkmeister/werkmeister-context.md` and copy it verbatim — do not restate it from memory.",
+        `Find the test command in \`../../.werkmeister/werkmeister-context.md\` and copy it verbatim — do not restate it from memory. ${SERVICE_RESEARCH_RULES}`,
         "Check what is already installed that could do the job before recommending anything new. " +
           // Moved from docs/harnesses.md: adapter runs kept deciding from a harness's docs, not its binary.
           "When a decision rests on how an external tool behaves (a CLI command or flag, a plugin API, an event name), check it against the installed tool, not only its docs: record `<bin> --version`, and confirm each fact with `<bin> <cmd> --help` or a real run or plugin load. `decisions.md` names the version and, beside each fact, the command that confirmed it; a fact only the docs support is marked `unverified: docs only`, and no decision rests on it. If the tool cannot be installed, say so and mark every such fact `unverified`. " +
