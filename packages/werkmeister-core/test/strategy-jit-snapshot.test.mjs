@@ -82,9 +82,16 @@ test("jit init writes the same files, byte for byte", async () => {
     if (process.env.UPDATE_SNAPSHOT) {
       fs.writeFileSync(SNAPSHOT, JSON.stringify(files, null, 2) + "\n");
     }
+    const raw = fs.readFileSync(SNAPSHOT, "utf8");
+    // SW-895: `merge=union` keeps both sides of a conflicting line; only a regenerated file has the writer's exact format.
+    assert.equal(
+      raw,
+      JSON.stringify(JSON.parse(raw), null, 2) + "\n",
+      "strategy-jit.snapshot.json is not regenerated: rerun with UPDATE_SNAPSHOT=1",
+    );
     assert.deepEqual(
       files,
-      JSON.parse(fs.readFileSync(SNAPSHOT, "utf8")),
+      JSON.parse(raw),
       "generated output differs from strategy-jit.snapshot.json: intended change? regenerate in packages/werkmeister-core through with-temp-home: with-temp-home env UPDATE_SNAPSHOT=1 node --test test/strategy-jit-snapshot.test.mjs",
     );
   } finally {
