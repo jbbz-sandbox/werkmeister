@@ -7,6 +7,7 @@
  * Builtins only and fail-open, like pr_guard.ts: PreToolUse runs it on every tool call.
  */
 
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -14,6 +15,7 @@ import { sandboxHome } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { WRAP_UP } from "./harness/claude/desktop.js";
 import { findRecordRoot } from "./pr_guard.js";
+import { childEnv, dockerBin } from "./tool_bins.js";
 
 export type AgentState = "working" | "needs-you" | "done" | "idle";
 
@@ -729,6 +731,30 @@ function leftOver(root: string): boolean {
   }
 }
 
+/**
+ * Whether Docker shows a running container of *feature*: then its queue entry is stale, since a whole `up`
+ * of a running feature never queues (SW-909). Asked only before holding a command; unreadable is false (SW-986).
+ */
+function featureRuns(feature: string): boolean {
+  try {
+    const out = execFileSync(
+      dockerBin(),
+      [
+        "ps",
+        "-q",
+        "--filter",
+        `label=com.werkmeister.feature=${feature}`,
+        "--filter",
+        "status=running",
+      ],
+      { encoding: "utf8", timeout: 3_000, stdio: ["ignore", "pipe", "ignore"], env: childEnv() },
+    );
+    return out.trim() !== "";
+  } catch {
+    return false;
+  }
+}
+
 // Starts containers or runs tests. A list of what is held, not of what passes: the ticket names the held
 // set, and an allowlist would hold `werkmeister feature stop`, the command that frees room (SW-768).
 const NEEDS_CAPACITY =
@@ -770,10 +796,16 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
   // Queued, only what needs this workspace's containers or the CPUs waits: the record, git and
   // `feature stop` (which frees room) go on, and so do prompts (SW-768).
   if (waiting && !needsCapacity(input)) return null;
+  const feature = featureOf(root);
+  // Its containers run: the entry is stale and no grant will come, so it holds nothing (SW-986).
+  if (waiting && feature && featureRuns(feature)) {
+    clearWaiting(root);
+    return null;
+  }
   // An agent read the older text as "not admitted" and stopped over running containers (SW-909).
   const reason = waiting
     ? `Waiting for capacity (position ${waiting.position}): this workspace is queued, so containers and ` +
-      `tests wait until it starts. Not a failure: \`docker ps --filter label=com.werkmeister.feature=${featureOf(root) ?? "<feature>"}\` ` +
+      `tests wait until it starts. Not a failure: \`docker ps --filter label=com.werkmeister.feature=${feature ?? "<feature>"}\` ` +
       "shows its containers; when they are not up, a grant notice tells this session to continue once room " +
       "frees, and edits and git still work meanwhile. If they are up, the queue entry is stale: tell the person."
     : PAUSED_REASON;

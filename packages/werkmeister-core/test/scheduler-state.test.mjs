@@ -882,6 +882,24 @@ test("a re-up of a running feature that must wait leaves no waiting.json and no 
   });
 });
 
+// SW-986 (review): the hook clears waiting.json over running containers; the queue entry it leaves must
+// not hold the head for a feature that already runs. A waiter with its waiting.json stays.
+test("admission drops a queued feature whose waiting.json is gone; a live waiter stays", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, COMPOSE);
+    const stale = path.join(home, "stale");
+    const live = path.join(home, "live");
+    for (const d of [stale, live]) fs.mkdirSync(path.join(d, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(waitingPath(live), JSON.stringify({ position: 2, reason: "preempted" }));
+    writeLeases({ stale: { slot: 1, workspace: stale }, live: { slot: 2, workspace: live } });
+    await enqueue("stale", stale);
+    fs.rmSync(waitingPath(stale));
+    await enqueue("live", live);
+    await requestAdmission("f", ws, false, [], { memory: 64 * G, cpus: 64, preempt: false });
+    assert.deepEqual(readQueue(), ["live"]);
+  });
+});
+
 // SW-910: a session on a tool-permission prompt is mid-turn (the prompted command is often a
 // `docker exec` into this very feature), not a session handed to the person: preemption must skip it.
 test("preemption rank: a permission prompt mid-turn is working; a question is human-check (SW-910)", async () => {
