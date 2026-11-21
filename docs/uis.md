@@ -5,7 +5,7 @@ to see them: the browser dashboard, the Claude Code pane, the VS Code extension
 and Claude Desktop. Each shows the same workspaces. Pick the one where you
 already are.
 
-Every screenshot on this page shows demo data. To make them, run `scripts/docs-demo-home.sh [features root]`: it seeds three demo workspaces in a throwaway home and prints the env to export before starting the dashboard. The Claude Code pane has no script, because `claude` needs your real login, so its buttons would write your real `~/.werkmeister`: point a demo daemon at that env by hand and click nothing.
+Every screenshot on this page shows demo data. To make them, run `scripts/docs-demo-home.sh [features root]`: it seeds three demo workspaces in a throwaway home and prints the env to export before starting the dashboard. The Claude Code pane has its own: `node plugins/werkmeister/scripts/render-pane.mjs docs/images/uis/claude-code-pane.png` draws the pane from the same three demo workspaces with no Claude session and no daemon. It needs the `claude` CLI on PATH, not a login.
 
 ## Retaking the screenshots
 
@@ -15,6 +15,7 @@ Follow this and a refresh needs no retakes for size, width, theme or browser chr
 - Every image on this page is 1280 px wide and under 400 KB.
 - Cut the hero out of that capture with `sips -c`.
 - To resample a capture to 1280 px, render it in an `<img>` through the same headless Chrome. Do not re-encode it with `sips`: that made a PNG larger (412 KB to 427 KB), and no PNG optimizer is installed.
+- The pane render's `.png` needs Chrome: `CHROME`, or Playwright's chrome-headless-shell. Its `.ans` writes the same pane as ANSI text anywhere.
 - Never screenshot a live session that lists real workspaces. Capture only the demo seed above.
 
 ## Workspaces dashboard

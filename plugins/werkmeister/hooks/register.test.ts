@@ -2,6 +2,7 @@ import type { On } from "claude-code";
 import type { Engine, Plugin } from "claude-code/testing";
 import { test as baseTest, expect, mock } from "claude-code/testing";
 import type { FormField, WorkspaceRow } from "../types";
+import { DEMO } from "./demo-fixture";
 import {
   actionsFor,
   applyFormFields,
@@ -170,6 +171,28 @@ async function openPane($: Engine) {
     presentation: { isFullscreen: true, columns: 120 },
   });
 }
+
+test("the docs demo fixture draws working, needs-you and done cards (SW-623)", async ($, on) => {
+  const demo: McpStub = Object.fromEntries(
+    Object.entries(DEMO).map(([op, answer]) => [`${WS}/${op}`, () => ok(answer)]),
+  );
+  const w = world(on, { ...demo, "ccd_session_mgmt/list_sessions": () => ok(undefined, "[]") });
+  await openPane($);
+  await w.clock.settle();
+  for (const surface of SURFACES) {
+    const ui = await $.ui.mount({
+      plugin: "werkmeister",
+      surface,
+      component: "Pane",
+      props: PANE_PROPS,
+      requestId: "workspaces",
+    });
+    expect((await ui.find({ key: "claude:demo-12-checkout-retry" }))?.text).toBe("◌ Working");
+    expect((await ui.find({ key: "claude:demo-15-search-facets" }))?.text).toBe("● Needs you");
+    expect((await ui.find({ key: "claude:demo-19-login-copy" }))?.text).toBe("✓ Done");
+    await ui.unmount();
+  }
+});
 
 test("empty list draws the empty message", async ($, on) => {
   world(on, {
