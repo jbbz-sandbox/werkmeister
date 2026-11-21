@@ -5,6 +5,7 @@
 1. Identifies per-feature Docker volumes (node_modules, build caches) that belong to stopped features
 2. Removes those orphaned volumes
 3. Releases stale slot entries (features with no running containers or compose file)
+4. Removes the host-load probe containers (`com.werkmeister.role=vm-load`) a killed `docker run` left Created or exited
 
 With `--all`, it first stops all active features (equivalent to running `werkmeister feature down --volumes` for each), then cleans everything.
 

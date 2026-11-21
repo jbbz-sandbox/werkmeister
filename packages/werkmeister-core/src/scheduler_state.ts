@@ -278,12 +278,57 @@ export const readHostLoad = () => ({ load: os.loadavg(), cores: os.availablePara
 // 7 reads × 4 s on top of with-temp-home's 90 s stays under an agent's 2 min Bash timeout (SW-469).
 const VM_LOAD_TIMEOUT_MS = 4_000;
 
+/** Marks the probe's container as werkmeister's, so `machine clean` can sweep one a killed run left (SW-969). */
+const VM_LOAD_LABEL = "com.werkmeister.role=vm-load";
+
+/**
+ * The load probes left Created or exited: `docker run` is create then start, and `--rm` removes
+ * only a container that ran, so the 4 s cap can kill it in between (SW-969). Removes them unless
+ * *dryRun*; returns their ids, or none when Docker can't be read.
+ */
+export function sweepVmLoadProbes(dryRun = false): string[] {
+  try {
+    const ids = execFileSync(
+      dockerBin(),
+      [
+        "ps",
+        "-aq",
+        "--filter",
+        `label=${VM_LOAD_LABEL}`,
+        "--filter",
+        "status=created",
+        "--filter",
+        "status=exited",
+      ],
+      { encoding: "utf8", timeout: 20_000 },
+    )
+      .split("\n")
+      .filter(Boolean);
+    if (ids.length && !dryRun)
+      execFileSync(dockerBin(), ["rm", ...ids], { timeout: 20_000, stdio: "ignore" });
+    return ids;
+  } catch {
+    return [];
+  }
+}
+
 /** A container's /proc/loadavg is the VM kernel's, not namespaced; macOS's own loadavg never sees the VM (SW-556, SW-888). */
 export function readVmLoad(): Promise<{ load: number[]; cores: number } | null> {
   return new Promise((resolve) => {
     execFile(
       dockerBin(),
-      ["run", "--rm", "--network", "none", "alpine:3", "sh", "-c", "cat /proc/loadavg; nproc"],
+      [
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--label",
+        VM_LOAD_LABEL,
+        "alpine:3",
+        "sh",
+        "-c",
+        "cat /proc/loadavg; nproc",
+      ],
       { timeout: VM_LOAD_TIMEOUT_MS, encoding: "utf8" },
       (err, stdout) => {
         const [avg = "", nproc = ""] = err ? [] : stdout.split("\n");

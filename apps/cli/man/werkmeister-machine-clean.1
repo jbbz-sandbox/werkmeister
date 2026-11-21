@@ -19,6 +19,8 @@ Identifies per\-feature Docker volumes (node_modules, build caches) that belong 
 Removes those orphaned volumes
 .IP 3. 3
 Releases stale slot entries (features with no running containers or compose file)
+.IP 4. 3
+Removes the host\-load probe containers (\fBcom.werkmeister.role=vm\-load\fR) a killed \fBdocker run\fR left Created or exited
 .PP
 With \fB\-\-all\fR, it first stops all active features (equivalent to running \fBwerkmeister feature down \-\-volumes\fR for each), then cleans everything.
 .PP
