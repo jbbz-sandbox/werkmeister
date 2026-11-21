@@ -54,6 +54,7 @@ Skills are namespaced by the plugin: `/werkmeister:diagnose`, `/werkmeister:work
 | `starting-prompt` | Run the `starting_prompt` defined in the workspace's `.werkmeister/workspace.yml`. |
 | `install-check` | Check (and `--fix`) that the global `werkmeister`/`w9r`, its MCP server and this plugin all run from the repo checkout. The plugin also runs it at every interactive session start. |
 | `check-in` | From the root session: cycle the workspaces, show each one waiting on a person as a card, and relay the answer. An approval goes in as the gate file's own status flip with the check-in note, so the workspace acts on it with no second prompt. |
+| `triage` | Order a Jira project's backlog (work in progress first, blockers above what they block, parked work last), give each ticket a component and group tickets for `next-wave`. You approve the proposal, then it applies it. |
 | `postmortem` | Before close-out: gather every problem in the run, agree with the person what changes so it doesn't recur, write `postmortem.md` and act on each change ([Workspace lifecycle § Post-mortem](../../docs/workspace-lifecycle.md#post-mortem)). |
 
 ## Bundled MCP server (`werkmeister`)
