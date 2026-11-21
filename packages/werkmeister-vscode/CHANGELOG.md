@@ -1,5 +1,17 @@
 # vscode-plugin
 
+## 0.97.0
+
+### Minor Changes
+
+- 48d72c8: Each staged workspace's card in the VS Code Workspaces view shows a segmented stages bar under its meta line: one segment per stage, the completed ones filled, its hover reading `1 of 4 stages done` (SW-961).
+
+### Patch Changes
+
+- Updated dependencies [29a14c0]
+  - werkmeister-core@0.97.0
+  - werkmeister-ui@0.7.73
+
 ## 0.96.7
 
 ### Patch Changes
