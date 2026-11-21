@@ -6,7 +6,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { gatePrs } from "../dist/pr_lifecycle.js";
+import { defaultDeps, gatePrs, openPrs } from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { initWorkspace } from "../dist/workspace_init.js";
 import { pinWerkmeisterRoot, withFixtureWorkspace } from "./fixtures.mjs";
@@ -59,6 +59,50 @@ test("a gate fixture behind origin/main fails the base row after a fetch, before
       assert.match(again.lines.join("\n"), /✓ base: up to date with origin\/main/);
     },
     { gate: true, behind: true },
+  );
+});
+
+/** openPrs on the inited gate fixture, with its waits stubbed. */
+async function openFixture(fx) {
+  await withReporter(collectingReporter(), () => initWorkspace({}, fx.workspace, { build: false }));
+  const deps = defaultDeps();
+  deps.sleep = async () => {};
+  const r = await openPrs(fx.workspace, undefined, deps);
+  const calls = fs.existsSync(fx.dockerLog) ? fs.readFileSync(fx.dockerLog, "utf8") : "";
+  return { ...r, out: r.lines.join("\n"), calls };
+}
+
+test("pr open on a gate fixture behind origin/main rebases by itself, tests and opens (SW-857)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const { ok, out, calls } = await openFixture(fx);
+      assert.equal(ok, true, out);
+      assert.match(out, /✓ base: rebased onto origin\/main \(was 2 commits behind origin\/main\)/);
+      git(fx.repo, "merge-base", "--is-ancestor", "origin/main", "HEAD");
+      assert.match(calls, /^exec /m, "the tests ran on the rebased branch");
+    },
+    { gate: true, behind: true },
+  );
+});
+
+test("pr open on a fixture whose branch and main change the same file aborts the rebase (SW-857)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const head = git(fx.repo, "rev-parse", "HEAD");
+      const { ok, out, calls } = await openFixture(fx);
+      assert.equal(ok, false);
+      assert.match(
+        out,
+        /✗ base: 2 commits behind origin\/main; auto-rebase onto origin\/main conflicts in x\.txt — aborted, branch unchanged/,
+      );
+      assert.equal(git(fx.repo, "rev-parse", "HEAD"), head);
+      const gitDir = git(fx.repo, "rev-parse", "--absolute-git-dir");
+      assert.ok(!fs.existsSync(path.join(gitDir, "rebase-merge")), "no rebase left in progress");
+      assert.ok(!fs.existsSync(path.join(gitDir, "rebase-apply")), "no rebase left in progress");
+      assert.equal(git(fx.repo, "status", "--porcelain"), "");
+      assert.doesNotMatch(calls, /^exec /m);
+    },
+    { gate: true, behind: true, change: "x.txt" },
   );
 });
 
@@ -116,7 +160,7 @@ test("--change names the file the gate fixture changes, beside a fragment change
     { name: "app", change: "packages/lib/index.js" },
   ]);
   assert.deepEqual(fixturePreset({ gate: true, change: "plugins/x/y.ts" }).repos, [
-    { name: "app", change: "plugins/x/y.ts" },
+    { name: "app", change: "plugins/x/y.ts", conflict: true },
   ]);
   assert.deepEqual(fixturePreset({ gate: true, fragmentChange: "x" }).repos, [
     { name: "app", change: undefined },

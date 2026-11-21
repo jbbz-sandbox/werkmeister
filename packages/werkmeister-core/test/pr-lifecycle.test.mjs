@@ -1997,6 +1997,8 @@ test("gate: no push access fails in the quick rows, before lint and tests (SW-40
 const BEHIND = [/rev-list --count HEAD\.\.origin\/main$/, { stdout: "3\n" }];
 // Not pushed yet: the stub answers 0 to anything unlisted, which would read as a pushed branch.
 const UNPUSHED = [/rev-parse --verify -q refs\/remotes\/origin\/me\/ws$/, { code: 1 }];
+// SW-857: pr open rebases only the PR file's own checked-out branch.
+const ON_BRANCH = [/rev-parse --abbrev-ref HEAD$/, { stdout: "me/ws\n" }];
 
 test("gate: a branch behind origin/<base> fails in the quick rows, after a fetch, before lint and tests (SW-669)", async () => {
   const ws = icmWorkspace();
@@ -2007,6 +2009,8 @@ test("gate: a branch behind origin/<base> fails in the quick rows, after a fetch
     const row = g.checks.find((c) => c.name === "base").detail;
     assert.match(row, /3 commits behind origin\/main/);
     assert.match(row, /git -C \S+ rebase origin\/main/);
+    assert.match(row, /`werkmeister pr open` does this rebase by itself/);
+    assert.ok(!d.calls.some((c) => / rebase /.test(c)), "pr gate never rebases (SW-857)");
     const fetchAt = d.calls.findIndex((c) => /fetch -q origin main$/.test(c));
     const countAt = d.calls.findIndex((c) => /rev-list --count HEAD\.\.origin\/main$/.test(c));
     assert.ok(fetchAt >= 0 && fetchAt < countAt, "fetches before it counts");
@@ -2105,16 +2109,110 @@ test("gate: a branch up to date with origin/<base> passes the base row (SW-669)"
   }
 });
 
-test("openPrs: a branch behind origin/<base> pushes and opens nothing (SW-669)", async () => {
+test("openPrs: an unpushed branch behind origin/<base> rebases, then tests and opens (SW-857)", async () => {
   const ws = icmWorkspace();
   try {
-    const d = deps([DIFF_API, BEHIND, UNPUSHED]);
+    const d = deps([
+      DIFF_API,
+      BEHIND,
+      UNPUSHED,
+      ON_BRANCH,
+      [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }],
+    ]);
+    const r = await open(ws, d);
+    assert.ok(r.ok, r.lines.join("\n"));
+    assert.match(
+      r.lines.join("\n"),
+      /✓ base: rebased onto origin\/main \(was 3 commits behind origin\/main\); the tests below run on the rebased branch/,
+    );
+    const at = (re) => d.calls.findIndex((c) => re.test(c));
+    const order = [
+      at(/fetch -q origin main$/),
+      at(/rev-list --count HEAD\.\.origin\/main$/),
+      at(/status --porcelain$/),
+      at(/rebase -q origin\/main$/),
+      at(/^docker exec/),
+      at(/push -u origin/),
+      at(/^gh pr create/),
+    ];
+    assert.ok(
+      order.every((i) => i >= 0),
+      `every step ran: ${order}`,
+    );
+    assert.deepEqual(
+      order,
+      [...order].sort((a, b) => a - b),
+      "rebase before the tests and the push",
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openPrs: a rebase that conflicts aborts, names the files, pushes and opens nothing (SW-857)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([
+      DIFF_API,
+      BEHIND,
+      UNPUSHED,
+      ON_BRANCH,
+      [/rebase -q origin\/main$/, { code: 1, stderr: "CONFLICT (content)\n" }],
+      [/diff --name-only --diff-filter=U$/, { stdout: "apps/api/x.ts\n" }],
+    ]);
     const r = await open(ws, d);
     assert.equal(r.ok, false);
+    assert.match(
+      r.lines.join("\n"),
+      /✗ base: 3 commits behind origin\/main; auto-rebase onto origin\/main conflicts in apps\/api\/x\.ts — aborted, branch unchanged/,
+    );
+    assert.ok(
+      d.calls.some((c) => /rebase --abort$/.test(c)),
+      "aborts the rebase",
+    );
     assert.deepEqual(
-      d.calls.filter((c) => /push -u origin|^gh pr create/.test(c)),
+      d.calls.filter((c) => /^docker exec|push -u origin|^gh pr create/.test(c)),
       [],
     );
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openPrs: a dirty tree behind its base is not rebased (SW-857)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([
+      DIFF_API,
+      BEHIND,
+      UNPUSHED,
+      ON_BRANCH,
+      [/status --porcelain$/, { stdout: " M x\n" }],
+    ]);
+    const r = await open(ws, d);
+    assert.equal(r.ok, false);
+    assert.ok(!d.calls.some((c) => / rebase /.test(c)), "no rebase on a dirty tree");
+    assert.match(r.lines.join("\n"), /✗ base: 3 commits behind origin\/main — /);
+    assert.match(r.lines.join("\n"), /✗ clean: uncommitted/);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openPrs: a worktree on another branch, or a gate already failing, is not rebased (SW-857)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const other = deps([
+      DIFF_API,
+      BEHIND,
+      UNPUSHED,
+      [/rev-parse --abbrev-ref HEAD$/, { stdout: "me/other\n" }],
+    ]);
+    assert.equal((await open(ws, other)).ok, false);
+    assert.ok(!other.calls.some((c) => / rebase /.test(c)), "another branch is never rewritten");
+    const noPush = deps([DIFF_API, BEHIND, UNPUSHED, ON_BRANCH, NO_PUSH]);
+    assert.equal((await open(ws, noPush)).ok, false);
+    assert.ok(!noPush.calls.some((c) => / rebase /.test(c)), "a failed row above skips the rebase");
   } finally {
     clean(ws);
   }

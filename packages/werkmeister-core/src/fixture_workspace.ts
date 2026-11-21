@@ -24,6 +24,8 @@ export interface FixtureRepo {
   name: string;
   /** A file committed on main (pushed as origin/main), then changed in one commit on the branch. */
   change?: string;
+  /** With `behind`: main's first moved commit edits `change` too, so a rebase conflicts (SW-857). */
+  conflict?: boolean;
 }
 
 /** What to seed. Data, so a new dimension is a field, not another boolean; see fixturePreset. */
@@ -50,7 +52,7 @@ export interface FixtureOptions {
   workspace?: Record<string, unknown>;
   /** The fake gh reports the PR merged, so `pr status` and `workspace close` run to the end (SW-482). */
   merged?: boolean;
-  /** origin/main gains 2 commits after the branch is cut, so the branch is behind its base (SW-669). */
+  /** origin/main gains 2 commits after the branch is cut, so the branch is behind its base (SW-669); with a repo's `conflict`, the first edits its change file (SW-857). */
   behind?: boolean;
   /** The workspace's `issue_id` (`o/<repo>#N`): resolved by the fixture's GitHub project to the fake gh, whose `issue view` answers it (SW-509). */
   issue?: string;
@@ -265,7 +267,7 @@ export function fixturePreset({
   }
   if (gate)
     Object.assign(preset, {
-      repos: [{ name: "app", change: gateChange }],
+      repos: [{ name: "app", change: gateChange, ...(change !== undefined && { conflict: true }) }],
       prFile: true,
       running: [containerOf(FIXTURE_FEATURE, "lib")],
     });
@@ -332,7 +334,7 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
   let applyFragmentChange: (() => void) | undefined;
   // pr push takes only the workspace's own <os user>/<workspace> branch (pushOne); the clone keeps me/demo.
   const branch = opts.worktrees ? `${os.userInfo().username}/${FIXTURE_FEATURE}` : FIXTURE_BRANCH;
-  for (const { name, change } of repos) {
+  for (const { name, change, conflict } of repos) {
     // Ends in owner/repo.git so originSlug matches the PR file's repo: (SW-381).
     const remote = path.join(root, "remotes", "o", `${name}.git`);
     fs.mkdirSync(remote, { recursive: true });
@@ -366,7 +368,13 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
       // Pushed from the source clone, so the workspace clone's origin/main stays stale until a fetch.
       git(source, "fetch", "-q", "origin", "main");
       git(source, "switch", "-q", "--detach", "origin/main");
-      for (const n of [1, 2]) git(source, "commit", "-q", "--allow-empty", "-m", `main moved ${n}`);
+      for (const n of [1, 2]) {
+        if (conflict && change && n === 1) {
+          write(path.join(source, change), "main moved\n");
+          git(source, "add", change);
+        }
+        git(source, "commit", "-q", "--allow-empty", "-m", `main moved ${n}`);
+      }
       git(source, "push", "-q", "origin", "HEAD:main");
     }
     git(source, "switch", "-q", "-c", "fixture-source");
