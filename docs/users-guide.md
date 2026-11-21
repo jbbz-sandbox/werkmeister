@@ -18,6 +18,7 @@ This guide covers the day-to-day workflows. New here? Start with the [Quick Star
 | [Registry fragments](registry-fragments.md) | a fragment's fields, `test:` and `validate:` |
 | [Troubleshooting](troubleshooting-advanced.md) | when something is broken |
 | [Architecture](werkmeister-architecture.md) | how the pieces fit, with diagrams |
+| [The foreman's workspace](foreman.md) | the agent that runs the folder of workspaces, and the courier pattern behind `/check-in` |
 
 ## Installation
 
