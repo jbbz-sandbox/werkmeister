@@ -161,7 +161,9 @@ test("each template renders with no undefined and a route per stage", async () =
             /input to a pre-approved command .*defaults to an allowlist of accepted values and lists what each accepted value can reach: files, env vars, network addresses, processes\. A blocklist needs a stated reason\./,
             `${wt}/${d}`,
           );
-        else assert.doesNotMatch(c, /defaults to an allowlist/, `${wt}/${d}`);
+        // SW-821: fix and implement carry it too, for rules the stage itself adds.
+        else if (!/_(fix|implement)$/.test(d))
+          assert.doesNotMatch(c, /defaults to an allowlist/, `${wt}/${d}`);
         // SW-789: the feature research stage samples CPU over time before a speed ticket names a lever.
         if (d.endsWith("_research"))
           assert.match(
@@ -376,6 +378,13 @@ test("each template renders with no undefined and a route per stage", async () =
           assert.match(
             c,
             /^7\. .*Every rule the fix keeps on the same command gets the same trailing-argument probes as the changed one \(another feature or workspace name, `-w`\/`--workspace <path>`, extra positional args\), and the failing test covers them\./m,
+            `${wt}/${d}`,
+          );
+        // SW-821: an allow rule added while fixing or implementing gets the research-stage allowlist check too.
+        if (/_(fix|implement)$/.test(d))
+          assert.match(
+            c,
+            /^\d+\. When this stage adds an allow rule or another pre-approved command: When the change adds or widens an input to a pre-approved command .* Write that list into this stage's output and into the question that asks the person to approve it\./m,
             `${wt}/${d}`,
           );
         // SW-566: step 4 also lists what each caller does with the result.
