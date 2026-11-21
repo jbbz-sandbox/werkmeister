@@ -247,6 +247,10 @@ const WHOLE_REPO_GREP =
 const RESOLVER_CALLERS =
   " When the fix changes a shared root or path resolver (a function that picks the tool's root, home or infra folder), list every caller that writes or starts something outside the workspace (a daemon or launchd entry, a proxy config, shared infra, the tool's home folder) and settle how the change reaches each before the fix is decided.";
 
+// SW-960: sw-891 gated on CLAUDECODE; the daemon behind the workspace-pr MCP tool and the pane ran the same gate without it.
+const GATE_ROUTES =
+  " For a change that gates or refuses a command, every route that runs it is a caller to check: the CLI, daemon or MCP tools, the pane, headless wakes, and other harnesses.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -530,7 +534,8 @@ const bugfix: Stage[] = [
         // SW-566: sw-545's fix changed a return shape its one caller treated as "stop"; only the exercise caught it.
         "List every other caller of the function at the root cause and what each does with the result (an early return, a printed value, a stored state), so the fix's return shape is checked against every caller before the fix stage — a fix there reaches them too. When the fix belongs in shared code, list its call sites through every helper or entry point that reaches that code, not one argument shape, and record the search commands (greps) you used in `repro.md`." +
           WHOLE_REPO_GREP +
-          RESOLVER_CALLERS,
+          RESOLVER_CALLERS +
+          GATE_ROUTES,
         // SW-442: sessionBusy had two true cases; stage 01 listed callers, so only review caught the second (sw-418).
         `When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test. ${PREAPPROVED_INPUT}`,
         NAME_HISTORY_STEP,

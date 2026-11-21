@@ -463,6 +463,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^4\. .* When the fix changes a shared root or path resolver \(a function that picks the tool's root, home or infra folder\), list every caller that writes or starts something outside the workspace .* and settle how the change reaches each before the fix is decided\./m,
             `${wt}/${d}`,
           );
+        // SW-960: a change that gates a command checks every route that runs it.
+        if (d.endsWith("_reproduce"))
+          assert.match(
+            c,
+            /^4\. .* For a change that gates or refuses a command, every route that runs it is a caller to check: the CLI, daemon or MCP tools, the pane, headless wakes, and other harnesses\./m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(
