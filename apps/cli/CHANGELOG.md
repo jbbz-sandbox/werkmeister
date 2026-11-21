@@ -1,5 +1,16 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.96.7
+
+### Patch Changes
+
+- 358991f: `werkmeister machine setup` offers the demo apps only when a kube context is set, and says why it skipped them otherwise: their backend reaches Postgres and Redis through the cluster, so without one `feature up` could not start them. Quick Start says the same (SW-641).
+- 1cc32fc: The `github_ingest` AWS key pair now lives in `~/.werkmeister/secrets.env` (`GITHUB_INGEST_ACCESS_KEY_ID`, `GITHUB_INGEST_SECRET_ACCESS_KEY`) instead of `~/.werkmeister/config.yaml`, so reading the config to check a setting no longer prints credentials. `werkmeister machine config --write` and `werkmeister machine setup` move keys still in config.yaml there, and the daemon reads either place until then (SW-759).
+- 9d6f002: `werkmeister machine config <args>` and `werkmeister machine setup` keep every top-level section of `~/.werkmeister/config.yaml` they don't ask about, such as `budget:`, `models:` and `github_ingest:`. Before, both rebuilt the file from a fixed key list and dropped any other section (SW-852).
+- 4d1c6be: With `WERKMEISTER_CONFIG_FILE` pointing somewhere other than the default home, or with `WERKMEISTER_FIXTURE=1`, `werkmeister machine config --write` and `werkmeister machine setup` leave `~/.zshenv` and `~/.zshrc` alone and say so, and `--check` no longer reports `~/.zshenv` as drift for such a home. The default home still gets both blocks (SW-866).
+- a1332f3: `werkmeister machine detect` fits Dockerfile repos better. A single-stage Dockerfile that runs `RUN`, `COPY` or `ADD` gives `dockerfile:` and a `<repo>:local` image instead of its base image. A service with no port in any source, or whose command is `sleep infinity`, is guessed `type: cli` and marked for a person to confirm, instead of `type: api` on port 3000. A compose service with no build context is matched by its relative bind mount (`.:/app`). Validation errors print as errors under "Not written", and the report names each service with no test command (SW-928).
+- 5d6f6b4: Re-running `werkmeister machine detect` no longer proposes an `infrastructure:` entry for a compose datastore the fragment already runs as a local service (`image:`), matched by name or by the host the service's existing env URL uses. It no longer proposes `command: sleep infinity` for an idle type (`cli`, `library`, `extension`), which already idles (SW-934).
+
 ## 0.96.6
 
 ### Patch Changes
