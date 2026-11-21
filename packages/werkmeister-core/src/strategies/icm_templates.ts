@@ -219,6 +219,10 @@ const SERVICE_RESEARCH_RULES =
 const TOOL_FACT_CHECK =
   "Before the check below flips anything, read `decisions.md` once more: every fact about an external tool's behaviour names the tool's version and, beside it, the command that confirmed it, or is marked `unverified`. A fact with neither fails this check: fix it first.";
 
+// SW-875: sw-578 edited before `feature up`, whose rebuild baked the fix into the dist its fail-first runs used.
+const BASE_BUILD_RED =
+  "A container start can rebuild from the working tree (`werkmeister feature up` reruns the install and build), so see each new test fail against a build of the unfixed code: build before editing source, or park the change and rebuild. Record which build each fail-first run used.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -446,6 +450,7 @@ const feature: Stage[] = [
         "Make the changes `spec.md` lists, and only those. No new runtime dependency unless `decisions.md` justified one in a line.",
         PREAPPROVED_IN_STAGE,
         "Add the tests `spec.md` names. Match the style of the nearest existing test; no new test framework.",
+        BASE_BUILD_RED,
         diffCheck("spec.md"),
         HOST_TEST_STEP,
         implementReview(v),
