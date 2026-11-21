@@ -235,6 +235,10 @@ const PROBE_FORMAT = " Run the repo's `Format:` command (`werkmeister-context.md
 const PROBE_HOME =
   "Before the lint chain, fold the reproduce stage's failing test into the ticket's committed test, or move it to `stages/01_reproduce/output/`: an untracked file in the worktree fails the lint chain and the gate's clean-worktree check.";
 
+// SW-898: SW-795's commit made SW-887's flake fix without citing it; SW-887's own PR then conflicted and needed a force-push.
+const CITE_OUT_OF_SCOPE =
+  "Before fixing a problem outside this run's tickets, find or file its ticket and cite it, as `../../_shared/issues-report.md` § Bugs: new or existing? says.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -555,6 +559,7 @@ const bugfix: Stage[] = [
         baseCheck("repro.md"),
         ...groupStep(v),
         "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
+        CITE_OUT_OF_SCOPE,
         PREAPPROVED_IN_STAGE,
         OPTION_REACH,
         diffCheck("repro.md"),

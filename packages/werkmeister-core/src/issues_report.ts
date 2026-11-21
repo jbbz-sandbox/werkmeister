@@ -55,7 +55,7 @@ Every issue has one type. It sets the ${[labels && "label (GitHub)", types && `i
 Decide this first.
 
 - **New — this workspace's changes caused it** (the bug is in code changed on this branch, committed or not, and does not happen on the base branch): fix it here, in the current stage or phase. Do **not** file an issue.
-- **Existing — it was already there** (it happens on the base branch, or it is in code this workspace has not touched, including the \`werkmeister\` tool itself): file it as an issue where it belongs (table below), then carry on. Fix it here only if the current task depends on it, and say so in the issue.
+- **Existing — it was already there** (it happens on the base branch, or it is in code this workspace has not touched, including the \`werkmeister\` tool itself): file it as an issue where it belongs (table below), then carry on. Fix it here only if the current task depends on it, and say so in the issue. Before fixing one here (a flaky test you trip over, say), search the tracker for an open ticket on it (How, step 1) and file one first if there is none; name its key in the commit message and the PR, and add it to the PR's group or comment on it, so its status moves with the PR.
 
 Not sure? Check whether it happens on the base branch. If you still can't tell, ask the person — don't guess.
 
