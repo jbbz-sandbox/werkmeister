@@ -175,8 +175,8 @@ tools keep their `claude-*` names.
   subagents, StopFailure), so its card shows no subagent activity.
 - **`claude-resume`** and the pane's Continue / New Session open
   `WERKMEISTER_MCP_TOKEN=$(cat .werkmeister/token) codex` (`resume <id>`, `resume --last`).
-- **Usage** sums each session's last `token_count`. There is no USD estimate unless
-  `~/.werkmeister/model-pricing.yaml` has a row for the model.
+- **Usage** sums each session's last `token_count`. The USD estimate uses the
+  built-in rates; a row in `~/.werkmeister/model-pricing.yaml` overrides them.
 - **Not on Codex:** calls with no workspace (the Jira fallback, refining a prompt, PR
   reconcile) still ask Claude Code. The resume nudge's open-session check and the
   `pr watch` wake still look for Claude sessions only.
