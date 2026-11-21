@@ -1,5 +1,12 @@
 # vscode-plugin
 
+## 0.99.1
+
+### Patch Changes
+
+- werkmeister-core@0.99.1
+- werkmeister-ui@0.7.76
+
 ## 0.99.0
 
 ### Patch Changes
