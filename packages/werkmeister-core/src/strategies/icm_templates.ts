@@ -207,6 +207,10 @@ const PREAPPROVED_INPUT =
 const KEPT_RULE_PROBES =
   "Every rule the fix keeps on the same command gets the same trailing-argument probes as the changed one (another feature or workspace name, `-w`/`--workspace <path>`, extra positional args), and the failing test covers them.";
 
+// SW-901: sw-855's gate passed with 11 Must-fix escapes in allowed commands' own options (`--upl=`, `-lO<cmd>`, `--output`).
+const OPTION_REACH =
+  "For any change to an allow or deny rule, list each pre-approved command's options that read, write or run anything outside the workspace, in every form the tool accepts (unique-prefix long options, bundled short flags, `--opt=value`). Give each a deny, an exact rule, or a recorded reason it stays open, and check each listed escape as a must-deny case under the real permission matcher (the How-to-validate text in `werkmeister-context.md` names the recipe), not only a model of it.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -492,7 +496,9 @@ const bugfix: Stage[] = [
         NAME_HISTORY_STEP,
         // SW-564: sw-521's root cause was a permission rule; step 4 listed the callers of one builder and missed two other sources of a matching rule.
         "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source. Also `git grep -F` the exact old rule text across the whole repo, tests and `apps/` included, and list each hit as a site the fix must update (SW-820). " +
-          KEPT_RULE_PROBES,
+          KEPT_RULE_PROBES +
+          " " +
+          OPTION_REACH,
         `Write \`output/repro.md\`: steps 1–7, and a proposed fix in one paragraph under a \`status: proposed\` line.${noCommitPlan(v.group)} Check the proposed fix against the standards rows above and name any rule that already prescribes it. ${CRITERION_REACH}`,
       ],
       outputs: ["`output/repro.md`", "One failing test, uncommitted"],
@@ -524,6 +530,7 @@ const bugfix: Stage[] = [
         ...groupStep(v),
         "Apply the fix `repro.md` settled, at the root cause. Every caller `repro.md` lists gets the fix through the shared function — do not patch callers one by one.",
         PREAPPROVED_IN_STAGE,
+        OPTION_REACH,
         diffCheck("repro.md"),
         TEST_STEP,
         `Write \`output/fix.md\`: \`git diff --stat\` per repo, the failing test's name, the test exit code and summary line, ${PER_SERVICE}, and ${SKIPPED}.`,
