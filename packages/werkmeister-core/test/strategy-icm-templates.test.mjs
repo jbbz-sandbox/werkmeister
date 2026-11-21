@@ -442,6 +442,13 @@ test("each template renders with no undefined and a route per stage", async () =
             /^\d+\. Before the lint chain, fold the reproduce stage's failing test into the ticket's committed test, or move it to `stages\/01_reproduce\/output\/`: an untracked file in the worktree fails the lint chain and the gate's clean-worktree check\./m,
             `${wt}/${d}`,
           );
+        // SW-898: a fix outside the run's tickets finds or files its ticket and cites it.
+        if (d.endsWith("_fix"))
+          assert.match(
+            c,
+            /^\d+\. Before fixing a problem outside this run's tickets, find or file its ticket and cite it, as `\.\.\/\.\.\/_shared\/issues-report\.md` § Bugs: new or existing\? says\./m,
+            `${wt}/${d}`,
+          );
         // SW-566: step 4 also lists what each caller does with the result.
         if (d.endsWith("_reproduce"))
           assert.match(

@@ -116,6 +116,15 @@ test("the issues guide routes app-code issues to the registry repos", () => {
   assert.match(md, /gh issue list -R <owner>\/<repo>/);
 });
 
+// SW-898: an existing problem fixed here gets an open ticket first, cited in the commit and the PR.
+test("the issues guide asks for a ticket before fixing an existing problem here", () => {
+  const md = buildIssuesReportMd("ws", "", it.trackerById("jira"));
+  assert.match(
+    md,
+    /^- \*\*Existing — .*Before fixing one here \(a flaky test you trip over, say\), search the tracker for an open ticket on it \(How, step 1\) and file one first if there is none; name its key in the commit message and the PR, and add it to the PR's group or comment on it, so its status moves with the PR\.$/m,
+  );
+});
+
 test("the issues guide maps each type to a label, the tracker's type and a template", () => {
   const md = buildIssuesReportMd("ws", "", it.trackerById("jira"));
   assert.match(md, /^\| bug \| .* \| `--label bug` \| Bug \|$/m);
