@@ -152,10 +152,11 @@ the CLI is the one anyone reads. `werkmeister-core` and `werkmeister-vscode` are
 
 On merge to `main`, the `release` job in `.github/workflows/ci.yml` opens (or
 updates) a **"chore: version packages"** PR carrying the version bumps and
-`CHANGELOG.md`. Once its CI is green and the merge queue is empty,
-`.github/workflows/queue-version-pr.yml` queues it, and its merge publishes to
-npmjs.com and tags the release. To hold a release, close that PR or unset the
-`RELEASE_APP_ID` variable.
+`CHANGELOG.md`. Once a day (06:00 UTC), if its CI is green and the merge queue
+is empty, `.github/workflows/queue-version-pr.yml` queues it, and its merge
+publishes to npmjs.com and tags the release, so one release carries the day's
+merges. Force one with `gh workflow run queue-version-pr.yml`. To hold a
+release, close that PR or unset the `RELEASE_APP_ID` variable.
 
 `release` runs only once the commit is tested: by a green merge-queue run
 of that exact commit (the `queued` job checks, and the push then skips its

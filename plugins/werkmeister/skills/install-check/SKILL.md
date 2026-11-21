@@ -44,7 +44,7 @@ On a machine without the checkout (`$WERKMEISTER_REPO/apps/cli` missing) the scr
 The dev link is current when it is built from an up-to-date `main`; this machine doesn't install the npm release (that would overwrite the link).
 
 1. A PR merged: `check.sh --pull`. It pulls, installs, runs the full `turbo run build`, and prints `PULL  main <old> -> <new>`. Note `<old>` for rollback.
-2. A release: the Changesets version PR merged and npm shows the version (`npm view werkmeister version`). Then `check.sh --pull`, as above; the pull brings the version commit.
+2. A release: the Changesets version PR merged and npm shows the version (`npm view werkmeister version`). Releases are daily (the version PR is queued at 06:00 UTC and carries every merge since the last one); force one with `gh workflow run queue-version-pr.yml`. Then `check.sh --pull`, as above; the pull brings the version commit.
 3. `werkmeister --version` prints no stale-build warning. Running MCP servers keep the old build: `/mcp` to reconnect them.
 
 ## Merging through the merge queue
@@ -58,7 +58,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/install-check/queue-pr.sh" <pr> [owner/repo]
 It waits for the PR's checks (a bot-pushed branch lists none at first; that isn't a failure), refuses a PR whose checks failed or whose head moved meanwhile, queues it with the GraphQL `enqueuePullRequest`, and waits for `MERGED`. Exit 1 says why it stopped. It merges: run it only when the person asked for that PR to merge.
 
 - One at a time, in order. A merge to `main` force-pushes the Changesets version PR, and a push drops a PR from the queue.
-- Don't queue the version PR: `.github/workflows/queue-version-pr.yml` queues it each time its CI goes green (SW-480). If it sits unqueued with green checks, read that workflow's latest run.
+- Don't queue the version PR: `.github/workflows/queue-version-pr.yml` queues it once a day at 06:00 UTC, when its head has a green CI run and the queue is empty (SW-480, SW-582). To release sooner, run `gh workflow run queue-version-pr.yml`. If it sits unqueued with green checks, read that workflow's latest run: it logs why it skipped.
 - Run it in the background; a queue run takes minutes.
 
 ## Session start hook
