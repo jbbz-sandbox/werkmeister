@@ -855,7 +855,14 @@ export async function runGate(
   ws: string,
   file: PrFile,
   deps: Deps = defaultDeps(),
-  { testsOnly = false }: { testsOnly?: boolean } = {},
+  {
+    testsOnly = false,
+    rebase = false,
+  }: {
+    testsOnly?: boolean;
+    /** SW-857: rebase an unpushed branch behind its base, as `pr open` does. */
+    rebase?: boolean;
+  } = {},
 ): Promise<GateResult> {
   const started: string[] = [];
   const recreated: string[] = [];
@@ -865,7 +872,7 @@ export async function runGate(
   const beat = setInterval(() => touchExecMarker(ws), EXEC_BEAT_MS);
   beat.unref();
   try {
-    result = await gateChecks(ws, file, deps, started, recreated, testsOnly);
+    result = await gateChecks(ws, file, deps, started, recreated, testsOnly, rebase);
   } finally {
     clearInterval(beat);
     fs.rmSync(path.join(ws, GATE_COMPOSE_FILE), { force: true });
@@ -1084,6 +1091,7 @@ async function gateChecks(
   recreated: string[],
   // SW-316: the lint and test rows only, on the uncommitted tree, so implement sees container-only failures.
   testsOnly = false,
+  rebase = false,
 ): Promise<GateResult> {
   const followUps = testsOnly ? null : followUpsCheck(ws);
   const checks: GateCheck[] = testsOnly ? [] : [stagesCheck(ws), ...(followUps ? [followUps] : [])];
@@ -1272,19 +1280,65 @@ async function gateChecks(
     const overlap = theirs.size
       ? (await names(`origin/${base}...HEAD`)).filter((f) => theirs.has(f))
       : [];
-    const also = overlap.length
-      ? `; origin/${base} also changed ${overlap.join(", ")} — rebase onto origin/${base}, recheck the spec and tests that name them, rerun`
+    const changedToo = overlap.length
+      ? `; origin/${base} also changed ${overlap.join(", ")} — `
       : "";
+    const also =
+      changedToo &&
+      `${changedToo}rebase onto origin/${base}, recheck the spec and tests that name them, rerun`;
+    const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
+    // SW-857: unpushed, so a rebase needs no force-push; the rows below then test the rebased HEAD.
+    // Only this workspace's own checked-out branch, and only when nothing above already failed the gate.
+    const tryRebase =
+      rebase &&
+      behind.code === 0 &&
+      count > 0 &&
+      !pushed &&
+      status.code === 0 &&
+      !status.stdout.trim() &&
+      checks.every((c) => c.ok) &&
+      branch !== "HEAD" &&
+      file.dir === path.basename(file.dir) &&
+      (await deps.run("git", ["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"])).stdout.trim() ===
+        branch;
+    // No hooks: the dry-run push above skips them too, so no repo hook runs on the host mid-gate.
+    const rebased = tryRebase
+      ? await deps.run("git", [
+          "-c",
+          "core.hooksPath=/dev/null",
+          "-C",
+          dir,
+          "rebase",
+          "-q",
+          `origin/${base}`,
+        ])
+      : null;
+    let conflict = "";
+    if (rebased?.code) {
+      const unmerged = await names("--diff-filter=U");
+      const abort = await deps.run("git", ["-C", dir, "rebase", "--abort"]);
+      conflict =
+        `${commits}; auto-rebase onto origin/${base} ` +
+        (unmerged.length
+          ? `conflicts in ${unmerged.join(", ")}`
+          : `failed: ${(rebased.stderr || rebased.stdout).trim()}`) +
+        (abort.code
+          ? `; rebase --abort failed (${abort.stderr.trim()}) — run \`git -C ${file.dir} rebase --abort\``
+          : ` — aborted, branch unchanged. Rebase by hand: \`git -C ${file.dir} rebase origin/${base}\`, resolve, rerun the tests, then rerun`);
+    }
     add(
       "base",
-      behind.code === 0 && (count === 0 || pushed),
+      behind.code === 0 && (count === 0 || pushed || rebased?.code === 0),
       behind.code
         ? `cannot check against origin/${base}: ${(behind.stderr || behind.stdout).trim()}`
         : pushed
           ? `${commits}; ${branch} is already pushed, so \`pr watch\` flags a conflict; after a rebase \`werkmeister pr push\` force-pushes it with a lease (rule 5)${also}`
-          : count
-            ? `${commits} — \`git -C ${file.dir} rebase origin/${base}\` (keeps one commit per ticket), rerun the tests, then rerun${also}`
-            : `up to date with origin/${base}`,
+          : rebased?.code === 0
+            ? `rebased onto origin/${base} (was ${commits}); the tests below run on the rebased branch${changedToo && `${changedToo}recheck the spec and tests that name them`}`
+            : conflict ||
+              (count
+                ? `${commits} — \`git -C ${file.dir} rebase origin/${base}\` (keeps one commit per ticket), rerun the tests, then rerun; \`werkmeister pr open\` does this rebase by itself when it applies cleanly${also}`
+                : `up to date with origin/${base}`),
     );
     if (behind.code === 0) {
       const merges = await mergesFromBase(dir, base, deps.run);
@@ -1299,7 +1353,6 @@ async function gateChecks(
             : "no merge commits",
       );
     }
-    const status = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
     add(
       "clean",
       status.code === 0 && status.stdout.trim() === "",
@@ -2089,7 +2142,7 @@ export async function openPrs(
       );
       continue;
     }
-    const g = await runGate(ws, f, deps);
+    const g = await runGate(ws, f, deps, { rebase: true });
     lines.push(...formatGate(f.stem, g));
     if (!g.ok) {
       ok = false;
