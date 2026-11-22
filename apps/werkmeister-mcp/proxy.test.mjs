@@ -126,15 +126,25 @@ async function until(cond, ms = 5000) {
   }
 }
 
-test("the proxy exits by itself when the client closes its stdin", async (t) => {
+// SW-999: the SDK's close() ends stdin, waits a fixed 2 s, then sends SIGTERM, so under host load a
+// slow exit read as a signalled one. End stdin here and wait for the exit itself; a stopped proxy
+// stands in for a starved one, and only a proxy that never exits fails.
+test("the proxy exits by itself when the client closes its stdin, starved or not", async (t) => {
   const daemon = fakeDaemon();
   await daemon.listen();
   t.after(() => daemon.close());
   const { client } = await startProxy(t, daemon.port);
   await client.listTools();
-  // The SDK keeps the child private; close() ends stdin, waits 2 s, then sends SIGTERM.
+  // The SDK keeps the child private.
   const child = client.transport._process;
-  await client.close();
+  child.kill("SIGSTOP");
+  setTimeout(() => child.kill("SIGCONT"), 3000).unref();
+  const exited = new Promise((resolve) => child.once("exit", resolve));
+  child.stdin.end();
+  await Promise.race([
+    exited,
+    sleep(60_000, undefined, { ref: false }).then(() => assert.fail("the proxy never exited")),
+  ]);
   assert.equal(child.signalCode, null, "the proxy had to be signalled");
   assert.equal(child.exitCode, 0);
 });
