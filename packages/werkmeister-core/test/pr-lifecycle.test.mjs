@@ -996,6 +996,36 @@ test("gate: a malformed exercise.md fails before any test command runs (SW-286)"
   }
 });
 
+test("gate: exercise.md's Baseline section records the bug before the fix; its FAIL rows don't fail the gate (SW-941)", async () => {
+  const t = (cell) => `| check | result |\n|---|---|\n| repro | ${cell} |\n`;
+  const baseline = `## Baseline before the fix\n\n${t("FAIL")}\n### Step 2\n\n${t("FAIL")}\n`;
+  const cases = [
+    // [exercise.md, failed rows]
+    [`${baseline}## After the fix\n\n${t("PASS")}`, []],
+    // A FAIL outside the Baseline section still fails.
+    [
+      `${baseline}## After the fix\n\n${t("PASS")}\n## Other\n\n${t("FAIL")}`,
+      ["exercise", "tests"],
+    ],
+    // A `# baseline` shell comment in a code block opens no section, so the FAIL after it counts.
+    [
+      `## After the fix\n\n${t("PASS")}\n\`\`\`sh\n# baseline run\n\`\`\`\n\n## Other\n\n${t("FAIL")}`,
+      ["exercise", "tests"],
+    ],
+    // A Baseline alone proves nothing passed.
+    [baseline, ["exercise", "tests"]],
+  ];
+  for (const [exercise, want] of cases) {
+    const ws = icmWorkspace({ exercise });
+    try {
+      const g = await gate(ws, deps([DIFF_API]));
+      assert.deepEqual(failed(g), want, g.checks.find((c) => c.name === "exercise").detail);
+    } finally {
+      clean(ws);
+    }
+  }
+});
+
 test("gate: a FAIL row in the PR file's Tests table is named with its heading (SW-390)", async () => {
   const body =
     `${PASS_BODY}\n## Tests\n| test | result | output |\n|---|---|---|\n` +

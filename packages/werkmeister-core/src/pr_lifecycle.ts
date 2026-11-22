@@ -629,6 +629,22 @@ function passTable(text: string, manual?: TableRow[]): string | null {
   return null;
 }
 
+/** exercise.md without its `Baseline…` sections: the bug as recorded before the fix, not a result (SW-941). */
+function dropBaseline(text: string): string {
+  let level = 0; // the open Baseline heading's level; a heading as high or higher closes it
+  let fenced = false; // a `# baseline` shell comment in a code block is no heading
+  return text
+    .split("\n")
+    .filter((line) => {
+      if (line.trim().startsWith("```")) fenced = !fenced;
+      const h = fenced ? null : /^(#{1,6})\s+(.*)/.exec(line.trim());
+      if (h && level && h[1].length <= level) level = 0;
+      if (h && !level && /^baseline\b/i.test(h[2])) level = h[1].length;
+      return !level;
+    })
+    .join("\n");
+}
+
 function stagesCheck(ws: string): GateCheck {
   const prDir = prFileDir(ws);
   if (!fs.existsSync(path.join(ws, "stages"))) {
@@ -1262,7 +1278,7 @@ async function gateChecks(
     else {
       const evidence = exerciseFile(ws);
       const evidenceProblem = evidence
-        ? passTable(fs.readFileSync(evidence, "utf8"))
+        ? passTable(dropBaseline(fs.readFileSync(evidence, "utf8")))
         : "is missing";
       add(
         "exercise",

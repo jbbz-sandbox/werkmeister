@@ -305,7 +305,7 @@ export const SELF_CHECK =
 // ends at an approved PR file is "propose".
 // The gate reads every `result` column and rejects any other cell text (SW-247, SW-286).
 const exerciseFormat = (col: string) =>
-  `a \`| check | result | ${col} |\` table whose result cell is exactly \`PASS\` or \`FAIL\` — nothing else in the cell — with the captured output in the ${col} column. The rule holds for every table in \`exercise.md\`; describe a superseded run in prose, not as a \`FAIL\` row`;
+  `a \`| check | result | ${col} |\` table whose result cell is exactly \`PASS\` or \`FAIL\` — nothing else in the cell — with the captured output in the ${col} column. The rule holds for every table in \`exercise.md\`; describe a superseded run in prose, not as a \`FAIL\` row. A run before the fix that records the bug goes under a heading that starts \`Baseline\` (e.g. \`## Baseline before the fix\`): the gate skips that section, down to the next heading of its level or higher`;
 
 // SW-736: `changeset status --since` reads git history, so before the commit it failed on an entry just written (sw-699, sw-755).
 // SW-825: the gate stops what it started (SW-34), so sw-798's check hit "container … is not running".
