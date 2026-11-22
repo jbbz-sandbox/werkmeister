@@ -247,7 +247,7 @@ a card always shows its services and PRs.
   same terminal takes focus, no second one opens. A `claude <workspace>` tab left open from before
   SW-864 is focused too. A Needs-you card's button is the primary-coloured **Answer in terminal**.
 - **Start work / Pause / Resume.** These act on the run, not on containers. A workspace nobody has
-  started has ▶ Start work beside Open terminal: click it and a `claude <workspace>` terminal opens
+  started has only ▶ Start work, no Open terminal (SW-1052): click it and a `claude <workspace>` terminal opens
   with the starting prompt already sent. A live run has ⏸ Pause, which holds the session and freezes
   its containers, and becomes ▶ Resume once the workspace reads Paused.
 - **Status strip (SW-1009).** At the default side bar width (about 300px) the top of the view is one strip
