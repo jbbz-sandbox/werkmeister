@@ -1,5 +1,11 @@
 # sandbox-core
 
+## 0.106.1
+
+### Patch Changes
+
+- 4861bad: `werkmeister issue start` now writes an `issue.start` metrics event when it moves an issue to In Progress, and the `metrics` tool starts cycle time at a workspace's earliest `issue.start`, falling back to its first turn (SW-1034). Each ticket row gains `inProgressAt`, the start it used, or null on the fallback. Lead time still starts at the first turn.
+
 ## 0.106.0
 
 ### Minor Changes
