@@ -371,3 +371,32 @@ test("SW-872: a host-access mount from dev_links alone still prints the test und
     },
   );
 });
+
+const testCommandsMd = () =>
+  buildSandboxContextMd(
+    "test",
+    1,
+    11100,
+    11119,
+    ["frontend"],
+    loadServices(),
+    "",
+    null,
+    ["frontend"],
+    false,
+    "",
+    {},
+    {},
+  );
+
+// SW-968: `docker exec` without -t forwards no signal, so a stopped run went on in the container.
+test("Test commands says a stopped docker exec run goes on in the container, and how to end it (SW-968)", async () => {
+  await withSandboxHome(
+    async () =>
+      assert.match(
+        testCommandsMd(),
+        /Stopping a background `docker exec` run[^\n]*goes on in the container[^\n]*`docker exec <container> kill -TERM -- -<pid>`/,
+      ),
+    { services: SERVICES },
+  );
+});
