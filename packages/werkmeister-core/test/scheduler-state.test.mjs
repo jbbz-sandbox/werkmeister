@@ -39,6 +39,7 @@ import {
 } from "../dist/scheduler_state.js";
 import {
   pinWerkmeisterRoot,
+  queueWorkspace,
   withFixtureWorkspace,
   withSandboxHome,
   writeSessionState,
@@ -1068,15 +1069,8 @@ test("preemption rank: a feature started within STARVE_MS is working, past it it
 test("a waiter's position is its place in the queue now, as budget status counts it (SW-988)", async () => {
   await withHome(async (home) => {
     const ws = {};
-    const leases = {};
-    for (const [i, f] of ["a", "b", "c"].entries()) {
-      ws[f] = path.join(home, "features", f);
-      fs.mkdirSync(path.join(ws[f], ".werkmeister"), { recursive: true });
-      fs.writeFileSync(path.join(ws[f], "compose.yml"), COMPOSE);
-      fs.writeFileSync(path.join(ws[f], ".env"), `FEATURE=${f}\n`);
-      leases[f] = { slot: i + 1, workspace: ws[f] };
-    }
-    writeLeases(leases);
+    for (const f of ["a", "b", "c"])
+      ws[f] = await queueWorkspace(f, { root: path.join(home, "features") });
     // enqueue puts each first (SW-1039): queued c, b, a reads a, b, c.
     for (const f of ["c", "b", "a"]) await enqueue(f, ws[f]);
     assert.equal(fs.readFileSync(waitingPath(ws.c), "utf8").includes('"position":1'), true);

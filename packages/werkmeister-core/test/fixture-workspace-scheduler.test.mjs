@@ -125,3 +125,36 @@ test("a seed value that could leave the fixture or isn't a number is refused (SW
   assert.throws(() => fixturePreset({ queue: ["ok", "-x"] }), /--queue: bad entry "-x"/);
   assert.doesNotThrow(() => fixturePreset({ containers: [ok], queue: ["ok"] }));
 });
+
+// SW-1032: scheduler probes hand-wrote .env and the lease up() leaves before they tested anything.
+test("queueWorkspace queues a workspace as up() leaves it, one call each (SW-1032)", async () => {
+  const { readQueue } = await import("../dist/scheduler_state.js");
+  const { readWaiting } = await import("../dist/agent_state.js");
+  const { grantWaiters } = await import("../dist/lifecycle.js");
+  const { queueWorkspace } = await import("./fixtures.mjs");
+  const holder = {
+    feature: "holder",
+    workspace: "holder",
+    startedAt: "2026-11-13T00:00:00Z",
+    memory: 0,
+    nanoCpus: 6e9,
+  };
+  await withFixtureWorkspace(
+    async () => {
+      const a = await queueWorkspace("qa", { waitedMin: 5 });
+      const b = await queueWorkspace("qb", { autonomous: true });
+      assert.deepEqual(readQueue(), ["qa", "qb"]);
+      assert.equal(readLeases().qb?.workspace, b);
+      assert.match(
+        fs.readFileSync(path.join(b, ".werkmeister", "workspace.yml"), "utf8"),
+        /autonomous: true/,
+      );
+      assert.deepEqual([readWaiting(a).position, readWaiting(b).position], [1, 2]);
+      // The grant pass finds each by its lease and starts it (the fake docker answers 0); a waiter it
+      // can't resolve would leave the queue unstarted ("its workspace can't be found").
+      assert.deepEqual(await grantWaiters(), ["qa", "qb"]);
+      assert.deepEqual(readQueue(), []);
+    },
+    { containers: [holder], config: { budget: { cpus: 6 } } },
+  );
+});

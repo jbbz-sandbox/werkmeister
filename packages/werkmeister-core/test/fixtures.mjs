@@ -228,6 +228,47 @@ export async function withFixtureWorkspace(fn, opts = {}) {
 }
 
 /**
+ * Queue *feature* as `workspace init` and `up()` leave it (SW-1032): its
+ * `.env` (`FEATURE=`), `.werkmeister/workspace.yml`, a compose.yml (1 CPU and 1 GiB per service, as the
+ * `--queue` seed has it), a lease at the next free slot, its `queue.json` entry last and its
+ * waiting.json, under *root* (default `workspacesRoot()`, set by withFixtureWorkspace; pass one under
+ * withSandboxHome). Returns the workspace folder.
+ */
+export async function queueWorkspace(
+  feature,
+  { waitedMin = 0, services, autonomous = false, root } = {},
+) {
+  const { workspacesRoot } = await import("../dist/config.js");
+  const { queuePath, readLeases, readQueue, writeLeases } = await import(
+    "../dist/scheduler_state.js"
+  );
+  const { writeWaiting } = await import("../dist/agent_state.js");
+  const ws = path.join(root ?? workspacesRoot(), feature);
+  fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".env"), `FEATURE=${feature}\n`);
+  fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), `autonomous: ${autonomous}\n`);
+  const svc = (name) =>
+    `  ${name}:\n    image: fixture\n    deploy:\n      resources:\n        limits:\n          cpus: "1"\n        reservations:\n          memory: 1g\n`;
+  fs.writeFileSync(
+    path.join(ws, "compose.yml"),
+    `services:\n${(services ?? ["app"]).map(svc).join("")}`,
+  );
+  const leases = readLeases();
+  const slot = Math.max(0, ...Object.values(leases).map((l) => l.slot)) + 1;
+  writeLeases({ ...leases, [feature]: { slot, workspace: ws } });
+  const queue = [...readQueue().filter((f) => f !== feature), feature];
+  fs.mkdirSync(path.dirname(queuePath()), { recursive: true });
+  fs.writeFileSync(queuePath(), JSON.stringify(queue));
+  writeWaiting(ws, {
+    position: queue.length,
+    reason: "waiting for capacity",
+    ...(services && { services }),
+    since: new Date(Date.now() - waitedMin * 60_000).toISOString(),
+  });
+  return ws;
+}
+
+/**
  * Run *fn* with a fake daemon (`startFakeDaemon` in fixture_fakes.ts: `/api/status`, and
  * `/api/tool` answered from *tools*) and WERKMEISTER_HOST pointing at it (SW-426, SW-263).
  * Pass `daemon.url` to withFixtureWorkspace's `daemon` to reach it from a fixture.
