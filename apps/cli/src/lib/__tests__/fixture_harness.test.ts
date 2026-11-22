@@ -106,3 +106,39 @@ it("runs init and the gate in a fixture, prints the context and fake calls, and 
   expect(fs.existsSync(hits), "the caller's claude or kubectl ran").toBe(false);
   expect(fs.readdirSync(scratch), "the fixture and temp HOME are removed").toEqual([]);
 }, 120_000);
+
+// SW-916: the wrapper's allow rule doesn't pin the cwd, so a file flag must resolve against the
+// built CLI's own worktree; from another folder a relative path there must not read that folder.
+it("file flags resolve against the CLI's worktree, never the shell's cwd (SW-916)", async () => {
+  const ws = path.join(tmp, "ws916");
+  fs.mkdirSync(ws);
+  fs.symlinkSync(REPO, path.join(ws, "werkmeister"));
+  writeTempHomeWrapper(ws);
+  const wrapper = writeFixtureWrapper(ws);
+  const outside = path.join(tmp, "outside");
+  fs.mkdirSync(outside);
+  fs.writeFileSync(path.join(outside, "secret.txt"), "caller-secret\n");
+  const leak = (file: string) =>
+    promisify(execFile)(
+      wrapper,
+      ["--no-wait", "--gate", "--change", "leak.txt", "--change-branch", file].concat([
+        "--print",
+        "app/leak.txt",
+        "--version",
+      ]),
+      { cwd: outside, env: { ...process.env, HOME: outside } },
+    ).then(
+      (r) => ({ code: 0, out: r.stdout + r.stderr }),
+      (e: { code: number; stdout: string; stderr: string }) => ({
+        code: e.code,
+        out: e.stdout + e.stderr,
+      }),
+    );
+  const refused = await leak("secret.txt");
+  expect(refused.out).not.toMatch(/caller-secret/);
+  expect(refused.code).toBe(2);
+  expect(refused.out).toMatch(/--change-branch: a file under/);
+  const own = await leak("apps/cli/package.json");
+  expect(own.code, own.out).toBe(0);
+  expect(own.out).toMatch(/--- app\/leak\.txt\n\{[\s\S]*"name": "werkmeister"/);
+}, 120_000);
