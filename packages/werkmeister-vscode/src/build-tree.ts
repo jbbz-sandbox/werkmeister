@@ -14,10 +14,11 @@ import {
   type DisplayOptions,
   displayModel,
   type HostInput,
-  type HostStrip,
   needLine,
   type PrInput,
   type ServiceHealth,
+  type StatusStrip,
+  type StripGlobals,
   statusStrip,
   type Tone,
   type UsageInput,
@@ -63,8 +64,10 @@ export interface TreeExtras {
   now?: Date;
   /** Per compose project, from the slower resources sweep; undefined until it lands. */
   usage?: Record<string, UsageInput> | null;
-  /** Undefined: no sweep yet, so no host row. Null: the sweep failed. */
+  /** For the strip. Undefined: no sweep yet, so no host line. Null: the sweep failed. */
   host?: HostInput | null;
+  /** The shared infra stack, from the same `status` call as the rows. */
+  infra?: StripGlobals["infra"];
 }
 
 export interface WsCard {
@@ -82,7 +85,7 @@ export interface WsCard {
   /** One entry per ICM stage (SW-961); empty for JIT, unstaged, finished or lifecycle workspaces. */
   pips: WorkspaceDisplay["workflow"]["pips"];
   issueId: string | null;
-  /** The agent asked something: Master control counts it and the card's button reads Answer in terminal. */
+  /** The agent asked something: the strip counts it and the card's button reads Answer in terminal. */
   needsYou: boolean;
   /** The one session button the card shows, if any (`sessionAction`). */
   action: "start" | "pause" | "resume" | null;
@@ -106,7 +109,7 @@ export interface InterceptsLike {
 }
 
 export interface WsNode {
-  kind: "workspace" | "service" | "pr" | "legend" | "host" | "error";
+  kind: "workspace" | "service" | "pr" | "legend" | "error";
   /** Stable across refreshes so VS Code preserves expansion state. */
   id: string;
   label: string;
@@ -254,12 +257,20 @@ function currentWorkspaceName(
   return null;
 }
 
-/** Which tile the active terminal is showing (SW-864): a workspace's card, Master control, or neither. */
+/** The workspaces-root chat's terminal name (SW-1009: was Master control). */
+export const FOREMAN = "Foreman";
+
+/** Terminals opened before the rename keep their old name, so both still count as Foreman's. */
+export function isForemanTerminal(name: string): boolean {
+  return name.includes(FOREMAN) || name.includes("Master control");
+}
+
+/** Which tile the active terminal is showing (SW-864): a workspace's card, the root chat, or neither. */
 export type InTerminal = { kind: "workspace"; name: string } | { kind: "root" } | null;
 
 /**
  * Map the active terminal's cwd to a tile. A session terminal starts in its workspace's
- * folder and Master control at the workspaces root; any other cwd, or none, shows no cue.
+ * folder and Foreman at the workspaces root; any other cwd, or none, shows no cue.
  */
 export function inTerminal(
   workspaces: Pick<WorkspaceEntryLike, "name" | "path">[],
@@ -274,8 +285,8 @@ export function inTerminal(
 }
 
 /**
- * The Jira board link for Master control: the default project's board, else nothing.
- * Only a Jira project with a board id gets one; the button hides rather than guess.
+ * The Jira board link for the title bar: the default project's board, else nothing.
+ * Only a Jira project with a board id gets one; the icon hides rather than guess.
  */
 export function boardUrl(
   base: string | undefined,
@@ -608,24 +619,26 @@ export function buildTree(
   // The window's own workspace first; the rest keep werkmeister-core's name order.
   const i = nodes.findIndex((n) => n.id === current);
   if (i > 0) nodes.unshift(...nodes.splice(i, 1));
-  return extra.host === undefined ? nodes : [hostNode(extra.host), ...nodes];
+  return nodes;
 }
 
-/** The load line above the workspaces (SW-41). */
-function hostNode(host: HostInput | null): WsNode {
-  // host is null or set here, so the strip always has a host line.
-  const line = statusStrip([], { host }).host as HostStrip;
-  return {
-    kind: "host",
-    id: "host:",
-    label: "Host",
-    description: line.text.replace(/^host /, ""),
-    tooltip: `${line.text}\n${line.tooltip}`,
-    icon: { id: "pulse", color: TONE_COLORS[line.tone] },
-    contextValue: "host",
-    expanded: false,
-    children: [],
-  };
+/**
+ * The pinned strip (SW-1009): the shared model over the same rows, in card order, so a chip
+ * jumps to the first card it counts.
+ */
+export function stripOf(
+  nodes: WsNode[],
+  statuses: WorkspaceStatusLike[],
+  extra: TreeExtras = {},
+): StatusStrip {
+  const byName = new Map(statuses.map((s) => [s.name, s]));
+  const rows = nodes.flatMap((n) => {
+    const ws = n.kind === "workspace" ? byName.get(n.id) : undefined;
+    return ws
+      ? [{ name: n.id, ws, prs: extra.prs?.get(n.id), prNeeds: extra.prNeeds?.get(n.id)?.prNeeds }]
+      : [];
+  });
+  return statusStrip(rows, { host: extra.host, infra: extra.infra }, extra.now);
 }
 
 /** The single node shown when the CLI can't be located — never an empty view. */

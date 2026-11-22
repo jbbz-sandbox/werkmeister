@@ -239,21 +239,27 @@ a card always shows its services and PRs.
   started has ▶ Start work beside Open terminal: click it and a `claude <workspace>` terminal opens
   with the starting prompt already sent. A live run has ⏸ Pause, which holds the session and freezes
   its containers, and becomes ▶ Resume once the workspace reads Paused.
-- **Master control.** With a chat already running in a terminal at the workspaces root, click it: that
-  terminal takes focus. Close it and click again: a `Master control` terminal opens there with the
-  circuit-board icon. Under its title: `● N need you · N PR to review` when there are any; click a count
-  and the view scrolls to the first card it counts.
-- **Jira board ↗.** With no `board:` under the default project in `~/.werkmeister/config.yaml`, there is no
-  button. Add `board: { id: 1, ready: … }` and refresh: the button shows, and clicking it opens the SW board.
-- **In-terminal cue (SW-864).** Open two workspaces' terminals and Master control. Click each terminal tab
-  in turn: the card for that tab, or the Master control tile, gets the blue border and the `In terminal`
-  pill at once, with no 5 s wait, and no other tile has it. Open a plain shell outside the workspaces
+- **Status strip (SW-1009).** At the default side bar width (about 300px) the top of the view is one strip
+  of at most 2 rows: chips such as `● 2 need you · 12 min`, `1 running` or `infra: caddy down` (only those
+  above zero), then `host 32% · features 0.5 of 10 cores` with a two-tone meter. Hover the host text: the
+  tooltip shows the 1 · 5 · 15 min load. Scroll the cards: the strip stays pinned on the side bar background.
+  Click a chip: the view scrolls to the first card it counts. Drag the side bar under 260px: the meter hides,
+  the text stays. With a workspace waiting on you, the view's icon in the activity bar carries that count.
+- **Foreman (title bar).** With a chat already running in a terminal at the workspaces root, click the
+  terminal icon in the view title: that terminal takes focus. Close it and click again: a `Foreman` terminal
+  opens there with the circuit-board icon. A `Master control` terminal left open from before is focused too.
+- **Jira board (title bar).** With no `board:` under the default project in `~/.werkmeister/config.yaml`,
+  there is no board icon. Add `board: { id: 1, ready: … }` and wait 5 s: the icon shows, and clicking it opens
+  the SW board. Refresh PRs, Connect infra, Legend, Detect and Sync registry are under the title's `…` menu.
+- **In-terminal cue (SW-864).** Open two workspaces' terminals. Click each terminal tab in turn: the card
+  for that tab gets the blue border and the `In terminal` pill at once, with no 5 s wait, and no other card
+  has it; the Foreman terminal cues no card. Open a plain shell outside the workspaces
   (Terminal → New Terminal from `~`) or click a `werkmeister …` command terminal: no tile has the cue.
   Close the active terminal: the cue follows whichever terminal VS Code shows next. Repeat in a light and
   a high-contrast theme: the border and pill stay visible.
-- **Dashboard ↗.** With the dashboard running, click it: the dashboard opens in the browser. With it
+- **Dashboard (title bar).** With the dashboard running, click its icon in the view title: the dashboard opens in the browser. With it
   stopped: a notice offers ⚡ Connect infra.
 - **Hide waiting on release (SW-1003).** With a merged workspace whose PR no release has yet, click the eye in
-  the view title: its card goes, the eye flips, and Master control reads `1 hidden · waiting on release`.
+  the view title: its card goes, the eye flips, and the strip reads `1 hidden · waiting on release`.
   Wait 10 s: it stays hidden across the 5 s redraws. Reload the window (Developer: Reload Window): the eye is
   still crossed and the card still hidden. Click `1 hidden · waiting on release` or the eye: the card is back.
