@@ -41,6 +41,7 @@ export TMPDIR="$tmp"
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' HUP INT TERM
 # Corepack keeps pnpm under HOME; without this a fresh HOME re-downloads it every run.
+# shortcut: pnpm downloads land in the caller's real corepack cache; point it at $tmp if a run must write nothing outside (SW-917).
 export COREPACK_HOME="\${COREPACK_HOME:-$HOME/.cache/node/corepack}"
 # OrbStack and Docker Desktop keep the compose plugin and context here (SW-285).
 export DOCKER_CONFIG="\${DOCKER_CONFIG:-$HOME/.docker}"
