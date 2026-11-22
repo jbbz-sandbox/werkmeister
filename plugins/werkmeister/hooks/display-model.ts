@@ -350,9 +350,19 @@ const ACTIVITY_TONE: Record<string, Tone> = {
   gone: "err",
   queued: "warn",
   starting: "warn",
-  idle: "off",
-  paused: "off",
 };
+
+// Core's SESSION_GONE_MS: silent this long, a Thinking is kept live only by its open process.
+const QUIET_MS = 30 * 60_000;
+
+/** The chip's detail (SW-953): null when it would only restate the chip, dim once the session went quiet. */
+function activity(a: WorkspaceState["activity"], now: Date): WorkspaceDisplay["activity"] {
+  if (a.id === "idle" || a.id === "paused") return null;
+  const quiet =
+    a.id === "thinking" && a.since !== null && now.getTime() - Date.parse(a.since) >= QUIET_MS;
+  if (quiet) return { text: a.label, tone: "off", time: `last heard ${ago(a.since, now)}` };
+  return { text: a.label, tone: ACTIVITY_TONE[a.id] ?? "ok", time: ago(a.since, now) };
+}
 
 function needRows(ws: DisplayInput, opts: DisplayOptions, now: Date): NeedRow[] {
   if (ws.paused) return [];
@@ -392,13 +402,7 @@ export function displayModel(ws: DisplayInput, opts: DisplayOptions = {}): Works
           tone: "off",
         }
       : null,
-    activity: st
-      ? {
-          text: st.activity.label,
-          tone: ACTIVITY_TONE[st.activity.id] ?? "ok",
-          time: ago(st.activity.since, now),
-        }
-      : null,
+    activity: st ? activity(st.activity, now) : null,
     autonomous: ws.autonomous ? { full: "⚙ Autonomous", compact: "⚙ Auto" } : null,
     model: ws.model ?? null,
     containers: containers(ws),

@@ -421,3 +421,30 @@ test("agent: Needs you whenever the list has an item, working while the activity
     since: ago(MIN),
   });
 });
+
+// SW-953: the chip and the activity line agreed only for a done signal; an idle one stayed Idle beside "Thinking".
+test("agent: an idle signal reads working while a session or background agent works", async () => {
+  const { agentOf } = await import("../dist/agent_state.js");
+  // sw-852: a turn busy for 6 h, no hook event for 40 min, its process still open.
+  const quiet = { status: "busy", at: ago(6 * 60 * MIN), last: ago(40 * MIN) };
+  const sessions = { s: quiet };
+  const signal = { agent: agentOf(sessions, NOW.getTime())?.agent ?? "idle", at: quiet.at };
+  const st = workspaceState(facts({ sessions, signal, processOpen: true }));
+  assert.equal(st.activity.label, "Thinking");
+  assert.equal(st.activity.since, quiet.last, "last heard, not the turn's start");
+  assert.equal(st.agent.id, "working", "Idle beside Thinking");
+  for (const tool of [
+    { name: "Read", at: ago(MIN) },
+    { name: "Bash", command: "pnpm test", at: ago(MIN) },
+  ])
+    assert.equal(
+      chip({ sessions: { s: busy({ tool }) } }, { agent: "idle", at: null }).id,
+      "working",
+    );
+
+  // Background agents after the parent's turn, before its Stop: no done signal to promote.
+  const bg = { s: { status: "idle", at: ago(MIN), last: ago(MIN), subagents: 5 } };
+  const idle = { agent: "idle", at: ago(MIN) };
+  assert.equal(workspaceState(facts({ sessions: bg, signal: idle })).activity.id, "subagent");
+  assert.equal(chip({ sessions: bg }, idle).id, "working", "Idle beside Background agent running");
+});

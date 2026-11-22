@@ -736,3 +736,40 @@ test("card: the phase, the activity and every need, PR items included", () => {
   const [b] = buildTree([ws("a")], [st("a", { workspaceState: building })], null, []);
   assert.equal(b.card.phase, null, "while building, meta already shows the stage");
 });
+
+// SW-953: one state word per card; the line under it is that state's detail.
+test("card: one state word, its activity a detail (sw-852's Thinking, sw-891's Done)", () => {
+  const hAgo = (h) => new Date(NOW.getTime() - h * 3_600_000).toISOString();
+  const card = (activity, agent) =>
+    buildTree(
+      [ws("a")],
+      [
+        st("a", {
+          workspaceState: {
+            phase: { id: "building", label: "", stage: null },
+            activity,
+            needs: [],
+            agent,
+          },
+        }),
+      ],
+      null,
+      [],
+      { now: NOW },
+    )[0].card;
+  const quiet = card(
+    { id: "thinking", label: "Thinking", since: hAgo(6), session: "s" },
+    { id: "working", since: hAgo(6) },
+  );
+  assert.equal(quiet.state, "◌ Working");
+  assert.deepEqual(quiet.activity, {
+    text: "Thinking · last heard 6 h ago",
+    color: TONE_COLORS.off,
+  });
+  const done = card(
+    { id: "idle", label: "Idle", since: null, session: null },
+    { id: "done", since: hAgo(1) },
+  );
+  assert.equal(done.state, "✓ Done");
+  assert.equal(done.activity, null);
+});

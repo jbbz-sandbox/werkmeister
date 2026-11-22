@@ -134,6 +134,8 @@ const STILL_ON_IT = new Set<ActivityId>([
   "subagent",
   "thinking",
 ]);
+// A session's own work, so it outranks an idle signal too (SW-953); containers starting or a queue place don't.
+const SESSION_WORK = new Set<ActivityId>(["testing", "tool", "subagent", "thinking"]);
 // shortcut: a command-text match, not the registry's `test:` commands (reading the registry costs every poll); add those if a runner is missed.
 const TEST_COMMAND =
   /\bwerkmeister\s+(pr\s+gate|test)\b|\b(turbo|pnpm|npm|yarn|bun)\b.*\btest\b|\bnode\s+--test\b|\b(vitest|jest|pytest|playwright\s+test|go\s+test|cargo\s+test)\b/;
@@ -216,7 +218,8 @@ function activityOf(f: StateFacts): Activity {
     ([, s]) => s.subagents && now - Date.parse(s.last ?? s.at) < SESSION_GONE_MS,
   );
   if (sub) return a("subagent", "Background agent running", sub[1].last ?? sub[1].at, sub[0]);
-  if (live.length) return a("thinking", "Thinking", live[0][1].at, live[0][0]);
+  // The newest hook event, not the turn's start: a 6 h turn heard from a minute ago is not "6 h ago" (SW-953).
+  if (live.length) return a("thinking", "Thinking", live[0][1].last ?? live[0][1].at, live[0][0]);
   if (f.turnRunning) return a("thinking", "Thinking");
   // A background shell outlives its turn too (SW-570).
   for (const [id, s] of Object.entries(f.sessions))
@@ -403,17 +406,19 @@ export function prNeeds(prs: RepoPr[]): { needs: NeedItem[]; phaseDetail: string
 }
 
 /**
- * Needs you whenever the list has an item (SW-487 Q8); a done turn reads working while the activity is (SW-681);
+ * Needs you whenever the list has an item (SW-487 Q8); a done turn reads working while the activity is (SW-681),
+ * an idle one while the session itself works (SW-953);
  * else what the sessions say. Paused: the signal, which every surface shows as Paused anyway.
  */
 function agentChip(signal: StateFacts["signal"], activity: Activity, needs: NeedItem[]): AgentChip {
   const own = { id: signal.agent, since: signal.at };
   const first = needs[0];
   if (activity.id === "paused") return own;
-  if (!first)
-    // Only a finished turn: an idle signal has no agent, so containers starting aren't its work.
-    return signal.agent === "done" && STILL_ON_IT.has(activity.id)
-      ? { id: "working", since: activity.since ?? signal.at }
-      : own;
+  if (!first) {
+    const working =
+      (signal.agent === "done" && STILL_ON_IT.has(activity.id)) ||
+      (signal.agent === "idle" && SESSION_WORK.has(activity.id));
+    return working ? { id: "working", since: activity.since ?? signal.at } : own;
+  }
   return signal.agent === "needs-you" ? own : { id: "needs-you", since: first.since };
 }
