@@ -39,6 +39,7 @@ vi.mock("werkmeister-core/locks", async (importOriginal) => ({
 import { dotDir, loadServices, stateInfraRoot } from "werkmeister-core/config";
 import { loadFeatureRouters } from "werkmeister-core/feature_routing";
 import {
+  composeHealthcheck,
   generateCaddyfile,
   generateFeatureCompose,
   generateFeatureEnv,
@@ -329,10 +330,11 @@ describe("cpu limits", () => {
 });
 
 // SW-933: a sidecar was Redis-only (redis-cli healthcheck, no environment or volumes).
+// SW-1056: its health_endpoint renders through composeHealthcheck, as a service's does.
 describe("extra_services sidecars", () => {
   it("keeps the Redis probe for a sidecar with no health_endpoint", () => {
     const { cache } = composeServices();
-    expect(cache.healthcheck.test).toEqual(["CMD", "redis-cli", "ping"]);
+    expect(cache.healthcheck.test).toEqual(["CMD-SHELL", composeHealthcheck("redis", 6379)]);
     expect(cache.command).toBe("redis-server");
   });
 
@@ -352,7 +354,7 @@ describe("extra_services sidecars", () => {
       };
     });
     const { db } = services;
-    expect(db.healthcheck.test).toEqual(["CMD", "pg_isready"]);
+    expect(db.healthcheck.test).toEqual(["CMD-SHELL", composeHealthcheck("postgres", 5432)]);
     expect(db.environment).toEqual(["POSTGRES_PASSWORD=pw", "POSTGRES_DB=app"]);
     expect(db.volumes).toEqual([
       `${tmp}/demo-services/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro`,
@@ -364,18 +366,28 @@ describe("extra_services sidecars", () => {
     expect(Object.keys(YAML.parse(fs.readFileSync(out, "utf8")).volumes)).toContain("f-pgdata");
   });
 
-  it("probes an HTTP path, and renders no healthcheck for an empty health_endpoint", () => {
+  it("probes an HTTP path, and an empty health_endpoint is a TCP connect, as on a service", () => {
     const services = composeServices((doc) => {
       doc.services.backend.extra_services = {
         web: { image: "nginx", internal_port: 80, health_endpoint: "/ping" },
         tcp: { image: "memcached", internal_port: 11211, health_endpoint: "" },
       };
     });
-    expect(services.web.healthcheck.test).toEqual([
+    expect(services.web.healthcheck.test).toEqual(["CMD-SHELL", composeHealthcheck("/ping", 80)]);
+    expect(services.tcp.healthcheck.test).toEqual(["CMD-SHELL", composeHealthcheck("", 11211)]);
+    expect(services.tcp.healthcheck.test[1]).toContain("nc -z 127.0.0.1 11211");
+  });
+
+  it("probes a postgres sidecar with no internal_port on 5432, where a bare pg_isready did", () => {
+    const services = composeServices((doc) => {
+      doc.services.backend.extra_services = {
+        db: { image: "postgres:16", health_endpoint: "postgres" },
+      };
+    });
+    expect(services.db.healthcheck.test).toEqual([
       "CMD-SHELL",
-      "curl -sf http://localhost:80/ping",
+      composeHealthcheck("postgres", 5432),
     ]);
-    expect(services.tcp.healthcheck).toBeUndefined();
   });
 });
 
