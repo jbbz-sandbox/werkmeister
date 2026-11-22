@@ -223,8 +223,9 @@ const TOOL_FACT_CHECK =
   "Before the check below flips anything, read `decisions.md` once more: every fact about an external tool's behaviour names the tool's version and, beside it, the command that confirmed it, or is marked `unverified`. A fact with neither fails this check: fix it first.";
 
 // SW-875: sw-578 edited before `feature up`, whose rebuild baked the fix into the dist its fail-first runs used.
+// SW-983: the stash stack is shared by every worktree on the machine; a bare pop takes another session's changes.
 const BASE_BUILD_RED =
-  "A container start can rebuild from the working tree (`werkmeister feature up` reruns the install and build), so see each new test fail against a build of the unfixed code: build before editing source, or park the change and rebuild. Record which build each fail-first run used.";
+  "A container start can rebuild from the working tree (`werkmeister feature up` reruns the install and build), so see each new test fail against a build of the unfixed code: build before editing source, or park the change in a temporary WIP commit (never the shared stash) and rebuild. Record which build each fail-first run used.";
 
 // SW-905: sw-856 showed tests red by editing dist/; an incremental tsc didn't re-emit and the edit leaked into the CLI bundle.
 const RED_BY_SOURCE =

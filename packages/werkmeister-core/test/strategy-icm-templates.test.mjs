@@ -418,7 +418,7 @@ test("each template renders with no undefined and a route per stage", async () =
         if (wt === "feature" && d.endsWith("_implement"))
           assert.match(
             c,
-            /^\d+\. A container start can rebuild from the working tree .*see each new test fail against a build of the unfixed code: build before editing source, or park the change and rebuild\. Record which build each fail-first run used\./m,
+            /^\d+\. A container start can rebuild from the working tree .*see each new test fail against a build of the unfixed code: build before editing source, or park the change in a temporary WIP commit \(never the shared stash\) and rebuild\. Record which build each fail-first run used\./m,
             `${wt}/${d}`,
           );
         else assert.doesNotMatch(c, /fail against a build of the unfixed code/, `${wt}/${d}`);
