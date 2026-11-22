@@ -506,8 +506,48 @@ export interface WaitingFile {
   parked?: { service: string };
 }
 
-/** The waiting record, or null when there is none or it doesn't parse. */
+/**
+ * The waiting record, or null when there is none or it doesn't parse. Its `position` is the one
+ * `budget status` shows, read from the queue now: the stored number is a snapshot nothing rewrites
+ * for a preempted waiter (SW-988).
+ */
 export function readWaiting(root: string): WaitingFile | null {
+  const w = storedWaiting(root);
+  const position = w && queuePosition(root);
+  return position ? { ...w, position } : w;
+}
+
+// scheduler_state's leasesPath; not imported, for the same reason as queuePath below.
+const leasesPath = () => path.join(sandboxHome(), "scheduler", "leases.json");
+
+/** *root*'s place in queue.json, gate waiters first as `queueOrder` has it; null when not queued. */
+function queuePosition(root: string): number | null {
+  const feature = featureOf(root);
+  let queue: unknown;
+  try {
+    queue = JSON.parse(fs.readFileSync(queuePath(), "utf8"));
+  } catch {
+    return null;
+  }
+  if (!feature || !Array.isArray(queue) || !queue.includes(feature)) return null;
+  let leases: Record<string, { workspace?: unknown }> = {};
+  try {
+    leases = JSON.parse(fs.readFileSync(leasesPath(), "utf8")) ?? {};
+  } catch {
+    // no leases: no gate waiters to put first
+  }
+  // shortcut: budget status also puts first a service start beside its feature's running containers,
+  // which needs Docker; this reads the gate flag only. Read Docker here if a gate's number shows wrong.
+  const gate = (f: string) => {
+    const ws = f === feature ? root : leases[f]?.workspace;
+    return typeof ws === "string" && ws !== "" && storedWaiting(ws)?.gate === true;
+  };
+  const names = queue.map(String);
+  const order = [...names.filter(gate), ...names.filter((f) => !gate(f))];
+  return order.indexOf(feature) + 1;
+}
+
+function storedWaiting(root: string): WaitingFile | null {
   try {
     const o = JSON.parse(fs.readFileSync(waitingPath(root), "utf8"));
     if (!Number.isInteger(o?.position)) return null;
