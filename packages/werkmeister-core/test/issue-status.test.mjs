@@ -14,6 +14,8 @@ import {
   resolveIssueStatuses,
   startIssue,
 } from "../dist/issue_status.js";
+import { metricsPath } from "../dist/metrics.js";
+import { withSandboxHome } from "./fixtures.mjs";
 
 const JIRA = resolveIssueStatuses({}, "jira");
 const GITHUB = resolveIssueStatuses({}, "github");
@@ -209,62 +211,88 @@ test("moveIssue: a failed read is retried once; a second failure says why and ho
   );
 });
 
-test("startIssue: names the first stage without output; no issue, no move", async () => {
-  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "issue-start-"));
-  try {
-    for (const d of ["01_research", "02_spec"])
-      fs.mkdirSync(path.join(ws, "stages", d, "output"), { recursive: true });
-    fs.writeFileSync(path.join(ws, "stages", "01_research", "output", ".gitkeep"), "");
-    fs.mkdirSync(dotDir(ws), { recursive: true });
-    fs.writeFileSync(path.join(dotDir(ws), "workspace.yml"), "feature: f\nissue_id: X-1\n");
-    const t = tracker({ ref: "X-1", status: "To Do", statusCategory: "new" });
-    assert.equal(await startIssue(ws, t, JIRA), "X-1 → In Progress");
-    assert.deepEqual(t.updates, [
-      [
-        "X-1",
-        {
-          status: "In Progress",
-          comment: `Work started: stage 01_research in workspace ${path.basename(ws)}.`,
-        },
-      ],
-    ]);
-    fs.writeFileSync(path.join(dotDir(ws), "workspace.yml"), "feature: f\n");
-    assert.equal(await startIssue(ws, t, JIRA), "no issue");
-    assert.equal(t.updates.length, 1);
-  } finally {
-    fs.rmSync(ws, { recursive: true, force: true });
-  }
-});
+test("startIssue: names the first stage without output; no issue, no move", () =>
+  withSandboxHome(async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "issue-start-"));
+    try {
+      for (const d of ["01_research", "02_spec"])
+        fs.mkdirSync(path.join(ws, "stages", d, "output"), { recursive: true });
+      fs.writeFileSync(path.join(ws, "stages", "01_research", "output", ".gitkeep"), "");
+      fs.mkdirSync(dotDir(ws), { recursive: true });
+      fs.writeFileSync(path.join(dotDir(ws), "workspace.yml"), "feature: f\nissue_id: X-1\n");
+      const t = tracker({ ref: "X-1", status: "To Do", statusCategory: "new" });
+      assert.equal(await startIssue(ws, t, JIRA), "X-1 → In Progress");
+      assert.deepEqual(t.updates, [
+        [
+          "X-1",
+          {
+            status: "In Progress",
+            comment: `Work started: stage 01_research in workspace ${path.basename(ws)}.`,
+          },
+        ],
+      ]);
+      // SW-1034: the move writes one issue.start under the temp home; no move, no event.
+      const log = metricsPath(new Date().toISOString());
+      assert.ok(
+        log.startsWith(path.dirname(process.env.WERKMEISTER_CONFIG_FILE)),
+        `${log} is outside the temp home`,
+      );
+      const starts = () =>
+        fs
+          .readFileSync(log, "utf8")
+          .split("\n")
+          .filter(Boolean)
+          .map((l) => JSON.parse(l))
+          .filter((e) => e.event === "issue.start" && e.workspace === path.basename(ws));
+      assert.deepEqual(
+        starts().map(({ ticket, workspace }) => ({ ticket, workspace })),
+        [{ ticket: "X-1", workspace: path.basename(ws) }],
+      );
+      const already = tracker({
+        ref: "X-1",
+        status: "In Progress",
+        statusCategory: "indeterminate",
+      });
+      assert.equal(await startIssue(ws, already, JIRA), "X-1 already In Progress");
+      assert.equal(starts().length, 1);
+      fs.writeFileSync(path.join(dotDir(ws), "workspace.yml"), "feature: f\n");
+      assert.equal(await startIssue(ws, t, JIRA), "no issue");
+      assert.equal(t.updates.length, 1);
+    } finally {
+      fs.rmSync(ws, { recursive: true, force: true });
+    }
+  }));
 
 // SW-500: a grouped workspace's moves cover the lead and each `group:` member.
-test("startIssue: a grouped workspace moves the lead and each member; one past it stays", async () => {
-  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "issue-start-"));
-  try {
-    fs.mkdirSync(dotDir(ws), { recursive: true });
-    fs.writeFileSync(
-      path.join(dotDir(ws), "workspace.yml"),
-      "feature: f\nissue_id: X-1\ngroup:\n  - X-2\n  - X-3\n",
-    );
-    const at = { "X-1": "To Do", "X-2": "To Do", "X-3": "Done" };
-    const updates = [];
-    const t = {
-      fetchIssue: async (ref) => ({
-        ref,
-        status: at[ref],
-        statusCategory: at[ref] === "Done" ? "done" : "new",
-      }),
-      updateIssue: async (ref, u) => updates.push([ref, u.status, u.comment]),
-    };
-    assert.equal(
-      await startIssue(ws, t, JIRA),
-      "X-1 → In Progress; X-2 → In Progress; X-3 already Done",
-    );
-    const comment = `Work started: research phase in workspace ${path.basename(ws)}.`;
-    assert.deepEqual(updates, [
-      ["X-1", "In Progress", comment],
-      ["X-2", "In Progress", comment],
-    ]);
-  } finally {
-    fs.rmSync(ws, { recursive: true, force: true });
-  }
-});
+test("startIssue: a grouped workspace moves the lead and each member; one past it stays", () =>
+  withSandboxHome(async () => {
+    const ws = fs.mkdtempSync(path.join(os.tmpdir(), "issue-start-"));
+    try {
+      fs.mkdirSync(dotDir(ws), { recursive: true });
+      fs.writeFileSync(
+        path.join(dotDir(ws), "workspace.yml"),
+        "feature: f\nissue_id: X-1\ngroup:\n  - X-2\n  - X-3\n",
+      );
+      const at = { "X-1": "To Do", "X-2": "To Do", "X-3": "Done" };
+      const updates = [];
+      const t = {
+        fetchIssue: async (ref) => ({
+          ref,
+          status: at[ref],
+          statusCategory: at[ref] === "Done" ? "done" : "new",
+        }),
+        updateIssue: async (ref, u) => updates.push([ref, u.status, u.comment]),
+      };
+      assert.equal(
+        await startIssue(ws, t, JIRA),
+        "X-1 → In Progress; X-2 → In Progress; X-3 already Done",
+      );
+      const comment = `Work started: research phase in workspace ${path.basename(ws)}.`;
+      assert.deepEqual(updates, [
+        ["X-1", "In Progress", comment],
+        ["X-2", "In Progress", comment],
+      ]);
+    } finally {
+      fs.rmSync(ws, { recursive: true, force: true });
+    }
+  }));

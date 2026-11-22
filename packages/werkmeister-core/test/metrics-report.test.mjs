@@ -20,6 +20,8 @@ const PR = (n) => `https://github.com/o/app/pull/${n}`;
 
 const EVENTS = [
   // ws-a: closed, first turn 08:00 on 11-16.
+  ev("2026-11-16T07:45:00Z", "issue.start", "ws-a", { ticket: "SW-1" }),
+  ev("2026-11-16T07:30:00Z", "issue.start", "ws-a", { ticket: "SW-1" }), // before its first turn; the earliest counts
   ev("2026-11-15T12:00:00Z", "answer", "ws-a", { session: "s", waited_s: 99999 }), // before its first turn: a reused name's earlier run
   ev("2026-11-16T09:00:00Z", "answer", "ws-a", { session: "s", waited_s: 600 }),
   ev("2026-11-16T09:30:00Z", "queue.admit", "ws-a", { feature: "a", waited_s: 300 }),
@@ -158,29 +160,31 @@ test("the range keeps only waits that ended inside it, with no week gaps", () =>
   );
 });
 
-test("cycle runs first turn → merge, lead first turn → release, or → merge with no tag", () => {
+test("cycle runs issue.start (else first turn) → merge, lead first turn → release, or → merge with no tag", () => {
   const r = report("7d");
   assert.deepEqual(r.tickets, [
     {
       ticket: "SW-1",
       workspace: "ws-a",
       firstTurn: "2026-11-16T08:00:00Z",
+      inProgressAt: "2026-11-16T07:30:00Z",
       mergedAt: "2026-11-16T10:45:00Z",
       releasedAt: "2026-11-16T11:45:00Z",
-      cycleMinutes: 165,
+      cycleMinutes: 195,
       leadMinutes: 225,
     },
     {
       ticket: "ws-b",
       workspace: "ws-b",
       firstTurn: "2026-11-17T08:00:00Z",
+      inProgressAt: null,
       mergedAt: "2026-11-17T12:00:00Z",
       releasedAt: null,
       cycleMinutes: 240,
       leadMinutes: 240,
     },
   ]);
-  assert.deepEqual(r.cycle, { p50Minutes: 165, p90Minutes: 240 });
+  assert.deepEqual(r.cycle, { p50Minutes: 195, p90Minutes: 240 });
   assert.deepEqual(r.lead, { p50Minutes: 225, p90Minutes: 240 });
 });
 
@@ -300,6 +304,29 @@ test("metricsReport counts a doubled pr.merged line in the temp-HOME log once", 
       assert.equal((await metricsReport({ range: "all" }, NOW)).waits.pr, 1800);
     },
     { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
+  );
+});
+
+test("a reused name's cycle starts at its own run's issue.start, not the earlier run's", () => {
+  const r = flowMetrics(
+    {
+      events: [
+        ev("2026-10-30T12:00:00Z", "issue.start", "ws-q", { ticket: "SW-9" }), // the earlier run
+        ev("2026-11-17T07:00:00Z", "issue.start", "ws-q", { ticket: "SW-9" }),
+        ev("2026-11-17T10:00:00Z", "pr.merged", "ws-q", { pr: PR(9) }),
+      ],
+      open: [],
+      usages: [
+        usage("ws-q", "2026-11-01T00:00:00Z", "2026-10-30T00:00:00Z", 1, NO_TOKENS, 0, 0, 0),
+        usage("ws-q", "2026-11-18T00:00:00Z", "2026-11-17T08:00:00Z", 1, NO_TOKENS, 0, 0, 0),
+      ],
+    },
+    "7d",
+    NOW,
+  );
+  assert.deepEqual(
+    r.tickets.map((t) => [t.inProgressAt, t.cycleMinutes, t.leadMinutes]),
+    [["2026-11-17T07:00:00Z", 180, 120]],
   );
 });
 

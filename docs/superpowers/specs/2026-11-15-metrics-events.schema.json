@@ -20,6 +20,7 @@
         "ask",
         "answer",
         "stage.done",
+        "issue.start",
         "gate.start",
         "gate.end",
         "pr.open",
@@ -116,6 +117,10 @@
       "then": { "required": ["stage", "commit"] }
     },
     {
+      "if": { "properties": { "event": { "const": "issue.start" } } },
+      "then": { "required": ["ticket"] }
+    },
+    {
       "if": { "properties": { "event": { "const": "gate.start" } } },
       "then": { "required": ["run", "retry"] }
     },
@@ -175,6 +180,13 @@
       "ticket": "SW-753",
       "stage": "02_spec",
       "commit": "a1b2c3d"
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T06:01:30Z",
+      "event": "issue.start",
+      "workspace": "sw-753-incremental-tsc",
+      "ticket": "SW-753"
     },
     {
       "v": 1,

@@ -23,6 +23,8 @@ export type MetricsEvent =
   | { event: "gate.start"; workspace: string; run: string; retry: number }
   | { event: "gate.end"; workspace: string; run: string; exit: number }
   | { event: "stage.done"; workspace: string; stage: string; commit: string }
+  /** `werkmeister issue start` moved *ticket* to in progress; where cycle time starts (SW-1034). */
+  | { event: "issue.start"; workspace: string; ticket: string }
   | { event: "ask"; workspace: string; session: string; kind: "question" | "plan" | "wrap-up" }
   | { event: "answer"; workspace: string; session: string; waited_s: number };
 

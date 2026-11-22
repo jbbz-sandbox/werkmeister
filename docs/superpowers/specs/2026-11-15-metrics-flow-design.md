@@ -97,7 +97,7 @@ Rejected: inferring capacity waits from transcript tool-call durations (they mix
 | Merge queue in and out | derived | github-ingest webhook | daemon log `~/.werkmeister/sandbox-mcp.log` | log only, no time on the line |
 | Gate started, result | derived | log mtime; `last-exec` marker | `pr_lifecycle.ts:947-950`; `apps/cli/src/commands/pr.ts:66-75` | last successful run only |
 | Release tagged | derived | git tag creatordate | `pr_lifecycle.ts:1964,1985` | PR frontmatter, no time |
-| Issue status move | derived | Jira changelog (never read today) | `moveIssue`, `issue_status.ts:140` | in the tracker |
+| Issue status move | logged since SW-1034: `issue.start` | Jira changelog (never read) | `startIssue`, `issue_status.ts` | the metrics log |
 | Workspace closed out | **yes** | `closedAt`, `firstTurn`, per-session first and last turn | `buildUsageSnapshot`, `usage_snapshot.ts:126-178`, written at `:244-262` | **yes**: `usage.json` is pushed to the record branch before the folder is removed (`sandbox.ts:2933-2940`). 237 survive from 2026-10-30 on. |
 
 ### To add: the minimum
@@ -113,7 +113,7 @@ Rejected: inferring capacity waits from transcript tool-call durations (they mix
 | `gate.start`, `gate.end` (exit code, retry count) | the gate runner, `pr_lifecycle.ts:947-950`; `apps/cli/src/commands/pr.ts:66-75` | gate first-pass rate, retry loss |
 | `pr.open`, `pr.merged`, `release` | where PR status is written, `pr_lifecycle.ts:1805,1939,1985`, using GitHub `createdAt`/`mergedAt` and the tag date | CI and queue time, release wait |
 
-Still derived, no new logging: session start, resume and idle (transcripts), issue status (Jira changelog), closed-out (`usage.json.closedAt`).
+Still derived, no new logging: session start, resume and idle (transcripts), closed-out (`usage.json.closedAt`).
 
 SW-404 (Pino structured logging, stage transitions and timings) writes through the same writer: one log, not two.
 
@@ -192,7 +192,7 @@ The follow-ups implement these exactly:
   - PR open → merge = `pr.merged.at` − `pr.open.at`: CI, review, the person's merge and the merge queue together (the person merges by hand)
   - gate retries = Σ(`gate.end.at` − `gate.start.at`) over runs whose `exit` is 75 ("retry later": host load or capacity, `apps/cli/src/commands/pr.ts:75`). Runs with any other non-zero exit are gate failures, a quality measure, not a wait.
   - release = `release.at` − `pr.merged.at`
-- **Cycle time** runs from issue In Progress (the Jira changelog, or else the workspace's first turn) to `pr.merged`.
+- **Cycle time** runs from issue In Progress (the `issue.start` event `werkmeister issue start` writes, or else the workspace's first turn) to `pr.merged`.
 - **Lead time** runs from the workspace's first turn to `release`, or to `pr.merged` when the repo ships with no tag.
 - **Aging WIP** compares an open card's time in its current column with that column's p50 and p90 over the selected range. A card past p90 turns red.
 - **Active time** is the sum of the gaps between consecutive transcript messages that are under 5 minutes. It is shown beside wall clock.
