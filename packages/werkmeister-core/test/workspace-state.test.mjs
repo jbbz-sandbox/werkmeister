@@ -308,7 +308,7 @@ test("needs-you: a gate is not handed over while a background shell, a capacity 
     ["tool", "Running in background: sleep 600"],
   );
   assert.deepEqual(
-    kinds(state({ sessions: shell("pnpm test", ago(SESSION_GONE_MS + MIN)) })),
+    kinds(state({ sessions: shell("pnpm test", ago(90 * MIN + SESSION_GONE_MS + MIN)) })),
     ["gate"],
     "a shell silent past the limit doesn't stick",
   );
@@ -384,7 +384,9 @@ test("agent: a background shell or a capacity wait reads working, not done", () 
     workspaceState(facts({ sessions: shell(long) })).activity.label,
     "Running in background: until gh pr view 12 --json state; do sl…",
   );
-  const stale = { s: { ...stopped, shell: { command: "x", at: ago(SESSION_GONE_MS + MIN) } } };
+  const stale = {
+    s: { ...stopped, shell: { command: "x", at: ago(90 * MIN + SESSION_GONE_MS + MIN) } },
+  };
   assert.deepEqual(chip({ sessions: stale }, done), { id: "done", since: ago(MIN) });
 
   // Nothing left running: done stays done.
@@ -569,4 +571,43 @@ test("stalled: an open tool call gets the 90 min limit, not the 30 min one", () 
   );
   assert.equal(thinking.activity.id, "thinking");
   assert.equal(thinking.stalled?.reason, "idle");
+});
+
+// SW-1047: a background shell outlives its turn, so it keeps the tool limit past SESSION_GONE_MS.
+test("stalled: a background shell keeps reading running past 30 min and gets the tool limit", () => {
+  const TOOL = 90 * MIN;
+  const stopped = { status: "idle", stopped: true };
+  // The transcript was last written when the shell started and the turn ended.
+  const bg = (command, ms, over = {}) =>
+    workspaceState(
+      facts({
+        sessions: {
+          s: { ...stopped, at: ago(ms), last: ago(ms), shell: { command, at: ago(ms) } },
+        },
+        signal: { agent: "done", at: ago(ms) },
+        lastActivity: ago(ms),
+        ...over,
+      }),
+    );
+  const test35 = bg("pnpm test", 35 * MIN);
+  assert.deepEqual([test35.activity.id, test35.activity.label], ["testing", "Running tests"]);
+  assert.equal(test35.agent.id, "working");
+  assert.equal(test35.stalled, null, "35 min is under toolMs");
+  assert.equal(bg("pnpm test", TOOL).stalled, null, "at the limit");
+  const hung = bg("pnpm test", TOOL + MIN);
+  assert.equal(hung.activity.id, "testing", "still visible once stalled");
+  assert.deepEqual(hung.stalled, { reason: "idle", since: ago(TOOL + MIN) });
+  // A non-test shell is a tool and gets the same limit.
+  const other = bg("sleep 9000", 35 * MIN);
+  assert.equal(other.activity.label, "Running in background: sleep 9000");
+  assert.equal(other.stalled, null);
+  assert.equal(bg("sleep 9000", TOOL + MIN).stalled?.reason, "idle");
+  // Past toolMs + SESSION_GONE_MS the record is taken for a missed exit and drops out.
+  const gone = bg("pnpm test", TOOL + SESSION_GONE_MS + MIN);
+  assert.equal(gone.activity.id, "idle");
+  assert.equal(gone.stalled, null);
+  // stalledAfter.toolMs moves the window: 40 min tool limit drops out past 70.
+  const stalledAfter = { idleMs: 30 * MIN, waitMs: 30 * MIN, toolMs: 40 * MIN };
+  assert.equal(bg("pnpm test", 41 * MIN, { stalledAfter }).stalled?.reason, "idle");
+  assert.equal(bg("pnpm test", 71 * MIN, { stalledAfter }).activity.id, "idle");
 });
