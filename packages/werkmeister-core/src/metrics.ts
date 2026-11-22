@@ -85,6 +85,7 @@ export function recordStageDone(ws: string): void {
   try {
     const root = path.join(ws, "stages");
     if (!fs.existsSync(root)) return;
+    let done: Map<string, string> | undefined;
     for (const stage of fs
       .readdirSync(root)
       .filter((d) => /^\d+_/.test(d))
@@ -105,6 +106,11 @@ export function recordStageDone(ws: string): void {
       } catch {
         continue;
       }
+      // `metrics rebuild` logs stage.done without a claim (SW-1025): don't add a second line.
+      // Checked only here, for a filled, unclaimed stage, so it stays off the hot path.
+      done ??= stageDoneTimes(ws);
+      // shortcut: keyed on stage, not commit, as stageDoneTimes is; a refilled stage is not re-logged.
+      if (done.has(stage)) continue;
       recordEvent(
         { event: "stage.done", workspace: path.basename(ws), stage, commit: fill.commit },
         fill.at,

@@ -338,6 +338,34 @@ test("parallel tool calls' hooks write one stage.done between them", () =>
     },
     { workspace: { context_strategy: "icm" } },
   ));
+
+// SW-1025: `metrics rebuild` logs stage.done without a claim file; the live sweep must not add a second.
+test("recordStageDone skips a stage whose stage.done rebuild already logged, but not a later stage", () =>
+  withFixtureWorkspace(
+    async (fx) => {
+      const { ws, commit, stages } = icmRun(fx);
+      const sha = commit(`stages/${stages[0]}/output/out.md`, "x");
+      const at = new Date().toISOString();
+      recordEvent(
+        { event: "stage.done", workspace: path.basename(ws), stage: stages[0], commit: sha },
+        at,
+      );
+      recordStageDone(ws);
+      assert.equal(stageDone().length, 1, "no second line for the rebuilt stage");
+      const next = commit(`stages/${stages[1]}/output/out.md`, "y");
+      recordStageDone(ws);
+      assert.deepEqual(
+        stageDone().map((e) => [e.stage, e.commit]),
+        [
+          [stages[0], sha],
+          [stages[1], next],
+        ],
+      );
+      assert.equal(fs.existsSync(path.join(ws, ".werkmeister", "stage-done", stages[1])), true);
+    },
+    { workspace: { context_strategy: "icm" } },
+  ));
+
 // SW-776: ask / answer from the agent-state hooks.
 const T0 = Date.parse("2026-11-21T10:00:00.000Z");
 const at = (s) => new Date(T0 + s * 1000);
