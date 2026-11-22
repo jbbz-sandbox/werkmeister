@@ -29,7 +29,7 @@ test("writes quiet.html and busy.html: the view's CSS, theme colours, the strip 
     "3 need you",
     "running",
     "2 waiting",
-    "infra: caddy, k8s-forwards down",
+    "infra: caddy down, k8s-forwards starting",
     "CI failed or conflicts",
   ])
     assert.ok(busy.includes(chip), chip);
