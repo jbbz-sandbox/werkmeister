@@ -200,7 +200,7 @@
               "cpus": { "$ref": "#/definitions/cpus" },
               "health_endpoint": {
                 "$ref": "#/definitions/healthEndpoint",
-                "description": "The sidecar's healthcheck: `redis` (the default), `postgres`, an HTTP path, or \"\" for none."
+                "description": "The sidecar's healthcheck, read as on a service: `redis` (the default), `postgres`, an HTTP path, or \"\" for a TCP connect."
               },
               "environment": { "$ref": "#/definitions/environment" },
               "extra_volumes": { "$ref": "#/definitions/volumes" }

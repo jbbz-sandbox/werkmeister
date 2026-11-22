@@ -700,12 +700,27 @@ function renderFeatureCompose(
       setdefault(svcObj, "memory_reservation", "512M");
       setdefault(svcObj, "cpus", DEFAULT_CPUS);
       if (svcObj["extra_services"]) {
-        // The template reads each sidecar's `cpus` unguarded.
+        // The template reads each sidecar's `cpus` unguarded. Its probe reads as a service's (SW-1056);
+        // unset stays the Redis probe sidecars began with (SW-933).
         svcObj["extra_services"] = Object.fromEntries(
-          Object.entries(svcObj["extra_services"]).map(([n, e]) => [
-            n,
-            { cpus: DEFAULT_CPUS, ...(e as object) },
-          ]),
+          Object.entries(svcObj["extra_services"]).map(([n, e]) => {
+            const extra = e as { health_endpoint?: string | null; internal_port?: number };
+            return [
+              n,
+              {
+                cpus: DEFAULT_CPUS,
+                ...extra,
+                healthcheck_test: JSON.stringify([
+                  "CMD-SHELL",
+                  composeHealthcheck(
+                    extra.health_endpoint ?? "redis",
+                    // A bare pg_isready checked 5432 before SW-1056; the template's port default is Redis's.
+                    extra.internal_port ?? (extra.health_endpoint === "postgres" ? 5432 : 6379),
+                  ),
+                ]),
+              },
+            ];
+          }),
         );
       }
       svcObj["health_endpoint"] = healthEndpointOf(svcObj);

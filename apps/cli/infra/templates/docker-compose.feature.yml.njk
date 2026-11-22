@@ -344,22 +344,13 @@ services:{% if not local_services | length %} {}{% endif %}
       resources:
         limits:
           cpus: "{{ extra.cpus }}"
-{# SW-933: health_endpoint as for services; unset keeps the Redis probe, "" has none. #}
-{% set probe = extra.get('health_endpoint', 'redis') %}
-{% if probe %}
     healthcheck:
-{% if probe == 'redis' %}
-      test: ["CMD", "redis-cli", "ping"]
-{% elif probe == 'postgres' %}
-      test: ["CMD", "pg_isready"]
-{% else %}
-      test: ["CMD-SHELL", "curl -sf http://localhost:{{ extra.get('internal_port', 6379) }}{{ probe }}"]
-{% endif %}
+{# SW-1056: health_endpoint read as for a service (composeHealthcheck); unset keeps the Redis probe #}
+      test: {{ extra.healthcheck_test }}
       interval: 5s
       timeout: 5s
       retries: 5
       start_period: 5s
-{% endif %}
     networks:
       - feature-{{ feature_name }}
       - shared-network
