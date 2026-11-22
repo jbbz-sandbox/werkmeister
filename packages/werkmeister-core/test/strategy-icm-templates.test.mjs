@@ -134,10 +134,11 @@ test("each template renders with no undefined and a route per stage", async () =
             `${wt}/${d}`,
           );
         // SW-242: research greps tests and fixtures for the exact value being changed.
+        // SW-1002: from the repo root, every package and app, with the command in inventory.md.
         if (d.endsWith("_research"))
           assert.match(
             c,
-            /^1\. List what exists.*grep tests and fixtures for that exact value and list the hits/m,
+            /^1\. List what exists.*grep tests and fixtures for that exact value with one `git grep` from the repo root across every package and app, not only the package the change touches, and list the hits; `inventory\.md` records the command and its scope/m,
             `${wt}/${d}`,
           );
         // Research checks an external tool's facts against the installed tool, not its docs.

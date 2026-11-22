@@ -402,7 +402,8 @@ const feature: Stage[] = [
         "List what exists that the brief touches: entry points, routes or exports, data shapes, and the tests that cover them. " +
           'For each module the change adds an export to, grep the tests for whole-module mocks of it (e.g. `vi.mock("<module>"`, `mock.module`) and list every hit as a fixture the change must update. ' +
           // SW-242: "no test covers it" was written without a grep; a test pinned the exact old string.
-          "For each value the change alters (a string, a default, a command), grep tests and fixtures for that exact value and list the hits; never write that no test covers it without that grep.",
+          // SW-1002: sw-777 grepped one package and missed apps/cli's test of the same value.
+          "For each value the change alters (a string, a default, a command), grep tests and fixtures for that exact value with one `git grep` from the repo root across every package and app, not only the package the change touches, and list the hits; `inventory.md` records the command and its scope. Never write that no test covers it without that grep.",
         `Find the test command in \`../../.werkmeister/werkmeister-context.md\` and copy it verbatim — do not restate it from memory. ${SERVICE_RESEARCH_RULES}`,
         "Check what is already installed that could do the job before recommending anything new. " +
           // Moved from docs/harnesses.md: adapter runs kept deciding from a harness's docs, not its binary.
