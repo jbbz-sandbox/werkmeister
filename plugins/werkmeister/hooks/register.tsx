@@ -964,17 +964,14 @@ export function canStart(r: WorkspaceRow): boolean {
   return !hasSession(r) && r.stage?.index === 1;
 }
 
-/** The infra line: `infra partial · 4 of 5 up · down: caddy`; services not healthy or running are named. */
+/** The infra line: `infra partial · 4 of 5 up`. The strip's infra chip names the down services (SW-1043). */
 export function infraLine(
   i: InfraStatus | null,
   t: { ok: boolean; reason?: string; fix: string } | null = null,
 ): string {
   const tracker = t && !t.ok ? `tracker: ${t.reason} · ${t.fix}` : null;
   if (!i) return ["infra · unknown", tracker].filter(Boolean).join(" · ");
-  const bad = i.services
-    .filter((s) => s.state !== "healthy" && s.state !== "running")
-    .map((s) => `${s.state}: ${s.name}`);
-  return [`infra ${i.state}`, i.total > 0 ? `${i.running} of ${i.total} up` : null, ...bad, tracker]
+  return [`infra ${i.state}`, i.total > 0 ? `${i.running} of ${i.total} up` : null, tracker]
     .filter(Boolean)
     .join(" · ");
 }

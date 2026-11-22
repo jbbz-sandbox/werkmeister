@@ -2243,9 +2243,7 @@ test("Connect runs werkmeister connect, refreshes, and the infra line shows stat
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await ui.find({ key: "infra" }))?.text).toBe(
-    "infra partial · 2 of 3 up · starting: k8s-forwards",
-  );
+  expect((await ui.find({ key: "infra" }))?.text).toBe("infra partial · 2 of 3 up");
   const before = w.calls.filter((c) => c.key === `${WS}/workspace-status`).length;
   await ui.press({ key: "connect" });
   expect(w.calls.filter((c) => c.key === `${WS}/connect`)).toHaveLength(1);
@@ -3382,3 +3380,36 @@ test("SW-487: a card lists every needs-you item with its action, the activity be
   expect((await ui.find({ key: "activity:ab" }))?.text).toBe("no live turn, nothing asked");
   await ui.unmount();
 });
+
+test("SW-1043: a down infra service is named once, on the strip's chip, not on the infra line too", async ($, on) => {
+  world(
+    on,
+    stubs({
+      [`${WS}/workspace-status`]: () =>
+        ok({
+          ...STATUS,
+          infra: {
+            state: "partial",
+            running: 1,
+            total: 2,
+            services: [
+              { name: "registry", state: "healthy" },
+              { name: "caddy", state: "down" },
+            ],
+          },
+        }),
+    }),
+  );
+  await openPane($);
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "infra" }))?.text).toBe("infra partial · 1 of 2 up");
+  expect((await ui.find({ key: "chips" }))?.text).toContain("infra: caddy down");
+  await ui.unmount();
+});
+
