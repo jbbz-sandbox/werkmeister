@@ -224,8 +224,9 @@ const TOOL_FACT_CHECK =
 
 // SW-875: sw-578 edited before `feature up`, whose rebuild baked the fix into the dist its fail-first runs used.
 // SW-983: the stash stack is shared by every worktree on the machine; a bare pop takes another session's changes.
+// SW-990: building first held a 5-CPU container through all the editing; a wave queued at once on entering stage 03.
 const BASE_BUILD_RED =
-  "A container start can rebuild from the working tree (`werkmeister feature up` reruns the install and build), so see each new test fail against a build of the unfixed code: build before editing source, or park the change in a temporary WIP commit (never the shared stash) and rebuild. Record which build each fail-first run used.";
+  "A container start can rebuild from the working tree (`werkmeister feature up` reruns the install and build), so see each new test fail against a build of the unfixed code. Write the change and its tests with no container, and start it at the first fail-first run, not at the start of the stage: park the change in a temporary WIP commit (never the shared stash), check out the unfixed source (`git checkout HEAD~ -- <source files>`; `rm` a source file the change adds; the tests stay), run `werkmeister feature up --service <name>` and the new tests, then restore the change (`git checkout HEAD -- <source files>`, then `git reset --soft HEAD~`; `rm` again a file the change deletes) and build and test. Run `werkmeister feature stop` when a long stretch of editing follows. Record which build each fail-first run used.";
 
 // SW-905: sw-856 showed tests red by editing dist/; an incremental tsc didn't re-emit and the edit leaked into the CLI bundle.
 const RED_BY_SOURCE =

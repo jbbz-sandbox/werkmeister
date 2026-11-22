@@ -418,7 +418,7 @@ test("each template renders with no undefined and a route per stage", async () =
         if (wt === "feature" && d.endsWith("_implement"))
           assert.match(
             c,
-            /^\d+\. A container start can rebuild from the working tree .*see each new test fail against a build of the unfixed code: build before editing source, or park the change in a temporary WIP commit \(never the shared stash\) and rebuild\. Record which build each fail-first run used\./m,
+            /^\d+\. A container start can rebuild from the working tree .*see each new test fail against a build of the unfixed code\. Write the change and its tests with no container, and start it at the first fail-first run, not at the start of the stage: park the change in a temporary WIP commit \(never the shared stash\), check out the unfixed source \(`git checkout HEAD~ -- <source files>`; `rm` a source file the change adds; the tests stay\), run `werkmeister feature up --service <name>` and the new tests, then restore the change \(`git checkout HEAD -- <source files>`, then `git reset --soft HEAD~`; `rm` again a file the change deletes\) and build and test\. Run `werkmeister feature stop` when a long stretch of editing follows\. Record which build each fail-first run used\./m,
             `${wt}/${d}`,
           );
         else assert.doesNotMatch(c, /fail against a build of the unfixed code/, `${wt}/${d}`);
