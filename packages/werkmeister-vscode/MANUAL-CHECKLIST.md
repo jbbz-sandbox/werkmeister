@@ -25,6 +25,17 @@ render, or a live editor.
 
 ## Phase A — Extension Development Host (F5)
 
+**Agents, and any check that presses a button: use the fixture dev host, never F5 (SW-1020).**
+F5 opens the dev host against your real daemon and `~/.werkmeister`, where Up, Stop,
+Restart, Close out and the session terminals act on real workspaces. After
+`pnpm --filter werkmeister-vscode run build`, run on the host:
+`node packages/werkmeister-vscode/scripts/manual-dev-host.mjs [busy|quiet]`.
+Its window shows the SW-1019 snapshot fixture's cards from a fake daemon; HOME,
+the workspaces root, `--user-data-dir` and `--extensions-dir` are temp, and the CLI
+is a stub, so a press reaches nothing real. Close the window: the script prints every
+daemon and CLI call the presses made, then deletes its temp folder. Steps that need
+real containers or Telepresence still need F5 by a person.
+
 1. **Launch the dev host.** Open `packages/werkmeister-vscode` in VS Code and press
    **F5**. A second VS Code window ("Extension Development Host") opens.
 
