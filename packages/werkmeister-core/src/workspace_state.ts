@@ -8,7 +8,9 @@ import {
   type Notice,
   SESSION_GONE_MS,
   type SessionRecord,
+  STALLED_TOOL_DEFAULT_MS,
   sessionGone,
+  shellLive,
   type WaitingFile,
 } from "./agent_state.js";
 import type { Lifecycle } from "./pr_lifecycle.js";
@@ -90,8 +92,7 @@ export interface Stalled {
   since: string | null;
 }
 export const STALLED_DEFAULT_MS = 30 * 60_000;
-/** The idle limit while a tool call runs, foreground (SW-1037) or a background shell (SW-1047). */
-export const STALLED_TOOL_DEFAULT_MS = 90 * 60_000;
+export { STALLED_TOOL_DEFAULT_MS };
 
 export interface WorkspaceState {
   phase: Phase;
@@ -233,11 +234,9 @@ function activityOf(f: StateFacts): Activity {
   // The newest hook event, not the turn's start: a 6 h turn heard from a minute ago is not "6 h ago" (SW-953).
   if (live.length) return a("thinking", "Thinking", live[0][1].last ?? live[0][1].at, live[0][0]);
   if (f.turnRunning) return a("thinking", "Thinking");
-  // A background shell outlives its turn too (SW-570). A turn that stops after starting it writes nothing
-  // more, so it stays a SESSION_GONE_MS past toolMs to read stalled before it is taken for a missed exit (SW-1047).
-  const shellMs = (f.stalledAfter?.toolMs ?? STALLED_TOOL_DEFAULT_MS) + SESSION_GONE_MS;
+  // A background shell outlives its turn too (SW-570).
   for (const [id, s] of Object.entries(f.sessions))
-    if (s.shell && now - Date.parse(s.shell.at) < shellMs)
+    if (s.shell && shellLive(s.shell, now, f.stalledAfter?.toolMs))
       return TEST_COMMAND.test(s.shell.command)
         ? a("testing", "Running tests", s.shell.at, id)
         : a("tool", `Running in background: ${backgroundWhat(s.shell.command)}`, s.shell.at, id);

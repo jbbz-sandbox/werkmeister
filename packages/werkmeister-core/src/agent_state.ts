@@ -138,6 +138,20 @@ const lastOf = (s: SessionRecord) => Date.parse(s.last ?? s.at);
 export const sessionGone = (s: SessionRecord, now = Date.now()) =>
   s.status === "busy" && now - lastOf(s) >= SESSION_GONE_MS;
 
+/** The idle limit while a tool call runs, foreground (SW-1037) or a background shell (SW-1047). */
+export const STALLED_TOOL_DEFAULT_MS = 90 * 60_000;
+
+/**
+ * Whether a background shell still counts as running. A turn that stops after starting it writes nothing more,
+ * so it stays a SESSION_GONE_MS past *toolMs* to read stalled before it is taken for a missed exit (SW-1047).
+ * The card and {@link agentOf} share it, so preemption and pause read a long test as working too (SW-1058).
+ */
+export const shellLive = (
+  shell: NonNullable<SessionRecord["shell"]>,
+  now: number,
+  toolMs = STALLED_TOOL_DEFAULT_MS,
+) => now - Date.parse(shell.at) < toolMs + SESSION_GONE_MS;
+
 /**
  * The one-word badge older readers show (VS Code, the dashboard, preemption), from the session
  * records alone; null when no session has done anything yet, so the caller falls back to the transcript.
@@ -145,6 +159,7 @@ export const sessionGone = (s: SessionRecord, now = Date.now()) =>
 export function agentOf(
   sessions: Record<string, SessionRecord>,
   now = Date.now(),
+  toolMs?: number,
 ): { agent: AgentState; at: string; question: string | null } | null {
   const list = Object.values(sessions);
   const ask = list
@@ -154,7 +169,7 @@ export function agentOf(
   const busy = list.find((s) => s.status === "busy" && !sessionGone(s, now));
   if (busy) return { agent: "working", at: busy.at, question: null };
   // A background shell outlives the turn that started it (SW-681).
-  const shell = list.find((s) => s.shell && now - Date.parse(s.shell.at) < SESSION_GONE_MS)?.shell;
+  const shell = list.find((s) => s.shell && shellLive(s.shell, now, toolMs))?.shell;
   if (shell) return { agent: "working", at: shell.at, question: null };
   const newest = list.sort((a, b) => lastOf(b) - lastOf(a))[0];
   if (!newest) return null;

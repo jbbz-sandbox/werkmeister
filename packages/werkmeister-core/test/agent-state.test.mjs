@@ -402,17 +402,17 @@ test("hooks: a background shell outlives a later unrelated turn, and agentOf rea
   assert.equal(rec(dir, "a").shell.id, "bg2");
   fire("PostToolUse", 7, { tool_name: "TaskStop", tool_input: { task_id: "bg2" } });
   assert.equal(rec(dir, "a").shell, undefined);
-  // A shell silent past SESSION_GONE_MS is no longer read as working.
+  // SW-1058: a shell reads working for the card's window, toolMs + SESSION_GONE_MS (SW-1047), then not.
   const { SESSION_GONE_MS } = await import("../dist/agent_state.js");
-  const old = new Date(Date.now() - SESSION_GONE_MS - 60_000).toISOString();
-  const stale = {
-    status: "idle",
-    at: old,
-    last: old,
-    stopped: true,
-    shell: { command: "x", at: old },
+  const { STALLED_TOOL_DEFAULT_MS } = await import("../dist/workspace_state.js");
+  const shellAt = (ms) => {
+    const at = new Date(Date.now() - ms).toISOString();
+    return { a: { status: "idle", at, last: at, stopped: true, shell: { command: "x", at } } };
   };
-  assert.equal(agentOf({ a: stale }).agent, "done");
+  assert.equal(agentOf(shellAt(35 * 60_000)).agent, "working", "a 35-min background test");
+  assert.equal(agentOf(shellAt(STALLED_TOOL_DEFAULT_MS + SESSION_GONE_MS + 60_000)).agent, "done");
+  // A shorter stalled_tool_minutes narrows it the same way it narrows the card.
+  assert.equal(agentOf(shellAt(35 * 60_000), Date.now(), 60_000).agent, "done");
 });
 
 // SW-487 fault 7: an unlocked read-modify-write of one shared file lost updates.
