@@ -890,6 +890,7 @@ function readEnv(ws: string, key: string): string {
  * The pre-PR gate for one repo. A container it had to start for the repo's
  * tests is stopped again, pass or fail; what was running before stays (SW-34).
  * One it recreated from the branch's settings is recreated from compose.yml (SW-118).
+ * With *keepStarted*, a passing gate leaves its starts running instead (SW-1046).
  */
 export async function runGate(
   ws: string,
@@ -898,8 +899,11 @@ export async function runGate(
   {
     testsOnly = false,
     rebase = false,
+    keepStarted = false,
   }: {
     testsOnly?: boolean;
+    /** SW-1046: `pr open` re-gates next; stopping them would queue its starts for capacity again. The idle reaper still stops them. */
+    keepStarted?: boolean;
     /** SW-857: rebase an unpushed branch behind its base, as `pr open` does. */
     rebase?: boolean;
   } = {},
@@ -929,7 +933,13 @@ export async function runGate(
       }
       result?.checks.push({ name: "containers", ok: true, detail });
     }
-    if (started.length) {
+    if (started.length && keepStarted && result?.ok)
+      result.checks.push({
+        name: "containers",
+        ok: true,
+        detail: `started ${started.join(", ")} for the gate, left running for \`pr open\``,
+      });
+    else if (started.length) {
       const stop = await deps.run("docker", ["stop", ...started]);
       result?.checks.push({
         name: "containers",
@@ -2066,7 +2076,7 @@ export async function gatePrs(
   // Every failure a capacity wait: the command exits 75, rerun (SW-668).
   let retryOnly = true;
   for (const f of files) {
-    const g = await runGate(ws, f, deps);
+    const g = await runGate(ws, f, deps, { keepStarted: true });
     ok &&= g.ok;
     if (!g.ok && !g.retry) retryOnly = false;
     lines.push(...formatGate(f.stem, g));
@@ -2103,7 +2113,7 @@ export async function gateTests(
       title: "",
       body: "",
     };
-    const g = await runGate(ws, file, deps, { testsOnly: true });
+    const g = await runGate(ws, file, deps, { testsOnly: true, keepStarted: true });
     ok &&= g.ok;
     if (!g.ok && !g.retry) retryOnly = false;
     lines.push(...formatGate(dir, g));
