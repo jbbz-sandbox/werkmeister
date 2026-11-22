@@ -19,7 +19,9 @@ export type MetricsEvent =
   | { event: "release"; workspace: string; ticket?: string; pr: string; tag: string }
   | { event: "gate.start"; workspace: string; run: string; retry: number }
   | { event: "gate.end"; workspace: string; run: string; exit: number }
-  | { event: "stage.done"; workspace: string; stage: string; commit: string };
+  | { event: "stage.done"; workspace: string; stage: string; commit: string }
+  | { event: "ask"; workspace: string; session: string; kind: "question" | "plan" | "wrap-up" }
+  | { event: "answer"; workspace: string; session: string; waited_s: number };
 
 /** `<sandboxHome()>/metrics/events-YYYY-MM.jsonl`, the UTC month of *at* (an ISO time). */
 export function metricsPath(at: string): string {

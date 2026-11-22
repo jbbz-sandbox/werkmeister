@@ -14,7 +14,7 @@ import * as path from "node:path";
 import { sandboxHome } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { WRAP_UP } from "./harness/claude/desktop.js";
-import { recordStageDone } from "./metrics.js";
+import { type MetricsEvent, recordEvent, recordStageDone } from "./metrics.js";
 import { findRecordRoot } from "./pr_guard.js";
 import { childEnv, dockerBin } from "./tool_bins.js";
 
@@ -253,6 +253,47 @@ function isExitNotice(line: string, tag: string): boolean {
 /** A permission prompt for an AskUserQuestion or ExitPlanMode call is that question, not news. */
 const askingTool = (s: SessionRecord) =>
   s.ask?.kind !== "permission" && s.tool !== undefined && ASKS.has(s.tool.name);
+
+/**
+ * The ask / answer metrics this hook event makes (SW-776): an `ask` only where a tool sets `s.ask`, an
+ * `answer` only at the open ask's own tool result, or the next prompt for a wrap_up ask. The paths that
+ * merely delete `s.ask` run on every tool call and emit nothing.
+ */
+export function askEvents(
+  input: Record<string, any>,
+  current: SessionRecord | null,
+  next: SessionRecord | null | undefined,
+  now: Date,
+  workspace: string,
+): MetricsEvent[] {
+  const event = input["hook_event_name"];
+  const tool = String(input["tool_name"] ?? "");
+  const session = String(input["session_id"]);
+  const set = next?.ask;
+  if (event === "PreToolUse" && set?.at === now.toISOString() && set.source === "session") {
+    if (set.via === "wrap_up") return [{ event: "ask", workspace, session, kind: "wrap-up" }];
+    if (ASKS.has(tool) && set.kind !== "permission")
+      return [{ event: "ask", workspace, session, kind: set.kind }];
+  }
+  const open = current?.ask;
+  if (open?.source !== "session") return [];
+  const answered =
+    event === "PostToolUse" || event === "PostToolUseFailure"
+      ? !open.via &&
+        ((tool === "AskUserQuestion" && open.kind === "question") ||
+          (tool === "ExitPlanMode" && open.kind === "plan"))
+      : event === "UserPromptSubmit" && open.via === "wrap_up";
+  if (!answered) return [];
+  const waited = Math.round((now.getTime() - Date.parse(open.at)) / 1000);
+  return [
+    {
+      event: "answer",
+      workspace,
+      session,
+      waited_s: Number.isNaN(waited) ? 0 : Math.max(0, waited),
+    },
+  ];
+}
 
 /**
  * The session's record after this hook event: null removes it, undefined leaves it as it is.
@@ -883,6 +924,9 @@ export function record(input: Record<string, any>, now = new Date()): string | n
   // `claude -p --resume <id>` shares an open session's id: its busy/idle counts, its end must not end that session.
   const foreign = headless && current !== null && !current.headless;
   const next = nextSession(input, current, now, { headless, foreign });
+  if (!foreign)
+    for (const e of askEvents(input, current, next, now, path.basename(root)))
+      recordEvent(e, now.toISOString());
   if (next === undefined) return null;
   if (next === null) {
     if (!current) return null;
