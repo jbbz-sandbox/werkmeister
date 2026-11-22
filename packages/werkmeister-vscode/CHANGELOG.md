@@ -1,5 +1,23 @@
 # vscode-plugin
 
+## 0.106.2
+
+### Patch Changes
+
+- 3cf8fe9: Internal: the werkmeister-vscode `snapshots` script writes the Workspaces view's strip and cards, quiet and busy, as static pages with the view's CSS and Dark Modern colours, so a layout can be measured at 300 px and 240 px before the exercise (SW-1019).
+- 403de51: Internal: `packages/werkmeister-vscode/scripts/manual-dev-host.mjs` opens an Extension Development Host over the snapshot fixture, with a temp HOME and VS Code dirs, a fake daemon and a logging stub CLI, so the manual check never acts on real workspaces. MANUAL-CHECKLIST.md and the validate text name it (SW-1020).
+- b9eeecd: The Workspaces view badge tooltip reads `1 needs you` for one workspace, with the same need/needs rule as the strip's chip (SW-1022).
+- Updated dependencies [67c9bcc]
+- Updated dependencies [ca67044]
+- Updated dependencies [75d5149]
+- Updated dependencies [1a99112]
+- Updated dependencies [8a52684]
+- Updated dependencies [d329530]
+- Updated dependencies [2c5fdf6]
+- Updated dependencies [f332481]
+  - werkmeister-core@0.106.2
+  - werkmeister-ui@0.7.90
+
 ## 0.106.1
 
 ### Patch Changes
