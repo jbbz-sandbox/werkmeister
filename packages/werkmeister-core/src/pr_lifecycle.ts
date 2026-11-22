@@ -2303,14 +2303,28 @@ export async function openPrs(
         continue;
       }
     }
-    writePrFields(f, {
-      status: "open",
-      url,
-      ...(g.release && { release: g.release }),
-      ...(await deps.session(ws)),
-      // Marks where review news starts, so a review before the first pr watch pass still wakes.
-      notified_review: new Date().toISOString(),
+    const session = await deps.session(ws);
+    // SW-1051: the first of two racing opens flips `approved` to `open`; the other sees that and records nothing.
+    const first = await withPrLock(ws, deps, async () => {
+      const now = readPrFiles(ws).find((p) => p.path === f.path);
+      if (now && statusOf(now) !== "approved") return false;
+      writePrFields(f, {
+        status: "open",
+        url,
+        ...(g.release && { release: g.release }),
+        ...session,
+        // Marks where review news starts, so a review before the first pr watch pass still wakes.
+        notified_review: new Date().toISOString(),
+      });
+      return true;
     });
+    if (!first) {
+      if (first === undefined) ok = false; // busy is a wait, so retryOnly stays: exit 75
+      lines.push(
+        `${f.stem}: ${first === undefined ? `${PR_LOCK_BUSY}; rerun pr open` : `already opened ${url}`}`,
+      );
+      continue;
+    }
     const prView = await deps.run("gh", ["pr", "view", url, "--json", "createdAt"], dir);
     let createdAt: string | undefined;
     try {
@@ -2415,6 +2429,35 @@ export async function refreshPrStatus(
   /** `gh pr view` of each PR still open, keyed by PR file path. */
   views: Map<string, PrView>;
 }> {
+  // SW-1051: the pass reads each PR file, then writes it, its events and the issue move; two at once would do all of it twice.
+  const done = await withPrLock(ws, deps, () => refreshPrStatusLocked(ws, deps, opts));
+  return done ?? { lines: [PR_LOCK_BUSY], changed: false, views: new Map() };
+}
+
+const PR_LOCK_BUSY = "another PR status pass is running";
+const PR_LOCK_WAIT_MS = 30_000;
+
+/** Runs *fn* holding `<ws>/.werkmeister/pr-status.lock`, waiting up to 30 s for another holder; `undefined` when it never frees. */
+async function withPrLock<T>(ws: string, deps: Deps, fn: () => Promise<T>): Promise<T | undefined> {
+  const file = path.join(dotDir(ws), "pr-status.lock");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  // shortcut: polls rather than watches; two passes at once are rare and the wait is seconds.
+  for (let waited = 0; !takeLock(file); waited += 100) {
+    if (waited >= PR_LOCK_WAIT_MS) return undefined;
+    await deps.sleep(100);
+  }
+  try {
+    return await fn();
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
+}
+
+async function refreshPrStatusLocked(
+  ws: string,
+  deps: Deps,
+  opts: { gh?: boolean },
+): Promise<{ lines: string[]; changed: boolean; views: Map<string, PrView> }> {
   const lines: string[] = [];
   const changed: string[] = [];
   const views = new Map<string, PrView>();

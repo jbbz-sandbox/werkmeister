@@ -181,6 +181,122 @@ test("pr open then pr status write pr.open and pr.merged at the fake gh's times"
   );
 });
 
+// SW-1051: racing passes write each pr.* line and make each issue move once.
+const RACE_TAG_SERVICES = `services:
+  lib:
+    type: cli
+    repo: app
+    path: packages/lib
+    test: "true"
+repos:
+  app:
+    services: [lib]
+    path_mappings:
+      packages/lib: lib
+    ship: tag
+    release_tag: "v*"
+`;
+
+/** Events of one kind in the temp-HOME log, after asserting the file is inside the fixture. */
+function eventsOf(fx, name) {
+  const file = metricsPath("2026-01");
+  assert.ok(file.startsWith(fx.root), `${file} is outside the fixture`);
+  return fs
+    .readFileSync(file, "utf8")
+    .trimEnd()
+    .split("\n")
+    .map((l) => JSON.parse(l))
+    .filter((e) => e.event === name);
+}
+
+const issueMoves = (fx) =>
+  fs
+    .readFileSync(fx.ghLog, "utf8")
+    .split("\n")
+    .filter((l) => l.startsWith("issue close ")).length;
+
+test("two concurrent pr status passes write one pr.merged and one issue close (SW-1051)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      assert.equal(open.ok, true, open.lines.join("\n"));
+      await Promise.all([refreshPrStatus(fx.workspace), refreshPrStatus(fx.workspace)]);
+      assert.equal(eventsOf(fx, "pr.merged").length, 1);
+      assert.equal(issueMoves(fx), 1, fs.readFileSync(fx.ghLog, "utf8"));
+    },
+    { gate: true, merged: true, issue: "o/app#1" },
+  );
+});
+
+test("two concurrent pr status passes write one release line (SW-1051)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      assert.equal(open.ok, true, open.lines.join("\n"));
+      const base = defaultDeps();
+      const deps = {
+        ...base,
+        run: async (cmd, args, cwd) => {
+          if (cmd === "git" && args.includes("--contains"))
+            return { code: 0, stdout: "v1.0.0\n", stderr: "" };
+          if (cmd === "git" && args.includes("for-each-ref"))
+            return { code: 0, stdout: "2026-01-03T00:00:00Z\n", stderr: "" };
+          return base.run(cmd, args, cwd);
+        },
+      };
+      await Promise.all([refreshPrStatus(fx.workspace, deps), refreshPrStatus(fx.workspace, deps)]);
+      assert.equal(eventsOf(fx, "pr.merged").length, 1);
+      assert.equal(eventsOf(fx, "release").length, 1);
+    },
+    { gate: true, merged: true, services: RACE_TAG_SERVICES },
+  );
+});
+
+test("two concurrent pr open calls write one pr.open (SW-1051)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const both = await Promise.all([
+        openPrs(fx.workspace, undefined, undefined, { wait: false }),
+        openPrs(fx.workspace, undefined, undefined, { wait: false }),
+      ]);
+      assert.equal(eventsOf(fx, "pr.open").length, 1, JSON.stringify(both));
+    },
+    { gate: true, merged: true },
+  );
+});
+
+test("a pass that cannot get the lock in 30 s reports busy and writes nothing; a stale lock is broken (SW-1051)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const lock = path.join(fx.workspace, ".werkmeister", "pr-status.lock");
+      assert.ok(lock.startsWith(fx.root));
+      fs.writeFileSync(lock, "");
+      const deps = { ...defaultDeps(), sleep: async () => {} };
+      const busy = await refreshPrStatus(fx.workspace, deps);
+      assert.deepEqual(busy.lines, ["another PR status pass is running"]);
+      assert.equal(busy.changed, false);
+      const old = new Date(Date.now() - 16 * 60_000);
+      fs.utimesSync(lock, old, old);
+      const ran = await refreshPrStatus(fx.workspace, deps);
+      assert.notDeepEqual(ran.lines, ["another PR status pass is running"]);
+      assert.equal(fs.existsSync(lock), false);
+    },
+    { gate: true, merged: true },
+  );
+});
+
 // SW-778: gate.start / gate.end around each runGate, retry counting the workspace's gate runs.
 
 /** Inits the fixture workspace, then runs `gatePrs` once per deps; returns the gate.* lines and each result. */
