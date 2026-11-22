@@ -381,8 +381,9 @@ export function statusStrip(rows: StripRow[], g: StripGlobals = {}, now = new Da
       chips.push({
         kind: "infra",
         count: bad.length,
-        text: `infra: ${bad.map((s) => s.name).join(", ")} down`,
-        tone: "err",
+        text: `infra: ${bad.map((s) => `${s.name} ${s.state}`).join(", ")}`,
+        // A start under way is no outage (SW-1069): warn until something is really down or unhealthy.
+        tone: bad.every((s) => s.state === "starting") ? "warn" : "err",
         first: null,
       });
   }

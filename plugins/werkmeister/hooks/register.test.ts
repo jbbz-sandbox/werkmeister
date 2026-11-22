@@ -2245,6 +2245,8 @@ test("Connect runs werkmeister connect, refreshes, and the infra line shows stat
     requestId: "workspaces",
   });
   expect((await ui.find({ key: "infra" }))?.text).toBe("infra partial · 2 of 3 up");
+  // A start under way is named as one, not as an outage (SW-1069).
+  expect((await ui.find({ key: "chips" }))?.text).toContain("infra: k8s-forwards starting");
   const before = w.calls.filter((c) => c.key === `${WS}/workspace-status`).length;
   await ui.press({ key: "connect" });
   expect(w.calls.filter((c) => c.key === `${WS}/connect`)).toHaveLength(1);

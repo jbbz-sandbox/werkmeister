@@ -528,10 +528,36 @@ test("SW-1008: every chip, in order, counting workspaces, with the first match t
       ["stalled", 1, "1 stalled", "err", "stuck"],
       ["running", 2, "2 running", "ok", "asks"],
       ["waiting", 1, "1 waiting · 11.5 of 16 GiB · 6 of 8 CPUs", "warn", "queued"],
-      ["infra", 2, "infra: caddy, redis down", "err", null],
+      ["infra", 2, "infra: caddy down, redis unhealthy", "err", null],
       ["ci", 2, "2 CI failed or conflicts", "err", "red"],
       ["auth", 1, "tracker auth expired", "warn", null],
     ],
+  );
+});
+
+test("SW-1069: the infra chip names each service by its state; starting alone is warn, not down", () => {
+  const chip = (...services) =>
+    statusStrip([], { infra: { state: "partial", services } }).chips.map(({ text, tone }) => [
+      text,
+      tone,
+    ])[0];
+  assert.deepEqual(chip({ name: "k8s-forwards", state: "starting" }), [
+    "infra: k8s-forwards starting",
+    "warn",
+  ]);
+  assert.deepEqual(chip({ name: "caddy", state: "down" }), ["infra: caddy down", "err"]);
+  assert.deepEqual(chip({ name: "redis", state: "unhealthy" }), ["infra: redis unhealthy", "err"]);
+  assert.deepEqual(
+    chip(
+      { name: "caddy", state: "down" },
+      { name: "registry", state: "healthy" },
+      { name: "k8s-forwards", state: "starting" },
+    ),
+    ["infra: caddy down, k8s-forwards starting", "err"],
+  );
+  assert.equal(
+    chip({ name: "caddy", state: "healthy" }, { name: "jaeger", state: "running" }),
+    undefined,
   );
 });
 
