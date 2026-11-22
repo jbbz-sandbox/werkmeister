@@ -142,18 +142,11 @@ export interface StateFacts {
 }
 
 const BEFORE_RELEASE = new Set<PhaseId>(["building", "pr-open", "merged"]);
-// While the agent is still on something, a proposed gate is its draft, not handed over (SW-570),
-// and the badge reads working rather than done (SW-681).
-const STILL_ON_IT = new Set<ActivityId>([
-  "queued",
-  "starting",
-  "testing",
-  "tool",
-  "subagent",
-  "thinking",
-]);
 // A session's own work, so it outranks an idle signal too (SW-953); containers starting or a queue place don't.
 const SESSION_WORK = new Set<ActivityId>(["testing", "tool", "subagent", "thinking"]);
+// While the agent is still on something, a proposed gate is its draft, not handed over (SW-570),
+// and the badge reads working rather than done (SW-681). Built from SESSION_WORK so the two can't drift (SW-1018).
+const STILL_ON_IT = new Set<ActivityId>([...SESSION_WORK, "queued", "starting"]);
 const NOT_THE_SESSION = new Set<ActivityId>(["paused", "queued", "starting"]);
 // shortcut: a command-text match, not the registry's `test:` commands (reading the registry costs every poll); add those if a runner is missed.
 const TEST_COMMAND =
