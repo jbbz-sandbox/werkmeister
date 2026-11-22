@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { disposeOutputChannel, registerCommands } from "./commands.js";
 import { registerClaudeUriHandler } from "./harness/claude/terminals.js";
 import { disposeLogTerminals } from "./logs.js";
-import { disposeTerminals } from "./terminal.js";
+import { disposeTerminals, onTaskEnd } from "./terminal.js";
 import { WorkspacesView } from "./view.js";
 
 /**
@@ -60,6 +60,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     ...registerCommands(provider),
     registerClaudeUriHandler(),
+    onTaskEnd(() => provider.refresh()),
   );
 }
 

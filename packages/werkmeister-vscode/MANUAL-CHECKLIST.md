@@ -111,25 +111,24 @@ render, or a live editor.
     still needs eyes is that it is filtered to `sandbox.*` rather than opening <!-- name-check: ignore -->
     the whole settings tree, which no API reports back.
 
-11. **Lifecycle: Start.** Inline ▶ on a down workspace. A terminal named
-    **`werkmeister <workspace>`** opens running `werkmeister feature up` in that workspace's
-    directory; within ~5s (next poll) the description reads `N of N up`.
+11. **Lifecycle: Start.** Inline ▶ on a down workspace. `werkmeister feature up` runs as a
+    task in the shared task panel, which does not take focus; the view refreshes when it
+    ends and the description reads `N of N up`.
 
-12. **Lifecycle: Stop.** Inline ⏸ on a running workspace. It reuses the same
-    **`werkmeister <workspace>`** terminal and the description reads `0 of N up`. (The *name* is
-    asserted in the integration test; what needs eyes here is that the
-    container state actually changes.)
+12. **Lifecycle: Stop.** Inline ⏸ on a running workspace. It runs in the same task panel
+    and the description reads `0 of N up`. (One panel and the exit codes are asserted in
+    the integration test; what needs eyes here is that the container state actually
+    changes.)
 
-13. **Lifecycle: Restart / Down.** Right-click → **Restart**, then → **Down**.
-    Each runs in that workspace's terminal.
+13. **Lifecycle: Restart / Down.** Right-click → **Restart**: a silent task. Then → **Down**
+    on a workspace with an open decision note: the panel comes forward with focus at the
+    `Graduate …? [g/s]` prompt, and a key you type answers it.
 
-14. **One terminal per command — the fix for a real bug.** With a `logs`
-    terminal still tailing (see step 15), click ▶ Up on any workspace.
-    Confirm a **separate, newly created terminal** appears and `werkmeister feature up`
-    actually runs.
-    - Failure looks like: nothing happens at all, no error, the tree never
-      changes — the command was typed into the tailing process's stdin and
-      swallowed. That was the pre-fix behaviour; it must not recur.
+14. **A failing command comes forward (SW-979).** Set the CLI path setting to a script
+    that exits 1, then click ▶ Up: the task panel comes forward with its output. With the
+    real CLI, run Up, Stop and Restart on three workspaces: at most one werkmeister task
+    terminal is open afterwards, and with `terminal.integrated.shellIntegration.enabled`
+    off the same holds.
 
 15. **Logs — scope.** Right-click **Logs** on a workspace node → terminal
     `logs <feature>` (tails everything). Right-click **Logs** on a

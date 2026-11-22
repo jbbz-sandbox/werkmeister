@@ -26,3 +26,12 @@ for (const argv of ALL_ARGV) {
     assert.doesNotMatch(stderr, /deprecat/i, stderr);
   });
 }
+
+// SW-979: a task that can ask comes forward; a silent one would wait unseen.
+test("only down and detect may prompt", async () => {
+  const { ARGV, LIFECYCLE, mayPrompt } = await import("../out/argv.js");
+  const asks = [...LIFECYCLE.map(ARGV.lifecycle), ARGV.detect("r"), ARGV.registrySync].filter(
+    mayPrompt,
+  );
+  assert.deepEqual(asks, [ARGV.lifecycle("down"), ARGV.detect("r")]);
+});

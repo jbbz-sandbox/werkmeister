@@ -14,6 +14,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { resolveSandboxBin } from "werkmeister-core";
 import { sandboxHome } from "werkmeister-core/config";
+import { mayPrompt } from "./argv.js";
 import { shellQuote } from "./harness/claude/uri.js";
 import { claim, forget, release, type Slot, takeGone } from "./terminal-pool.js";
 
@@ -119,9 +120,55 @@ function whenReady(term: vscode.Terminal): Promise<void> {
   });
 }
 
+const TASK_TYPE = "werkmeister";
+
+/**
+ * Run a one-shot `werkmeister <args…>` from `cwd` as a VS Code task (SW-979): every one shares one
+ * panel whatever its cwd, and the exit code comes from the task, not from shell integration. A
+ * command that may ask comes forward with focus; the rest stay out of sight until one fails.
+ * `args` and `cwd` are the definition, so the same command in two workspaces runs side by side.
+ */
+export async function runTask(args: string[], cwd: string, name: string): Promise<void> {
+  let bin: string;
+  try {
+    bin = await resolveSandboxBin();
+  } catch (e) {
+    void vscode.window.showErrorMessage((e as Error).message);
+    return;
+  }
+  const task = new vscode.Task(
+    { type: TASK_TYPE, args, cwd },
+    vscode.TaskScope.Workspace,
+    `${args.join(" ")} · ${name}`,
+    TASK_TYPE,
+    new vscode.ProcessExecution(bin, args, { cwd }),
+  );
+  const asks = mayPrompt(args);
+  task.presentationOptions = {
+    panel: vscode.TaskPanelKind.Shared,
+    reveal: asks ? vscode.TaskRevealKind.Always : vscode.TaskRevealKind.Silent,
+    focus: asks,
+    showReuseMessage: false,
+  };
+  await vscode.tasks.executeTask(task);
+}
+
+/** Refresh when a werkmeister task ends, and bring a failed one's output forward. */
+export function onTaskEnd(refresh: () => void): vscode.Disposable {
+  return vscode.tasks.onDidEndTaskProcess((e) => {
+    const task = e.execution.task;
+    if (task.definition.type !== TASK_TYPE) return;
+    refresh();
+    // shortcut: matched by name, as no API maps an execution to its terminal; fine while names stay unique per run.
+    // endsWith: `up · ws-a` is inside `up · ws-ab`.
+    if (e.exitCode) vscode.window.terminals.find((t) => t.name.endsWith(task.name))?.show(true);
+  });
+}
+
 /**
  * Run `werkmeister <args…>` with `cwd` set to the workspace directory and show the
- * terminal. Resolves once the command has been sent — not when it finishes;
+ * terminal: only for the wizard and `infra connect`, which ask in ways a task's hidden
+ * panel would swallow (`connect` hands the terminal to `gh` to sign in). Resolves once the command has been sent — not when it finishes;
  * the tree's poll picks up the result.
  *
  * Reuses a terminal only once its foreground command has ended: `werkmeister feature logs`

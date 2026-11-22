@@ -123,7 +123,8 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
   }
 
   refresh(): void {
-    void this.load();
+    // A task ending or a setting changing before the view opens has nothing to redraw (SW-979).
+    if (this.view) void this.load();
   }
 
   /**

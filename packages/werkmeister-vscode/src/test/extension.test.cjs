@@ -49,26 +49,47 @@ suite("Sandbox Workspaces", () => {
     assert.deepEqual(missing, []);
   });
 
-  // The terminal is named for the workspace because it is reused for every
-  // later command in that directory — naming it `sandbox stop foo` left `up`
-  // and `down` running in a terminal called "stop".
-  test("a lifecycle command names its terminal for the workspace, not the command", async () => {
-    const { workspace, bin } = fixture("demo-feature");
+  // SW-979: one-shot commands are tasks sharing one panel, whatever their cwd; no terminal per workspace.
+  test("lifecycle commands on three workspaces leave at most one task terminal, each exit code reported", async () => {
     // Tests share the extension host's process, so this is the same `process.env`
     // resolveSandboxBin() reads — no fake checkout or settings write needed.
+    const { bin } = fixture("unused");
     process.env.WERKMEISTER_BIN = bin;
+    const ended = [];
+    const sub = vscode.tasks.onDidEndTaskProcess((e) => ended.push(e.exitCode));
+    try {
+      for (const name of ["ws-a", "ws-b", "ws-c"])
+        for (const action of ["up", "stop", "restart"]) {
+          const n = ended.length;
+          await vscode.commands.executeCommand(
+            `sandbox.${action}`,
+            wsNode(fixture(name).workspace),
+          );
+          await waitFor(() => ended.length > n);
+        }
+    } finally {
+      sub.dispose();
+    }
+    assert.deepEqual(ended, Array(9).fill(0));
+    const own = vscode.window.terminals.filter((t) => /werkmeister/.test(t.name));
+    assert.ok(own.length <= 1, `task terminals: ${own.map((t) => t.name).join(", ")}`);
+  });
 
-    await vscode.commands.executeCommand("sandbox.stop", wsNode(workspace));
-    assert.deepEqual(
-      vscode.window.terminals.map((t) => t.name),
-      ["werkmeister demo-feature"],
-    );
-
-    await vscode.commands.executeCommand("sandbox.up", wsNode(workspace));
-    assert.deepEqual(
-      [...new Set(vscode.window.terminals.map((t) => t.name))],
-      ["werkmeister demo-feature"],
-    );
+  // A failing command reports its exit code, which is what brings its panel forward. Whether the
+  // panel is in front no API reports (activeTerminal is the task's either way): MANUAL-CHECKLIST 14.
+  test("a failing lifecycle task ends with its exit code", async () => {
+    const { workspace, bin } = fixture("ws-fail");
+    fs.writeFileSync(bin, "#!/bin/sh\necho boom >&2\nexit 3\n");
+    process.env.WERKMEISTER_BIN = bin;
+    const ended = [];
+    const sub = vscode.tasks.onDidEndTaskProcess((e) => ended.push(e.exitCode));
+    try {
+      await vscode.commands.executeCommand("sandbox.stop", wsNode(workspace));
+      await waitFor(() => ended.length > 0);
+    } finally {
+      sub.dispose();
+    }
+    assert.deepEqual(ended, [3]);
   });
 
   // ⚡ Connect infra is view-wide (SW-55): no workspace cwd to name its terminal after.
