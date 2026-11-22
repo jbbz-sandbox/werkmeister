@@ -256,3 +256,44 @@ test("the Jira board button shows only with a board, and links to it", () => {
     null,
   );
 });
+
+// SW-1003: the title-bar toggle hides merged cards waiting on a release, and says how many.
+test("hide waiting on release: two merged and one working leave one card, the count reads 2", () => {
+  const names = ["m1", "m2", "w"];
+  const nodes = (life, statuses = {}) =>
+    buildTree(
+      names.map((n) => ws(n)),
+      names.map((n) => st(n, statuses[n] ?? (n === "w" ? ag("working") : {}))),
+      null,
+      [],
+      { lifecycles: new Map(Object.entries(life)) },
+    );
+  const merged = { m1: "merged", m2: "merged", w: "working" };
+  const cards = (html) =>
+    [...html.matchAll(/<article class="card[^"]*" id="ws-([^"]+)"/g)].map((m) => m[1]);
+
+  const off = renderCards(nodes(merged));
+  assert.deepEqual(cards(off), names, "off: every card, as today");
+  assert.doesNotMatch(off, /hidden/);
+
+  const on = renderCards(nodes(merged), { hideMerged: true });
+  assert.deepEqual(cards(on), ["w"]);
+  assert.match(on, /data-cmd="sandbox.showMerged"[^>]*>2 hidden · waiting on release</);
+
+  // A release ships, or it needs the person: back on the next poll.
+  assert.deepEqual(cards(renderCards(nodes({ ...merged, m1: "shipped" }), { hideMerged: true })), [
+    "m1",
+    "w",
+  ]);
+  const asks = nodes(merged, { m2: ag("needs-you", null, "Ship it?") });
+  const shown = renderCards(asks, { hideMerged: true });
+  assert.deepEqual(cards(shown), ["m2", "w"]);
+  // Master control still counts the hidden ones: a merged workspace whose other repo has a PR open.
+  const review = buildTree([ws("m1")], [st("m1")], null, [], {
+    lifecycles: new Map([["m1", "merged"]]),
+    prs: new Map([["m1", [{ url: PR, state: "OPEN", ci: null, failingChecks: 0 }]]]),
+  });
+  const hiddenReview = renderCards(review, { hideMerged: true });
+  assert.deepEqual(cards(hiddenReview), []);
+  assert.match(hiddenReview, /1 PR to review/);
+});

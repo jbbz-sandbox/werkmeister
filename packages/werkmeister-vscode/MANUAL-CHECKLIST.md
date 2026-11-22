@@ -253,3 +253,7 @@ a card always shows its services and PRs.
   a high-contrast theme: the border and pill stay visible.
 - **Dashboard ↗.** With the dashboard running, click it: the dashboard opens in the browser. With it
   stopped: a notice offers ⚡ Connect infra.
+- **Hide waiting on release (SW-1003).** With a merged workspace whose PR no release has yet, click the eye in
+  the view title: its card goes, the eye flips, and Master control reads `1 hidden · waiting on release`.
+  Wait 10 s: it stays hidden across the 5 s redraws. Reload the window (Developer: Reload Window): the eye is
+  still crossed and the card still hidden. Click `1 hidden · waiting on release` or the eye: the card is back.
