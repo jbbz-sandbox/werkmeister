@@ -1144,21 +1144,26 @@ async function gateChecks(
   let capacityShort = false;
   // After a NO_CAPACITY start, the rows that then find no container are its consequence, not a verdict.
   const NO_CONTAINER = /no running container|container not running|not run — fix the rows above/;
-  const add = (name: string, ok: boolean, detail: string) =>
-    checks.push({
-      name,
-      ok,
-      detail,
-      ...(!ok && capacityShort && NO_CONTAINER.test(detail) && { retry: true as const }),
-    });
+  const add = (name: string, ok: boolean, detail: string) => {
+    const waits = !ok && capacityShort && NO_CONTAINER.test(detail);
+    // The wait is the start row's; this one only never ran (SW-981).
+    checks.push(
+      waits
+        ? { name, ok, detail: "not run: waiting on capacity (see the start row)", retry: true }
+        : { name, ok, detail },
+    );
+  };
   const startFailed = (name: string, e: unknown, prefix = "") => {
     // HOST_LOAD: a setup start that waited out load or low memory is the host, not the change (SW-620).
     const capacity = ["NO_CAPACITY", "HOST_LOAD"].includes((e as { code?: string }).code ?? "");
     if (capacity) capacityShort = true;
+    const detail = prefix + (e instanceof Error ? e.message : String(e));
+    // A second attempt that waited again is the same wait: one row (SW-981).
+    if (capacity && checks.some((c) => c.name === name && c.detail === detail)) return;
     checks.push({
       name,
       ok: false,
-      detail: prefix + (e instanceof Error ? e.message : String(e)),
+      detail,
       ...(capacity && { retry: true as const }),
     });
   };
@@ -2008,7 +2013,8 @@ export function formatGate(dir: string, g: GateResult): string[] {
   return [
     `${dir}: gate ${g.ok ? "passed" : g.retry ? `retry later (${g.checks.some((c) => c.name === "memory" && !c.ok) ? "low memory" : "no capacity"})` : "FAILED"}`,
     ...g.checks.map(
-      (c) => `  ${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail.replace(/\n/g, "\n      ")}`,
+      (c) =>
+        `  ${c.ok ? "✓" : c.retry ? "-" : "✗"} ${c.name}: ${c.detail.replace(/\n/g, "\n      ")}`,
     ),
   ];
 }
