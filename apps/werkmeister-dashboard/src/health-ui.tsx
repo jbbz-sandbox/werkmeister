@@ -6,18 +6,17 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { NeedItem, WorkspaceStatus } from "werkmeister-core";
-import { type DisplayOptions, displayModel, needLine } from "werkmeister-ui/display-model";
+import { needLine, type WorkspaceDisplay } from "werkmeister-ui/display-model";
 import { Css } from "werkmeister-ui/theme";
 import { Usage, type WorkspaceUsage } from "werkmeister-ui/usage-widget";
 import type { HostBridge } from "werkmeister-ui/workspace-ui";
+import { healthRows, type PrExtra } from "./lib/health-rows.js";
 
 interface InfraService {
   name: string;
   state: "healthy" | "starting" | "unhealthy" | "running" | "down";
 }
 type FeatureStatus = WorkspaceStatus;
-/** Per workspace: what its PRs need and the phase note, from `workspace-prs` (SW-558). */
-type PrExtra = Record<string, Pick<DisplayOptions, "prNeeds" | "phaseDetail">>;
 interface WorkspaceStatusResult {
   infra: {
     state: "up" | "partial" | "down" | "unknown";
@@ -124,7 +123,7 @@ function ServiceRow({ s, nested }: { s: InfraService; nested: boolean }) {
 }
 
 /** The card's agent chip (`◌ Working`, `● Needs you`, `✓ Done`, `⏸ Paused`); nothing for Idle. */
-function ClaudeBadge({ f, d }: { f: FeatureStatus; d: ReturnType<typeof displayModel> }) {
+function ClaudeBadge({ f, d }: { f: FeatureStatus; d: WorkspaceDisplay }) {
   const id = f.workspaceState.agent.id;
   if (f.claude.state === "failed" && id !== "needs-you" && id !== "working")
     return <span className="claude failed">claude: failed</span>;
@@ -181,19 +180,15 @@ function Features({
   prs: PrExtra;
   bridge: HostBridge;
 }) {
-  // A health view cares about live sandboxes; hide workspaces with no containers.
-  const active = features
-    .filter((f) => f.total > 0)
-    .sort((a, b) => (a.slot ?? 99) - (b.slot ?? 99));
-  if (!active.length)
+  const rows = healthRows(features, prs);
+  if (!rows.length)
     return (
       <div className="row">
         {"No feature sandboxes up (start one with `werkmeister feature up <feature>`)"}
       </div>
     );
-  return active.map((f) => {
-    // The pane's words: phase, activity and every need, PR items included (SW-558).
-    const d = displayModel(f, prs[f.name]);
+  // The pane's words: phase, activity and every need, PR items included (SW-558).
+  return rows.map(({ f, d }) => {
     const where = [
       d.phase?.text,
       d.activity && [d.activity.text, d.activity.time].filter(Boolean).join(" · "),
