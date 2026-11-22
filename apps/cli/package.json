@@ -85,6 +85,7 @@
     "./man/werkmeister-registry.1",
     "./man/werkmeister-budget.1",
     "./man/werkmeister-budget-status.1",
+    "./man/werkmeister-metrics-rebuild.1",
     "./man/werkmeister-daemon.1",
     "./man/werkmeister-daemon-status.1",
     "./man/werkmeister-daemon-install.1",

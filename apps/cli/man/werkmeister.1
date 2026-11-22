@@ -181,6 +181,9 @@ The scheduler's budget, the slots held and the features Waiting for room
 \fBbudget status\fR
 Show the budget, the slots held and the features Waiting for room
 .TP
+\fBmetrics rebuild\fR
+Backfill the metrics event log from record branches, GitHub and transcripts
+.TP
 \fBdaemon\fR [command]
 The host daemon (the MCP server on port 3002)
 .TP
@@ -252,6 +255,7 @@ Restart the daemon, through launchd when launchd owns it
 \fBwerkmeister\-registry\fR(1),
 \fBwerkmeister\-budget\fR(1),
 \fBwerkmeister\-budget\-status\fR(1),
+\fBwerkmeister\-metrics\-rebuild\fR(1),
 \fBwerkmeister\-daemon\fR(1),
 \fBwerkmeister\-daemon\-status\fR(1),
 \fBwerkmeister\-daemon\-install\fR(1),

@@ -218,6 +218,8 @@ exports[`command spellings > ["machine","tokens","--remove"] 1`] = `
 }
 `;
 
+exports[`command spellings > ["metrics","rebuild"] 1`] = `{}`;
+
 exports[`command spellings > ["migrate","--check","--workspaces"] 1`] = `
 {
   "check": true,

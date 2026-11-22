@@ -299,6 +299,10 @@ const CASES: [string[], string[]][] = [
     ["stop", "infra"],
     ["infra", "stop"],
   ],
+  [
+    ["metrics", "rebuild"],
+    ["metrics", "rebuild"],
+  ],
 ];
 
 // Started by the first case, never at module load, so a failed spawn fails inside a test.

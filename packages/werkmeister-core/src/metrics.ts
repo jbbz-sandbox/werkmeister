@@ -28,24 +28,40 @@ export function metricsPath(at: string): string {
   return path.join(sandboxHome(), "metrics", `events-${at.slice(0, 7)}.jsonl`);
 }
 
-/** Appends *e* to this month's log. A failure warns and never throws: a lost metric must not fail its caller. */
-export function recordEvent(e: MetricsEvent, at = new Date().toISOString()): void {
+/** Appends *e* to this month's log; false when it could not. A failure warns and never throws: a lost metric must not fail its caller. */
+export function recordEvent(e: MetricsEvent, at = new Date().toISOString()): boolean {
   const file = metricsPath(at);
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     // One appendFileSync is one write() on an O_APPEND file, so concurrent writers' lines don't interleave.
     fs.appendFileSync(file, `${JSON.stringify({ v: 1, at, ...e })}\n`);
+    return true;
   } catch (err) {
     warn(`metrics: could not record ${e.event}: ${(err as Error).message}`);
+    return false;
   }
 }
 
-/** The commit that first added a file other than `.gitkeep` under `stages/<stage>/output/`, or null. */
-export function firstFill(ws: string, stage: string): { commit: string; at: string } | null {
+/** The commit on *rev* (default HEAD) that first added a file other than `.gitkeep` under `stages/<stage>/output/`, or null. */
+export function firstFill(
+  ws: string,
+  stage: string,
+  rev?: string,
+): { commit: string; at: string } | null {
   const out = `stages/${stage}/output`;
   const r = spawnSync(
     "git",
-    ["-C", ws, "log", "--diff-filter=A", "--format=%H %cI", "--", out, `:!${out}/.gitkeep`],
+    [
+      "-C",
+      ws,
+      "log",
+      ...(rev ? [rev] : []),
+      "--diff-filter=A",
+      "--format=%H %cI",
+      "--",
+      out,
+      `:!${out}/.gitkeep`,
+    ],
     { encoding: "utf8" },
   );
   const line = r.status === 0 ? r.stdout.trim().split("\n").pop() : ""; // newest first

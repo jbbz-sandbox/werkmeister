@@ -1,0 +1,30 @@
+.TH WERKMEISTER-METRICS-REBUILD 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-metrics\-rebuild \- Backfill the metrics event log from record branches, GitHub and transcripts
+.SH SYNOPSIS
+\fBwerkmeister metrics rebuild\fR
+.SH DESCRIPTION
+.PP
+\fBWhat it does:\fR
+.IP 1. 3
+Clones the workspace repo (the origin of \fB<repos_root>/sandbox\-workspace\fR, else \fBoverrides.workspace_repo\fR) into a temporary bare clone, removed when the command ends. The shared checkout is never fetched into or written \" name-check: ignore
+.IP 2. 3
+On each record branch except the default one: writes \fBstage.done\fR for each stage at the commit that first filled its \fBoutput/\fR, and \fBpr.open\fR / \fBpr.merged\fR at GitHub's \fBcreatedAt\fR / \fBmergedAt\fR for each PR file's \fBurl:\fR (through \fBgh\fR). The ticket comes from the branch's \fBusage.json\fR
+.IP 3. 3
+Writes \fBask\fR / \fBanswer\fR pairs (AskUserQuestion, ExitPlanMode) from the workspace's Claude Code transcripts still on disk
+.IP 4. 3
+Appends each new line to \fB~/.werkmeister/metrics/events\-YYYY\-MM.jsonl\fR, the month of the event's own time
+.PP
+Re\-running adds nothing: a stage, a PR event or a transcript session already in the log is skipped.
+.PP
+It cannot rebuild \fBqueue.*\fR, \fBgate.*\fR, \fBrelease\fR or wrap\-up asks: nothing on disk holds them.
+.PP
+\fBWhen to use:\fR
+.IP \(bu 3
+Once after upgrading to a version with the metrics event log, to cover earlier work
+.IP \(bu 3
+Before transcripts age out (Claude Code prunes them after about 30 days), to keep their ask/answer times
+.PP
+The command only appends. Copy \fB~/.werkmeister/metrics\fR first if you want to undo a run.
+.SH SEE ALSO
+\fBwerkmeister\fR(1)
