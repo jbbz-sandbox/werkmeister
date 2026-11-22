@@ -75,13 +75,15 @@ export interface TicketTimes {
   ticket: string;
   /** The workspace folder name. */
   workspace: string;
-  /** The workspace's first Claude turn, where both times start. */
+  /** The workspace's first Claude turn, where lead starts, and cycle when `inProgressAt` is null. */
   firstTurn: string;
+  /** The workspace's earliest `issue.start`, where cycle starts, or null with none. */
+  inProgressAt: string | null;
   /** Its last PR merge. */
   mergedAt: string;
   /** Its last release, or null when the repo ships with no tag. */
   releasedAt: string | null;
-  /** Minutes from the first turn to the merge. */
+  /** Minutes from `inProgressAt` (else the first turn) to the merge. */
   cycleMinutes: number;
   /** Minutes from the first turn to the release, or to the merge when the repo ships with no tag. */
   leadMinutes: number;
@@ -334,6 +336,26 @@ export function flowMetrics(input: FlowInput, range: MetricsRange, now: Date): M
     }
   }
 
+  // Each workspace's earliest issue.start, where cycle starts (SW-1034). It can precede the first
+  // turn, which the filter above drops for a closed run, so its floor is an earlier run's close-out.
+  const inProgress = new Map<string, string>();
+  for (const e of input.events) {
+    const at = String(e["at"]);
+    if (e["event"] !== "issue.start" || Number.isNaN(ms(at))) continue;
+    const ws = String(e["workspace"]);
+    const turn = firstTurn.get(ws);
+    const floor = input.open.some((o) => o.workspace === ws)
+      ? runStart.get(ws)
+      : input.usages.reduce<string | undefined>(
+          (a, u) =>
+            u.workspace === ws && u.closedAt && turn && ms(u.closedAt) < ms(turn)
+              ? max(a, u.closedAt)
+              : a,
+          undefined,
+        );
+    if (!floor || ms(at) >= ms(floor)) inProgress.set(ws, min(inProgress.get(ws), at));
+  }
+
   // Waits by cause, bucketed by the ISO week of the event that ends them.
   const waits = zeroWaits();
   const byWeek = new Map<string, WaitSeconds>();
@@ -421,13 +443,15 @@ export function flowMetrics(input: FlowInput, range: MetricsRange, now: Date): M
     const start = firstTurn.get(ws);
     if (!start || !inRange(t.lastMerged)) continue;
     const releasedAt = t.lastRelease ?? null;
+    const inProgressAt = inProgress.get(ws) ?? null;
     tickets.push({
       ticket: t.ticket ?? ticketOf.get(ws) ?? ws,
       workspace: ws,
       firstTurn: start,
+      inProgressAt,
       mergedAt: t.lastMerged,
       releasedAt,
-      cycleMinutes: minutes(start, t.lastMerged),
+      cycleMinutes: minutes(inProgressAt ?? start, t.lastMerged),
       leadMinutes: minutes(start, releasedAt ?? t.lastMerged),
     });
   }

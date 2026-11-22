@@ -31,7 +31,6 @@ test/handoff-push-error.test.mjs
 test/infra-abort.test.mjs
 test/infra-needs.test.mjs
 test/issue-section.test.mjs
-test/issue-status.test.mjs
 test/jira-markdown-wiki.test.mjs
 test/launcher.test.mjs
 test/lifecycle-proxy.test.mjs

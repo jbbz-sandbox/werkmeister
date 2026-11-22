@@ -18,6 +18,7 @@ import {
   type TrackerAt,
 } from "./issue_tracker.js";
 import type { Issue, IssueTrackerStrategy, TrackerId } from "./issue_trackers/types.js";
+import { recordEvent } from "./metrics.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 
 export const ISSUE_POINTS = ["in_progress", "in_review", "merged", "done", "abandoned"] as const;
@@ -217,17 +218,14 @@ export async function startIssue(
   const refs = issueRefsOf(cfg);
   if (!refs.length) return "no issue";
   const comment = `Work started: ${currentStage(ws)} in workspace ${path.basename(ws)}.`;
-  return eachIssue(refs, (ref) => {
+  return eachIssue(refs, async (ref) => {
     const at = { project: projectOf(cfg), text: ref };
-    return moveIssue(
-      tracker ?? issueTracker(at),
-      ref,
-      "in_progress",
-      statuses ?? issueStatuses(at),
-      {
-        comment,
-      },
-    );
+    const s = statuses ?? issueStatuses(at);
+    const line = await moveIssue(tracker ?? issueTracker(at), ref, "in_progress", s, { comment });
+    // moveIssue's line for a status it set; "already …" or a refusal is no start.
+    if (line === `${ref} → ${s.in_progress}`)
+      recordEvent({ event: "issue.start", workspace: path.basename(ws), ticket: ref });
+    return line;
   });
 }
 

@@ -88,6 +88,7 @@ const METRICS_OUTPUT = {
       ticket: z.string(),
       workspace: z.string(),
       firstTurn: z.string(),
+      inProgressAt: z.string().nullable(),
       mergedAt: z.string(),
       releasedAt: z.string().nullable(),
       cycleMinutes: z.number(),
