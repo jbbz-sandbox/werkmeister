@@ -3,21 +3,11 @@
  *
  * The scheduler's budget (proposal 3, SW-181), the features holding a slot, what
  * each running one holds, and what each waiter needs, in admission order (SW-675).
+ * The read itself is werkmeister-core's `budgetStatus`, shared with the `budget` tool.
  */
 
-import os from "node:os";
-import { readWaiting } from "werkmeister-core/agent_state";
-import { describeLease, runningLeases } from "werkmeister-core/lifecycle";
-import { headCanWaitOut, queueOrder, STARVE_MS } from "werkmeister-core/scheduler";
-import { waitingQueue } from "werkmeister-core/scheduler_client";
-import {
-  featureCost,
-  hostLoadLimit,
-  loadBudget,
-  readLeases,
-  readVmLoad,
-  waiters,
-} from "werkmeister-core/scheduler_state";
+import { budgetStatus } from "werkmeister-core/budget_status";
+import { describeLease } from "werkmeister-core/lifecycle";
 
 const GIB = 2 ** 30;
 const limit = (n: number, unit: string) =>
@@ -31,52 +21,9 @@ export function hostLoadText(limit: number, platform: NodeJS.Platform = process.
 }
 
 export async function run(args: Record<string, unknown>): Promise<void> {
-  const budget = await loadBudget();
-  // macOS and Windows scale the limit by the Docker VM's cores, as the wait does (SW-888).
-  const vm = process.platform === "darwin" || process.platform === "win32";
-  const hostLoad = hostLoadLimit((vm && (await readVmLoad())?.cores) || os.availableParallelism());
-  // A snapshot for display: no `allocate` lock, so a lease taken mid-read shows next time.
-  const leases = readLeases();
-  const waiting = await waitingQueue();
-  const running = runningLeases();
-  const order = queueOrder(waiters(waiting, running ?? [])).map((w, i) => {
-    const ws = leases[w.feature]?.workspace;
-    const services = (ws && readWaiting(ws)?.services) || null;
-    const cost = ws ? featureCost(ws, services ?? undefined) : null;
-    // The head the queue holds for: as admit() and capacityWait have it (SW-701, SW-903).
-    const holds =
-      i === 0 && w.waitedMs >= STARVE_MS && !w.parked && headCanWaitOut(budget, running ?? [], w);
-    return { ...w, position: i + 1, services, cost, holds };
-  });
-
+  const { budget, hostLoad, leases, running, order, json } = await budgetStatus();
   if (args.json) {
-    // JSON has no Infinity: an unlimited value is null.
-    const n = (v: number) => (Number.isFinite(v) ? v : null);
-    console.log(
-      JSON.stringify({
-        budget: { memory: n(budget.memory), cpus: n(budget.cpus), preempt: budget.preempt },
-        host_load: hostLoad,
-        leases,
-        waiting,
-        running:
-          running?.map((l) => ({
-            feature: l.feature,
-            cpus: l.cost.cpus,
-            memory: l.cost.memory,
-            rank: l.rank,
-            busy: l.busy,
-          })) ?? null,
-        waiters: order.map((w) => ({
-          feature: w.feature,
-          position: w.position,
-          services: w.services,
-          cpus: w.cost?.cpus ?? null,
-          memory: w.cost?.memory ?? null,
-          waited_ms: w.waitedMs,
-          gate: w.gate,
-        })),
-      }),
-    );
+    console.log(JSON.stringify(json));
     return;
   }
 

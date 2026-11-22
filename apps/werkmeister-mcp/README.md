@@ -119,7 +119,7 @@ server. Until that is widened, use:
 
 <!-- generated:mcp-tools -->
 
-57 tools (5 UI-only).
+58 tools (5 UI-only).
 
 | Tool | What it does |
 | --- | --- |
@@ -129,6 +129,7 @@ server. Until that is widened, use:
 | `cache` | Prune the shared build caches |
 | `registry` | Regenerate the service registry |
 | `resources` | CPU and memory per workspace |
+| `budget` | Scheduler budget, running and waiting |
 | `intercepts` | Telepresence intercept state |
 | `scheduler` | Slot leases and the waiting queue |
 | `up` | Bring a feature up |

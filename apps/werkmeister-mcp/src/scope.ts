@@ -25,5 +25,6 @@ export const WORKSPACE_SCOPED_TOOLS: ReadonlySet<string> = new Set([
   "workspace-usage",
   "status",
   "resources",
+  "budget",
   "intercepts",
 ]);

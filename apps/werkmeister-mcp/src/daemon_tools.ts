@@ -1,6 +1,6 @@
 /**
  * The CLI verbs that had no tool (clean, stats, optimize, cache, registry) and
- * the two reads the VS Code extension polls (resources, intercepts), so a thin
+ * the reads the workspaces views poll (resources, budget, intercepts), so a thin
  * client never needs Docker or telepresence in its own process (SW-184).
  * Same adapter as tools.ts: the CLI's transcript as `content`, the core result
  * as `structuredContent`.
@@ -8,6 +8,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { budgetStatus } from "werkmeister-core/budget_status";
 import { pruneCaches } from "werkmeister-core/build_caches";
 import { containerStats } from "werkmeister-core/docker";
 import {
@@ -169,6 +170,24 @@ export function registerDaemonTools(server: McpServer): void {
     },
     async (): Promise<CallToolResult> =>
       adapt(async () => ({ ...(await getWorkspaceResources()) })),
+  );
+
+  server.registerTool(
+    "budget",
+    {
+      title: "Scheduler budget, running and waiting",
+      annotations: { readOnlyHint: true },
+      description:
+        "`werkmeister budget status --json`: the scheduler's budget, slot leases, what each running " +
+        "feature holds and what each waiter needs, in admission order: what the workspaces views poll.",
+      inputSchema: {},
+      outputSchema: z.looseObject({
+        budget: z.looseObject({}),
+        running: z.array(z.looseObject({})).nullable(),
+        waiters: z.array(z.looseObject({})),
+      }),
+    },
+    async (): Promise<CallToolResult> => adapt(async () => ({ ...(await budgetStatus()).json })),
   );
 
   server.registerTool(

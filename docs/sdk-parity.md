@@ -58,6 +58,7 @@ werkmeister's own apps (the MCP server and the CLI) import internal entries, not
 | `cache` | `pruneCaches` | |
 | `registry` | `syncRegistry` | |
 | `resources` | `getWorkspaceResources` | |
+| `budget` | `waitingQueue` | the slot and budget figures are scheduler internals |
 | `intercepts` | `interceptsSnapshot` | |
 | `scheduler` | `schedulerOp`, `waitingQueue` | |
 | `claude-transcript` | `getClaudeTranscript`, `listSessions` | |

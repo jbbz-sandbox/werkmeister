@@ -262,7 +262,16 @@ test("notes: an icm workspace lists its stage-output decisions and graduates one
 });
 
 // SW-184: the CLI verbs that had no tool, and the reads the VS Code extension polls.
-const DAEMON_TOOLS = ["clean", "stats", "optimize", "cache", "registry", "resources", "intercepts"];
+const DAEMON_TOOLS = [
+  "clean",
+  "stats",
+  "optimize",
+  "cache",
+  "registry",
+  "resources",
+  "budget",
+  "intercepts",
+];
 
 test("the daemon tools are listed, and clean/cache prune default to a dry run", async () => {
   const { tools } = await (await connect()).listTools();
