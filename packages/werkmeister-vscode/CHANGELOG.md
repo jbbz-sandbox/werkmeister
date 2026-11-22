@@ -1,5 +1,24 @@
 # vscode-plugin
 
+## 0.104.0
+
+### Patch Changes
+
+- 23bcf56: The Workspaces view title has a toggle to hide workspaces waiting on a release (SW-1003): cards whose PR merged and no release contains yet, and that need nothing from you. While it is on, Master control reads `N hidden · waiting on release`, and a click shows them again. The choice survives a window reload; a hidden workspace comes back by itself once its release ships or it needs you, and Master control's counts still include every workspace.
+- 0e97ac7: The workspace card shows one state word (SW-953). The agent chip reads Working whenever the session itself works (tests, a tool, a background agent, thinking), not only after a finished turn, so it no longer says Idle beside "Thinking" or "Background agent running". The activity line is the chip's detail: it is left out when it only restates the chip (no "Done" beside "Idle"), Thinking's time is when the session was last heard from rather than when its turn began, and a Thinking silent for 30 min or more reads dim as "Thinking · last heard 40 min ago". Same in the VS Code view, the /workspaces pane and the dashboard.
+- a6be6f8: The VS Code card and the dashboard's Health rows build the needs-you line from one shared `needLine()` (SW-962), so their wording can't drift apart. No visible change.
+- ee25c15: One-shot commands from the Workspaces view run as VS Code tasks, not pooled terminals (SW-979). `feature up/stop/restart/pause/resume` and `registry sync` share one task panel whatever their folder, stay out of sight while they work, and bring their output forward only when they fail. `feature down` and `machine detect`, which can stop and ask, come forward with focus. The view refreshes as soon as a command ends. The New Workspace wizard, Connect infra (which can hand the terminal to `gh` to sign in), logs and session terminals are unchanged.
+- Updated dependencies [6a36c01]
+- Updated dependencies [84c6fa1]
+- Updated dependencies [dbe33fc]
+- Updated dependencies [c6d49ed]
+- Updated dependencies [0e97ac7]
+- Updated dependencies [67821d2]
+- Updated dependencies [6c66c97]
+- Updated dependencies [193fad7]
+  - werkmeister-core@0.104.0
+  - werkmeister-ui@0.7.85
+
 ## 0.103.1
 
 ### Patch Changes
