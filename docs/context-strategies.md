@@ -79,6 +79,8 @@ With an issue, both strategies also show it. The stored copy is `.werkmeister/is
 | ICM | root `CLAUDE.md`, plus a "Where things live" row for `.werkmeister/issue.md` | `BRIEF.md` = issue section, then `description`, then `starting_prompt`. The "No starting prompt was given" note appears only with no issue and no prompt |
 | JIT | `CLAUDE.md` Current Task, replacing the bare link | the starting-prompt handoff note opens with the issue section; written even when `starting_prompt` is empty, if there is an issue |
 
+A Jira issue with a parent epic also stores the epic in `issue.md` under `## Parent` (its key, summary, link and description, where an epic keeps the links its stories cite), and the issue section names it in a `Parent:` line. `werkmeister issue view` prints the same (SW-633).
+
 The stage template for `feature` is the four-stage research → spec → implement → ship pipeline in `~/features/icm-ws2/stages/`. `bugfix` would be reproduce → fix → verify → ship; `spike` would be two stages. Contracts must tell the agent to use `docker restart <feature>-<service>` to reload a running container, and `werkmeister feature up` once first when it is not running (a never-started container has no `pnpm` until `up` bootstraps it, SW-135), unless the `up` hook refresh is gated (next section).
 
 ## Option A — a `context_strategy` field, branch in core

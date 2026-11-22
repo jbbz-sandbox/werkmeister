@@ -93,6 +93,13 @@ function fromRest(r: JiraRestIssue): Issue {
     description: f.description ? wikiToMarkdown(String(f.description)) : str(f.description),
     url: jiraBrowseUrl(r.key) ?? undefined,
     comments,
+    ...(f.parent?.key && {
+      parent: {
+        ref: f.parent.key,
+        title: str(f.parent.fields?.summary),
+        url: jiraBrowseUrl(f.parent.key) ?? undefined,
+      },
+    }),
   };
 }
 
@@ -294,7 +301,16 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
 
     async fetchIssue(ref, why) {
       const rest = await fetchIssueRest(ref, why);
-      if (rest) return fromRest(rest);
+      if (rest) {
+        const issue = fromRest(rest);
+        // The `parent` field carries no description; one more GET, and a failure keeps key + summary.
+        const p = issue.parent && (await fetchIssueRest(issue.parent.ref))?.fields;
+        if (issue.parent && p) {
+          issue.parent.title = str(p.summary) ?? issue.parent.title;
+          if (p.description) issue.parent.description = wikiToMarkdown(String(p.description));
+        }
+        return issue;
+      }
       const mcp = await fetchViaMcp(ref);
       if (!mcp) why?.push("the Atlassian MCP fallback returned no issue");
       return mcp;

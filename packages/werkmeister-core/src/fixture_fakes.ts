@@ -179,11 +179,26 @@ const JIRA_STATUSES = ["To Do", "In Progress", "In Review", "Done"];
  * A stand-in for the Jira REST paths jira-rest.ts calls (SW-896): every issue starts `To Do`,
  * `POST …/transitions` moves it, `POST …/comment` is taken. Any other path fails 501, so a path
  * the fake doesn't cover fails loudly. Point JIRA_BASE_URL at `url` with any email and token.
+ * Every key is a parentless `fixture issue`, except story SW-595 under epic SW-585 (SW-633).
  */
 export async function startFakeJira(): Promise<FakeDaemon> {
   const calls: string[] = [];
   const status = new Map<string, string>();
   const statusOf = (key: string) => status.get(key) ?? "To Do";
+  // SW-633: SW-595 is a story under epic SW-585, whose description holds the review link.
+  const FIXED: Record<string, Record<string, unknown>> = {
+    "SW-585": {
+      summary: "Werkmeister docs overhaul",
+      issuetype: { name: "Epic" },
+      description:
+        "Findings are cited as Page #N from the review doc.\n\nSpec: [review doc|https://example.invalid/review]",
+    },
+    "SW-595": {
+      summary: "Docs: Troubleshooting leads with the skills",
+      issuetype: { name: "Story" },
+      parent: { key: "SW-585", fields: { summary: "Werkmeister docs overhaul" } },
+    },
+  };
   const issue = (key: string) => ({
     key,
     fields: {
@@ -191,6 +206,7 @@ export async function startFakeJira(): Promise<FakeDaemon> {
       status: { name: statusOf(key) },
       issuetype: { name: "Task" },
       comment: { comments: [] },
+      ...FIXED[key],
     },
   });
   const server = http.createServer(async (req, res) => {

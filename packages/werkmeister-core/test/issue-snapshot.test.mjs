@@ -123,3 +123,35 @@ test("comment bodies containing ### lines round-trip", () => {
   };
   assert.deepEqual(parseIssueCopy(renderIssueCopy(s)), s);
 });
+
+test("a parent section round-trips, and readIssueRef passes it on (SW-633)", () => {
+  const s = {
+    ref: "SW-595",
+    url: "https://x.atlassian.net/browse/SW-595",
+    tracker: "jira",
+    title: "Child",
+    status: "To Do",
+    body: "Findings: #1\n\n## Ask\nDo it.",
+    parent: {
+      ref: "SW-585",
+      title: "Werkmeister docs overhaul",
+      url: "https://x.atlassian.net/browse/SW-585",
+      body: "Spec: [review](https://example.invalid/review)",
+    },
+    fetchedAt: "2026-10-11T18:04:00.000Z",
+    comments: [{ author: "amy", created: "2026-10-02T10:00:00Z", body: "ok" }],
+  };
+  const text = renderIssueCopy(s);
+  assert.match(
+    text,
+    /\nDo it\.\n\n## Parent\n\nParent: SW-585 Werkmeister docs overhaul\nhttps:\/\/x\.atlassian\.net\/browse\/SW-585\n\nSpec: /,
+  );
+  assert.deepEqual(parseIssueCopy(text), s);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ws-"));
+  writeIssueCopy(root, s);
+  assert.deepEqual(readIssueRef(root, "SW-595").parent, {
+    ref: "SW-585",
+    title: "Werkmeister docs overhaul",
+    url: "https://x.atlassian.net/browse/SW-585",
+  });
+});

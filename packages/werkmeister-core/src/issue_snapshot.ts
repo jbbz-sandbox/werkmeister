@@ -58,6 +58,17 @@ export interface IssueSnapshot {
   body: string;
   /** The comments, oldest first. */
   comments: IssueComment[];
+  /** The parent issue (a Jira epic), when it has one. */
+  parent?: {
+    /** The parent's ref, e.g. `PROJ-1`. */
+    ref: string;
+    /** Its summary line; empty when it has none. */
+    title: string;
+    /** Its web page; null when the tracker has none. */
+    url: string | null;
+    /** Its body as text; empty when it has none or could not be fetched. */
+    body: string;
+  };
   /** ISO time the copy was taken. */
   fetchedAt: string;
 }
@@ -79,11 +90,20 @@ export async function fetchIssueSnapshot(
     status: issue.status ?? "",
     body: issue.description ?? "",
     comments: issue.comments ?? [],
+    ...(issue.parent && {
+      parent: {
+        ref: issue.parent.ref,
+        title: issue.parent.title ?? "",
+        url: issue.parent.url ?? tracker.url(issue.parent.ref),
+        body: issue.parent.description ?? "",
+      },
+    }),
     fetchedAt: now().toISOString(),
   };
 }
 
 const COMMENTS = "\n\n## Comments\n";
+const PARENT = "\n\n## Parent\n\nParent: ";
 
 export function renderIssueCopy(s: IssueSnapshot): string {
   const head = [
@@ -99,10 +119,12 @@ export function renderIssueCopy(s: IssueSnapshot): string {
     "",
     s.body,
   ].join("\n");
+  const p = s.parent;
+  const parent = p ? `${PARENT}${p.ref} ${p.title}\n${p.url ?? ""}\n\n${p.body}` : "";
   const comments = s.comments
     .map((c) => `\n### ${c.author} · ${c.created ?? ""}\n\n${c.body}\n`)
     .join("");
-  return `${head}${COMMENTS}${comments}`;
+  return `${head}${parent}${COMMENTS}${comments}`;
 }
 
 export function parseIssueCopy(text: string): IssueSnapshot | null {
@@ -123,6 +145,16 @@ export function parseIssueCopy(text: string): IssueSnapshot | null {
     if (!c) return null;
     comments.push({ author: c[1], ...(c[2] ? { created: c[2] } : {}), body: c[3] });
   }
+  let body = rest.slice(0, at);
+  let parent: IssueSnapshot["parent"];
+  // shortcut: like Comments, the last Parent heading wins; a body quoting "\n\n## Parent\n\nParent: " mis-splits.
+  const pAt = body.lastIndexOf(PARENT);
+  const p =
+    pAt < 0 ? null : /^(\S+) (.*)\n(.*)\n\n([\s\S]*)$/.exec(body.slice(pAt + PARENT.length));
+  if (p) {
+    parent = { ref: p[1], title: p[2], url: p[3] || null, body: p[4] };
+    body = body.slice(0, pAt);
+  }
   return {
     ref: m[1],
     url: m[2] || null,
@@ -130,8 +162,9 @@ export function parseIssueCopy(text: string): IssueSnapshot | null {
     status: m[4],
     fetchedAt: m[5],
     title: m[6],
-    body: rest.slice(0, at),
+    body,
     comments,
+    ...(parent && { parent }),
   };
 }
 
@@ -149,8 +182,16 @@ export function readIssueRef(root: string, issueId: string, project = ""): Issue
   } catch {
     /* no copy */
   }
-  if (s && s.ref === issueId)
-    return { ref: s.ref, url: s.url, title: s.title, fetchedAt: s.fetchedAt };
+  if (s && s.ref === issueId) {
+    const p = s.parent;
+    return {
+      ref: s.ref,
+      url: s.url,
+      title: s.title,
+      fetchedAt: s.fetchedAt,
+      ...(p && { parent: { ref: p.ref, title: p.title, url: p.url } }),
+    };
+  }
   if (!issueId) return null;
   return {
     ref: issueId,
