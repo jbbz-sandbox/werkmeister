@@ -233,6 +233,17 @@ interface Timeline {
   firstFinished?: { at: string; exit: number };
 }
 
+/** Racing `pr watch` / `pr status` writers can log one `pr.open` / `pr.merged` / `release` twice (SW-997): keep the first per (event, pr). */
+function firstPerPr(): (e: Record<string, unknown>) => boolean {
+  const seen = new Set<string>();
+  return (e) => {
+    const pr = e["pr"];
+    if (!["pr.open", "pr.merged", "release"].includes(String(e["event"])) || !pr) return true;
+    const key = `${e["event"]}|${pr}`;
+    return !seen.has(key) && !!seen.add(key);
+  };
+}
+
 /** The report for *input* over *range*, as of *now*. Pure: the formulas of § Definitions. */
 export function flowMetrics(input: FlowInput, range: MetricsRange, now: Date): MetricsReport {
   const to = now.getTime();
@@ -271,7 +282,8 @@ export function flowMetrics(input: FlowInput, range: MetricsRange, now: Date): M
       const start = runStart.get(String(e["workspace"]));
       return !start || ms(at) >= ms(start);
     })
-    .sort((a, b) => ms(String(a["at"])) - ms(String(b["at"])));
+    .sort((a, b) => ms(String(a["at"])) - ms(String(b["at"])))
+    .filter(firstPerPr());
   for (const e of events) {
     const at = String(e["at"]);
     const ws = String(e["workspace"]);

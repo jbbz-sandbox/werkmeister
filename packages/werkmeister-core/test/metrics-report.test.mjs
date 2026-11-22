@@ -264,6 +264,45 @@ test("a reused name open again drops only the old run's events, even with its tr
   assert.equal(r.board[2].cards[0].enteredAt, "2026-11-19T00:00:00Z");
 });
 
+// SW-997: a racing `pr watch` and `pr status` can write one pr.* / release line twice.
+const LIFECYCLE = [
+  ev("2026-11-18T10:00:00Z", "pr.open", "ws-d", { pr: PR(20) }),
+  ev("2026-11-18T10:30:00Z", "pr.merged", "ws-d", { pr: PR(20) }),
+  ev("2026-11-18T11:30:00Z", "release", "ws-d", { pr: PR(20), tag: "v2" }),
+];
+const waitsOf = (events) => flowMetrics({ events, open: [], usages: [] }, "all", NOW).waits;
+
+test("identical pr.open, pr.merged and release lines count once", () => {
+  const once = waitsOf(LIFECYCLE);
+  assert.deepEqual([once.pr, once.release], [1800, 3600]);
+  assert.deepEqual(waitsOf([...LIFECYCLE, ...LIFECYCLE]), once);
+});
+
+test("distinct PRs and other events are not collapsed", () => {
+  const other = [
+    ev("2026-11-18T10:00:00Z", "pr.open", "ws-f", { pr: PR(21) }),
+    ev("2026-11-18T10:10:00Z", "pr.merged", "ws-f", { pr: PR(21) }),
+  ];
+  assert.equal(waitsOf([...LIFECYCLE, ...other]).pr, 1800 + 600);
+  const answer = ev("2026-11-18T09:00:00Z", "answer", "ws-d", { session: "s", waited_s: 60 });
+  assert.equal(waitsOf([answer, { ...answer }]).person, 120);
+});
+
+test("metricsReport counts a doubled pr.merged line in the temp-HOME log once", async () => {
+  await withSandboxHome(
+    async (home) => {
+      const file = metricsPath(LIFECYCLE[0].at);
+      assert.ok(file.startsWith(`${home}${path.sep}`), file);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      const lines = [...LIFECYCLE, LIFECYCLE[1]].map((e) => JSON.stringify(e)).join("\n");
+      fs.writeFileSync(file, `${lines}\n`);
+      fs.mkdirSync(path.join(os.homedir(), "ws"), { recursive: true });
+      assert.equal((await metricsReport({ range: "all" }, NOW)).waits.pr, 1800);
+    },
+    { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
+  );
+});
+
 const git = (cwd, ...a) =>
   execFileSync("git", ["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", ...a], {
     cwd,
