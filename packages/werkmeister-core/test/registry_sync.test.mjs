@@ -763,3 +763,33 @@ test("mergeRegistry refuses a service path that leaves the repo", () => {
       );
   assert.doesNotThrow(() => merge([frag("app", { services: { api: { path: "apps/..api" } } })]));
 });
+
+// SW-1061: since SW-939 a forwarded service with no health_endpoint is probed as GET /health, so a
+// non-HTTP one (gRPC, raw TCP) fails its probe and k8s-forwards restarts its tunnel every 45 s.
+test("syncRegistry warns once per forwarded service with no health_endpoint, and for nothing else (SW-1061)", () => {
+  writeFragment(
+    "demo",
+    "services:\n" +
+      "  grpc:\n    k8s_forward_port: 9060\n    internal_port: 50051\n" +
+      "  web:\n    k8s_forward_port: 9061\n    internal_port: 80\n    health_endpoint: /\n" +
+      "  tcp:\n    k8s_forward_port: 9062\n    internal_port: 6000\n    health_endpoint: ''\n" +
+      "  upstream:\n    k8s_forward_port: 9063\n    internal_port: 80\n    baseline_upstream: up.example.test:80\n" +
+      "  local: {}\n" +
+      "infrastructure:\n  pg:\n    k8s_forward_port: 9051\n    internal_port: 5432\n",
+  );
+  for (const checkOnly of [false, true]) {
+    const steps = syncRegistry({ reposRoot: repos, checkOnly });
+    const warned = steps.filter((s) => /probed as GET \/health/.test(s.detail));
+    assert.deepEqual(
+      warned.map((s) => [s.label, s.ok, s.detail]),
+      [
+        [
+          "service grpc",
+          true,
+          'no health_endpoint, probed as GET /health since SW-939; set health_endpoint: "" for a non-HTTP service',
+        ],
+      ],
+      `checkOnly ${checkOnly}`,
+    );
+  }
+});

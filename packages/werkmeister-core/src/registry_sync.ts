@@ -24,6 +24,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { RepoEntry, ServiceEntry } from "./config.js";
 import {
   DOT_DIR,
+  forwardSpecs,
   getReposRoot,
   sandboxHome,
   servicesLocalYamlPath,
@@ -644,7 +645,16 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
       detail: `listed in ${DISABLED_KEY} in ${localPath}, but no fragment under ${reposRoot}`,
     })),
   ];
-  const report = (step: Step): Step[] => [step, ...skips];
+  // SW-1061: since SW-939 such a forward is probed as GET /health, which a gRPC or raw-TCP service fails.
+  const unprobed: Step[] = Object.entries(merged.services ?? {})
+    .filter(([key, def]) => def?.health_endpoint == null && forwardSpecs({ [key]: def }).length)
+    .map(([key]) => ({
+      label: `service ${key}`,
+      ok: true,
+      detail:
+        'no health_endpoint, probed as GET /health since SW-939; set health_endpoint: "" for a non-HTTP service',
+    }));
+  const report = (step: Step): Step[] => [step, ...skips, ...unprobed];
 
   const count = split.fragments.length;
   const sources = `${count} fragment${count === 1 ? "" : "s"}`;
