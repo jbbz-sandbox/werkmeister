@@ -52,12 +52,26 @@ export function envVar(name: string): string | undefined {
 export const isFixture = (): boolean => envVar("FIXTURE") === "1";
 
 /**
+ * Why this process must leave the login session alone (launchd's `gui/<uid>`, the user
+ * crontab, the shared infra containers), or undefined when it may touch them. Those are
+ * keyed on uid and DOCKER_CONFIG, not HOME, so a temp HOME isolates nothing (SW-1054).
+ * Equal to HOME, not merely set: a test that moves HOME under the wrapper drives its own fakes.
+ */
+export function hostSessionSkipReason(): string | undefined {
+  if (isFixture()) return "WERKMEISTER_FIXTURE";
+  const temp = envVar("TEMP_HOME");
+  if (temp && temp === process.env.HOME) return "a with-temp-home HOME";
+  return undefined;
+}
+
+/**
  * Why this process must leave the one shared w9r-caddy alone, or undefined when it
  * may reload or start it. Only the default home owns it: a `WERKMEISTER_CONFIG_FILE`
  * home pushing its Caddyfile there takes routing down for every workspace (SW-279).
  */
 export function sharedProxySkipReason(): string | undefined {
-  if (isFixture()) return "WERKMEISTER_FIXTURE";
+  const host = hostSessionSkipReason();
+  if (host) return host;
   if (path.resolve(configPath()) !== path.join(dotDir(os.homedir()), "config.yaml")) {
     return "WERKMEISTER_CONFIG_FILE is not the default home";
   }

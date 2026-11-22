@@ -4,12 +4,13 @@
 // argv; HOME is a temp dir so stopAll() finds no real web-server pid files.
 
 import assert from "node:assert/strict";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 
-import { down } from "../dist/infra.js";
+import { down, restart, startSharedInfra, stop } from "../dist/infra.js";
+import { ensurePortForwardsHealthy } from "../dist/k8s.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { pinWerkmeisterRoot } from "./fixtures.mjs";
 
@@ -22,6 +23,8 @@ const VARS = [
   "WERKMEISTER_SERVICES_YAML",
   "WERKMEISTER_ROOT",
   "WERKMEISTER_DOCKER_BIN",
+  "WERKMEISTER_TEMP_HOME",
+  "DOCKER_HOST",
 ];
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 let dir, log;
@@ -63,4 +66,17 @@ test("down resolves false when docker compose down fails, so an SDK caller can t
     `#!/bin/sh\necho "$*" >> "${log}"\ncase "$*" in *" down"*) exit 1;; esac\n`,
   );
   assert.equal(await withReporter(collectingReporter(), () => down()), false);
+});
+
+test("under a with-temp-home HOME, infra up/down/stop/restart and the k8s-forwards repair leave the shared containers alone (SW-1054)", async () => {
+  process.env.WERKMEISTER_TEMP_HOME = dir;
+  // Never the machine's engine: a stop or restart that got past the guard fails here instead.
+  process.env.DOCKER_HOST = `unix://${path.join(dir, "no.sock")}`;
+  for (const call of [() => startSharedInfra(), () => down(true), () => stop(), () => restart()])
+    assert.equal(await withReporter(collectingReporter(), call), true);
+  assert.equal(
+    await withReporter(collectingReporter(), () => ensurePortForwardsHealthy()),
+    "healthy",
+  );
+  assert.equal(existsSync(log), false, "no docker call");
 });

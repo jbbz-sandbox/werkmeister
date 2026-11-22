@@ -6,7 +6,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   installPrWatchSchedule,
   PR_WATCH_CRON_MARKER,
@@ -60,11 +60,16 @@ const plistPath = () =>
 const writes = () => calls.filter((c) => c[0] === "crontab" && c[1] !== "-l");
 
 beforeEach(() => {
+  // with-temp-home's marker equals HOME here, and would skip every install (SW-1054).
+  vi.stubEnv("WERKMEISTER_TEMP_HOME", "");
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pr-watch-schedule-"));
   calls = [];
   crontab = "";
 });
-afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
+afterEach(() => {
+  vi.unstubAllEnvs();
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
 
 describe("launchd", () => {
   it("installs a plist that runs pr watch every 600s, logging both streams", () => {
@@ -236,4 +241,22 @@ describe("syncPrWatchSchedule", () => {
     const [step] = syncPrWatchSchedule(false, true, opts("linux", { runner }));
     expect(step).toMatchObject({ ok: false, optional: true, detail: "crontab not found" });
   });
+});
+
+describe("a with-temp-home HOME or a fixture run (SW-1054)", () => {
+  for (const [why, name, value] of [
+    ["with-temp-home", "WERKMEISTER_TEMP_HOME", () => process.env.HOME ?? ""],
+    ["a fixture", "WERKMEISTER_FIXTURE", () => "1"],
+  ] as const) {
+    it(`under ${why}, install, uninstall and setup's step never reach launchctl or the crontab`, () => {
+      vi.stubEnv(name, value());
+      for (const platform of ["darwin", "linux"] as const) {
+        expect(installPrWatchSchedule(opts(platform)).lines[0]).toMatch(/skipped/);
+        expect(uninstallPrWatchSchedule(opts(platform)).lines[0]).toMatch(/skipped/);
+        expect(syncPrWatchSchedule(false, true, opts(platform))[0]?.detail).toMatch(/skipped/);
+      }
+      expect(calls).toEqual([]);
+      expect(fs.existsSync(plistPath())).toBe(false);
+    });
+  }
 });

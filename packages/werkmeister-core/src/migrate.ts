@@ -19,7 +19,7 @@ import {
   configPath,
   envVar,
   expandUser,
-  isFixture,
+  hostSessionSkipReason,
   sandboxHome,
   servicesLocalYamlPath,
   servicesYamlPath,
@@ -327,10 +327,11 @@ export async function migrate(opts: MigrateOptions = {}): Promise<Step[]> {
 
   // Its log path is the home; in --check before the move, `current` is judged against the old one.
   const prLabel = "pr-watch schedule";
-  // crontab isn't scoped by HOME: a fixture run must not rewrite the caller's real one (SW-581).
-  const prWatch = isFixture() ? undefined : prWatchScheduleState(opts.prWatch);
+  // crontab isn't scoped by HOME: a fixture or temp-HOME run must not rewrite the caller's real one (SW-581, SW-1054).
+  const prSkip = hostSessionSkipReason();
+  const prWatch = prSkip ? undefined : prWatchScheduleState(opts.prWatch);
   if (!prWatch) {
-    steps.push({ label: prLabel, ok: true, detail: "skipped in the fixture" });
+    steps.push({ label: prLabel, ok: true, detail: `skipped (${prSkip})` });
   } else if (!prWatch.installed) {
     steps.push({ label: prLabel, ok: true, detail: "not installed" });
   } else if (prWatch.current && !(checkOnly && moving)) {
