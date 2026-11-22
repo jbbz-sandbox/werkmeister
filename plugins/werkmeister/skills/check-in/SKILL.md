@@ -23,6 +23,7 @@ Run all of these in one turn:
   - a desktop title from `list_sessions` → that workspace's desktop session. A title in `list_sessions` but not in `ListAgents` is dead.
   - a row named `<ws>-<suffix>` (e.g. `sw-110-repo-dir-drift-be`) → a terminal session for that workspace. It is not in `list_sessions` but has a live inbox.
   - neither → treat the workspace as headless.
+  - Only those two kinds of row count. Ignore every other row (Remote Control sessions on other machines, cloud sessions, sessions outside `<root>`), even one shown as waiting on a human: don't report it and don't message it.
 
 Candidates: the workspaces the person named, else `candidates` from `check-in`. If the person says "all", take every one in `workspaces[]`.
 
