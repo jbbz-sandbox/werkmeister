@@ -77,7 +77,7 @@ UI-only tools render an interface in an MCP App client and return little to a sc
 
 <!-- generated:sdk-call-tools -->
 
-57 tools.
+58 tools.
 
 | Tool | What it does | Arguments |
 | --- | --- | --- |
@@ -136,6 +136,7 @@ UI-only tools render an interface in an MCP App client and return little to a sc
 | `cache` | Prune the shared build caches | `name?: string`, `reset?: boolean`, `force?: boolean`, `dryRun?: boolean` |
 | `registry` | Regenerate the service registry | `check?: boolean` |
 | `resources` | CPU and memory per workspace | none |
+| `budget` | Scheduler budget, running and waiting | none |
 | `intercepts` | Telepresence intercept state | none |
 | `scheduler` | Slot leases and the waiting queue | `op: "allocate" \| "lease" \| "release" \| "admit" \| "grant" \| "grant-later" \| "queue"`, `feature?: string`, `workspace?: string \| null`, `preferredSlot?: integer \| null`, `byPerson?: boolean`, `starting?: object` |
 

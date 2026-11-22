@@ -60,18 +60,55 @@ beforeAll(() => {
 });
 afterAll(() => fs.rmSync(home, { recursive: true, force: true }));
 
+const env = () => ({
+  ...process.env,
+  HOME: home,
+  WERKMEISTER_CONFIG_FILE: path.join(home, ".werkmeister", "config.yaml"),
+  WERKMEISTER_MCP_TOKEN: "",
+  PATH: path.dirname(process.execPath),
+  // A missing docker: Running reads as unavailable on every host, and no call reaches the real
+  // engine (node's dir can hold docker too, e.g. /usr/local/bin with OrbStack).
+  WERKMEISTER_DOCKER_BIN: path.join(home, "no-docker"),
+});
 const budget = (...argv: string[]) =>
-  execAsync(process.execPath, [MAIN, "budget", "status", ...argv], {
-    cwd: home,
-    env: {
-      ...process.env,
-      HOME: home,
-      WERKMEISTER_CONFIG_FILE: path.join(home, ".werkmeister", "config.yaml"),
-      WERKMEISTER_MCP_TOKEN: "",
-      // No docker on PATH: Running reads as unavailable, the same on every host.
-      PATH: path.dirname(process.execPath),
-    },
+  execAsync(process.execPath, [MAIN, "budget", "status", ...argv], { cwd: home, env: env() });
+
+/** Built by turbo before this package: the CLI devDepends on werkmeister-mcp. */
+const MCP_DIR = path.resolve(CLI_DIR, "../werkmeister-mcp");
+// Run from MCP_DIR so the SDK's bare specifiers resolve from its node_modules.
+const CALL_BUDGET_TOOL = `
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { createServer } from "./dist/server.js";
+const [c, s] = InMemoryTransport.createLinkedPair();
+await createServer().connect(s);
+const client = new Client({ name: "budget.test", version: "0" });
+await client.connect(c);
+const res = await client.callTool({ name: "budget", arguments: {} });
+console.log(JSON.stringify(res.structuredContent));
+process.exit(0);
+`;
+
+// SW-1006: the views read the `budget` tool; it must say what `budget status --json` says.
+it("the budget MCP tool returns the same data as budget status --json", async () => {
+  const [cli, tool] = await Promise.all([
+    budget("--json"),
+    execAsync(process.execPath, ["--input-type=module", "-e", CALL_BUDGET_TOOL], {
+      cwd: MCP_DIR,
+      env: env(),
+    }),
+  ]);
+  expect(cli.status, cli.stderr).toBe(0);
+  expect(tool.status, tool.stderr).toBe(0);
+  // waited_ms ticks between the two reads; every other field must match exactly.
+  const steady = (o: { waiters: { waited_ms: number }[] }) => ({
+    ...o,
+    waiters: o.waiters.map((w) => ({ ...w, waited_ms: Math.round(w.waited_ms / 60_000) })),
   });
+  const fromTool = JSON.parse(tool.stdout.trim().split("\n").at(-1) ?? "");
+  expect(steady(fromTool)).toEqual(steady(JSON.parse(cli.stdout)));
+  expect(fromTool.waiters).toHaveLength(3);
+});
 
 it("prints the budget, leases and Waiting queue as JSON", async () => {
   const res = await budget("--json");
