@@ -355,3 +355,27 @@ test("killing the wrapper during its host-load wait stops the wait too (SW-456)"
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+// SW-935: slim images (python:3.14-slim) have no procps, so `uptime: not found` landed in every gate excerpt.
+test("no uptime: the failure line reads /proc/loadavg, or leaves the load out, with no 'not found' (SW-935)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const tools = path.join(root, "tools");
+    fs.mkdirSync(tools);
+    for (const t of ["sh", "sed", "mktemp", "rm", "env", "getconf", "cat"]) {
+      const at = spawnSync("sh", ["-c", `command -v ${t}`], { encoding: "utf8" }).stdout.trim();
+      if (at) fs.symlinkSync(at, path.join(tools, t));
+    }
+    const r = spawnSync(bin, ["sh", "-c", "exit 3"], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: tools },
+    });
+    assert.equal(r.status, 3);
+    assert.doesNotMatch(r.stderr, /not found/);
+    const line = fs.existsSync("/proc/loadavg")
+      ? /^with-temp-home: exit 3; host load [\d.]+ [\d.]+ [\d.]+ on \d+ cores$/m
+      : /^with-temp-home: exit 3$/m;
+    assert.match(r.stderr, line);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
