@@ -1,5 +1,14 @@
 # vscode-plugin
 
+## 0.104.1
+
+### Patch Changes
+
+- 1f52643: The host line reads `host 122% · features 3.6 of 12 cores` in the VS Code view and the /workspaces pane (SW-1008): host is the 1-minute load as a share of the cores, features is the feature containers' CPU in cores. The 5 and 15 minute load moved to the tooltip. Both views now take it from one shared status-strip model, which also builds the strip's chips.
+- 919dd5e: The top of the VS Code workspaces view is one pinned status strip of at most 2 rows (SW-1009): chips for what needs you (with the oldest one's age), running, waiting, infra, red CI or conflicts, each shown only when above zero and linking to the first card it counts, then the host line with a two-tone meter. It stays in place while the cards scroll. The Master control and Host cards are gone: Foreman (the renamed Master control terminal, which still finds an open `Master control` terminal), Dashboard and the Jira board are title-bar icons, the board icon only when a board is configured. Refresh PRs, Connect infra and Legend moved to the `…` menu. The view's badge shows how many workspaces need you.
+  - werkmeister-core@0.104.1
+  - werkmeister-ui@0.7.86
+
 ## 0.104.0
 
 ### Patch Changes
