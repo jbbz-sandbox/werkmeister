@@ -14,7 +14,7 @@ import type {
   WorkspaceResources,
   WorkspaceRow,
 } from "../types";
-import { displayModel, hostLine, type Tone, type WorkspaceDisplay } from "./display-model";
+import { displayModel, statusStrip, type Tone, type WorkspaceDisplay } from "./display-model";
 
 export const PLUGIN = "werkmeister";
 export const PANE = "workspaces";
@@ -1980,8 +1980,9 @@ export const register: Register = (on) => {
     const { value: reason = "" } = await $.state.get(REASON);
     const { value: infra = null } = await $.state.get(INFRA);
     const { value: resources } = await $.state.get(RESOURCES);
-    // No line before the first sweep lands, `host load n/a` once one failed.
-    const host = resources === undefined ? null : hostLine(resources?.host ?? null);
+    // No line before the first sweep lands, `host n/a` once one failed.
+    const host =
+      resources === undefined ? null : statusStrip([], { host: resources?.host ?? null }).host;
     const { value: snap = null } = await $.state.get(INTERCEPTS);
     const { value: tracker = null } = await $.state.get(TRACKER);
     const { value: polled } = await $.state.get(PRS);

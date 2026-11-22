@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "node:test";
 
-const { displayModel, ago, hostLine } = await import("../dist/display-model.js");
+const { displayModel, ago, statusStrip } = await import("../dist/display-model.js");
 
 const NOW = new Date("2026-10-20T12:00:00Z");
 const minsAgo = (m) => new Date(NOW.getTime() - m * 60_000).toISOString();
@@ -267,15 +267,6 @@ test("SW-41: usage and start reason", () => {
   assert.equal(none.started, null);
 });
 
-test("SW-41: hostLine", () => {
-  assert.deepEqual(hostLine({ load: [3.2, 2.8, 2.1], cores: 10, featureCpuPercent: 45 }), {
-    text: "host load 3.2 · 2.8 · 2.1 / 10 cores · features 45% CPU",
-    tone: "ok",
-  });
-  assert.equal(hostLine({ load: [401, 300, 200], cores: 10, featureCpuPercent: 900 }).tone, "warn");
-  assert.deepEqual(hostLine(null), { text: "host load n/a", tone: "off" });
-});
-
 // SW-487: the core state model rendered as a Needs-you list, a phase and an activity.
 const wsState = (over = {}) => ({
   phase: { id: "building", label: "Stage 2 of 4 · spec", stage: "Stage 2 of 4 · spec" },
@@ -426,4 +417,152 @@ test("SW-962: needLine: guess, since, no since", async () => {
   assert.equal(needLine(row), "● Ship it? · 12 min ago — Answer it");
   assert.equal(needLine({ ...row, guess: true }), "● Ship it? (guess) · 12 min ago — Answer it");
   assert.equal(needLine({ ...row, since: "" }), "● Ship it? — Answer it");
+});
+
+// SW-1008: the status strip both workspaces views draw.
+const row = (name, ws = {}, extra = {}) => ({
+  name,
+  ws: { ...base, state: "down", ...ws },
+  ...extra,
+});
+const GiB = 1024 ** 3;
+const quiet = { load: [1, 1, 1], cores: 12, featureCpuPercent: 0 };
+
+test("SW-1008: an all-zero snapshot has no chips, only the host line", () => {
+  const s = statusStrip(
+    [
+      row("a"),
+      row("b", {
+        workspaceState: wsState({
+          activity: { id: "idle", label: "", since: null, session: null },
+        }),
+      }),
+    ],
+    {
+      host: quiet,
+      infra: { state: "up", services: [{ name: "caddy", state: "healthy" }] },
+      trackerAuth: { ok: true },
+    },
+    NOW,
+  );
+  assert.deepEqual(s.chips, []);
+  assert.deepEqual(s.host, {
+    text: "host 8% · features 0.0 of 12 cores",
+    tone: "ok",
+    meter: { host: 1 / 12, features: 0 },
+    tooltip: "load 1 · 5 · 15 min: 1 · 1 · 1 on 12 cores",
+  });
+});
+
+test("SW-1008: a host over 100% keeps the raw percent, warns, and clamps the meter", () => {
+  const s = statusStrip([], {
+    host: { load: [14.6, 9.2, 8], cores: 12, featureCpuPercent: 358.4 },
+    budget: { memory: 16 * GiB, cpus: null, used: { memory: 11.5 * GiB, cpus: 0 } },
+  });
+  assert.equal(s.host.text, "host 122% · features 3.6 of 12 cores");
+  assert.equal(s.host.tone, "warn");
+  assert.equal(s.host.meter.host, 1);
+  assert.ok(Math.abs(s.host.meter.features - 3.584 / 12) < 1e-9);
+  assert.equal(
+    s.host.tooltip,
+    "load 1 · 5 · 15 min: 14.6 · 9.2 · 8 on 12 cores\nmemory budget 11.5 of 16 GiB",
+  );
+});
+
+test("SW-1008: no sweep yet has no host line; a failed one reads host n/a", () => {
+  assert.equal(statusStrip([]).host, null);
+  assert.deepEqual(statusStrip([], { host: null }).host, {
+    text: "host n/a",
+    tone: "off",
+    meter: { host: 0, features: 0 },
+    tooltip: "host load unavailable",
+  });
+});
+
+test("SW-1008: every chip, in order, counting workspaces, with the first match to jump to", () => {
+  const queued = { id: "queued", label: "Waiting for capacity", since: minsAgo(3), session: null };
+  const rows = [
+    row("quiet"),
+    row("asks", {
+      state: "up",
+      workspaceState: wsState({
+        agent: { id: "needs-you", since: minsAgo(5) },
+        needs: [need({ since: minsAgo(130) })],
+      }),
+    }),
+    row("asks2", {}, { prNeeds: [need({ id: "pr:x", since: minsAgo(20) })] }),
+    row("stuck", { state: "partial" }, { stalled: true }),
+    row("stuck-but-asks", {}, { stalled: true, prNeeds: [need({ id: "pr:y" })] }),
+    row("queued", { workspaceState: wsState({ activity: queued }) }),
+    row("red", {}, { prs: [{ url: "u", state: "OPEN", ci: "fail", failingChecks: 1 }] }),
+    row(
+      "conflict",
+      {},
+      {
+        prs: [{ url: "u", state: "OPEN", ci: "pass", failingChecks: 0, mergeable: "CONFLICTING" }],
+      },
+    ),
+    row("merged-red", {}, { prs: [{ url: "u", state: "MERGED", ci: "fail", failingChecks: 1 }] }),
+  ];
+  const s = statusStrip(
+    rows,
+    {
+      host: quiet,
+      infra: {
+        state: "partial",
+        services: [
+          { name: "caddy", state: "down" },
+          { name: "redis", state: "unhealthy" },
+          { name: "pg", state: "running" },
+        ],
+      },
+      trackerAuth: { ok: false, reason: "token expired" },
+      budget: { memory: 16 * GiB, cpus: 8, used: { memory: 11.5 * GiB, cpus: 6 } },
+    },
+    NOW,
+  );
+  assert.deepEqual(
+    s.chips.map(({ kind, count, text, tone, first }) => [kind, count, text, tone, first]),
+    [
+      ["needs", 3, "● 3 need you · 2 h", "needs", "asks"],
+      ["stalled", 1, "1 stalled", "err", "stuck"],
+      ["running", 2, "2 running", "ok", "asks"],
+      ["waiting", 1, "1 waiting · 11.5 of 16 GiB · 6 of 8 CPUs", "warn", "queued"],
+      ["infra", 2, "infra: caddy, redis down", "err", null],
+      ["ci", 2, "2 CI failed or conflicts", "err", "red"],
+      ["auth", 1, "tracker auth expired", "warn", null],
+    ],
+  );
+});
+
+test("SW-1008: one workspace reads needs you; data a view lacks hides its chip or suffix", () => {
+  const queued = { id: "queued", label: "", since: null, session: null };
+  const s = statusStrip([
+    row("a", {}, { prNeeds: [need({ since: null })] }),
+    row("b", { workspaceState: wsState({ activity: queued }) }),
+  ]);
+  assert.deepEqual(
+    s.chips.map((c) => c.text),
+    ["● 1 needs you", "1 waiting"],
+  );
+  assert.equal(
+    statusStrip([], { infra: { state: "unknown", services: [] } }).chips[0].text,
+    "infra: docker unreachable",
+  );
+  assert.deepEqual(
+    statusStrip([row("p", { paused: { at: minsAgo(1), containers: [] } }, { prNeeds: [need()] })])
+      .chips,
+    [],
+  );
+});
+
+test("SW-1008: a budget limit that is no whole GiB reads to one decimal", () => {
+  const queued = { id: "queued", label: "", since: null, session: null };
+  const budget = { memory: 8e9, cpus: null, used: { memory: 2 * GiB, cpus: 0 } };
+  const s = statusStrip([row("q", { workspaceState: wsState({ activity: queued }) })], {
+    host: quiet,
+    budget,
+  });
+  assert.equal(s.chips[0].text, "1 waiting · 2.0 of 7.5 GiB");
+  assert.match(s.host.tooltip, /memory budget 2\.0 of 7\.5 GiB$/);
 });

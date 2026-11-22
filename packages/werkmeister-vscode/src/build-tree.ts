@@ -14,10 +14,11 @@ import {
   type DisplayOptions,
   displayModel,
   type HostInput,
-  hostLine,
+  type HostStrip,
   needLine,
   type PrInput,
   type ServiceHealth,
+  statusStrip,
   type Tone,
   type UsageInput,
   type WorkspaceDisplay,
@@ -612,13 +613,14 @@ export function buildTree(
 
 /** The load line above the workspaces (SW-41). */
 function hostNode(host: HostInput | null): WsNode {
-  const line = hostLine(host);
+  // host is null or set here, so the strip always has a host line.
+  const line = statusStrip([], { host }).host as HostStrip;
   return {
     kind: "host",
     id: "host:",
     label: "Host",
     description: line.text.replace(/^host /, ""),
-    tooltip: `${line.text}\nLoad average (1 · 5 · 15 min) and the CPU of every feature container, in % of one core.`,
+    tooltip: `${line.text}\n${line.tooltip}`,
     icon: { id: "pulse", color: TONE_COLORS[line.tone] },
     contextValue: "host",
     expanded: false,

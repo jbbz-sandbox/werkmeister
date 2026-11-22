@@ -61,6 +61,7 @@ export interface PrInput {
   state: RepoPr["state"];
   ci: RepoPr["ci"];
   failingChecks: number;
+  mergeable?: RepoPr["mergeable"];
   draft?: boolean;
   /** The release tag (`v0.14.0`) once the merged PR shipped. */
   release?: string | null;
@@ -258,13 +259,142 @@ function usage(u: UsageInput | null | undefined): Text | null {
   };
 }
 
-/** The pane's host line: `host load 3.2 · 2.8 · 2.1 / 10 cores · features 45% CPU`. */
-export function hostLine(h: HostInput | null): Text {
-  if (!h) return { text: "host load n/a", tone: "off" };
+/** One workspace as the status strip counts it. `stalled` is SW-1007's signal: absent until it lands. */
+export interface StripRow {
+  name: string;
+  ws: DisplayInput;
+  prs?: PrInput[] | null;
+  prNeeds?: NeedItem[] | null;
+  stalled?: boolean;
+}
+
+/** SW-1006's `budget status`, in bytes; a null limit is uncapped. */
+export interface BudgetInput {
+  memory: number | null;
+  cpus: number | null;
+  used: { memory: number; cpus: number };
+}
+
+export interface StripGlobals {
+  /** undefined: no sweep yet, so no host line; null: the sweep failed. */
+  host?: HostInput | null;
+  infra?: {
+    state: "up" | "partial" | "down" | "unknown";
+    services: { name: string; state: ServiceHealth }[];
+  } | null;
+  trackerAuth?: { ok: boolean; reason?: string } | null;
+  budget?: BudgetInput | null;
+}
+
+export type ChipKind = "needs" | "stalled" | "running" | "waiting" | "infra" | "ci" | "auth";
+
+export interface StripChip extends Text {
+  kind: ChipKind;
+  count: number;
+  /** The first matching workspace, the card a click jumps to; null for infra and auth. */
+  first: string | null;
+}
+
+export interface HostStrip extends Text {
+  /** Each 0–1, clamped: the text carries a value over 100%. */
+  meter: { host: number; features: number };
+  tooltip: string;
+}
+
+/** The top of the workspaces views (SW-1008): chips shown only when non-zero, and the host line. */
+export interface StatusStrip {
+  chips: StripChip[];
+  host: HostStrip | null;
+}
+
+const GIB = 1024 ** 3;
+const clamp = (n: number) => Math.min(1, Math.max(0, n));
+
+function budgetText(b: BudgetInput | null | undefined): string {
+  if (!b) return "";
+  const mem =
+    b.memory === null
+      ? ""
+      : ` · ${(b.used.memory / GIB).toFixed(1)} of ${Number((b.memory / GIB).toFixed(1))} GiB`;
+  const cpus = b.cpus === null ? "" : ` · ${b.used.cpus} of ${b.cpus} CPUs`;
+  return mem + cpus;
+}
+
+function hostStrip(h: HostInput | null | undefined, b: BudgetInput | null | undefined) {
+  if (h === undefined) return null;
+  if (h === null)
+    return {
+      text: "host n/a",
+      tone: "off" as Tone,
+      meter: { host: 0, features: 0 },
+      tooltip: "host load unavailable",
+    };
+  const load1 = h.load[0] ?? 0;
+  const features = h.featureCpuPercent / 100;
+  const memory =
+    b && b.memory !== null
+      ? `\nmemory budget ${(b.used.memory / GIB).toFixed(1)} of ${Number((b.memory / GIB).toFixed(1))} GiB`
+      : "";
   return {
-    text: `host load ${h.load.join(" · ")} / ${h.cores} cores · features ${h.featureCpuPercent}% CPU`,
-    tone: (h.load[0] ?? 0) > h.cores ? "warn" : "ok",
+    text: `host ${Math.round((load1 / h.cores) * 100)}% · features ${features.toFixed(1)} of ${h.cores} cores`,
+    tone: (load1 > h.cores ? "warn" : "ok") as Tone,
+    meter: { host: clamp(load1 / h.cores), features: clamp(features / h.cores) },
+    tooltip: `load 1 · 5 · 15 min: ${h.load.join(" · ")} on ${h.cores} cores${memory}`,
   };
+}
+
+export function statusStrip(rows: StripRow[], g: StripGlobals = {}, now = new Date()): StatusStrip {
+  const chips: StripChip[] = [];
+  const chip = (kind: ChipKind, hits: StripRow[], text: string, tone: Tone) => {
+    if (hits.length)
+      chips.push({ kind, count: hits.length, text, tone, first: hits[0]?.name ?? null });
+  };
+  const needItems = (r: StripRow) =>
+    r.ws.paused ? [] : [...(r.ws.workspaceState?.needs ?? []), ...(r.prNeeds ?? [])];
+  const needing = rows.filter((r) => displayModel(r.ws, { prNeeds: r.prNeeds, now }).needs);
+  const oldest = needing
+    .flatMap(needItems)
+    .map((n) => n.since)
+    .filter((s): s is string => !!s)
+    .sort()[0];
+  const age = oldest ? ` · ${ago(oldest, now).replace(/ ago$/, "")}` : "";
+  const n = needing.length;
+  chip("needs", needing, `● ${n} ${n === 1 ? "needs" : "need"} you${age}`, "needs");
+  const stalled = rows.filter((r) => r.stalled && !needing.includes(r));
+  chip("stalled", stalled, `${stalled.length} stalled`, "err");
+  const running = rows.filter((r) => r.ws.state === "up" || r.ws.state === "partial");
+  chip("running", running, `${running.length} running`, "ok");
+  const waiting = rows.filter((r) => r.ws.workspaceState?.activity.id === "queued");
+  chip("waiting", waiting, `${waiting.length} waiting${budgetText(g.budget)}`, "warn");
+  const infra = g.infra;
+  if (infra) {
+    const bad = infra.services.filter((s) => s.state !== "healthy" && s.state !== "running");
+    if (infra.state === "unknown")
+      chips.push({
+        kind: "infra",
+        count: 1,
+        text: "infra: docker unreachable",
+        tone: "err",
+        first: null,
+      });
+    else if (bad.length)
+      chips.push({
+        kind: "infra",
+        count: bad.length,
+        text: `infra: ${bad.map((s) => s.name).join(", ")} down`,
+        tone: "err",
+        first: null,
+      });
+  }
+  const red = rows.filter((r) =>
+    (r.prs ?? []).some(
+      (p) => p.state === "OPEN" && (p.ci === "fail" || p.mergeable === "CONFLICTING"),
+    ),
+  );
+  chip("ci", red, `${red.length} CI failed or conflicts`, "err");
+  if (g.trackerAuth?.ok === false)
+    chips.push({ kind: "auth", count: 1, text: "tracker auth expired", tone: "warn", first: null });
+  return { chips, host: hostStrip(g.host, g.budget) };
 }
 
 /** `https://github.com/o/repo/pull/12` → `repo#12`; the URL itself when it isn't one. */
