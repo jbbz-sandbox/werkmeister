@@ -597,9 +597,15 @@ export function writeLastStop(root: string, stop: LastStop): void {
 
 /** Read and remove the last stop, so one grant reports it once. */
 export function claimLastStop(root: string): LastStop | null {
+  const last = readLastStop(root);
+  fs.rmSync(lastStopPath(root), { force: true });
+  return last;
+}
+
+/** The last stop, left in place for the grant that reports it (SW-998). */
+export function readLastStop(root: string): LastStop | null {
   try {
     const o = JSON.parse(fs.readFileSync(lastStopPath(root), "utf8"));
-    fs.rmSync(lastStopPath(root), { force: true });
     if (typeof o?.why !== "string") return null;
     return {
       at: String(o.at),
