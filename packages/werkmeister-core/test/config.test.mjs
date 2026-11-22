@@ -102,8 +102,10 @@ test("forwardSpecs: only k8s_forward_port entries, alias name for services only"
     specs.map((s) => [s.name, s.listen, s.remote, s.health]),
     [
       ["backend", 9001, 3000, "/health"],
-      ["real-name", 9002, 80, ""],
+      // SW-939: a service with no health_endpoint gets the default the gate and compose use.
+      ["real-name", 9002, 80, "/health"],
       // Infrastructure keys are the forward name; k8s_forward_name is a service-only alias.
+      // An infrastructure entry with none stays TCP-only (docs/configuration.md).
       ["postgres", 9051, 5432, ""],
     ],
   );

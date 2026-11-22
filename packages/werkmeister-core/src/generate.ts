@@ -29,6 +29,7 @@ import {
   DEFAULT_CPUS,
   DEFAULT_SETUP_CPUS,
   dotDir,
+  healthEndpointOf,
   IDLE_SERVICE_TYPES,
   loadArchetypes,
   loadCaches,
@@ -707,7 +708,7 @@ function renderFeatureCompose(
           ]),
         );
       }
-      setdefault(svcObj, "health_endpoint", "/health");
+      svcObj["health_endpoint"] = healthEndpointOf(svcObj);
       setdefault(svcObj, "extra_services", null);
       setdefault(svcObj, "depends_on", []);
       svcObj["worktree_gitdir"] = resolveWorktreeGitdir(

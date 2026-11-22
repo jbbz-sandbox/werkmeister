@@ -64,7 +64,7 @@ describe("buildForwardRows — infrastructure forwards", () => {
     const infra = {
       redis: { k8s_forward_port: 9050, internal_port: 6379, baseline_upstream: "10.0.0.5:6379" },
     };
-    expect(buildForwardRows(services, infra)).toEqual(["frontend|9053|3000|||"]);
+    expect(buildForwardRows(services, infra)).toEqual(["frontend|9053|3000|||/health"]); // SW-939: no health_endpoint is /health
   });
 
   it("returns no rows when there is no forwarded infrastructure", () => {
