@@ -90,6 +90,7 @@ export {
   runClean,
 } from "./lifecycle.js";
 export type { Runner, Step } from "./machine_setup.js";
+export { type MetricsReport, metricsReport } from "./metrics_report.js";
 export { type MigrateOptions, migrate } from "./migrate.js";
 export { listNotes, type Note, parseNote } from "./notes.js";
 export {

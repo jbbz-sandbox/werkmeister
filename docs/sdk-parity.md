@@ -55,6 +55,7 @@ werkmeister's own apps (the MCP server and the CLI) import internal entries, not
 | `clean` | `planClean`, `runClean` | |
 | `stats` | `runCollection`, `containerStats` | |
 | `optimize` | `optimizeReport` | |
+| `metrics` | `metricsReport` | |
 | `cache` | `pruneCaches` | |
 | `registry` | `syncRegistry` | |
 | `resources` | `getWorkspaceResources` | |
