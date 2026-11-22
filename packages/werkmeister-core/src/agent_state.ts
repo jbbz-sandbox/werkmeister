@@ -844,26 +844,206 @@ function featureRuns(feature: string): boolean {
   }
 }
 
-// Starts containers or runs tests. A list of what is held, not of what passes: the ticket names the held
-// set, and an allowlist would hold `werkmeister feature stop`, the command that frees room (SW-768). Not
-// `feature up`: queued, it only re-asks admission, and holding it kept a session from starting (SW-992).
-const NEEDS_CAPACITY =
-  /(^|[\s;&|(`/'"])(docker|pnpm|npm|npx|node|turbo|vitest|with-temp-home|with-fixture-workspace)(\s|$)|\b(werkmeister|w9r)\s+(feature\s+restart|pr\s+(gate|open))\b/;
+// Programs that start containers or run tests. A list of what is held, not of what passes: the ticket names
+// the held set, and an allowlist would hold `werkmeister feature stop`, the command that frees room (SW-768).
+// Not `feature up`: queued, it only re-asks admission, and holding it kept a session from starting (SW-992).
+const HELD_PROGRAMS = new Set([
+  "docker",
+  "pnpm",
+  "npm",
+  "npx",
+  "node",
+  "turbo",
+  "vitest",
+  "with-temp-home",
+  "with-fixture-workspace",
+]);
+const HELD_WERKMEISTER = /^(feature restart|pr (gate|open))(\s|$)/;
 // The MCP forms of the held commands (SW-832); `workspace-pr` `status` passes like `pr status`.
 const NEEDS_CAPACITY_TOOL = /^mcp__.*werkmeister.*__(restart|test|workspace-pr)$/;
+const SHELL_KEYWORDS = new Set([
+  "{",
+  "}",
+  "!",
+  "if",
+  "then",
+  "do",
+  "else",
+  "elif",
+  "while",
+  "until",
+]);
+// Run the word after them (and their `-x`/numeric arguments) as the program.
+const WRAPPERS = new Set([
+  "env",
+  "time",
+  "command",
+  "exec",
+  "nohup",
+  "sudo",
+  "nice",
+  "timeout",
+  "xargs",
+]);
+const SHELLS = new Set(["sh", "bash", "zsh", "dash"]);
+// Options whose following words are a command the program runs.
+const EXEC_OPTIONS = new Map([
+  ["find", /^-(exec|execdir|ok|okdir)$/],
+  ["git", /^(-x|--exec)$/],
+]);
+
+/** Index of the program among a simple command's words, past assignments, keywords and wrappers; -1 for none. */
+function programAt(words: string[]): number {
+  let k = 0;
+  while (k < words.length) {
+    if (SHELL_KEYWORDS.has(words[k]) || /^[A-Za-z_]\w*=/.test(words[k])) k++;
+    else if (WRAPPERS.has(words[k])) {
+      k++;
+      // `xargs -I {}`, `timeout -s KILL`, `env -u CI`, `sudo -u root`: the option's value is no program.
+      while (k < words.length && /^[-\d]/.test(words[k]))
+        k += /^-[IusknLPd]$/.test(words[k]) ? 2 : 1;
+    } else return k;
+  }
+  return -1;
+}
+
+/**
+ * The simple commands a shell line runs, each as its words with quotes removed: one per `&& || ; | &` or
+ * newline segment, and per `$(…)`, backtick, `( … )` and heredoc fed to a shell. Quoted text, other heredoc
+ * bodies, comments and redirect targets are data, so a commit message or printf naming node runs nothing (SW-1065).
+ * shortcut: no `case` patterns, aliases, functions, shells fed on stdin (`… | sh`, `bash <<< …`) or substitutions in
+ * an unquoted heredoc's body; a misread command passes, as a held list allows (SW-768). Widen it if agents use those.
+ */
+function simpleCommands(s: string): string[][] {
+  const out: string[][] = [];
+  scan(s, 0, "", out);
+  return out;
+}
+
+/** Scans *s* from *from* to *stop* (or the end) into *out*; returns the index past *stop*. */
+function scan(s: string, from: number, stop: string, out: string[][]): number {
+  let words: string[] = [];
+  let word: string | null = null;
+  let redirectTarget = false;
+  const heredocs: { delim: string; tabs: boolean; code: boolean }[] = [];
+  const endWord = () => {
+    if (word === null) return;
+    if (redirectTarget) redirectTarget = false;
+    else words.push(word);
+    word = null;
+  };
+  const endCommand = () => {
+    endWord();
+    if (words.length) out.push(words);
+    words = [];
+    redirectTarget = false;
+  };
+  let i = from;
+  while (i < s.length) {
+    const c = s[i];
+    if (stop && c === stop) {
+      endCommand();
+      return i + 1;
+    }
+    if (c === "\\") {
+      if (s[i + 1] !== "\n") word = (word ?? "") + (s[i + 1] ?? "");
+      i += 2;
+    } else if (c === "'") {
+      const end = s.indexOf("'", i + 1) < 0 ? s.length : s.indexOf("'", i + 1);
+      word = (word ?? "") + s.slice(i + 1, end);
+      i = end + 1;
+    } else if (c === '"') {
+      // Only a substitution inside double quotes runs.
+      let w: string = word ?? "";
+      for (i++; i < s.length && s[i] !== '"'; ) {
+        if (s[i] === "\\") (w += s[i + 1] ?? ""), (i += 2);
+        else if (s.startsWith("$(", i)) i = scan(s, i + 2, ")", out);
+        else if (s[i] === "`") i = scan(s, i + 1, "`", out);
+        else w += s[i++];
+      }
+      word = w;
+      i++;
+    } else if (s.startsWith("$(", i)) {
+      word ??= "";
+      i = scan(s, i + 2, ")", out);
+    } else if (c === "`") {
+      word ??= "";
+      i = scan(s, i + 1, "`", out);
+    } else if (c === "#" && word === null) {
+      while (i < s.length && s[i] !== "\n") i++;
+    } else if (s.startsWith("<<", i) && !s.startsWith("<<<", i)) {
+      endWord();
+      i += 2;
+      const tabs = s[i] === "-";
+      if (tabs) i++;
+      while (s[i] === " " || s[i] === "\t") i++;
+      const m = /^(['"]?)([^\s;&|<>()'"]+)\1/.exec(s.slice(i));
+      if (m) {
+        const k = programAt(words);
+        const code = k >= 0 && SHELLS.has(path.posix.basename(words[k])) && !words.includes("-c");
+        heredocs.push({ delim: m[2], tabs, code });
+        i += m[0].length;
+      }
+    } else if (c === "<" || c === ">" || (c === "&" && s[i + 1] === ">")) {
+      if (word !== null && /^\d+$/.test(word)) word = null; // the fd of `2>&1`
+      endWord();
+      for (i++; s[i] === ">" || s[i] === "<" || s[i] === "&" || s[i] === "|"; ) i++;
+      redirectTarget = true;
+    } else if (c === "(") {
+      endCommand();
+      i = scan(s, i + 1, ")", out);
+    } else if (c === "\n") {
+      endCommand();
+      i++;
+      for (const h of heredocs.splice(0)) {
+        const body: string[] = [];
+        while (i < s.length) {
+          const nl = s.indexOf("\n", i) < 0 ? s.length : s.indexOf("\n", i);
+          const line = s.slice(i, nl);
+          i = nl + 1;
+          if ((h.tabs ? line.replace(/^\t+/, "") : line) === h.delim) break;
+          body.push(line);
+        }
+        if (h.code) scan(body.join("\n"), 0, "", out);
+      }
+    } else if (c === ";" || c === "&" || c === "|" || c === ")") {
+      endCommand();
+      i++;
+    } else if (c === " " || c === "\t") {
+      endWord();
+      i++;
+    } else {
+      word = (word ?? "") + c;
+      i++;
+    }
+  }
+  endCommand();
+  return i;
+}
+
+/** Whether a Bash command line runs a held program, through `sh -c` and `eval` scripts too. */
+function runsHeld(line: string, depth = 0): boolean {
+  return simpleCommands(line).some((words) => {
+    const k = programAt(words);
+    if (k < 0) return false;
+    const name = path.posix.basename(words[k]);
+    const args = words.slice(k + 1);
+    // `docker ps` reads, starts nothing: the deny text tells a held agent to run it (SW-909 review).
+    if (HELD_PROGRAMS.has(name)) return !(name === "docker" && args[0] === "ps");
+    if (name === "werkmeister" || name === "w9r") return HELD_WERKMEISTER.test(args.join(" "));
+    if (depth > 4) return false;
+    if (name === "eval") return runsHeld(args.join(" "), depth + 1);
+    const x = args.findIndex((a) => EXEC_OPTIONS.get(name)?.test(a));
+    if (x >= 0 && runsHeld(args.slice(x + 1).join(" "), depth + 1)) return true;
+    const c = SHELLS.has(name) ? args.findIndex((a) => /^-[a-z]*c[a-z]*$/.test(a)) : -1;
+    return c >= 0 && runsHeld(args[c + 1] ?? "", depth + 1);
+  });
+}
 
 function needsCapacity(input: Record<string, any>): boolean {
   if (input["hook_event_name"] !== "PreToolUse") return false;
   const tool = String(input["tool_name"] ?? "");
-  // A quoted message (`git commit -m "restart docker"`) is data, not a command (SW-768 review). Only
-  // `-m`/`--message`: other quotes may hold one (`sh -c 'docker …'`).
-  const command = String(input["tool_input"]?.["command"] ?? "").replace(
-    /(\s(?:-m|--message)[= ]?\s*)('[^']*'|"[^"]*")/g,
-    "$1''",
-  );
-  // A lone `docker ps` reads, starts nothing: the deny text tells a held agent to run it (SW-909 review).
-  if (tool === "Bash" && /^\s*docker\s+ps(\s[^;&|`$()<>\n]*)?$/.test(command)) return false;
-  if (tool === "Bash") return NEEDS_CAPACITY.test(command);
+  if (tool === "Bash") return runsHeld(String(input["tool_input"]?.["command"] ?? ""));
   return NEEDS_CAPACITY_TOOL.test(tool) && input["tool_input"]?.["action"] !== "status";
 }
 
