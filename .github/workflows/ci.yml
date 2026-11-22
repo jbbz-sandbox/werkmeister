@@ -53,6 +53,8 @@ jobs:
       - run: pnpm run licenses
       # Before turbo so a lint or format failure surfaces in seconds, not after the build.
       - run: pnpm exec biome ci --diagnostic-level=error .
+      # SW-1000: `biome ci` passes at every level with safe fixes still unapplied; fail on any.
+      - run: pnpm exec biome check --write . && git diff --exit-code
       # SW-82: a broken `{@link}` in core's comments fails here; it needs no build.
       - run: pnpm --filter werkmeister-core run docs:links
       # SW-655, SW-750: every symbol on werkmeister-core/sdk (the public entry) carries TSDoc with an @example.
