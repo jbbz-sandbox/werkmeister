@@ -671,3 +671,9 @@ export function cliNotFoundNode(message: string): WsNode {
     children: [],
   };
 }
+
+/** The view's badge: the needs chip's count, worded with the chip's need/needs rule (SW-1022). */
+export function badgeOf(strip: StatusStrip): { value: number; tooltip: string } | undefined {
+  const n = strip.chips.find((c) => c.kind === "needs")?.count ?? 0;
+  return n ? { value: n, tooltip: `${n} ${n === 1 ? "needs" : "need"} you` } : undefined;
+}

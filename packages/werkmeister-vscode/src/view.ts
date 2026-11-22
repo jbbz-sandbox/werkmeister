@@ -27,6 +27,7 @@ import type { WorkspaceResources } from "werkmeister-core/resources";
 import type { InterceptsSnapshot } from "werkmeister-core/status";
 import type { PrInput, StatusStrip } from "werkmeister-ui";
 import {
+  badgeOf,
   boardUrl,
   buildTree,
   cliNotFoundNode,
@@ -240,9 +241,7 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
     void this.view?.webview.postMessage({ html });
     // The board icon's `when` clause; a config edit shows or hides it on the next post.
     void vscode.commands.executeCommand("setContext", HAS_BOARD, currentBoardUrl() !== null);
-    const needs = this.strip.chips.find((c) => c.kind === "needs")?.count ?? 0;
-    if (this.view)
-      this.view.badge = needs ? { value: needs, tooltip: `${needs} need you` } : undefined;
+    if (this.view) this.view.badge = badgeOf(this.strip);
   }
 
   /** Undefined until the first sweep lands, null when it failed: the strip's host line. */
