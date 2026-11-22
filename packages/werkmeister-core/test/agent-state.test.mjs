@@ -11,7 +11,9 @@ import { test } from "node:test";
 const home = fs.mkdtempSync(path.join(os.tmpdir(), "agent-state-home-"));
 const root = path.join(home, "features");
 process.env.HOME = home;
-process.env.WERKMEISTER_CONFIG_FILE = "/nonexistent/config.yaml";
+// Missing, so config is all defaults; under the temp home so ask/answer metrics land there (SW-776),
+// and not the default path, which would turn off sharedProxySkipReason's guard.
+process.env.WERKMEISTER_CONFIG_FILE = path.join(home, "w9r", "config.yaml");
 process.env.WERKMEISTER_WORKSPACES_ROOT = root;
 // The waiting gate asks Docker before it holds a command (SW-986): never the real daemon here.
 process.env.WERKMEISTER_DOCKER_BIN = "/nonexistent/docker";

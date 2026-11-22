@@ -1,4 +1,4 @@
-// SW-775: the metrics event log, and queue.wait / queue.admit at admission; SW-777: stage.done. Every line is checked against the schema.
+// SW-775: the metrics event log, and queue.wait / queue.admit at admission; SW-776: ask / answer from the hooks; SW-777: stage.done. Every line is checked against the schema.
 
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import { record } from "../dist/agent_state.js";
 import { sandboxHome } from "../dist/config.js";
 import { metricsPath, recordEvent, recordStageDone } from "../dist/metrics.js";
 import { defaultDeps, gatePrs, openPrs, refreshPrStatus } from "../dist/pr_lifecycle.js";
@@ -40,8 +41,8 @@ const COMPOSE =
   "services:\n  api:\n    deploy:\n      resources:\n        reservations: { memory: 512M }\n";
 
 /** Every line in this month's log, each asserted valid against the schema. */
-function lines() {
-  const file = metricsPath(new Date().toISOString());
+function lines(when = new Date().toISOString()) {
+  const file = metricsPath(when);
   if (!fs.existsSync(file)) return [];
   const text = fs.readFileSync(file, "utf8");
   assert.ok(text.endsWith("\n"));
@@ -336,3 +337,115 @@ test("parallel tool calls' hooks write one stage.done between them", () =>
     },
     { workspace: { context_strategy: "icm" } },
   ));
+// SW-776: ask / answer from the agent-state hooks.
+const T0 = Date.parse("2026-11-21T10:00:00.000Z");
+const at = (s) => new Date(T0 + s * 1000);
+const hookLines = () => lines(at(0).toISOString()); // the hooks fire at T0's month, not today's
+
+/** A recordable workspace under the fixture and a `fire(event, extra, seconds)` that records into it. */
+function hookWorkspace(fx, name) {
+  const ws = workspace(fx, name);
+  fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "autonomous: false\n");
+  return (event, extra = {}, s = 0) =>
+    record({ hook_event_name: event, cwd: ws, session_id: "s1", ...extra }, at(s));
+}
+
+const strip = ({ v, at, ...rest }) => rest;
+const ASK = { tool_name: "AskUserQuestion", tool_input: { questions: [{ question: "Which?" }] } };
+
+test("one AskUserQuestion round-trip writes one ask and one answer timed tool_use→tool_result", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const fire = hookWorkspace(fx, "mine");
+    assert.ok(metricsPath(at(0).toISOString()).startsWith(fx.root));
+    fire("UserPromptSubmit");
+    fire("PreToolUse", ASK, 10);
+    fire("PostToolUse", ASK, 75);
+    fire("Stop", { last_assistant_message: "Done." }, 80);
+    assert.deepEqual(hookLines().map(strip), [
+      { event: "ask", workspace: "mine", session: "s1", kind: "question" },
+      { event: "answer", workspace: "mine", session: "s1", waited_s: 65 },
+    ]);
+  });
+});
+
+test("ExitPlanMode answers at its own PostToolUse, a rejected plan too", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const fire = hookWorkspace(fx, "plan");
+    const plan = { tool_name: "ExitPlanMode", tool_input: { plan: "x" } };
+    fire("PreToolUse", plan, 0);
+    fire("PostToolUse", plan, 7);
+    fire("PreToolUse", plan, 10);
+    fire("PostToolUseFailure", plan, 12);
+    assert.deepEqual(
+      hookLines().map((l) => [l.event, l.kind ?? l.waited_s]),
+      [
+        ["ask", "plan"],
+        ["answer", 7],
+        ["ask", "plan"],
+        ["answer", 2],
+      ],
+    );
+  });
+});
+
+test("a wrap-up ask is answered at the next prompt, not at its own PostToolUse or Stop", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const fire = hookWorkspace(fx, "wrap");
+    const wrap = { tool_name: "mcp__ccd_turn__wrap_up", tool_input: { ask: "Approve?" } };
+    fire("PreToolUse", wrap, 0);
+    fire("PostToolUse", wrap, 1);
+    fire("Stop", { last_assistant_message: "Recap." }, 2);
+    fire("UserPromptSubmit", {}, 30);
+    fire("UserPromptSubmit", {}, 40);
+    assert.deepEqual(
+      hookLines().map((l) => [l.event, l.kind ?? l.waited_s]),
+      [
+        ["ask", "wrap-up"],
+        ["answer", 30],
+      ],
+    );
+  });
+});
+
+test("other hook events write nothing, the ask-deleting ones included", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const fire = hookWorkspace(fx, "quiet");
+    const bash = { tool_name: "Bash", tool_input: { command: "ls" } };
+    fire("SessionStart");
+    fire("UserPromptSubmit");
+    for (const s of [1, 2]) {
+      fire("PreToolUse", bash, s);
+      fire("PostToolUse", bash, s);
+    }
+    fire("PermissionRequest", bash, 3);
+    fire("Stop", { last_assistant_message: "Which one do you want?" }, 4);
+    fire("UserPromptSubmit", {}, 5);
+    fire("PostToolUse", ASK, 6); // no ask open
+    // An ask a later tool call cleared (`:328`) is not answered by that call.
+    fire("PreToolUse", ASK, 7);
+    fire("PreToolUse", bash, 8);
+    fire("PostToolUse", ASK, 9);
+    assert.deepEqual(
+      hookLines().map((l) => l.event),
+      ["ask"],
+    );
+  });
+});
+
+test("a headless turn on an interactive session's id writes nothing", async () => {
+  const was = process.env.CLAUDE_CODE_ENTRYPOINT;
+  try {
+    await withFixtureWorkspace(async (fx) => {
+      const fire = hookWorkspace(fx, "fork");
+      process.env.CLAUDE_CODE_ENTRYPOINT = "cli";
+      fire("SessionStart");
+      process.env.CLAUDE_CODE_ENTRYPOINT = "sdk-cli";
+      fire("PreToolUse", ASK, 1);
+      fire("PostToolUse", ASK, 2);
+      assert.deepEqual(hookLines(), []);
+    });
+  } finally {
+    if (was === undefined) delete process.env.CLAUDE_CODE_ENTRYPOINT;
+    else process.env.CLAUDE_CODE_ENTRYPOINT = was;
+  }
+});
