@@ -1,5 +1,16 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.105.0
+
+### Minor Changes
+
+- bf37394: New `werkmeister metrics rebuild` (SW-780) backfills `~/.werkmeister/metrics` with work from before the event log existed. It writes `stage.done` from record-branch stage commits, `pr.open` / `pr.merged` from GitHub's `createdAt` / `mergedAt` for each PR file, and `ask` / `answer` pairs from the Claude Code transcripts still on disk. It reads the workspace repo through a temporary bare clone that it removes on exit, and never fetches into the shared checkout. Re-running it adds nothing. `recordEvent` now returns whether the line was written.
+
+### Patch Changes
+
+- c63fc92: A Desktop wrap_up ask now gets its `answer` metrics event when the closing message also ends in a question (SW-1005). At Stop, the open wrap_up ask is kept instead of being replaced by a guess from the reply text, and the needs-you card shows the wrap_up question.
+- 10dc619: A doc-comment slip no longer stops `werkmeister feature up` for the werkmeister repo's own services (SW-1012). The `werkmeister-install` setup container used to build every package, and docs-site's typedoc treats a missing doc comment as an error, so the install exited 4 and no container started. It now builds every other package first, and that build still fails the install. Then it builds docs-site, and a failure there only prints a warning. The docs-site test row and the lint row's `docs:sdk` still fail on the slip. When a setup container does fail, the `Failed to start …` error from `feature up` (with or without `--service`) and the gate's service starts now ends with that container's name, its exit code and its last 20 log lines. Before, the cause showed only in `docker logs`.
+
 ## 0.104.1
 
 ## 0.104.0

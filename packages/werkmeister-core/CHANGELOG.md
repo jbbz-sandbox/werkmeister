@@ -1,5 +1,19 @@
 # sandbox-core
 
+## 0.105.0
+
+### Minor Changes
+
+- bf37394: New `werkmeister metrics rebuild` (SW-780) backfills `~/.werkmeister/metrics` with work from before the event log existed. It writes `stage.done` from record-branch stage commits, `pr.open` / `pr.merged` from GitHub's `createdAt` / `mergedAt` for each PR file, and `ask` / `answer` pairs from the Claude Code transcripts still on disk. It reads the workspace repo through a temporary bare clone that it removes on exit, and never fetches into the shared checkout. Re-running it adds nothing. `recordEvent` now returns whether the line was written.
+
+### Patch Changes
+
+- c82b6d6: ICM `01_research` runs its value grep with one `git grep` from the repo root across every package and app, not only the package the change touches, and records the command and its scope in `inventory.md` (SW-1002).
+- e3e0790: The ICM `04_propose` contract no longer asks the agent to push the record branch (SW-1011): `werkmeister pr push` refused there before a PR was open, so runs fell back to an un-pre-approved `git push`. The step now says to commit the record and leave the push to `werkmeister pr open`. Rule 1 of the PR rules and the workspace `CLAUDE.md` router say the same: `pr open` and `workspace close` push the record.
+- 10dc619: A doc-comment slip no longer stops `werkmeister feature up` for the werkmeister repo's own services (SW-1012). The `werkmeister-install` setup container used to build every package, and docs-site's typedoc treats a missing doc comment as an error, so the install exited 4 and no container started. It now builds every other package first, and that build still fails the install. Then it builds docs-site, and a failure there only prints a warning. The docs-site test row and the lint row's `docs:sdk` still fail on the slip. When a setup container does fail, the `Failed to start …` error from `feature up` (with or without `--service`) and the gate's service starts now ends with that container's name, its exit code and its last 20 log lines. Before, the cause showed only in `docker logs`.
+- 43943c5: The generated issues guide says where an autonomous workspace's `werkmeister issue create --body-file` must live (SW-948): a file inside the workspace, not `-` (stdin) and not a scratchpad or temp path, which `issue create` refuses.
+- 47e68d4: Brief generation never asks for an acceptance criterion that reads the real `~/.werkmeister` (SW-996): the starting-prompt format and the ICM first stage's brief step say to prove a temp-HOME-only write with a test assertion instead.
+
 ## 0.104.1
 
 ## 0.104.0
