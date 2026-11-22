@@ -41,7 +41,7 @@ The state is read from the PR files alone (`lifecycleOf` in `packages/werkmeiste
 
 ## Rules
 
-1. **The workspace root branch is a record only.** Commit and push it; never open a PR from it, never merge it.
+1. **The workspace root branch is a record only.** Commit it; `werkmeister pr open` and `werkmeister workspace close` push it. Never open a PR from it, never merge it.
 2. **PRs come only from code worktrees**, one per repo touched, each from its PR file.
 3. **The gate** (below) passes before a PR opens.
 4. **Only `werkmeister pr open` opens PRs.** A PreToolUse hook enforces this.

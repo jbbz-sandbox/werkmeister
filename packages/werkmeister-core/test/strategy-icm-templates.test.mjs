@@ -298,6 +298,15 @@ test("each template renders with no undefined and a route per stage", async () =
             /^\d+\. Before the PR file: .*file it through `\.\.\/\.\.\/_shared\/issues-report\.md`/m,
             `${wt}/${d}`,
           );
+        // SW-1011: `pr push` refuses before a PR is open, so the record step names `pr open` as its push.
+        if (d.endsWith("_propose")) {
+          assert.match(
+            c,
+            /^\d+\. Commit this folder's branch — the record\. Don't push it yourself: `werkmeister pr open` pushes it \(`werkmeister pr push` is only rule 5's conflict push\)\. Never open a PR for it\.$/m,
+            `${wt}/${d}`,
+          );
+          assert.doesNotMatch(c, /Commit and push this folder's branch/, `${wt}/${d}`);
+        }
         // SW-415: a repo without repo.lint has no `<lint> &&` head.
         if (d.endsWith("_propose"))
           assert.match(

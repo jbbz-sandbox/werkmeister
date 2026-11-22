@@ -812,6 +812,13 @@ test("SW-807: each bugfix contract lists its own pre-approved commands and steer
       );
       for (const d of ["01_reproduce", "02_fix", "03_exercise", "04_propose"])
         assert.match(section(d), /never a `python3` heredoc or `python3 -c`/);
+      // SW-1011: the router agrees with 04_propose: `pr open` pushes the record.
+      const router = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+      assert.match(
+        router,
+        /\| this folder's git branch \| the run's record \(contracts \+ stage outputs\): commit it; `werkmeister pr open` and `werkmeister workspace close` push it;/,
+      );
+      assert.doesNotMatch(router, /commit and push it/i);
     },
     { inputs: { work_type: "bugfix" } },
   );
