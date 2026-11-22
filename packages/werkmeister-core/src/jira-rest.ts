@@ -126,10 +126,11 @@ export interface JiraRestIssue {
     comment?: {
       comments?: Array<{ author?: { displayName?: string }; body?: string; created?: string }>;
     };
+    parent?: { key?: string; fields?: { summary?: string } } | null;
   };
 }
 
-const ISSUE_FIELDS = "summary,description,status,issuetype,assignee,comment";
+const ISSUE_FIELDS = "summary,description,status,issuetype,assignee,comment,parent";
 
 /**
  * Fetch one issue (summary/description/status/type/assignee/comments). Null on any failure,

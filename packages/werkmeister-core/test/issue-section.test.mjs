@@ -24,3 +24,22 @@ test("renderIssueRef without a copy or url (Jira, no base_url)", () => {
       "Its status moves by itself (In Progress → In Review → Done): `docs/workspace-lifecycle.md` § Issue status in the werkmeister repo.\n",
   );
 });
+
+test("renderIssueRef names the parent epic (SW-633)", () => {
+  const text = renderIssueRef({
+    ref: "SW-595",
+    url: null,
+    title: "Child",
+    fetchedAt: "2026-10-11T18:04:00.000Z",
+    parent: { ref: "SW-585", title: "Werkmeister docs overhaul", url: "https://x/browse/SW-585" },
+  });
+  assert.match(
+    text,
+    /^## Issue\n\nSW-595: Child\. Copy taken 2026-10-11: `\.werkmeister\/issue\.md`\.\nParent: /,
+  );
+  assert.ok(
+    text.includes(
+      "\nParent: [SW-585](https://x/browse/SW-585): Werkmeister docs overhaul. Its description and links: `.werkmeister/issue.md` § Parent.\n",
+    ),
+  );
+});

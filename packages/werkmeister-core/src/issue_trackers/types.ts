@@ -69,6 +69,20 @@ export interface Issue {
   url?: string;
   /** The comments, oldest first, each with `author`, `body` and maybe `created`; absent when not fetched. */
   comments?: IssueComment[];
+  /** The parent issue (a Jira epic), when it has one; absent otherwise. */
+  parent?: IssueParent;
+}
+
+/** An issue's parent, where a child's context often lives (an epic's linked review). */
+export interface IssueParent {
+  /** The parent's ref, e.g. `PROJ-1`. */
+  ref: string;
+  /** The parent's summary line. */
+  title?: string;
+  /** The parent's web page. */
+  url?: string;
+  /** The parent's body as text; absent when it could not be fetched. */
+  description?: string;
 }
 
 export interface IssueUpdate {

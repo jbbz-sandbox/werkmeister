@@ -7,10 +7,17 @@ export function renderIssueRef(issue: IssueRef): string {
   const copy = issue.fetchedAt
     ? `Copy taken ${issue.fetchedAt.slice(0, 10)}: \`.werkmeister/issue.md\`.`
     : "No stored copy; run `werkmeister workspace init --refresh-issue`.";
+  const p = issue.parent;
+  const parent = p
+    ? [
+        `Parent: ${p.url ? `[${p.ref}](${p.url})` : p.ref}${p.title ? `: ${p.title}` : ""}. Its description and links: \`.werkmeister/issue.md\` § Parent.`,
+      ]
+    : [];
   return [
     "## Issue",
     "",
     `${name}${title}. ${copy}`,
+    ...parent,
     "Before each stage, re-read the live issue for newer direction: `werkmeister issue view`",
     "Its status moves by itself (In Progress → In Review → Done): `docs/workspace-lifecycle.md` § Issue status in the werkmeister repo.",
     "",

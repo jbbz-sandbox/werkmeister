@@ -140,4 +140,6 @@ export interface IssueRef {
   url: string | null;
   title: string;
   fetchedAt: string | null;
+  /** The parent epic from the stored copy (SW-633). */
+  parent?: { ref: string; title: string; url: string | null };
 }
