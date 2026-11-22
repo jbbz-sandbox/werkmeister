@@ -273,10 +273,15 @@ test("resumeAndNudge: with no live session, continue goes headless", async () =>
 
 // SW-397: the hooks' record can miss an open terminal session; a `claude` process in the
 // workspace still means no headless `--resume` beside it.
-// The gate's container has neither `ps` nor `lsof`; the host the CLI runs on has both.
-const noProcTools = ["ps", "lsof"].some(
-  (b) => spawnSync("sh", ["-c", `command -v ${b}`]).status !== 0,
-);
+// Fails, never skips: turbo caches a skip and replays it after the tool is back (SW-1027).
+const needProcTools = () => {
+  for (const b of ["ps", "lsof"])
+    assert.equal(
+      spawnSync("sh", ["-c", `command -v ${b}`]).status,
+      0,
+      `${b} is not on PATH (the core container gets lsof from the tools volume, SW-683)`,
+    );
+};
 // A process `ps` lists as *name*, its cwd in the workspace. Not a `/bin/sleep` symlink: Ubuntu
 // 26.04's multi-call coreutils picks the tool by argv[0], so `claude -> sleep` exits at once.
 const openProcess = (name) =>
@@ -284,9 +289,8 @@ const openProcess = (name) =>
     argv0: name,
     cwd: path.join(ws, ".werkmeister"),
   });
-test("resumeAndNudge: an open claude process with no record gets a pending nudge", {
-  skip: noProcTools && "no ps/lsof",
-}, async (t) => {
+test("resumeAndNudge: an open claude process with no record gets a pending nudge", async (t) => {
+  needProcTools();
   paused(true);
   const child = openProcess("claude");
   t.after(() => child.kill());
@@ -296,9 +300,8 @@ test("resumeAndNudge: an open claude process with no record gets a pending nudge
 });
 
 // SW-488: in a `harness: codex` workspace the open session is a `codex` process, not `claude`.
-test("resumeAndNudge: an open codex process in a codex workspace gets a pending nudge", {
-  skip: noProcTools && "no ps/lsof",
-}, async (t) => {
+test("resumeAndNudge: an open codex process in a codex workspace gets a pending nudge", async (t) => {
+  needProcTools();
   paused(true);
   const yml = path.join(dot, "workspace.yml");
   fs.writeFileSync(yml, "feature: demo\nharness: codex\n");
