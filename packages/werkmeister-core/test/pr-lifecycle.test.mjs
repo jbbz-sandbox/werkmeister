@@ -1757,6 +1757,34 @@ test("gate: a touched web service's test runs in its own container, started on d
   }
 });
 
+test("a passing `pr gate` / `pr gate --tests` leaves its starts running for the `pr open` after it; a failing one stops them (SW-1046)", async () => {
+  const ws = icmWorkspace();
+  fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  const tree = [MERGE_BASE, [/diff --name-only abc$/, { stdout: "apps/api/x.ts\n" }]];
+  try {
+    for (const run of [
+      (d) => withSandboxHome(() => gateTests(ws, undefined, d)),
+      (d) => withSandboxHome(() => gatePrs(ws, undefined, d)),
+    ]) {
+      const pass = noServices(ws, tree);
+      const r = await run(pass);
+      assert.equal(r.ok, true, r.lines.join("\n"));
+      assert.deepEqual(pass.started, ["feat-api"], r.lines.join("\n"));
+      assert.ok(!pass.calls.some((c) => c.startsWith("docker stop")), pass.calls.join("\n"));
+      assert.ok(
+        r.lines.some((l) => /started feat-api for the gate, left running/.test(l)),
+        r.lines.join("\n"),
+      );
+
+      const fail = noServices(ws, [...tree, [/npm test -w api/, { code: 1, stdout: "1 failing" }]]);
+      assert.equal((await run(fail)).ok, false);
+      assert.equal(fail.calls.at(-1), "docker stop feat-api");
+    }
+  } finally {
+    clean(ws);
+  }
+});
+
 test("gate stops the container it started when a test fails (SW-34)", async () => {
   const ws = icmWorkspace();
   try {
