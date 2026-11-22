@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  badgeOf,
   buildTree,
   daemonDownNode,
   featureOf,
@@ -821,4 +822,15 @@ test("card: one state word, its activity a detail (sw-852's Thinking, sw-891's D
   );
   assert.equal(done.state, "✓ Done");
   assert.equal(done.activity, null);
+});
+
+// SW-1022: the view badge's tooltip takes the strip chip's need/needs rule.
+test("the view badge counts the needs chip and reads `1 needs you` for one", () => {
+  const strip = (count) => ({
+    chips: count ? [{ kind: "needs", count, text: "", tone: "needs", first: null }] : [],
+    host: null,
+  });
+  assert.deepEqual(badgeOf(strip(1)), { value: 1, tooltip: "1 needs you" });
+  assert.deepEqual(badgeOf(strip(3)), { value: 3, tooltip: "3 need you" });
+  assert.equal(badgeOf(strip(0)), undefined);
 });
