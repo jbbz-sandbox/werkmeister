@@ -198,19 +198,19 @@
       },
       {
         "command": "sandbox.masterControl",
-        "title": "Master control",
+        "title": "Foreman",
         "category": "Werkmeister",
         "icon": "$(terminal)"
       },
       {
         "command": "sandbox.dashboard",
-        "title": "Dashboard ↗",
+        "title": "Dashboard",
         "category": "Werkmeister",
         "icon": "$(dashboard)"
       },
       {
         "command": "sandbox.openBoard",
-        "title": "Jira board ↗",
+        "title": "Jira board",
         "category": "Werkmeister",
         "icon": "$(project)"
       },
@@ -265,18 +265,18 @@
           "group": "navigation@1"
         },
         {
-          "command": "sandbox.refreshPrs",
+          "command": "sandbox.masterControl",
           "when": "view == sandboxWorkspaces",
           "group": "navigation@2"
         },
         {
-          "command": "sandbox.connect",
+          "command": "sandbox.dashboard",
           "when": "view == sandboxWorkspaces",
           "group": "navigation@3"
         },
         {
-          "command": "sandbox.legend",
-          "when": "view == sandboxWorkspaces",
+          "command": "sandbox.openBoard",
+          "when": "view == sandboxWorkspaces && sandbox.hasBoard",
           "group": "navigation@4"
         },
         {
@@ -288,6 +288,21 @@
           "command": "sandbox.showMerged",
           "when": "view == sandboxWorkspaces && sandbox.mergedHidden",
           "group": "navigation@5"
+        },
+        {
+          "command": "sandbox.refreshPrs",
+          "when": "view == sandboxWorkspaces",
+          "group": "0_view@1"
+        },
+        {
+          "command": "sandbox.connect",
+          "when": "view == sandboxWorkspaces",
+          "group": "0_view@2"
+        },
+        {
+          "command": "sandbox.legend",
+          "when": "view == sandboxWorkspaces",
+          "group": "0_view@3"
         },
         {
           "command": "sandbox.detect",

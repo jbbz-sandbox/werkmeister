@@ -6,6 +6,7 @@ import {
   featureOf,
   interceptView,
   LEGEND_NODE,
+  stripOf,
   TONE_COLORS,
   TOOLTIP_COMMANDS,
 } from "../out/build-tree.js";
@@ -667,16 +668,18 @@ test("SW-41: a crash loop reads as an error on the row and the service, with the
   assert.equal(web.icon.color, TONE_COLORS.ok);
 });
 
-test("SW-41: the host row leads once a sweep has landed, and only then", () => {
+test("SW-1009: the host line moved to the strip; no host row leads the tree", () => {
   const host = { load: [401, 380, 300], cores: 10, featureCpuPercent: 845.2 };
-  const [first, second] = buildTree([ws("a")], [st("a")], null, [], { host });
-  assert.equal(first.kind, "host");
-  assert.equal(first.description, "4010% · features 8.5 of 10 cores");
-  assert.equal(first.icon.color, TONE_COLORS.warn, "load past the core count warns");
-  assert.equal(second.id, "a");
-  const failed = buildTree([ws("a")], [st("a")], null, [], { host: null });
-  assert.equal(failed[0].description, "n/a");
-  assert.equal(buildTree([ws("a")], [st("a")], null, [])[0].id, "a", "no sweep yet, no row");
+  const nodes = buildTree([ws("a")], [st("a")], null, [], { host });
+  assert.deepEqual(
+    nodes.map((n) => n.id),
+    ["a"],
+  );
+  const s = stripOf(nodes, [st("a")], { host });
+  assert.equal(s.host.text, "host 4010% · features 8.5 of 10 cores");
+  assert.equal(s.host.tone, "warn", "load past the core count warns");
+  assert.equal(stripOf(nodes, [st("a")], { host: null }).host.text, "host n/a");
+  assert.equal(stripOf(nodes, [st("a")]).host, null, "no sweep yet, no host line");
 });
 
 // SW-184: every Docker read goes through the host daemon, so a daemon that is

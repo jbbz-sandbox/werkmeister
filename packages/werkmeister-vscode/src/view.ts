@@ -12,6 +12,7 @@ import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
 import {
   getWorkspacePRs,
+  type InfraStatus,
   interceptsFromSnapshot,
   lifecycleOf,
   listWorkspaces,
@@ -24,7 +25,7 @@ import { loadJira } from "werkmeister-core/global_config";
 import { loadProjects } from "werkmeister-core/projects";
 import type { WorkspaceResources } from "werkmeister-core/resources";
 import type { InterceptsSnapshot } from "werkmeister-core/status";
-import type { PrInput } from "werkmeister-ui";
+import type { PrInput, StatusStrip } from "werkmeister-ui";
 import {
   boardUrl,
   buildTree,
@@ -33,6 +34,7 @@ import {
   inTerminal,
   LEGEND_NODE,
   prFilesKey,
+  stripOf,
   type WsNode,
 } from "./build-tree.js";
 import { CARD_COMMANDS, CARD_CSS, findNode, renderCards } from "./cards.js";
@@ -41,6 +43,8 @@ import { pollWhileVisible } from "./poll.js";
 const POLL_MS = 5000;
 /** The stats sweep costs the daemon about a second per run, so CPU/memory refresh on a slower clock (SW-41). */
 const RESOURCE_POLL_MS = 30000;
+/** `.w0{width:0%}` … `.w10{width:100%}`: the meter widths cards.ts names by class. */
+const METER_WIDTHS = Array.from({ length: 11 }, (_, i) => `.w${i}{width:${i * 10}%}`).join("");
 
 /** Theme variables only, so the cards follow whatever theme is active, live. */
 const CSS = `
@@ -72,6 +76,16 @@ a:focus-visible,button:focus-visible{outline:1px solid var(--vscode-focusBorder)
 .stages span{flex:1;height:5px;border-radius:3px;background:color-mix(in srgb,var(--vscode-foreground) 18%,transparent)}
 .stages .done{background:var(--vscode-charts-blue)}
 .stages .current{background:color-mix(in srgb,var(--vscode-charts-blue) 40%,transparent)}
+/* SW-1009: the strip stays pinned while the cards scroll under it; 2 rows at most: chips scroll sideways rather than wrap. */
+.strip{position:sticky;top:0;z-index:1;margin:0 0 8px;padding:4px 12px;background:var(--vscode-sideBar-background);display:flex;flex-direction:column;gap:2px}
+.strip .host{display:flex;align-items:center;gap:6px;white-space:nowrap;overflow:hidden}
+.strip .chips{display:flex;gap:10px;white-space:nowrap;overflow-x:auto;scrollbar-width:thin}
+.meter{position:relative;flex:none;width:48px;height:5px;border-radius:3px;background:color-mix(in srgb,var(--vscode-foreground) 18%,transparent)}
+.meter span{position:absolute;left:0;top:0;bottom:0;border-radius:3px}
+.m-host{background:color-mix(in srgb,var(--vscode-charts-blue) 40%,transparent)}
+.m-feat{background:var(--vscode-charts-blue)}
+${METER_WIDTHS}
+@media (max-width:260px){.meter{display:none}}
 ${CARD_CSS}`;
 
 /** The page is a shell: the host posts the cards, a click posts back a command id and a node id. */
@@ -104,10 +118,13 @@ vscode.postMessage({ cmd: "ready" });
 
 /** The memento key and the `when` context key the two title-bar commands swap on. */
 const HIDE_MERGED = "sandbox.mergedHidden";
+/** The `when` context key that shows the Jira board icon only when there is a board. */
+const HAS_BOARD = "sandbox.hasBoard";
 
 export class WorkspacesView implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
   private roots: WsNode[] = [];
+  private strip: StatusStrip = { chips: [], host: null };
   private loading = false;
   /** Undefined until the first fetch lands; null when it failed (the card's "PRs unavailable"). */
   private prs: Map<string, PrInput[]> | null | undefined;
@@ -217,10 +234,20 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
         terminalCwd(vscode.window.activeTerminal),
         workspacesRoot(),
       ),
-      board: currentBoardUrl(),
+      strip: this.strip,
       hideMerged: this.hideMerged,
     });
     void this.view?.webview.postMessage({ html });
+    // The board icon's `when` clause; a config edit shows or hides it on the next post.
+    void vscode.commands.executeCommand("setContext", HAS_BOARD, currentBoardUrl() !== null);
+    const needs = this.strip.chips.find((c) => c.kind === "needs")?.count ?? 0;
+    if (this.view)
+      this.view.badge = needs ? { value: needs, tooltip: `${needs} need you` } : undefined;
+  }
+
+  /** Undefined until the first sweep lands, null when it failed: the strip's host line. */
+  private host() {
+    return this.resources === undefined ? undefined : (this.resources?.host ?? null);
   }
 
   /** Kept apart from load(): a slow sweep must never hold up the rows. */
@@ -247,7 +274,7 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
       // Independent reads — a failed intercept lookup must not cost the list.
       const [workspaces, statuses, intercepts] = await Promise.all([
         listWorkspaces(),
-        callTool<{ statuses: WorkspaceStatus[] }>("status").then((r) => r.data),
+        callTool<{ statuses: WorkspaceStatus[]; infra: InfraStatus }>("status").then((r) => r.data),
         callTool<InterceptsSnapshot>("intercepts").then((r) => interceptsFromSnapshot(r.data)),
       ]);
       // Files only, so cheap enough for every poll.
@@ -255,25 +282,29 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
       const prFiles = prFilesKey(new Map([...life].map(([name, l]) => [name, l.prs])));
       if (this.prFiles !== undefined && prFiles !== this.prFiles) void this.refreshPrs();
       this.prFiles = prFiles;
+      const extra = {
+        prs: this.prs,
+        prNeeds: this.prNeeds,
+        lifecycles: new Map([...life].map(([name, l]) => [name, l.state])),
+        usage: this.resources?.projects,
+        host: this.host(),
+        infra: statuses.infra,
+      };
       this.roots = buildTree(
         workspaces.workspaces,
         statuses.statuses,
         intercepts,
         currentFolderPaths(),
-        {
-          prs: this.prs,
-          prNeeds: this.prNeeds,
-          lifecycles: new Map([...life].map(([name, l]) => [name, l.state])),
-          usage: this.resources?.projects,
-          host: this.resources === undefined ? undefined : (this.resources?.host ?? null),
-        },
+        extra,
       );
+      this.strip = stripOf(this.roots, statuses.statuses, extra);
     } catch (e) {
       this.roots = [
         e instanceof DaemonUnavailable
           ? daemonDownNode(e.message)
           : cliNotFoundNode((e as Error).message),
       ];
+      this.strip = stripOf([], [], { host: this.host() });
     } finally {
       this.loading = false;
       this.post();

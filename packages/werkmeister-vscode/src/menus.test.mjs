@@ -262,3 +262,31 @@ test("every command a menu references is declared", () => {
     }
   }
 });
+
+// SW-1009: the old Master control card's buttons are title-bar icons; the rest sit in the … menu.
+test("the title bar shows new, Foreman, Dashboard and a board icon only with a board", () => {
+  const title = manifest.contributes.menus["view/title"];
+  const icons = title.filter((m) => m.group.startsWith("navigation"));
+  assert.deepEqual(
+    icons.map((m) => m.command),
+    [
+      "sandbox.newWorkspace",
+      "sandbox.masterControl",
+      "sandbox.dashboard",
+      "sandbox.openBoard",
+      "sandbox.hideMerged",
+      "sandbox.showMerged",
+    ],
+  );
+  assert.match(icons.find((m) => m.command === "sandbox.openBoard").when, /&& sandbox\.hasBoard$/);
+  const more = title.filter((m) => !m.group.startsWith("navigation")).map((m) => m.command);
+  assert.deepEqual(more, [
+    "sandbox.refreshPrs",
+    "sandbox.connect",
+    "sandbox.legend",
+    "sandbox.detect",
+    "sandbox.registrySync",
+  ]);
+  const foreman = manifest.contributes.commands.find((c) => c.command === "sandbox.masterControl");
+  assert.equal(foreman.title, "Foreman");
+});

@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { boardUrl, buildTree, cliNotFoundNode, inTerminal } from "../out/build-tree.js";
+import {
+  boardUrl,
+  buildTree,
+  cliNotFoundNode,
+  inTerminal,
+  isForemanTerminal,
+  stripOf,
+} from "../out/build-tree.js";
 import { CARD_COMMANDS, findNode, renderCards } from "../out/cards.js";
 
 const ws = (name, over = {}) => ({
@@ -87,8 +94,6 @@ test("a card carries the stage name, the model, the issue, each PR and each cont
     html,
     /<button type="button" data-cmd="sandbox.openTerminal" data-id="a" class="primary">Answer in terminal/,
   );
-  assert.match(html, /<button type="button" data-cmd="sandbox.masterControl"/);
-  assert.match(html, /<button type="button" data-cmd="sandbox.dashboard"/);
 });
 
 test("a staged workspace's card shows one segment per stage, the done ones filled (SW-961)", () => {
@@ -172,7 +177,7 @@ test("a right-click gets the node's contextValue and the fields the commands rea
 test("every click names an allowed command and a node the host can find", () => {
   const nodes = [...tree(), cliNotFoundNode("boom")];
   const clicks = [...renderCards(nodes).matchAll(/data-cmd="([^"]+)" data-id="([^"]*)"/g)];
-  assert.equal(clicks.length, 7);
+  assert.equal(clicks.length, 5);
   for (const [, cmd, id] of clicks) {
     assert.ok(CARD_COMMANDS.includes(cmd), cmd);
     if (id) assert.ok(findNode(nodes, id), id);
@@ -181,7 +186,7 @@ test("every click names an allowed command and a node the host can find", () => 
 
 // --- SW-864: the cue on whichever tile the active terminal shows -------------
 
-test("a terminal's cwd names a workspace, Master control, or nothing", () => {
+test("a terminal's cwd names a workspace, the workspaces root, or nothing", () => {
   const list = [
     { name: "a", path: "/ws/a" },
     { name: "a-inner", path: "/ws/a/inner" },
@@ -198,7 +203,7 @@ test("a terminal's cwd names a workspace, Master control, or nothing", () => {
   assert.equal(inTerminal(list, undefined, "/ws"), null);
 });
 
-test("exactly one tile gets the cue: the card, or Master control, or none", () => {
+test("exactly one tile gets the cue: the card, or none (the root chat has no tile since SW-1009)", () => {
   const nodes = buildTree([ws("a"), ws("b")], [st("a"), st("b")], null, []);
   const cued = (t) =>
     [
@@ -207,35 +212,42 @@ test("exactly one tile gets the cue: the card, or Master control, or none", () =
       ),
     ].map((m) => m[3] ?? "master");
   assert.deepEqual(cued({ kind: "workspace", name: "b" }), ["ws-b"]);
-  assert.deepEqual(cued({ kind: "root" }), ["master"]);
+  assert.deepEqual(cued({ kind: "root" }), []);
   assert.deepEqual(cued(null), []);
   assert.deepEqual(cued({ kind: "workspace", name: "gone" }), []);
-  assert.equal(
-    renderCards(nodes, { inTerminal: { kind: "root" } }).match(/In terminal/g).length,
-    1,
-  );
+  assert.doesNotMatch(renderCards(nodes, { inTerminal: { kind: "root" } }), /In terminal/);
 });
 
-test("Master control counts what needs you and links each count to its first card", () => {
+// SW-1009: the pinned strip replaces the Master control and Host cards.
+test("the strip is pinned, links each chip to its first card, and shows the host line", () => {
   const needs = ag("needs-you", null, "?");
-  const html = renderCards(
-    buildTree([ws("a"), ws("b"), ws("c")], [st("a"), st("b", needs), st("c", needs)], null, [], {
-      prs: new Map([["a", [{ url: PR, state: "OPEN", ci: null, failingChecks: 0 }]]]),
-    }),
+  const statuses = [st("a", { state: "up" }), st("b", needs), st("c", needs)];
+  const extra = {
+    host: { load: [14.6, 9.2, 8], cores: 12, featureCpuPercent: 358.4 },
+    infra: { state: "partial", services: [{ name: "caddy", state: "down" }] },
+  };
+  const nodes = buildTree([ws("a"), ws("b"), ws("c")], statuses, null, [], extra);
+  const html = renderCards(nodes, { strip: stripOf(nodes, statuses, extra) });
+  assert.match(
+    html,
+    /^<header class="strip"><span class="host" title="load 1 · 5 · 15 min: 14\.6 · 9\.2 · 8 on 12 cores"><span class="c-charts-yellow">host 122% · features 3\.6 of 12 cores<\/span><span class="meter" aria-hidden="true"><span class="m-host w10"><\/span><span class="m-feat w3"><\/span><\/span><\/span><div class="chips"><a href="#ws-b" class="c-charts-yellow">● 2 need you<\/a><a href="#ws-a" class="c-charts-green">1 running<\/a><span class="c-errorForeground">infra: caddy down<\/span><\/div><\/header>/,
   );
-  assert.match(html, /<a href="#ws-b" class="c-charts-yellow">2 need you<\/a>/);
-  assert.match(html, /<a href="#ws-a">1 PR to review<\/a>/);
-  // Nothing to count: no line at all.
-  assert.doesNotMatch(renderCards(buildTree([ws("a")], [st("a")], null, [])), /to review|need/);
+  assert.doesNotMatch(html, /Master control|Triage, backlog|stalled|waiting|<section/);
+  // A host row no longer leads the tree: the strip carries it.
+  assert.equal(nodes[0].id, "a");
+  // Nothing to count and no sweep yet: no strip at all.
+  const idle = buildTree([ws("a")], [st("a")], null, []);
+  assert.doesNotMatch(renderCards(idle, { strip: stripOf(idle, [st("a")]) }), /strip/);
 });
 
-test("the Jira board button shows only with a board, and links to it", () => {
-  const nodes = tree();
-  assert.doesNotMatch(renderCards(nodes), /sandbox\.openBoard/);
-  assert.match(
-    renderCards(nodes, { board: "https://x.atlassian.net/jira/software/projects/SW/boards/1" }),
-    /data-cmd="sandbox.openBoard" data-id="" title="https:\/\/x.atlassian.net\/[^"]+">Jira board ↗/,
-  );
+test("Foreman's terminal is found by its new name and by the old Master control name", () => {
+  assert.ok(isForemanTerminal("Foreman"));
+  assert.ok(isForemanTerminal("Master control"));
+  assert.ok(isForemanTerminal("Master control (2)"));
+  assert.equal(isForemanTerminal("a · claude"), false);
+});
+
+test("boardUrl gives the default Jira project's board, else null", () => {
   const jira = (over) => ({
     tracker: "jira",
     scope: { project: "SW" },
@@ -288,12 +300,19 @@ test("hide waiting on release: two merged and one working leave one card, the co
   const asks = nodes(merged, { m2: ag("needs-you", null, "Ship it?") });
   const shown = renderCards(asks, { hideMerged: true });
   assert.deepEqual(cards(shown), ["m2", "w"]);
-  // Master control still counts the hidden ones: a merged workspace whose other repo has a PR open.
-  const review = buildTree([ws("m1")], [st("m1")], null, [], {
+  // The strip still counts the hidden ones: a merged workspace whose other repo has a red PR.
+  const extra = {
     lifecycles: new Map([["m1", "merged"]]),
-    prs: new Map([["m1", [{ url: PR, state: "OPEN", ci: null, failingChecks: 0 }]]]),
+    prs: new Map([["m1", [{ url: PR, state: "OPEN", ci: "fail", failingChecks: 1 }]]]),
+  };
+  const review = buildTree([ws("m1")], [st("m1")], null, [], extra);
+  const hiddenReview = renderCards(review, {
+    hideMerged: true,
+    strip: stripOf(review, [st("m1")], extra),
   });
-  const hiddenReview = renderCards(review, { hideMerged: true });
   assert.deepEqual(cards(hiddenReview), []);
-  assert.match(hiddenReview, /1 PR to review/);
+  assert.match(
+    hiddenReview,
+    /<header class="strip"><div class="chips"><a href="#ws-m1" class="c-errorForeground">1 CI failed or conflicts<\/a><div>.*1 hidden · waiting on release/,
+  );
 });

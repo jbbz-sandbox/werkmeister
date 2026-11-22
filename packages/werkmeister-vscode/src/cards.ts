@@ -6,6 +6,8 @@
  * No inline styles, since the view's CSP allows only the nonce'd stylesheet;
  * a colour is the class `colorClass` names.
  */
+
+import type { StatusStrip } from "werkmeister-ui";
 import {
   type InTerminal,
   RELEASED_COLOR,
@@ -22,9 +24,6 @@ export const CARD_COMMANDS = [
   "sandbox.startWork",
   "sandbox.pause",
   "sandbox.resume",
-  "sandbox.masterControl",
-  "sandbox.dashboard",
-  "sandbox.openBoard",
   "sandbox.configure",
   "sandbox.showMerged",
 ];
@@ -179,8 +178,8 @@ function plainCard(n: WsNode): string {
 export interface RenderOptions {
   /** The tile the active terminal is showing; it alone gets the cue. */
   inTerminal?: InTerminal;
-  /** The Jira board link; no button without one. */
-  board?: string | null;
+  /** The pinned strip above the cards (SW-1009). */
+  strip?: StatusStrip;
   /** The title-bar toggle (SW-1003): leave out the cards {@link hiddenByToggle} picks. */
   hideMerged?: boolean;
 }
@@ -195,39 +194,25 @@ function hiddenLine(count: number): string {
   return `<div>${action("a", "sandbox.showMerged", "", `${count} hidden · waiting on release`, ` class="dim"`)}</div>`;
 }
 
-/** `● 2 need you · 1 PR to review`, each linking to the first card it counts. */
-function summary(nodes: WsNode[]): string {
-  const ws = nodes.filter((n) => n.kind === "workspace");
-  const needs = ws.filter((n) => n.card?.needsYou);
-  const review = ws.filter((n) => n.children.some((c) => c.pr?.open));
-  const count = (list: WsNode[], one: string, many: string, cls: string) =>
-    list.length
-      ? `<a href="#ws-${esc(list[0].id)}"${cls}>${list.length} ${list.length === 1 ? one : many}</a>`
-      : "";
-  const parts = [
-    count(needs, "needs you", "need you", ` class="${colorClass(TONE_COLORS.needs)}"`),
-    count(review, "PR to review", "PRs to review", ""),
-  ].filter(Boolean);
-  return parts.length ? `<div>${parts.join(`<span class="dim"> · </span>`)}</div>` : "";
-}
+/** A meter fraction as one of the `w0`…`w10` width classes: the CSP allows no inline style. */
+const width = (f: number) => `w${Math.round(f * 10)}`;
 
-function masterControl(nodes: WsNode[], o: RenderOptions, hidden: number): string {
-  const active = o.inTerminal?.kind === "root";
-  return [
-    `<section class="card master${active ? " in-terminal" : ""}" aria-label="Master control">`,
-    `<div class="row"><span class="name">Master control</span>${active ? CHIP : ""}</div>`,
-    `<div class="dim">Triage, backlog and close-out</div>`,
-    summary(nodes),
-    hiddenLine(hidden),
-    `<div class="row">`,
-    action("button", "sandbox.masterControl", "", "Master control", ` class="primary"`),
-    action("button", "sandbox.dashboard", "", "Dashboard ↗"),
-    o.board
-      ? action("button", "sandbox.openBoard", "", "Jira board ↗", ` title="${esc(o.board)}"`)
-      : "",
-    `</div>`,
-    `</section>`,
-  ].join("");
+/** The pinned strip: the host line and its meter, then the chips, each linking to the first card it counts. */
+function strip(s: StatusStrip | undefined, hidden: number): string {
+  const chips = (s?.chips ?? []).map((c) => {
+    const cls = ` class="${colorClass(TONE_COLORS[c.tone])}"`;
+    return c.first
+      ? `<a href="#ws-${esc(c.first)}"${cls}>${esc(c.text)}</a>`
+      : `<span${cls}>${esc(c.text)}</span>`;
+  });
+  const h = s?.host;
+  const host = h
+    ? `<span class="host" title="${esc(h.tooltip)}"><span class="${colorClass(TONE_COLORS[h.tone])}">${esc(h.text)}</span><span class="meter" aria-hidden="true"><span class="m-host ${width(h.meter.host)}"></span><span class="m-feat ${width(h.meter.features)}"></span></span></span>`
+    : "";
+  // Two rows at most at any width: the host line, then one chip row that scrolls sideways.
+  const row = [...chips, hiddenLine(hidden)].filter(Boolean).join("");
+  const body = host + (row ? `<div class="chips">${row}</div>` : "");
+  return body ? `<header class="strip">${body}</header>` : "";
 }
 
 export function renderCards(nodes: WsNode[], o: RenderOptions = {}): string {
@@ -235,7 +220,7 @@ export function renderCards(nodes: WsNode[], o: RenderOptions = {}): string {
   const shown = o.hideMerged ? nodes.filter((n) => !hiddenByToggle(n)) : nodes;
   // The counts still read every workspace, hidden or not.
   return [
-    masterControl(nodes, o, nodes.length - shown.length),
+    strip(o.strip, nodes.length - shown.length),
     ...shown.map((n) =>
       n.kind === "workspace"
         ? workspaceCard(n, t?.kind === "workspace" && t.name === n.workspace?.name)

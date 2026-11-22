@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as vscode from "vscode";
 import { CODEX_LAUNCH, listWorkspaces, reconcileLaunch, startArgs } from "werkmeister-core";
 import { harnessIdOf } from "werkmeister-core/harness_layout";
+import { FOREMAN, isForemanTerminal } from "../../build-tree.js";
 import { trackSessionTerminal } from "../../terminal.js";
 import {
   liveSessionTerminal,
@@ -90,8 +91,6 @@ export async function startWorkTerminal(ws: { name: string; path: string }): Pro
   openClaudeTerminal(ws, command, harness);
 }
 
-const MASTER_CONTROL = "Master control";
-
 /**
  * The chat at the workspaces root, where triage and next-wave run: focus it, else start one there.
  * A chat started by hand has no name of ours, so after the name it is any terminal whose shell sits
@@ -101,14 +100,14 @@ const MASTER_CONTROL = "Master control";
 export function focusMasterControl(root: string): void {
   const all = vscode.window.terminals;
   const open =
-    all.find((t) => t.name.includes(MASTER_CONTROL)) ??
+    all.find((t) => isForemanTerminal(t.name)) ??
     all.find((t) => t.shellIntegration?.cwd?.fsPath === root && !t.name.startsWith("werkmeister "));
   if (open) {
     open.show();
     return;
   }
   const term = vscode.window.createTerminal({
-    name: MASTER_CONTROL,
+    name: FOREMAN,
     cwd: root,
     iconPath: new vscode.ThemeIcon("circuit-board"),
   });
