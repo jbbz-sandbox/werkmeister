@@ -95,6 +95,8 @@ export type RepoPr = {
   /** Absent from a core older than SW-47. */
   ci?: "pass" | "running" | "fail" | null;
   failingChecks?: number;
+  /** GitHub's `mergeable`, as core's RepoPr; the strip's conflicts chip reads it (SW-1010). */
+  mergeable?: "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | null;
 };
 
 /** One container's health, as workspace-status reports it. */
