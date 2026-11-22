@@ -1037,6 +1037,14 @@ export function idleStopMinutes(): number {
   return Number.isInteger(v) && (v as number) >= 0 ? (v as number) : 30;
 }
 
+/** `overrides.stalled_idle_minutes` / `stalled_wait_minutes` in ms (SW-1007); 30 min when unset or not a whole number ≥ 1. */
+export function stalledAfterMs(): { idleMs: number; waitMs: number } {
+  const o = loadGlobalConfig()["overrides"] as Record<string, unknown> | undefined;
+  const ms = (v: unknown) =>
+    (Number.isInteger(v) && (v as number) >= 1 ? (v as number) : 30) * 60_000;
+  return { idleMs: ms(o?.["stalled_idle_minutes"]), waitMs: ms(o?.["stalled_wait_minutes"]) };
+}
+
 /** The gate's `docker exec` marker (SW-39), touched by `runGate`. */
 export function lastExecMarker(workspaceRoot: string): string {
   return path.join(dotDir(workspaceRoot), "last-exec");

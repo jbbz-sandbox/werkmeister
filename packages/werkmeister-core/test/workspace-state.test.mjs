@@ -448,3 +448,74 @@ test("agent: an idle signal reads working while a session or background agent wo
   assert.equal(workspaceState(facts({ sessions: bg, signal: idle })).activity.id, "subagent");
   assert.equal(chip({ sessions: bg }, idle).id, "working", "Idle beside Background agent running");
 });
+
+// SW-1007: stalled = working with no session write, a capacity wait, or a crash; each limit is "older than".
+test("stalled: each rule, its 30 min boundary, and need-you apart", () => {
+  const stalled = (over) => workspaceState(facts(over)).stalled;
+  const working = { agent: "working", at: ago(MIN) };
+  const LIMIT = 30 * MIN;
+  for (const [ms, want] of [
+    [LIMIT - 1, null],
+    [LIMIT, null],
+    [LIMIT + 1, "idle"],
+  ])
+    assert.equal(
+      stalled({ signal: working, lastActivity: ago(ms) })?.reason ?? null,
+      want,
+      `idle ${ms}`,
+    );
+  assert.deepEqual(stalled({ signal: working, lastActivity: ago(LIMIT + 1) }), {
+    reason: "idle",
+    since: ago(LIMIT + 1),
+  });
+  assert.equal(stalled({ lastActivity: ago(2 * LIMIT) }), null, "not working");
+  assert.equal(stalled({ signal: working, lastActivity: null }), null, "no activity known");
+
+  const waiting = (ms) => ({ position: 1, reason: "budget", since: ago(ms) });
+  for (const [ms, want] of [
+    [LIMIT - 1, null],
+    [LIMIT, null],
+    [LIMIT + 1, "capacity-wait"],
+  ])
+    assert.equal(stalled({ waiting: waiting(ms) })?.reason ?? null, want, `wait ${ms}`);
+  assert.equal(stalled({ waiting: { position: 1, reason: "budget" } }), null, "no since");
+  const done = { agent: "done", at: ago(LIMIT + 1) };
+  assert.equal(
+    stalled({ signal: done, lastActivity: ago(LIMIT + 1), waiting: waiting(LIMIT + 1) })?.reason,
+    "capacity-wait",
+    "queued reads working but is not idle",
+  );
+  assert.equal(
+    stalled({ signal: done, lastActivity: ago(LIMIT + 1), waiting: waiting(MIN) }),
+    null,
+    "a short queue wait over a quiet transcript",
+  );
+
+  const crash = stalled({ crashLoops: [{ service: "api", restarts: 4, lastLog: "boom" }] });
+  assert.equal(crash?.reason, "crash-loop");
+  const stale = { s: busy({ at: ago(SESSION_GONE_MS * 2), last: ago(SESSION_GONE_MS * 2) }) };
+  assert.equal(stalled({ sessions: stale, lifecycle: "pr-open" })?.reason, "session-died");
+
+  const asked = (at) => ({
+    status: "idle",
+    at,
+    ask: { kind: "question", what: "?", at, source: "session" },
+  });
+  const one = workspaceState(facts({ sessions: { a: asked(ago(2 * LIMIT)) } }));
+  assert.deepEqual([one.stalled, one.oldestNeedMs], [null, 2 * LIMIT], "need-you is not stalled");
+  const two = workspaceState(facts({ sessions: { a: asked(ago(MIN)), b: asked(ago(5 * MIN)) } }));
+  assert.equal(two.oldestNeedMs, 5 * MIN);
+  assert.equal(workspaceState(facts()).oldestNeedMs, null);
+});
+
+test("stalled: stalledAfter overrides both 30 min limits", () => {
+  const stalledAfter = { idleMs: 10 * MIN, waitMs: 5 * MIN };
+  const stalled = (over) =>
+    workspaceState(facts({ stalledAfter, ...over })).stalled?.reason ?? null;
+  const working = { agent: "working", at: ago(MIN) };
+  assert.equal(stalled({ signal: working, lastActivity: ago(10 * MIN) }), null);
+  assert.equal(stalled({ signal: working, lastActivity: ago(10 * MIN + 1) }), "idle");
+  const waiting = (ms) => ({ position: 1, reason: "budget", since: ago(ms) });
+  assert.equal(stalled({ waiting: waiting(5 * MIN) }), null);
+  assert.equal(stalled({ waiting: waiting(5 * MIN + 1) }), "capacity-wait");
+});

@@ -141,6 +141,7 @@ import {
   reloadProxy,
   restart,
   resume,
+  stalledAfterMs,
   stop,
   up,
 } from "./lifecycle.js";
@@ -166,7 +167,13 @@ import {
   readAutonomous,
   resolveInputs,
 } from "./workspace_prompts.js";
-import { type NeedItem, prNeeds, type WorkspaceState, workspaceState } from "./workspace_state.js";
+import {
+  type NeedItem,
+  prNeeds,
+  type StateFacts,
+  type WorkspaceState,
+  workspaceState,
+} from "./workspace_state.js";
 import { revokeWorkspaceToken } from "./workspace_token.js";
 import { hasGit, listRepoWorktrees } from "./worktrees.js";
 
@@ -1990,9 +1997,10 @@ export async function getWorkspaceStatuses(): Promise<{
       };
     }),
   );
+  const stalledAfter = stalledAfterMs();
   const statuses = await Promise.all(
     rows.map(async (s): Promise<WorkspaceStatus> => {
-      const workspaceState = await stateFor(path.join(root, s.name), s);
+      const workspaceState = await stateFor(path.join(root, s.name), s, stalledAfter);
       return {
         ...s,
         workspaceState,
@@ -2112,7 +2120,11 @@ const mtimeOf = (file: string) =>
   );
 
 /** The facts {@link workspaceState} reads for one swept workspace, beyond its status row. */
-async function stateFor(dir: string, s: SweptRow): Promise<WorkspaceState> {
+async function stateFor(
+  dir: string,
+  s: SweptRow,
+  stalledAfter: StateFacts["stalledAfter"],
+): Promise<WorkspaceState> {
   const sessions = readSessions(dir);
   const life = lifecycleOf(dir);
   const shipped = life.state === "shipped";
@@ -2154,6 +2166,8 @@ async function stateFor(dir: string, s: SweptRow): Promise<WorkspaceState> {
         ? { what: s.claude.question, at: s.claude.at ?? new Date().toISOString() }
         : null,
     autonomous: s.autonomous,
+    lastActivity: s.lastActivity,
+    stalledAfter,
   });
 }
 

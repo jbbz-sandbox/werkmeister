@@ -1025,6 +1025,9 @@ export function registerWorkspaceTools(server: McpServer): void {
               ),
               // SW-558: the card's one word (working, needs-you, done, idle), formerly `claude.agent`.
               agent: z.object({ id: z.string(), since: z.string().nullable() }),
+              // SW-1007: idle, capacity-wait, crash-loop or session-died; a person's need alone is not stalled.
+              stalled: z.object({ reason: z.string(), since: z.string().nullable() }).nullable(),
+              oldestNeedMs: z.number().nullable(),
             }),
           }),
         ),
