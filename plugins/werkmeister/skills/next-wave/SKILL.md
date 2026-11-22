@@ -46,6 +46,7 @@ werkmeister workspace new <slug> --issue-id <ref> --repos <repo> \
   --labels focus [--group <member keys>] [--autonomous] [--model <tier>]
 ```
 
+- `--work-type` comes from the lead ticket's issue type: Task or Story → `feature`, Bug → `bugfix`. Use `refactor` or `spike` only when the person asks for it or the ticket itself says so. A GitHub-issues project has no issue type: a `bug` label → `bugfix`, anything else → `feature`.
 - Before the first create: the code checkout the CLI runs from is on an up-to-date `main` and rebuilt (`pnpm run build` at its root; the plugin's MCP server runs `apps/werkmeister-mcp/dist`).
 - A group gets one workspace, for its lead: `--group <member keys, comma-separated>`, so the ICM contracts render the grouped PR (one commit per ticket). Its starting prompt names every member and says to close the members when the PR ships. Check that `group:` appears in its `workspace.yml`.
 - List only the services the ticket says to run (usually none), and any service whose container the ticket measures or exercises (memory, cold build or gate timings, its runtime): without it `werkmeister feature up` starts nothing and the run measures in a throwaway container (SW-280). The gate starts each touched service's container that isn't running and stops it again (SW-34, SW-336), so zero services is fine for a plain code change. Every listed service is a container plus an install and build on `werkmeister feature up`, so extra ones cost real CPU (SW-28).
