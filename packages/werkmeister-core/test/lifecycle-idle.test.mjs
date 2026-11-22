@@ -9,6 +9,7 @@ import { test } from "node:test";
 
 import {
   idleFeatures,
+  idleStopFeature,
   idleStopMinutes,
   liveSessions,
   stalledAfterMs,
@@ -314,4 +315,35 @@ test("stopIdle: a granted start whose continue is undelivered keeps its containe
     stop: async (f) => gone.push(f),
   });
   assert.deepEqual(gone, ["closed"]);
+});
+
+// SW-1033: the SessionEnd auto-stop reached a plain stop(), which drops a queued start (SW-1017).
+test("idleStopFeature: a workspace waiting for capacity as a whole is not auto-stopped (SW-1033)", () => {
+  const ws = workspaceWith({});
+  const at = {
+    feature: "demo",
+    workspaceRoot: ws,
+    sessionId: "s1",
+    reason: "other",
+    entrypoint: "cli",
+  };
+  assert.equal(idleStopFeature(at), "demo");
+  fs.writeFileSync(
+    path.join(ws, ".werkmeister", "waiting.json"),
+    JSON.stringify({ position: 1, reason: "preempted" }),
+  );
+  assert.equal(idleStopFeature(at), null);
+  // A service start's wait runs beside running containers: those still stop.
+  fs.writeFileSync(
+    path.join(ws, ".werkmeister", "waiting.json"),
+    JSON.stringify({ position: 1, reason: "waiting for capacity", services: ["api"] }),
+  );
+  assert.equal(idleStopFeature(at), "demo");
+  // A left-over whole-feature waiting.json (its feature out of the queue) does not hold the stop.
+  const waiting = path.join(ws, ".werkmeister", "waiting.json");
+  fs.writeFileSync(waiting, JSON.stringify({ position: 1, reason: "preempted" }));
+  fs.writeFileSync(path.join(ws, ".env"), "FEATURE=demo\n");
+  const old = (Date.now() - MIN) / 1000;
+  fs.utimesSync(waiting, old, old);
+  assert.equal(idleStopFeature(at), "demo");
 });
