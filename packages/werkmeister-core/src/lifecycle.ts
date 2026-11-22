@@ -589,14 +589,12 @@ export async function admitServiceStart(
     (s) => !up.has(s),
   );
   if (!services.length) return;
-  // A plain `up` or a preemption queued this feature; the grant brings it back whole.
+  // A queued whole start (a plain `up`, or a preemption) asks for more than this one: this replaces it (SW-1017).
   const queued = readWaiting(workspace);
   if (queued && !queued.services && (await waitingQueue()).includes(feature)) {
-    throw new SandboxError(
-      `'${feature}' is waiting for capacity (${queued.reason}, position ${queued.position}); ` +
-        `${service} was not started. It starts with the rest of the feature when room frees.`,
-      "NO_CAPACITY",
-    );
+    await dequeue(feature);
+    clearWaiting(workspace);
+    info(`'${feature}' left the queue for its whole start; starting ${service} instead`);
   }
   let starting: Starting = { services };
   let released: string[] = [];
@@ -924,7 +922,8 @@ function refuseInsideOwnContainer(feature: string, verb: string): void {
 /** A feature that was running, and the slot it keeps while stopped. */
 export interface StopResult {
   feature: string;
-  slot: number;
+  /** null: it held no slot, and the stop only took its queued start out of the queue (SW-1017). */
+  slot: number | null;
 }
 
 /** What `werkmeister internal session-end` knows when a SessionEnd hook runs it (#231). */
@@ -1487,6 +1486,15 @@ async function grantWaitersQuietly(): Promise<void> {
   }
 }
 
+/** Take *feature* out of the capacity queue and clear its waiting.json; false when it was not queued. */
+async function dropQueuedStart(feature: string): Promise<boolean> {
+  if (!readQueue().includes(feature)) return false;
+  await dequeue(feature);
+  const workspace = readLeases()[feature]?.workspace || workspaceForFeature(feature);
+  if (workspace) clearWaiting(workspace);
+  return true;
+}
+
 /**
  * What a session hears when werkmeister stopped its containers under these commands (SW-856):
  * they died with them (exit 137), so the session reruns them rather than reading a test failure.
@@ -1503,14 +1511,23 @@ export function killedNudge(why: string, killed: string[]): string {
  * Stop *feature*'s containers, leaving them and its slot in place so
  * `restart`/`up` can resume it.
  *
- * Throws `NOT_RUNNING` when the feature holds no slot, and
- * `COMPOSE_STOP_FAILED` when a container fails to stop.
+ * Throws `NOT_RUNNING` when the feature holds no slot and is not queued (queued only: it leaves the
+ * queue and returns `slot: null`), and `COMPOSE_STOP_FAILED` when a container fails to stop.
  */
 export async function stop(
   feature: string,
   { grant = true, why }: { grant?: boolean; why?: string } = {},
 ): Promise<StopResult> {
   refuseInsideOwnContainer(feature, "stop");
+  // A person's or agent's own stop also ends its queued start (SW-1017). Not preemption's or the reaper's
+  // (*why*), which requeue it or never queued it, nor a gate's release (no grant), which keeps its place.
+  const dropped = grant && !why && (await dropQueuedStart(feature));
+  // A start queued before it ever ran holds no slot: leaving the queue is the whole stop.
+  if (dropped && (await getSlot(feature)) === null) {
+    info(`'${feature}' left the waiting queue; it had not started`);
+    await grantWaitersQuietly();
+    return { feature, slot: null };
+  }
   const slot = await requireSlot(feature);
   // *why* marks a stop nobody in the workspace asked for: name what it kills to the session (SW-856).
   const workspace = why ? workspaceForFeature(feature) : null;
@@ -1773,6 +1790,8 @@ export async function down(
     warn(`Containers for '${feature}' may still exist -- see the docker compose output above`);
   }
 
+  // Before the slot goes: the lease names the workspace whose waiting.json to clear (SW-1017).
+  await dropQueuedStart(feature);
   info("Releasing feature slot...");
   await releaseSlot(feature);
   // Tearing down ends a pause, and a wait: there is nothing left to resume or start.

@@ -59,10 +59,12 @@ import {
   GATE_CAPACITY_WAIT_MS,
   restart,
   startsAsPerson,
+  stop,
 } from "werkmeister-core/lifecycle";
 import { run } from "werkmeister-core/proc";
 import { info } from "werkmeister-core/reporter";
 import { enqueue, readQueue, writeLeases } from "werkmeister-core/scheduler_state";
+import { getSlot } from "werkmeister-core/slots";
 
 const G = 2 ** 30;
 let tmp: string;
@@ -442,7 +444,8 @@ describe("admitServiceStart", () => {
     expect(readWaiting(mine)).toBeNull();
   });
 
-  it("refuses while the feature is queued to come back whole (preempted), leaving its place", async () => {
+  // SW-1017: it asks for less than the queued whole start, so it replaces it rather than being refused.
+  it("replaces a whole start queued to come back (preempted), and starts at once when it fits", async () => {
     const other = workspace("other", { autonomous: true });
     session(other); // working: SW-546 would otherwise take an idle holder's lease
     const mine = workspace("mine", { autonomous: true });
@@ -450,11 +453,9 @@ describe("admitServiceStart", () => {
     writeLeases({ mine: { slot: 2, workspace: mine } });
     busy(other, 1);
     await enqueue("mine", mine);
-    await expect(
-      admitServiceStart("mine", mine, "api", { sleep: async () => expect.fail("waited") }),
-    ).rejects.toMatchObject({ code: "NO_CAPACITY", message: expect.stringContaining("preempted") });
-    expect(readQueue()).toEqual(["mine"]);
-    expect(readWaiting(mine)).toMatchObject({ reason: "preempted" });
+    await admitServiceStart("mine", mine, "api", { sleep: async () => expect.fail("waited") });
+    expect(readQueue()).toEqual([]);
+    expect(readWaiting(mine)).toBeNull();
   });
 
   it("a service already running costs nothing again", async () => {
@@ -702,5 +703,35 @@ describe("admitServiceStart", () => {
       admitServiceStart("mine", mine, "api", { sleep: async () => {}, waitMs: 0 }),
     ).rejects.toMatchObject({ code: "NO_CAPACITY" });
     expect(ops).not.toContain("grant-later");
+  });
+});
+
+// SW-1017: a queued whole start outlived `feature stop`, and refused the smaller `--service` start.
+describe("a queued whole start", () => {
+  beforeEach(() =>
+    vi.mocked(run).mockImplementation(() => ({ status: 0, stdout: "", stderr: "" })),
+  );
+
+  it("leaves the queue on the feature's own stop, not on preemption's", async () => {
+    const mine = workspace("mine", { autonomous: true });
+    writeLeases({ mine: { slot: 2, workspace: mine } });
+    await enqueue("mine", mine);
+    await stop("mine", { grant: false, why: "preempted to make room for 'x'" });
+    expect(readQueue()).toEqual(["mine"]);
+    await stop("mine");
+    expect(readQueue()).toEqual([]);
+    expect(readWaiting(mine)).toBeNull();
+  });
+
+  it("a start queued before it ever ran leaves the queue and returns no slot, not NOT_RUNNING", async () => {
+    const mine = workspace("mine", { autonomous: true });
+    await enqueue("mine", mine);
+    vi.mocked(getSlot).mockResolvedValue(null);
+    vi.mocked(workspaceForFeature).mockImplementation((f) => (f === "mine" ? mine : null));
+    expect(await stop("mine")).toEqual({ feature: "mine", slot: null });
+    expect(readQueue()).toEqual([]);
+    expect(readWaiting(mine)).toBeNull();
+    await expect(stop("mine")).rejects.toMatchObject({ code: "NOT_RUNNING" });
+    vi.mocked(getSlot).mockResolvedValue(1);
   });
 });

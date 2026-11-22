@@ -18,7 +18,7 @@ Leaves any k8s intercepts the feature holds (best effort; teardown never waits o
 .IP 2. 3
 Stops all Docker containers for the feature (\fBdocker compose down \-\-remove\-orphans\fR)
 .IP 3. 3
-Releases the slot back to the pool, and clears any pause or capacity wait
+Releases the slot back to the pool, and clears any pause or capacity wait, its queue entry included
 .IP 4. 3
 Starts queued features that now fit in the freed budget
 .IP 5. 3

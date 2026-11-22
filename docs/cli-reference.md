@@ -72,7 +72,7 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 
 **If the workspace lists no services**, the command still proceeds — the feature is registered and routes entirely to k8s. To add services later, list them in `.werkmeister/workspace.yml`, rerun `werkmeister workspace init`, then `werkmeister feature up`.
 
-**If the feature has to wait for capacity**, the command exits 75 without starting containers. It prints `=== Feature '<name>' is waiting for capacity (position N) ===`, who holds the budget, what the start needs against what is free, and the head it waits behind. The feature stays queued and starts by itself when room frees, and its session is told to continue. A `--service` start waits up to 10 minutes, then exits 75 the same way and stays queued: it starts by itself when room frees, and a rerun keeps its place. One that stopped the feature's running containers to wait does not stay queued: `werkmeister feature up` starts the feature again. Exit 75 means no capacity yet, not a failure. `werkmeister budget status` shows the queue.
+**If the feature has to wait for capacity**, the command exits 75 without starting containers. It prints `=== Feature '<name>' is waiting for capacity (position N) ===`, who holds the budget, what the start needs against what is free, and the head it waits behind. The feature stays queued and starts by itself when room frees, and its session is told to continue. A `--service` start waits up to 10 minutes, then exits 75 the same way and stays queued: it starts by itself when room frees, and a rerun keeps its place. One that stopped the feature's running containers to wait does not stay queued: `werkmeister feature up` starts the feature again. A `--service` start while the whole feature waits replaces that wait: the feature leaves the queue for its whole start and starts just that service. Exit 75 means no capacity yet, not a failure. `werkmeister budget status` shows the queue.
 
 **What a queued session can do.** While its whole feature waits (`.werkmeister/waiting.json`), the werkmeister hook denies the session's commands that need its containers or the CPUs: `docker`, `pnpm`, `npm`, `npx`, `node`, `turbo`, `vitest`, `with-temp-home`, `werkmeister feature restart`, `pr gate` and `pr open`, and their MCP forms. Everything else passes: edits, git, `werkmeister feature stop`, `werkmeister budget status`, a lone `docker ps`, and `werkmeister feature up`, which only asks admission again (exit 75 while there is no room) and so starts a queued feature once room frees, for example after `budget:` grows. The deny does not end the turn, so the session goes on with other work. Before it denies, the hook asks Docker whether the feature's containers already run; if they do, the queue entry is stale, and it removes `waiting.json` and lets the command through. When a grant starts the feature, the session is told `Capacity freed: … Continue where you left off.`: the workspaces pane sends that to the workspace's Desktop session, and keeps it for its next refresh when the send fails. A `--service` start's own wait holds nothing, since its poll is the session's own command. A paused workspace holds every tool and ends the turn.
 
@@ -97,7 +97,7 @@ Stop containers, release slot, update proxy (`infra <verb>` for shared infra)
 
 1. Leaves any k8s intercepts the feature holds (best effort; teardown never waits on Telepresence)
 2. Stops all Docker containers for the feature (`docker compose down --remove-orphans`)
-3. Releases the slot back to the pool, and clears any pause or capacity wait
+3. Releases the slot back to the pool, and clears any pause or capacity wait, its queue entry included
 4. Starts queued features that now fit in the freed budget
 5. Regenerates the Caddyfile (removing this feature's routing rules) and reloads Caddy if running
 
@@ -256,7 +256,7 @@ Stop containers without removing them or releasing the slot
 
 `werkmeister feature stop [feature]`
 
-Stops a feature's containers without removing them or releasing its slot. Bring it back with `werkmeister feature restart` or `werkmeister feature up`. Use `infra` as the feature name to stop the shared infrastructure.
+Stops a feature's containers without removing them or releasing its slot. A start of the feature still waiting for capacity leaves the queue too. Bring it back with `werkmeister feature restart` or `werkmeister feature up`. Use `infra` as the feature name to stop the shared infrastructure.
 
 Two modes run without a person: `--if-idle` is the SessionEnd hook behind a workspace's `auto_stop`, and `--idle` is one pass of the idle reaper over every workspace.
 
