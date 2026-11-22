@@ -164,7 +164,7 @@ test("under the fixture the pr-watch schedule is skipped: no crontab call", asyn
     const step = (await run({ prWatch: { ...prWatch(), platform: "linux" } })).find(
       (s) => s.label === "pr-watch schedule",
     );
-    assert.equal(step.detail, "skipped in the fixture");
+    assert.equal(step.detail, "skipped (WERKMEISTER_FIXTURE)");
     assert.ok(!calls.some((c) => c.startsWith("crontab")), calls.join("\n"));
   } finally {
     if (saved === undefined) delete process.env.WERKMEISTER_FIXTURE;

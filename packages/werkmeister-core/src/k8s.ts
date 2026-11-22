@@ -15,7 +15,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { Colors } from "./colors.js";
 import { composeInvocation, INFRA_PROJECT, K8S_FORWARDS_CONTAINER } from "./compose_infra.js";
 import {
-  isFixture,
+  hostSessionSkipReason,
   loadServices,
   needsCluster,
   type ServicesConfig,
@@ -175,8 +175,10 @@ function clusterReachable(): boolean {
  * Verify the k8s-forwards container is healthy, restarting it if not.
  */
 export async function ensurePortForwardsHealthy(): Promise<ForwardsOutcome> {
-  if (isFixture()) {
-    info("k8s port-forwards skipped (WERKMEISTER_FIXTURE)");
+  // A force-recreate from a temp HOME would mount its soon-deleted kubeconfig into the machine's container (SW-1054).
+  const skip = hostSessionSkipReason();
+  if (skip) {
+    info(`k8s port-forwards skipped (${skip})`);
     return "healthy";
   }
   const health = await checkPortForwardHealth();

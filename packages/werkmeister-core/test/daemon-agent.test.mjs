@@ -196,3 +196,51 @@ test("once launchd owns the daemon, a PID-file stop leaves it running", {
   fs.writeFileSync(daemonPlistPath(home), "<plist/>");
   assert.equal(await stop(MCP), false);
 });
+
+// SW-1054: launchctl acts on gui/<uid> whatever HOME is, so a temp HOME (with-temp-home) or a
+// fixture run must never boot out, bootstrap or rewrite the login session's agents.
+for (const [why, env] of [
+  ["with-temp-home", () => ({ WERKMEISTER_TEMP_HOME: home })],
+  ["a fixture run", () => ({ WERKMEISTER_FIXTURE: "1" })],
+]) {
+  test(`under ${why}, daemon install and uninstall never run launchctl (SW-1054)`, async (t) => {
+    const set = env();
+    const prev = Object.fromEntries(Object.keys(set).map((k) => [k, process.env[k]]));
+    Object.assign(process.env, set);
+    t.after(() => {
+      for (const [k, v] of Object.entries(prev))
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+    });
+    const [step] = await syncDaemonAgent(false, true, opts());
+    assert.equal(step.ok, true);
+    assert.match(step.detail, /skipped/);
+    assert.equal(fs.existsSync(daemonPlistPath(home)), false, "no plist written");
+    fs.mkdirSync(path.dirname(daemonPlistPath(home)), { recursive: true });
+    fs.writeFileSync(daemonPlistPath(home), "<plist/>");
+    assert.match(uninstallDaemonAgent(opts()).detail, /skipped/);
+    assert.deepEqual(calls, []);
+  });
+}
+
+test("sharedProxySkipReason: a with-temp-home HOME at the default config path leaves the shared Caddy alone (SW-1054)", async (t) => {
+  const { sharedProxySkipReason } = await import("../dist/config.js");
+  const prev = [process.env.WERKMEISTER_TEMP_HOME, process.env.WERKMEISTER_CONFIG_FILE];
+  delete process.env.WERKMEISTER_CONFIG_FILE;
+  process.env.WERKMEISTER_TEMP_HOME = home;
+  t.after(() => {
+    for (const [k, v] of [
+      ["WERKMEISTER_TEMP_HOME", prev[0]],
+      ["WERKMEISTER_CONFIG_FILE", prev[1]],
+    ])
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+  });
+  assert.ok(sharedProxySkipReason(), "a temp HOME is not the machine's home");
+  // HOME moved off the marker: the predicate is the marker, not any HOME override.
+  process.env.WERKMEISTER_TEMP_HOME = path.join(home, "elsewhere");
+  assert.equal(sharedProxySkipReason(), undefined);
+  // The real home: no marker, the guard stays off.
+  delete process.env.WERKMEISTER_TEMP_HOME;
+  assert.equal(sharedProxySkipReason(), undefined);
+});

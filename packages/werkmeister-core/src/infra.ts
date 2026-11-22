@@ -33,7 +33,7 @@ import {
   recreatePlan,
   staleInfraContainers,
 } from "./compose_infra.js";
-import { isFixture, sandboxHome } from "./config.js";
+import { hostSessionSkipReason, sandboxHome } from "./config.js";
 import { execCapture, projectContainers } from "./docker.js";
 import { generateCaddyfile } from "./generate.js";
 import { configureGitHooksPath } from "./git_hooks.js";
@@ -144,6 +144,13 @@ async function ensureProxyFiles(): Promise<void> {
   refreshKubeconfig();
 }
 
+/** The shared containers are the machine's, reached through the real DOCKER_CONFIG: a fixture or temp HOME leaves them be (SW-1054). */
+function sharedInfraSkipped(what: string): boolean {
+  const skip = hostSessionSkipReason();
+  if (skip) info(`Shared infra (Caddy, k8s forwards) ${what} skipped (${skip})`);
+  return skip !== undefined;
+}
+
 /**
  * Start all infrastructure containers via compose/shared-infra.yml.
  *
@@ -152,10 +159,7 @@ async function ensureProxyFiles(): Promise<void> {
  * k8s-forwards image, which routinely outlasts the cap.
  */
 export async function startSharedInfra(signal?: AbortSignal): Promise<boolean> {
-  if (isFixture()) {
-    info("Shared infra (Caddy, k8s forwards) skipped (WERKMEISTER_FIXTURE)");
-    return true;
-  }
+  if (sharedInfraSkipped("start")) return true;
   const { argv, env, cwd } = composeInvocation();
   const composeFile = argv[3];
 
@@ -439,6 +443,7 @@ export async function connectK8s(): Promise<boolean> {
  */
 export async function down(volumes = false): Promise<boolean> {
   await stopAll();
+  if (sharedInfraSkipped("down")) return true;
   takeDownProject(LEGACY_INFRA_PROJECT, "the pre-rename shared infra", { removeVolumes: volumes });
   // `--profile *`: plain `down` skips an opted-in jaeger/redisinsight (as
   // compose.ts's ALL_PROFILES does for workspaces).
@@ -475,6 +480,7 @@ export async function down(volumes = false): Promise<boolean> {
  */
 export async function stop(): Promise<boolean> {
   await stopAll();
+  if (sharedInfraSkipped("stop")) return true;
   const err = await stopOrRestart("stop", INFRA_PROJECT);
   if (err) {
     error(err);
@@ -502,6 +508,10 @@ export async function stop(): Promise<boolean> {
  * ```
  */
 export async function restart(): Promise<boolean> {
+  if (sharedInfraSkipped("restart")) {
+    await restartAll();
+    return true;
+  }
   const err = await stopOrRestart("restart", INFRA_PROJECT);
   if (err) error(err);
   else success("Shared infrastructure restarted");
