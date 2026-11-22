@@ -514,6 +514,16 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
       WERKMEISTER_WORKSPACE_CONFIG: "",
       // Read before sandboxHome(): a caller's would take the fixture's issue briefings.
       WERKMEISTER_CACHE_FILE: "",
+      // Every other binary or path resolver variable, blank so its default applies; fixture-env.test.mjs finds a new one (SW-918).
+      WERKMEISTER_BIN: "",
+      WERKMEISTER_MODEL_PRICING_YAML: "",
+      WERKMEISTER_SERVICES_YAML: "",
+      WERKMEISTER_PORTS_YAML: "",
+      WERKMEISTER_WORKSPACES_ROOT: "",
+      CHROME_BIN: "",
+      VSCODE_BIN: "",
+      // Claude Code's, in an agent's shell: `feature stop --if-idle` would act on the real workspace.
+      CLAUDE_PROJECT_DIR: "",
       // Dead even when the caller's shell exports the real daemon's address (SW-264, SW-426).
       WERKMEISTER_HOST: opts.daemon ?? closedPortUrl(),
       // A refused daemon is retried for a restart gap (15 s default): each fixture step would wait it out (SW-708).
