@@ -94,6 +94,11 @@ export interface NeedRow {
   dismiss: string | null;
 }
 
+/** `● <what> (guess) · <since> — <action>`: one wording for every surface that prints it as text (SW-962). */
+export function needLine(n: NeedRow): string {
+  return `● ${n.what}${n.guess ? " (guess)" : ""}${n.since ? ` · ${n.since}` : ""} — ${n.action}`;
+}
+
 export interface Text {
   text: string;
   tone: Tone;
