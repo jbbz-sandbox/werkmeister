@@ -377,7 +377,7 @@ export function statusStrip(rows: StripRow[], g: StripGlobals = {}, now = new Da
   };
   const needItems = (r: StripRow) =>
     r.ws.paused ? [] : [...(r.ws.workspaceState?.needs ?? []), ...(r.prNeeds ?? [])];
-  const needing = rows.filter((r) => displayModel(r.ws, { prNeeds: r.prNeeds, now }).needs);
+  const needing = rows.filter((r) => needsYou(r.ws, r.prNeeds));
   const oldest = needing
     .flatMap(needItems)
     .map((n) => n.since)
@@ -512,6 +512,11 @@ function needRows(ws: DisplayInput, opts: DisplayOptions, now: Date): NeedRow[] 
     url: n.url ?? null,
     dismiss: n.dismiss ?? null,
   }));
+}
+
+/** The needs chip's rule, for every count of it (SW-1053): paused workspaces out, PR-poll needs in; no status, no need. */
+export function needsYou(ws: DisplayInput | undefined, prNeeds?: NeedItem[] | null): boolean {
+  return !!ws && displayModel(ws, { prNeeds }).needs;
 }
 
 export function displayModel(ws: DisplayInput, opts: DisplayOptions = {}): WorkspaceDisplay {

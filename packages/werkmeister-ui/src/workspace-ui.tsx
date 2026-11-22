@@ -15,9 +15,9 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
-import type { Lifecycle, RepoPr, WorkspaceStatus } from "werkmeister-core";
+import type { Lifecycle, NeedItem, RepoPr, WorkspaceStatus } from "werkmeister-core";
 import { ChatPanel, type ClaudeMessage } from "./chat-panel.js";
-import { type DisplayInput, displayModel, type Tone } from "./display-model.js";
+import { type DisplayInput, displayModel, needsYou, type Tone } from "./display-model.js";
 import { filterWorkspaces } from "./lib/workspace-search.js";
 import { Css } from "./theme.js";
 import { Usage, type WorkspaceUsage } from "./usage-widget.js";
@@ -369,6 +369,7 @@ export function WorkspaceList({
   const [infra, setInfra] = useState<Counted | null>(null);
   // undefined while loading; null when the lookup failed (→ "PRs unavailable · retry").
   const [prs, setPrs] = useState<Record<string, RepoPr[]> | null | undefined>(undefined);
+  const [prNeeds, setPrNeeds] = useState<Record<string, NeedItem[]>>({});
   const [busy, setBusy] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
@@ -390,14 +391,9 @@ export function WorkspaceList({
     setPrs(undefined);
     try {
       const d = await bridge.callTool("workspace-prs", {});
-      setPrs(
-        Object.fromEntries(
-          (d.workspaces ?? []).map((w: { name: string; repos?: RepoPr[] }) => [
-            w.name,
-            w.repos ?? [],
-          ]),
-        ),
-      );
+      const ws: { name: string; repos?: RepoPr[]; needs?: NeedItem[] }[] = d.workspaces ?? [];
+      setPrs(Object.fromEntries(ws.map((w) => [w.name, w.repos ?? []])));
+      setPrNeeds(Object.fromEntries(ws.map((w) => [w.name, w.needs ?? []])));
     } catch {
       setPrs(null);
     }
@@ -468,10 +464,10 @@ export function WorkspaceList({
 
   const shown = useMemo(() => {
     if (!all) return [];
-    const needs = (w: WorkspaceEntry) =>
-      statuses?.[w.name]?.workspaceState?.agent?.id === "needs-you";
     const base = all.filter(
-      (w) => (!needsOnly || needs(w)) && (!focusOnly || w.labels.includes("focus")),
+      (w) =>
+        (!needsOnly || needsYou(statuses?.[w.name], prNeeds[w.name])) &&
+        (!focusOnly || w.labels.includes("focus")),
     );
     return query.trim()
       ? filterWorkspaces(base, query.trim(), {
@@ -479,9 +475,8 @@ export function WorkspaceList({
           prsByWs: prs ?? {},
         })
       : base;
-  }, [all, statuses, prs, needsOnly, focusOnly, query]);
-  const needCount =
-    all?.filter((w) => statuses?.[w.name]?.workspaceState?.agent?.id === "needs-you").length ?? 0;
+  }, [all, statuses, prs, prNeeds, needsOnly, focusOnly, query]);
+  const needCount = all?.filter((w) => needsYou(statuses?.[w.name], prNeeds[w.name])).length ?? 0;
 
   const header = (
     <TopBar
@@ -571,6 +566,7 @@ export function WorkspaceList({
                     ? displayModel(s ?? UNREACHABLE, {
                         prs: prs === null ? null : (prs?.[w.name] ?? []),
                         lifecycle: w.lifecycle ?? null,
+                        prNeeds: prNeeds[w.name],
                       })
                     : null
                 }

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "node:test";
 
-const { displayModel, ago, statusStrip } = await import("../dist/display-model.js");
+const { displayModel, ago, needsYou, statusStrip } = await import("../dist/display-model.js");
 
 const NOW = new Date("2026-10-20T12:00:00Z");
 const minsAgo = (m) => new Date(NOW.getTime() - m * 60_000).toISOString();
@@ -591,4 +591,14 @@ test("SW-1008: a budget limit that is no whole GiB reads to one decimal", () => 
   });
   assert.equal(s.chips[0].text, "1 waiting · 2.0 of 7.5 GiB");
   assert.match(s.host.tooltip, /memory budget 2\.0 of 7\.5 GiB$/);
+});
+
+test("SW-1053: needsYou is the needs chip's rule: a paused asker is out, a PR-only need is in, no status is out", () => {
+  const asks = { workspaceState: wsState({ agent: { id: "needs-you", since: null } }) };
+  const paused = { paused: { at: minsAgo(1), containers: [] } };
+  assert.equal(needsYou(row("a", asks).ws), true);
+  assert.equal(needsYou(row("a", { ...asks, ...paused }).ws), false);
+  assert.equal(needsYou(row("a").ws, [need({ source: "pr" })]), true);
+  assert.equal(needsYou(row("a").ws), false);
+  assert.equal(needsYou(undefined, [need()]), false);
 });
