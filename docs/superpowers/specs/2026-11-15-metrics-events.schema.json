@@ -16,6 +16,7 @@
       "enum": [
         "queue.wait",
         "queue.admit",
+        "queue.preempt",
         "ask",
         "answer",
         "stage.done",
@@ -36,7 +37,15 @@
       "type": "string",
       "description": "werkmeister version+commit that wrote the line, e.g. 0.91.3+1dbfac70"
     },
-    "feature": { "type": "string", "description": "queue.*: the feature asking for capacity" },
+    "feature": {
+      "type": "string",
+      "description": "queue.wait, queue.admit: the feature asking for capacity; queue.preempt: the feature stopped"
+    },
+    "rank": {
+      "enum": ["idle", "human-check", "working", "person"],
+      "description": "queue.preempt: how admission ranked the stopped feature"
+    },
+    "for": { "type": "string", "description": "queue.preempt: the feature it made room for" },
     "position": {
       "type": "integer",
       "minimum": 1,
@@ -85,6 +94,10 @@
     {
       "if": { "properties": { "event": { "const": "queue.admit" } } },
       "then": { "required": ["feature", "waited_s"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "queue.preempt" } } },
+      "then": { "required": ["feature", "rank", "for"] }
     },
     {
       "if": { "properties": { "event": { "const": "ask" } } },
