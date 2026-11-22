@@ -129,9 +129,13 @@ function workspaceCard(n: WsNode, active: boolean): string {
       .join(" · ");
     return `${action("a", "sandbox.openPr", p.id, `${p.label} ↗`)} ${status}`;
   });
-  const open = card.needsYou
-    ? action("button", "sandbox.openTerminal", n.id, "Answer in terminal", ` class="primary"`)
-    : action("button", "sandbox.openTerminal", n.id, "Open terminal");
+  // Nothing to open before the first start: Start work is the only button then (SW-1052).
+  const open =
+    card.action === "start"
+      ? ""
+      : card.needsYou
+        ? action("button", "sandbox.openTerminal", n.id, "Answer in terminal", ` class="primary"`)
+        : action("button", "sandbox.openTerminal", n.id, "Open terminal");
   return [
     `<article class="card${active ? " in-terminal" : ""}" id="ws-${esc(n.id)}"${context(n)}>`,
     `<div class="row">${name}<span class="${colorClass(n.icon.color)}">${esc(card.state)}</span>${active ? CHIP : ""}</div>`,

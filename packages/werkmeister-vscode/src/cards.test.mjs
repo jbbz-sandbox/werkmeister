@@ -133,6 +133,16 @@ test("the card's one button acts on the run: start it, hold it, or pick it back 
   assert.doesNotMatch(card({ state: "up", running: 1, total: 1 }), /sandbox\.up"/);
 });
 
+test("SW-1052: a never-started workspace shows only Start work; a stopped one started before keeps Open terminal", () => {
+  const card = (over) => renderCards(buildTree([ws("a")], [st("a", over)], null, []));
+  const terminal = /data-cmd="sandbox\.openTerminal"/;
+  assert.doesNotMatch(card({}), terminal);
+  assert.match(card({}), /sandbox\.startWork/);
+  // Stopped, nothing running, but a turn ran before: the session is there to continue.
+  assert.match(card({ lastActivity: "2026-10-22T10:00:00Z" }), terminal);
+  assert.match(card({ stage: { index: 3, total: 4, name: "verify" } }), terminal);
+});
+
 test("each PR gets a line of its own, its status in its own colour; the issue is the name", () => {
   const pr = (over) => ({ url: PR, state: "OPEN", ci: null, failingChecks: 0, ...over });
   const card = (prs) =>
