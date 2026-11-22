@@ -736,6 +736,60 @@ test("waiting gate: holds container and test commands only; the record, git and 
   assert.equal(pauseGate({ hook_event_name: "UserPromptSubmit" }, dir).decision, "block");
 });
 
+// SW-1065: the hook matched the held words anywhere in the text, so a printf, sed, commit message or
+// heredoc that only mentioned node or pnpm waited too. It holds the programs a command runs.
+test("waiting gate: holds a command by the programs it runs, not the words it mentions", () => {
+  const dir = workspace("j-wait-programs", null);
+  writeWaiting(dir, { position: 3, reason: "waiting for capacity" });
+  for (const command of [
+    "printf '%s\\n' '---' 'pnpm --filter werkmeister-vscode run snapshots' > .changeset/a.md && git add .changeset && git commit -m 'x'",
+    "sed -i '' 's/node --test/x/' view.ts",
+    "{ printf '// a node script\\n'; sed -n '1,5p' view.ts; } > src/view-css.ts && sed -i '' '1,5d' view.ts",
+    "git commit -m \"$(cat <<'EOF'\nfix: run pnpm test under node\nEOF\n)\"",
+    "cat > notes.md <<'EOF'\ndocker compose up\nnode --test\nEOF\ngit add notes.md",
+    'grep -rn "docker exec" src | head',
+    "ls node_modules/.bin/node 2>&1",
+    "echo npx vitest # turbo",
+    "grep -x node names.txt",
+    "docker ps -a --filter label=com.werkmeister.feature=demo && ls",
+  ])
+    assert.equal(pauseGate(bash(command), dir), null, command);
+  for (const command of [
+    "FOO=1 node x.js",
+    "env CI=1 pnpm test",
+    "cd a; npx tsc",
+    "ls && turbo run build",
+    "git log | node -e 'x'",
+    "echo $(docker run x)",
+    "echo `vitest run`",
+    'git commit -m "$(node gen.js)"',
+    'bash -c "pnpm test"',
+    "sh -lc 'ls && docker compose up -d'",
+    "bash <<'EOF'\npnpm test\nEOF",
+    "/usr/local/bin/node x.js",
+    "./node_modules/.bin/vitest run",
+    "time pnpm test",
+    "nohup node server.js &",
+    "/ws/.werkmeister/bin/with-fixture-workspace demo -- ls",
+    "for f in a b; do node $f; done",
+    "(cd x && pnpm test)",
+    "if true; then pnpm test; fi",
+    "ls | xargs node",
+    "ls *.test.mjs | xargs -I {} node --test {}",
+    "timeout -s KILL 600 pnpm test",
+    "env -u CI pnpm test",
+    "find . -name '*.test.mjs' -exec node --test {} +",
+    "git rebase -x 'pnpm test' origin/main",
+    "docker exec demo-core sh -c 'ls'",
+    "werkmeister pr gate",
+  ])
+    assert.equal(
+      pauseGate(bash(command), dir)?.hookSpecificOutput?.permissionDecision,
+      "deny",
+      command,
+    );
+});
+
 // SW-713: a waiting.json its feature's queue entry outlived held the session with a stale position
 // while budget status showed nothing waiting.
 test("waiting gate: a waiting.json the queue no longer holds is cleared and holds nothing", () => {
