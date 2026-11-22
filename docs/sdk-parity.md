@@ -131,6 +131,7 @@ werkmeister's own apps (the MCP server and the CLI) import internal entries, not
 | `daemon install` | | excluded: installs this machine's launchd agent, a setup step |
 | `daemon uninstall` | | excluded: removes this machine's launchd agent, a setup step |
 | `daemon restart` | | excluded: restarts the daemon process the SDK talks to |
+| `metrics rebuild` | | excluded: a one-off backfill of this machine's event log, a setup step |
 | `start-args` | `startArgs` | |
 | `internal wait-load` | | excluded: the throttle `with-temp-home` runs before a command |
 | `internal gate` | | excluded: a Claude Code hook; reads hook JSON on stdin |

@@ -49,6 +49,7 @@ import issueHelp from "./commands/issue.help.md";
 import listWorkspacesHelp from "./commands/list-workspaces.help.md";
 import logsHelp from "./commands/logs.help.md";
 import mcpHelp from "./commands/mcp.help.md";
+import metricsHelp from "./commands/metrics.help.md";
 import migrateHelp from "./commands/migrate.help.md";
 import notesHelp from "./commands/notes.help.md";
 import openHelp from "./commands/open.help.md";
@@ -139,6 +140,7 @@ const NOUNS: Record<string, { description: string; help?: string; alias?: string
     help: budgetHelp,
   },
   daemon: { description: "The host daemon (the MCP server on port 3002)", help: daemonHelp },
+  metrics: { description: "The local metrics event log under ~/.werkmeister/metrics" },
   internal: { description: "Hook, tool and sibling-app entry points; not typed by people" },
 };
 
@@ -1301,6 +1303,18 @@ const SPECS: CommandSpec[] = [
         .option("--json", "Print JSON");
     },
     namespace: (_a, o) => ({ json: Boolean(o.json) }),
+  },
+  {
+    name: "metrics rebuild",
+    group: "Machine:",
+    help: metricsHelp,
+    load: () => import("./commands/metrics.js"),
+    configure: (cmd) => {
+      cmd.description(
+        "Backfill the metrics event log from record branches, GitHub and transcripts",
+      );
+    },
+    namespace: () => ({}),
   },
   ...(
     [
