@@ -1248,10 +1248,11 @@ export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | 
   const gateCutoff = Date.now() - Math.max(idleStopMinutes(), 2) * 60_000;
   // Its session's record predates the start, so a grant's next head took it for idle and stopped it (SW-989).
   const holdCutoff = Date.now() - STARVE_MS;
+  const { toolMs } = stalledAfterMs();
   return found
     .map((f) => {
       const sessions = readSessions(f.workspace);
-      const state = agentOf(sessions);
+      const state = agentOf(sessions, Date.now(), toolMs);
       // A permission prompt is mid-turn, often on a `docker exec` into this feature: it ranks as its turn (SW-910).
       const prompted = Object.values(sessions).some((s) => s.ask?.kind === "permission");
       // The oldest start: a crash-looping container restarts on its own and must not hold its feature forever.
@@ -1658,7 +1659,8 @@ export async function pause(feature: string): Promise<PauseResult> {
   writePaused(workspace, {
     at: new Date().toISOString(),
     containers,
-    was_working: agentOf(readSessions(workspace))?.agent === "working",
+    was_working:
+      agentOf(readSessions(workspace), Date.now(), stalledAfterMs().toolMs)?.agent === "working",
   });
 
   info(`Pausing ${containers.length} container(s) for '${feature}' (slot ${slot})...`);
