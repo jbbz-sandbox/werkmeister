@@ -146,7 +146,7 @@ export function dequeue(feature: string): Promise<void> {
   );
 }
 
-/** Queue *feature* at the back and hold its session (a preempted feature). */
+/** Queue a preempted *feature* first and hold its session: it was admitted before every waiter now (SW-1039). */
 export function enqueue(feature: string, workspace: string): Promise<void> {
   return sandboxLock(
     "scheduler",
@@ -154,17 +154,17 @@ export function enqueue(feature: string, workspace: string): Promise<void> {
       const queue = readQueue().filter((f) => f !== feature);
       // waiting.json first: if it can't be written, the queue must not move (SW-246).
       writeWaiting(workspace, {
-        position: queue.length + 1,
+        position: 1,
         reason: "preempted",
         since: new Date().toISOString(),
       });
-      writeQueue([...queue, feature]);
+      writeQueue([feature, ...queue]);
       // Every writer that queues a feature is an event, so a stale waiting.json names its writer (SW-991).
       recordEvent({
         event: "queue.wait",
         workspace: path.basename(workspace),
         feature,
-        position: queue.length + 1,
+        position: 1,
         reason: "preempted",
       });
     },

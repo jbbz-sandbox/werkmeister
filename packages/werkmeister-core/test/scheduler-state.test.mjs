@@ -1064,7 +1064,7 @@ test("preemption rank: a feature started within STARVE_MS is working, past it it
   });
 });
 
-// SW-988: enqueue() stores the back of the queue as a preempted waiter's position, and nothing rewrites it.
+// SW-988: enqueue() stores a preempted waiter's position at enqueue time, and nothing rewrites it.
 test("a waiter's position is its place in the queue now, as budget status counts it (SW-988)", async () => {
   await withHome(async (home) => {
     const ws = {};
@@ -1077,8 +1077,9 @@ test("a waiter's position is its place in the queue now, as budget status counts
       leases[f] = { slot: i + 1, workspace: ws[f] };
     }
     writeLeases(leases);
-    for (const f of ["a", "b", "c"]) await enqueue(f, ws[f]);
-    assert.equal(fs.readFileSync(waitingPath(ws.c), "utf8").includes('"position":3'), true);
+    // enqueue puts each first (SW-1039): queued c, b, a reads a, b, c.
+    for (const f of ["c", "b", "a"]) await enqueue(f, ws[f]);
+    assert.equal(fs.readFileSync(waitingPath(ws.c), "utf8").includes('"position":1'), true);
     const roomy = { memory: 64 * G, cpus: 64, preempt: true };
     assert.deepEqual(await requestAdmission("a", ws.a, false, [], roomy), { kind: "admit" });
     assert.deepEqual([readWaiting(ws.b).position, readWaiting(ws.c).position], [1, 2]);
@@ -1087,7 +1088,7 @@ test("a waiter's position is its place in the queue now, as budget status counts
     assert.deepEqual([readWaiting(ws.b).position, readWaiting(ws.c).position], [2, 1]);
     // Not queued: the stored number stands.
     await dequeue("b");
-    assert.equal(readWaiting(ws.b).position, 2);
+    assert.equal(readWaiting(ws.b).position, 1);
   });
 });
 
@@ -1107,5 +1108,19 @@ test("preemption: a feature whose gate touched its exec marker just now is never
     fs.writeFileSync(path.join(ws, ".werkmeister", "last-exec"), "");
     assert.equal(runningLeases(run)[0].busy, true);
     assert.deepEqual(admit(budget, runningLeases(run), [], req), { kind: "wait", position: 1 });
+  });
+});
+
+// SW-1039: a preempted feature went to the back of the queue, behind every start queued after it was admitted.
+test("enqueue: a preempted feature keeps its place ahead of later waiters (SW-1039)", async () => {
+  await withHome(async (home) => {
+    const ws = workspace(home, COMPOSE);
+    await enqueue("later", ws);
+    await enqueue("victim", ws);
+    assert.deepEqual(readQueue(), ["victim", "later"]);
+    assert.equal(readWaiting(ws).reason, "preempted");
+    // The queue lands in the test's sandbox home, never the real ~/.werkmeister.
+    const sandbox = path.dirname(process.env.WERKMEISTER_CONFIG_FILE);
+    assert.ok(queuePath().startsWith(`${sandbox}/`), queuePath());
   });
 });
