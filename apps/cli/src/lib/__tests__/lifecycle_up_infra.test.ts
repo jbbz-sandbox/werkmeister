@@ -33,10 +33,16 @@ vi.mock("werkmeister-core/compose", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   composeUpAsync: vi.fn(async () => true),
   getContainerStatus: vi.fn(async () => []),
+  // The real one asks the host's daemon for a legacy project (SW-1012 review).
+  liveProject: vi.fn(async (feature: string) => `werkmeister-${feature}`),
 }));
 const dockerStarted: string[] = [];
 vi.mock("werkmeister-core/docker", async (importOriginal) => ({
   ...(await importOriginal<object>()),
+  containerLogs: vi.fn(
+    async (_p: string, service: string, _o: unknown, onLine: (l: string) => void) =>
+      onLine(`${service} | docs-site#build exited (4)`),
+  ),
   docker: () => ({
     getContainer: (name: string) => ({
       start: async () => {
@@ -223,6 +229,17 @@ describe("lifecycle.up when compose gives up with a container left Created", () 
       box("demo-core", "created"),
     ]);
     await fails();
+  });
+
+  // SW-1012: the install's cause was only in `docker logs <ws>-werkmeister-install`.
+  it("puts a failed setup's last lines in the error", async () => {
+    vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
+    const failed = [box("demo-install-setup", "exited", 4), box("demo-core", "created")];
+    // Once for startLeftCreated, once for the message.
+    vi.mocked(getContainerStatus).mockResolvedValueOnce(failed).mockResolvedValueOnce(failed);
+    await expect(withReporter(quiet, () => up("demo", workspace(["cli"])))).rejects.toThrow(
+      /demo-install-setup exited 4[^\n]*\n {2}install-setup \| docs-site#build exited \(4\)/,
+    );
   });
 
   // Review: the timeout fires while a slow install still runs; core started then sees half a node_modules.

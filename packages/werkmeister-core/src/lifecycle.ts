@@ -70,6 +70,7 @@ import {
   sharedProxySkipReason,
 } from "./config.js";
 import {
+  containerLogs,
   docker,
   listVolumeNames,
   projectContainers,
@@ -333,7 +334,7 @@ export async function up(
     ) {
       throw new SandboxError(
         // Not "above": a grant runs this in another process, and its nudge carries this text (SW-861).
-        `Failed to start containers: \`werkmeister feature logs ${feature}\` shows why.`,
+        `Failed to start containers: \`werkmeister feature logs ${feature}\` shows why.${await failedSetupLines(feature)}`,
         "COMPOSE_UP_FAILED",
       );
     }
@@ -520,10 +521,32 @@ export async function startService(
     // A timed-out or cancelled up leaves the container Created, never started (SW-86).
     const state = (await getContainerStatus(feature)).find((c) => c.service === service)?.status;
     throw new SandboxError(
-      `Failed to start ${service}${state ? ` (left ${state})` : ""}: \`werkmeister feature logs ${feature} ${service}\` shows why`,
+      `Failed to start ${service}${state ? ` (left ${state})` : ""}: \`werkmeister feature logs ${feature} ${service}\` shows why${await failedSetupLines(feature)}`,
       "COMPOSE_UP_FAILED",
     );
   }
+}
+
+/**
+ * The last lines of each setup container of *feature* that exited non-zero, for a failed start's
+ * message: its dependents never start, and the cause was otherwise only in `docker logs` (SW-1012).
+ * Empty when none failed.
+ */
+async function failedSetupLines(feature: string): Promise<string> {
+  const failed = (await getContainerStatus(feature)).filter(
+    (c) => isOneShotService(c.service, c.role) && c.status === "exited" && c.exitCode !== 0,
+  );
+  const lines: string[] = [];
+  for (const c of failed) {
+    lines.push(`${c.name} exited ${c.exitCode}; its last lines:`);
+    await containerLogs(
+      await liveProject(feature),
+      c.service,
+      { follow: false, tail: 20, color: false },
+      (line) => lines.push(`  ${line}`),
+    );
+  }
+  return lines.length ? `\n${lines.join("\n")}` : "";
 }
 
 const SERVICE_POLL_MS = 15_000;

@@ -84,6 +84,9 @@ function npmCalls(): string[] {
   return lines.filter(Boolean);
 }
 
+/** The install's two builds: every package but docs-site, then docs-site (SW-1012). */
+const BUILD = ["turbo run build --filter=!docs-site", "turbo run build --filter=docs-site"];
+
 const stamp = (app: string) => path.join(app, "node_modules", ".werkmeister-install-hash");
 
 beforeEach(() => {
@@ -105,15 +108,22 @@ beforeEach(() => {
       '  mkdir -p "$3/node_modules/.bin" && printf "#!/bin/sh\\nexit 0\\n" > "$3/node_modules/.bin/claude"',
       '  chmod +x "$3/node_modules/.bin/claude"',
       "fi",
-      'if [ "$1" = run ]; then',
-      '  mkdir -p "$BUILD_INFLIGHT/$$"',
-      '  ls "$BUILD_INFLIGHT" | wc -l >> "$BUILD_PEAKS"',
-      '  sleep "${BUILD_SECONDS:-0}"',
-      '  rmdir "$BUILD_INFLIGHT/$$"',
-      "fi",
     ].join("\n"),
   );
   writeExec(path.join(tmp, "bin", "node"), 'echo "$NODE_V"');
+  // SW-1012: the build calls turbo itself, twice; FAIL_BUILD=<filter> fails that call as typedoc does (exit 4).
+  writeExec(
+    path.join(tmp, "bin", "turbo"),
+    [
+      'echo "turbo $*" >> "$LOG"',
+      '[ "$3" = "--filter=${FAIL_BUILD:-}" ] && exit 4',
+      // Each build counts itself in BUILD_INFLIGHT, so the SW-35 case can see overlap.
+      'mkdir -p "$BUILD_INFLIGHT/$$"',
+      'ls "$BUILD_INFLIGHT" | wc -l >> "$BUILD_PEAKS"',
+      'sleep "${BUILD_SECONDS:-0}"',
+      'rmdir "$BUILD_INFLIGHT/$$"',
+    ].join("\n"),
+  );
   // Stands in for `corepack enable --install-directory <dir> pnpm`: drops the shim in <dir>.
   writeExec(
     path.join(tmp, "bin", "corepack"),
@@ -140,13 +150,13 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
   it("installs once, then skips npm ci while nothing changed", async () => {
     const app = makeApp("app");
     expect((await run(app)).status).toBe(0);
-    expect(npmCalls()).toEqual(["ci", "run build"]);
+    expect(npmCalls()).toEqual(["ci", ...BUILD]);
     expect(fs.existsSync(stamp(app))).toBe(true);
 
     const second = await run(app);
     expect(second.status).toBe(0);
     expect(second.stdout).toContain("skipping npm ci");
-    expect(npmCalls()).toEqual(["run build"]);
+    expect(npmCalls()).toEqual(BUILD);
   });
 
   it("reinstalls when the lockfile changes", async () => {
@@ -155,7 +165,7 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     npmCalls();
     fs.writeFileSync(path.join(app, "package-lock.json"), '{"lockfileVersion":3,"x":1}\n');
     expect((await run(app)).status).toBe(0);
-    expect(npmCalls()).toEqual(["ci", "run build"]);
+    expect(npmCalls()).toEqual(["ci", ...BUILD]);
   });
 
   it("reinstalls when the Node major changes, not the minor", async () => {
@@ -163,9 +173,9 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     await run(app);
     npmCalls();
     await run(app, { NODE_V: "v22.9.0" });
-    expect(npmCalls()).toEqual(["run build"]);
+    expect(npmCalls()).toEqual(BUILD);
     await run(app, { NODE_V: "v24.0.0" });
-    expect(npmCalls()).toEqual(["ci", "run build"]);
+    expect(npmCalls()).toEqual(["ci", ...BUILD]);
   });
 
   it("writes no stamp when npm ci fails, so the next run retries", async () => {
@@ -179,7 +189,7 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     expect(npmCalls()).toEqual(["ci"]);
 
     expect((await run(app)).status).toBe(0);
-    expect(npmCalls()).toEqual(["ci", "run build"]);
+    expect(npmCalls()).toEqual(["ci", ...BUILD]);
   });
 
   it("reinstalls when the worktree is re-created on a kept node_modules volume (SW-85)", async () => {
@@ -192,11 +202,11 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     }
     fs.writeFileSync(path.join(app, "package-lock.json"), '{"lockfileVersion":3}\n');
     expect((await run(app)).status).toBe(0);
-    expect(npmCalls()).toEqual(["ci", "run build"]);
+    expect(npmCalls()).toEqual(["ci", ...BUILD]);
 
     // ...and only once: the next up of the same worktree skips again.
     await run(app);
-    expect(npmCalls()).toEqual(["run build"]);
+    expect(npmCalls()).toEqual(BUILD);
   });
 
   it("reinstalls when the volume is dropped and the worktree kept (`down -v`)", async () => {
@@ -206,7 +216,7 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     fs.rmSync(path.join(app, "node_modules"), { recursive: true });
     fs.mkdirSync(path.join(app, "node_modules"));
     expect((await run(app)).status).toBe(0);
-    expect(npmCalls()).toEqual(["ci", "run build"]);
+    expect(npmCalls()).toEqual(["ci", ...BUILD]);
   });
 
   it("installs with pnpm when the app has a pnpm lockfile (SW-31)", async () => {
@@ -214,7 +224,7 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     fs.rmSync(path.join(app, "package-lock.json"));
     fs.writeFileSync(path.join(app, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
     expect((await run(app)).status).toBe(0);
-    expect(npmCalls()).toEqual(["pnpm install --frozen-lockfile", "pnpm run build"]);
+    expect(npmCalls()).toEqual(["pnpm install --frozen-lockfile", ...BUILD]);
     expect(fs.existsSync(stamp(app))).toBe(true);
   });
 
@@ -227,7 +237,22 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     // Same lockfile, same Node: pnpm's own up-to-date check is the skip (2-5 s), and it
     // restores a package deleted under it; the stamp would have skipped the install.
     expect((await run(app)).status).toBe(0);
-    expect(npmCalls()).toEqual(["pnpm install --frozen-lockfile", "pnpm run build"]);
+    expect(npmCalls()).toEqual(["pnpm install --frozen-lockfile", ...BUILD]);
+  });
+
+  // SW-1012: docs-site's typedoc fails on a doc-comment warning, and no container needs its build to start.
+  it("builds docs-site after the rest and only warns when it fails (SW-1012)", async () => {
+    const app = makeApp("app");
+    const r = await run(app, { FAIL_BUILD: "docs-site" });
+    expect(r.status).toBe(0);
+    expect(npmCalls()).toEqual(["ci", ...BUILD]);
+    expect(r.stderr).toMatch(/warning: the docs-site build failed/);
+  });
+
+  it("still fails when the build of any other package fails (SW-1012)", async () => {
+    const app = makeApp("app");
+    expect((await run(app, { FAIL_BUILD: "!docs-site" })).status).not.toBe(0);
+    expect(npmCalls()).toEqual(["ci", BUILD[0]]);
   });
 
   it("adds corepack's pnpm shim to the tools volume once, in either mode", async () => {
@@ -294,7 +319,7 @@ describe.skipIf(!hasFlock)("werkmeister-install-startup.sh install", () => {
     );
     expect(await Promise.all(runs)).toEqual([0, 0, 0]);
     const peaks = fs.readFileSync(path.join(tmp, "build-peaks"), "utf8").trim().split("\n");
-    expect(peaks).toHaveLength(3);
+    expect(peaks).toHaveLength(6); // two builds per install (SW-1012)
     expect(Math.max(...peaks.map(Number))).toBe(1);
   });
 });

@@ -88,7 +88,13 @@ if [ "${1:-}" = install ]; then
   # pid, and identical install containers get identical pids, so two installs
   # of one commit could write the same temp file. Queued, the first builds and
   # the rest restore from the cache.
-  flock "$LOCKS/turbo-build" $pm run build
+  # SW-1012: docs-site builds last and only warns: its typedoc fails on any doc-comment warning, no
+  # container starts from its output, and its test row fails on the same slip. turbo is called
+  # directly because npm and pnpm pass `--filter` to a script differently.
+  PATH="$PWD/node_modules/.bin:$PATH" flock "$LOCKS/turbo-build" sh -c '
+    turbo run build --filter=!docs-site || exit
+    turbo run build --filter=docs-site ||
+      echo "werkmeister-install: warning: the docs-site build failed (above); the containers start without it, and its test row fails on it" >&2'
 fi
 
 DOCKER_VERSION=27.5.1
