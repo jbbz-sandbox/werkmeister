@@ -107,7 +107,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     return;
   }
 
-  let slot: number;
+  let slot: number | null;
   try {
     ({ slot } = await stopFeature(feature));
   } catch (e) {
@@ -120,6 +120,12 @@ export async function run(args: Record<string, unknown>): Promise<void> {
       process.exit(1);
     }
     throw e;
+  }
+  if (slot === null) {
+    console.log(
+      `\n${Colors.GREEN}${Colors.BOLD}Feature '${feature}' left the waiting queue${Colors.RESET}\n`,
+    );
+    return;
   }
 
   console.log(`\n${Colors.GREEN}${Colors.BOLD}Feature '${feature}' stopped${Colors.RESET}\n`);
