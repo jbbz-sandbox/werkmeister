@@ -14,7 +14,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { isDeepStrictEqual } from "node:util";
 import YAML from "yaml";
 
-import { clearNotice, raiseNotice, writeWakeNudge } from "./agent_state.js";
+import { clearNotice, raiseNotice, readLastStop, writeWakeNudge } from "./agent_state.js";
 import {
   changedStartFields,
   hostAccess,
@@ -1187,6 +1187,7 @@ async function gateChecks(
         "-c",
         cmd,
       ]);
+    const began = Date.now();
     let res = await exec();
     const lines = [`${cmd} → exit ${res.code}`];
     const why = res.code ? retryIf(res) : null;
@@ -1209,8 +1210,30 @@ async function gateChecks(
       const { load, cores } = deps.hostLoad();
       lines.push(loadNote(load, cores));
     }
-    add(name, res.code === 0, lines.join("\n"));
+    const gone = res.code ? await stoppedUnder(container, began) : null;
+    if (gone) {
+      // Its container stopped under it: not the change's verdict, so the gate exits 75 (SW-998), and the
+      // rows it leaves unrun are its consequence, as after a NO_CAPACITY start.
+      capacityShort = true;
+      lines.push(gone);
+      checks.push({ name, ok: false, detail: lines.join("\n"), retry: true });
+    } else add(name, res.code === 0, lines.join("\n"));
     return res;
+  };
+  /** Who stopped *container* during a row that *began* then, from werkmeister's stop record; null while it runs. */
+  const stoppedUnder = async (container: string, began: number): Promise<string | null> => {
+    const state = await deps.run("docker", ["inspect", "-f", "{{.State.Status}}", container]);
+    if (!["exited", "dead"].includes(state.stdout.trim())) return null;
+    const stop = readLastStop(ws);
+    // A record from before the row is an earlier stop (a restart leaves it), not this one.
+    const last = stop && Date.parse(stop.at) >= began ? stop : null;
+    return (
+      `${container} stopped while this row ran: ` +
+      (last
+        ? `werkmeister stopped it at ${last.at} (${last.why})`
+        : "werkmeister recorded no stop (a `feature stop`, the session's auto-stop, or Docker did)") +
+      ". The change didn't fail: rerun `werkmeister pr open`."
+    );
   };
 
   const dir = path.join(ws, file.dir);

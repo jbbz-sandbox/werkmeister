@@ -10,7 +10,7 @@ import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import YAML from "yaml";
 
-import { heldWakes, readNotices } from "../dist/agent_state.js";
+import { heldWakes, readNotices, writeLastStop } from "../dist/agent_state.js";
 import { dotDir, getReposRoot, sandboxHome } from "../dist/config.js";
 import { resolveIssueStatuses } from "../dist/issue_status.js";
 import { metricsPath } from "../dist/metrics.js";
@@ -6667,5 +6667,45 @@ test("openPrs: no createdAt from gh writes no pr.open, and the PR still opens", 
     });
   } finally {
     clean(ws);
+  }
+});
+
+// SW-998: a scheduler stop killed the lint row's container mid-run, and the gate called it an ordinary failure.
+test("runGate: a row whose container stopped under it names the stop and asks for a rerun, exit 75", async () => {
+  // During the row (a time past its start), before it (a restart leaves the record), or none.
+  const during = new Date(Date.now() + 60_000).toISOString();
+  for (const at of [during, "2026-11-21T18:35:15Z", null]) {
+    const recorded = at === during;
+    const ws = icmWorkspace();
+    try {
+      if (at) writeLastStop(ws, { at, why: "idle ≥ 30 min", killed: [] });
+      const r = stubRun([
+        [/^docker ps/, { stdout: "feat-api\trunning\nfeat-lib\trunning\n" }],
+        DIFF_API,
+        [
+          /^docker exec/,
+          { code: 137, stderr: "Error response from daemon: container is not running" },
+        ],
+        [/^docker inspect -f \{\{\.State\.Status\}\} feat-api$/, { stdout: "exited\n" }],
+      ]);
+      const g = await gate(ws, { ...deps([]), run: r.run, calls: r.calls });
+      assert.equal(g.ok, false);
+      assert.equal(g.retry, true, "the change didn't fail");
+      // The lint row runs first, so it is the one the stop kills.
+      const row = g.checks.find((c) => /stopped while this row ran/.test(c.detail));
+      assert.equal(row?.retry, true, JSON.stringify(g.checks));
+      assert.match(
+        row.detail,
+        /feat-api stopped while this row ran: .*rerun `werkmeister pr open`/s,
+      );
+      assert.match(
+        row.detail,
+        recorded
+          ? new RegExp(`werkmeister stopped it at ${during} \\(idle ≥ 30 min\\)`)
+          : /werkmeister recorded no stop/,
+      );
+    } finally {
+      clean(ws);
+    }
   }
 });

@@ -1090,3 +1090,22 @@ test("a waiter's position is its place in the queue now, as budget status counts
     assert.equal(readWaiting(ws.b).position, 2);
   });
 });
+
+// SW-998: a gate's heartbeat marker (SW-745) makes its feature busy, so not even a person's start preempts it.
+test("preemption: a feature whose gate touched its exec marker just now is never a victim (SW-998)", async () => {
+  await withHome(async (home) => {
+    const ws = path.join(home, "features", "auto");
+    fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "autonomous: true\n");
+    const run = (cmd) =>
+      cmd[1] === "ps"
+        ? { status: 0, stdout: "id1\n" }
+        : { status: 0, stdout: `auto\t${ws}\t2026-10-29T10:00:00Z\t${G}\t4000000000\t0` };
+    const budget = { memory: 8 * G, cpus: 6, preempt: true };
+    const req = { feature: "other", cost: { memory: G, cpus: 4 }, byPerson: true };
+    assert.equal(admit(budget, runningLeases(run), [], req).kind, "preempt");
+    fs.writeFileSync(path.join(ws, ".werkmeister", "last-exec"), "");
+    assert.equal(runningLeases(run)[0].busy, true);
+    assert.deepEqual(admit(budget, runningLeases(run), [], req), { kind: "wait", position: 1 });
+  });
+});
