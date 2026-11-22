@@ -205,7 +205,9 @@ const WRITE_BRIEF =
   "If `../../BRIEF.md` has no `## Acceptance criteria` section, write `## Goal`, `## Acceptance criteria` (a `- [ ]` list, each with how it is checked) and `## Open questions` into it now, from the issue (`werkmeister issue view`) or else the starting prompt, before step 1: every later stage and self-check walks that list. " +
   // SW-374: "regenerate this workspace's file" cannot run mid-run: init rewrites the contracts and the installed CLI predates the change.
   // SW-414: no werkmeister file names in a generic template (SW-143).
-  "For a change to text a generator writes, the criterion is a fixture run of the built generator showing the new text; regenerating this workspace's own copy is a post-release check, not a criterion.";
+  "For a change to text a generator writes, the criterion is a fixture run of the built generator showing the new text; regenerating this workspace's own copy is a post-release check, not a criterion. " +
+  // SW-996: sw-779's "the real ~/.werkmeister/metrics/ is unchanged" contradicted the run limits and was denied.
+  "Never write a criterion that reads or lists the real `~/.werkmeister`: the run may not read it. Prove a write lands only under the test's temporary HOME with a test assertion (the written path is under it).";
 
 // SW-275: SW-257's brief said "test-only" but the cause was in production code; with no rule the run stopped to ask.
 const OUT_OF_SCOPE =

@@ -748,6 +748,11 @@ test("the first stage contract, and only it, starts the issue when there is one 
     assert.match(first, /^0\. If `\.\.\/\.\.\/BRIEF\.md` has no `## Acceptance criteria`/m);
     // SW-374: generated-text criteria use a fixture run; regenerating this workspace is post-release.
     assert.match(first, /^0\. .*a fixture run of the built generator.*post-release check/m);
+    // SW-996: a criterion never reads the real ~/.werkmeister; a test assertion proves a temp-HOME write.
+    assert.match(
+      first,
+      /^0\. .*Never write a criterion that reads or lists the real `~\/\.werkmeister`: the run may not read it\. Prove a write lands only under the test's temporary HOME with a test assertion \(the written path is under it\)\./m,
+    );
     // SW-275: a root cause outside the brief's scope has a named action.
     assert.match(
       first,
