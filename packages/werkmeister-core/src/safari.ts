@@ -224,7 +224,7 @@ export async function launchSafariWindow(
               const curUrl = await wdFetch(port, `/session/${sessionId}/url`, "GET");
               if (taggedUrl.get(h) !== curUrl) await tagHandle(h);
             } catch {
-              continue; // tab closed mid-poll
+              // tab closed mid-poll
             }
           }
         }
