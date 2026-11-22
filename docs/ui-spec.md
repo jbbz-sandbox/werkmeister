@@ -65,7 +65,7 @@ Every row reads werkmeister-core; no surface computes its own. The shapes and th
 | **Workflow** | `stage {index, total, name}` (ICM) · `phase` (JIT, from the newest note) · `lifecycleOf()` for the lifecycle step |
 | **Agent** | `workspaceState.agent {id, since}` (`working` · `needs-you` · `done` · `idle`; SW-558), `claude.state` (a `claude-send` turn), `lastActivity` (newest transcript's mtime), `autonomous`, `autoStop`, `model` |
 | **Needs you** · activity | `workspaceState {phase, activity, needs[]}` on `WorkspaceStatus` (hooks' `.werkmeister/sessions/<id>.json`, one per session); PR items and `phaseDetail` (`waiting on review`, `behind main`) on `getWorkspacePRs()`'s `needs` |
-| **Stalled** | `workspaceState.stalled {reason, since}` (`idle`: working with no session write for `overrides.stalled_idle_minutes` · `capacity-wait`: queued past `overrides.stalled_wait_minutes` · `crash-loop` · `session-died`; SW-1007), null otherwise; a question or approval waiting on a person is not stalled by itself, and `workspaceState.oldestNeedMs` is the oldest need's age in ms. Both limits are in `~/.werkmeister/config.yaml`, 30 minutes when unset |
+| **Stalled** | `workspaceState.stalled {reason, since}` (`idle`: working with no session write for `overrides.stalled_idle_minutes`, or `overrides.stalled_tool_minutes` (90 by default) while a foreground tool call runs, SW-1037 · `capacity-wait`: queued past `overrides.stalled_wait_minutes` · `crash-loop` · `session-died`; SW-1007), null otherwise; a question or approval waiting on a person is not stalled by itself, and `workspaceState.oldestNeedMs` is the oldest need's age in ms. The limits are in `~/.werkmeister/config.yaml`, 30 minutes when unset (the tool limit 90) |
 
 ### Badges
 

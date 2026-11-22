@@ -1037,12 +1037,16 @@ export function idleStopMinutes(): number {
   return Number.isInteger(v) && (v as number) >= 0 ? (v as number) : 30;
 }
 
-/** `overrides.stalled_idle_minutes` / `stalled_wait_minutes` in ms (SW-1007); 30 min when unset or not a whole number ≥ 1. */
-export function stalledAfterMs(): { idleMs: number; waitMs: number } {
+/** `overrides.stalled_idle_minutes` / `stalled_wait_minutes` (SW-1007) / `stalled_tool_minutes` (SW-1037) in ms; 30, 30, 90 min when unset or not a whole number ≥ 1. */
+export function stalledAfterMs(): { idleMs: number; waitMs: number; toolMs: number } {
   const o = loadGlobalConfig()["overrides"] as Record<string, unknown> | undefined;
-  const ms = (v: unknown) =>
-    (Number.isInteger(v) && (v as number) >= 1 ? (v as number) : 30) * 60_000;
-  return { idleMs: ms(o?.["stalled_idle_minutes"]), waitMs: ms(o?.["stalled_wait_minutes"]) };
+  const ms = (v: unknown, fallback = 30) =>
+    (Number.isInteger(v) && (v as number) >= 1 ? (v as number) : fallback) * 60_000;
+  return {
+    idleMs: ms(o?.["stalled_idle_minutes"]),
+    waitMs: ms(o?.["stalled_wait_minutes"]),
+    toolMs: ms(o?.["stalled_tool_minutes"], 90),
+  };
 }
 
 /** The gate's `docker exec` marker (SW-39), touched by `runGate`. */
