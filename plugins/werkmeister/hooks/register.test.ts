@@ -3413,3 +3413,44 @@ test("SW-1043: a down infra service is named once, on the strip's chip, not on t
   await ui.unmount();
 });
 
+test("SW-1044: the tab's need-you count is the strip chip's: a paused workspace is out, a PR-only need is in", async ($, on) => {
+  const merge = {
+    id: "merge:sandbox",
+    kind: "merge",
+    what: "sandbox PR is approved and green",
+    since: null,
+    action: "Merge it",
+    source: "pr",
+  };
+  const status = {
+    ...STATUS,
+    statuses: STATUS.statuses.map((s) =>
+      s.name === "abc"
+        ? { ...s, state: "paused", paused: { at: "2026-10-20T11:00:00Z", containers: [] } }
+        : s,
+    ),
+  };
+  const prs = ["ab", "empty"].map((name) => ({
+    name,
+    repos: [],
+    needs: [merge],
+    phaseDetail: null,
+  }));
+  const w = world(
+    on,
+    stubs({ [`${WS}/workspace-status`]: () => ok(status), [`${WS}/workspace-prs`]: () => ok(prs) }),
+  );
+  await openPane($);
+  await w.clock.settle();
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "chips" }))?.text).toMatch(/^● 2 need you/);
+  expect((await ui.find({ key: "tab:list" }))?.props.label).toBe("Workspaces · 2 need you");
+  await ui.unmount();
+});
+

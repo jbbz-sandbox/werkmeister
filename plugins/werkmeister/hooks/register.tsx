@@ -2034,7 +2034,8 @@ export const register: Register = (on) => {
     );
     const host = strip.host;
     const shown = visibleRows(rows, focus).map((r) => withLivePrs(r, prs[r.name] ?? []));
-    const needing = rows.filter((r) => r.workspaceState?.agent?.id === "needs-you").length;
+    // The strip chip's count, so the tab and the chip agree (SW-1044): no paused workspaces, PR needs in.
+    const needing = strip.chips.find((c) => c.kind === "needs")?.count ?? 0;
     // Mobile draws no Input or Select; there the Create tab hands the form to the model.
     const els = $.ui.resolve(e);
     const Input = "Input" in els ? els.Input : null;
