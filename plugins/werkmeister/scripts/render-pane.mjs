@@ -13,7 +13,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir, tmpdir, userInfo } from "node:os";
 import { dirname, extname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -276,12 +276,25 @@ export function toHtml(lines) {
   return `<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:${BG}}pre{margin:0;padding:${PAD_PX}px;color:${FG};font:14px/${LINE_PX}px Menlo,"DejaVu Sans Mono",monospace}</style><pre>${body}</pre>\n`;
 }
 
-function chrome() {
-  if (process.env.CHROME) return process.env.CHROME;
-  for (const cache of [
-    join(homedir(), "Library/Caches/ms-playwright"),
-    join(homedir(), ".cache/ms-playwright"),
-  ]) {
+/** Where Playwright keeps its browsers: its own override, then the real home's cache (SW-1016). */
+export function browserCaches(env = process.env) {
+  let home;
+  try {
+    // The user database's home, not $HOME: with-temp-home points $HOME at an empty temp dir.
+    home = userInfo().homedir;
+  } catch {
+    home = homedir(); // a uid with no passwd entry (some containers)
+  }
+  return [
+    env.PLAYWRIGHT_BROWSERS_PATH,
+    join(home, "Library/Caches/ms-playwright"),
+    join(home, ".cache/ms-playwright"),
+  ].filter(Boolean);
+}
+
+export function chrome(env = process.env, caches = browserCaches(env)) {
+  if (env.CHROME) return env.CHROME;
+  for (const cache of caches) {
     if (!existsSync(cache)) continue;
     const builds = readdirSync(cache)
       .filter((d) => d.startsWith("chromium_headless_shell-"))
