@@ -342,6 +342,15 @@ test("jira placeholder base_url counts as not configured (#114)", async () => {
   }
 });
 
+// SW-948: issue.ts refuses an autonomous body file outside the workspace, stdin included.
+test("the issues guide says where an autonomous workspace's --body-file must live (SW-948)", () => {
+  for (const t of [undefined, it.trackerById("jira")])
+    assert.match(
+      buildIssuesReportMd("ws", "PROJ-1", t),
+      /^2\. .*via `--body-file`\. In an autonomous workspace `werkmeister issue create` takes only a file inside this workspace: not `-` \(stdin\), not a scratchpad or temp path\.$/m,
+    );
+});
+
 test("a filing that cites this run's files names the record branch, not the workspace folder (SW-827)", () => {
   const md = buildIssuesReportMd("sw-1-x");
   assert.match(md, /record branch/);
