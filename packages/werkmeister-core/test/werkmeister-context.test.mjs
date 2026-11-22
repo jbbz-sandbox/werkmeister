@@ -400,3 +400,11 @@ test("Test commands says a stopped docker exec run goes on in the container, and
     { services: SERVICES },
   );
 });
+
+// SW-995: a restart under a run left exit 137 and a log that just stopped, which read as silence.
+test("Test commands says exit 137 with a log cut off mid-step is the container going away (SW-995)", async () => {
+  await withSandboxHome(
+    async () => assert.match(testCommandsMd(), /exit 137[^\n]*container[^\n]*rerun/),
+    { services: SERVICES },
+  );
+});
