@@ -24,3 +24,9 @@ export const ALL_ARGV: string[][] = [
   ARGV.registrySync,
   ARGV.connect,
 ];
+
+/** Commands that can stop and ask (down's graduate prompt, detect's write prompt): their task comes forward (SW-979). */
+export function mayPrompt(args: string[]): boolean {
+  const cmd = args.slice(0, 2).join(" ");
+  return cmd === "feature down" || cmd === "machine detect";
+}

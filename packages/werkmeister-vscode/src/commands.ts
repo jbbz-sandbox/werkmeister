@@ -16,7 +16,7 @@ import {
   startWorkTerminal,
 } from "./harness/claude/terminals.js";
 import { showLogs } from "./logs.js";
-import { runInTerminal } from "./terminal.js";
+import { runInTerminal, runTask } from "./terminal.js";
 import { currentBoardUrl, type WorkspacesView } from "./view.js";
 
 export { ALL_ARGV, ARGV } from "./argv.js";
@@ -209,7 +209,7 @@ export function registerCommands(provider: WorkspacesView): vscode.Disposable[] 
         async (node?: WsNode) => {
           const ws = await pickWorkspace(node);
           if (!ws) return;
-          await runInTerminal(ARGV.lifecycle(action), ws.path);
+          await runTask(ARGV.lifecycle(action), ws.path, ws.name);
         },
       ),
     ),
@@ -305,15 +305,15 @@ export function registerCommands(provider: WorkspacesView): vscode.Disposable[] 
       void vscode.window.showInformationMessage(`Opening a tagged browser for '${ws.name}'…`);
     }),
 
-    // The CLI prompts for the Claude assist and before writing, so like
-    // newWorkspace it runs in a terminal rather than being reimplemented here.
+    // The CLI prompts for the Claude assist and before writing, so its task comes
+    // forward with focus (mayPrompt) rather than being reimplemented here.
     vscode.commands.registerCommand("sandbox.detect", async () => {
       const repo = await pickRepo();
-      if (repo) await runInTerminal(ARGV.detect(repo), repo);
+      if (repo) await runTask(ARGV.detect(repo), repo, basename(repo));
     }),
 
     vscode.commands.registerCommand("sandbox.registrySync", async () => {
-      await runInTerminal(ARGV.registrySync, getReposRoot(), "registry");
+      await runTask(ARGV.registrySync, getReposRoot(), "registry");
     }),
 
     // SW-55 splits #160's one verb back in two, as every surface shows them:

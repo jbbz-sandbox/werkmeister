@@ -25,6 +25,25 @@
     "onUri"
   ],
   "contributes": {
+    "taskDefinitions": [
+      {
+        "type": "werkmeister",
+        "required": [
+          "args",
+          "cwd"
+        ],
+        "properties": {
+          "args": {
+            "type": "array",
+            "description": "The werkmeister subcommand and its arguments."
+          },
+          "cwd": {
+            "type": "string",
+            "description": "The folder the CLI runs from."
+          }
+        }
+      }
+    ],
     "viewsContainers": {
       "activitybar": [
         {
