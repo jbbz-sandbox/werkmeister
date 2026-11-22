@@ -671,11 +671,11 @@ test("SW-41: the host row leads once a sweep has landed, and only then", () => {
   const host = { load: [401, 380, 300], cores: 10, featureCpuPercent: 845.2 };
   const [first, second] = buildTree([ws("a")], [st("a")], null, [], { host });
   assert.equal(first.kind, "host");
-  assert.equal(first.description, "load 401 · 380 · 300 / 10 cores · features 845.2% CPU");
+  assert.equal(first.description, "4010% · features 8.5 of 10 cores");
   assert.equal(first.icon.color, TONE_COLORS.warn, "load past the core count warns");
   assert.equal(second.id, "a");
   const failed = buildTree([ws("a")], [st("a")], null, [], { host: null });
-  assert.equal(failed[0].description, "load n/a");
+  assert.equal(failed[0].description, "n/a");
   assert.equal(buildTree([ws("a")], [st("a")], null, [])[0].id, "a", "no sweep yet, no row");
 });
 

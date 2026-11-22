@@ -2887,9 +2887,7 @@ test("SW-41: the pane shows the host line and each card's vitals and crash line"
     props: PANE_PROPS,
     requestId: "workspaces",
   });
-  expect((await ui.find({ key: "host" }))?.text).toBe(
-    "host load 3.2 · 2.8 · 2.1 / 10 cores · features 45% CPU",
-  );
+  expect((await ui.find({ key: "host" }))?.text).toBe("host 32% · features 0.5 of 10 cores");
   expect((await ui.find({ key: "vitals:ab" }))?.text).toMatch(
     /^12\.3% CPU · 410 MiB · started .+ ago by gate$/,
   );
