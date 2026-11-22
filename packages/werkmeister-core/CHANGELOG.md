@@ -1,5 +1,21 @@
 # sandbox-core
 
+## 0.104.0
+
+### Minor Changes
+
+- 6a36c01: A Jira issue's parent epic now shows where its context is read (SW-633). `werkmeister issue view` prints `Parent: <KEY> <summary>` and the epic's description, where an epic keeps the links its stories cite. `.werkmeister/issue.md` stores the same under `## Parent`, and the workspace's `## Issue` section (BRIEF.md, CLAUDE.md) names the parent. The REST fetch asks for the `parent` field and reads the epic in one more request; when that request fails, the key and summary still show. The Atlassian-MCP fallback and GitHub issues show no parent.
+- 84c6fa1: The metrics event log records questions to the person (SW-776): `ask` when a session calls AskUserQuestion, ExitPlanMode or Desktop's wrap_up with an ask, and `answer` with `waited_s` when that ask's own tool returns (or, for a wrap_up ask, at the next prompt). Other tool calls write nothing.
+- dbe33fc: A `stage.done` metrics event (SW-777), with the stage and the record-branch commit that first filled its `output/`, timed at that commit. The agent-state hook writes it after the tool call that follows the commit, and close-out writes any it missed; a claim file per stage under `.werkmeister/stage-done/` keeps it to one per stage, also across parallel tool calls; `usage.json` counts an event only when its commit is in the workspace's history, so a reused workspace name does not pick up an earlier run's times. `usage.json` stage minutes now come from these events, or from that commit when there is no event, and the oldest output mtime only when the stage has no commit. A stage never counts negative minutes, and two stages committed together no longer get split by their files' mtimes.
+- c6d49ed: Each gate run (`pr gate`, `pr gate --tests`, `pr open`, the MCP `workspace-pr gate`) writes a `gate.start` (run id, `retry`: the workspace's earlier gate runs) and a `gate.end` (run id, `exit`: 0 pass, 75 retry later, 1 failure) to the metrics log under `~/.werkmeister/metrics/`. The run count is kept in the workspace's `.werkmeister/gate-runs`, which `pr open` commits to the record with the gate logs (SW-778).
+
+### Patch Changes
+
+- 0e97ac7: The workspace card shows one state word (SW-953). The agent chip reads Working whenever the session itself works (tests, a tool, a background agent, thinking), not only after a finished turn, so it no longer says Idle beside "Thinking" or "Background agent running". The activity line is the chip's detail: it is left out when it only restates the chip (no "Done" beside "Idle"), Thinking's time is when the session was last heard from rather than when its turn began, and a Thinking silent for 30 min or more reads dim as "Thinking · last heard 40 min ago". Same in the VS Code view, the /workspaces pane and the dashboard.
+- 67821d2: PR rules rule 3 (SW-982): a background gate or `pr open` job takes no trailing `echo "exit $?"` (its 0 replaces the command's exit code in the completion notice), and `pr open` runs only after a `pr gate` log shows `<repo>: gate passed` for every repo.
+- 6c66c97: The feature `03_implement` contract's fail-first step (SW-983) parks the change in a temporary WIP commit, never the shared stash, before the rebuild.
+- 193fad7: The feature `03_implement` contract's fail-first step (SW-990) writes the change and its tests with no container and starts it at the first fail-first run: park the change in a WIP commit, check out the unfixed source, `feature up` and run the new tests, then restore the change, build and test; `feature stop` when a long stretch of editing follows.
+
 ## 0.103.1
 
 ## 0.103.0
