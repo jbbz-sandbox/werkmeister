@@ -17,6 +17,8 @@ const SRCS = ["../src", "../../../apps/cli/src"].map((d) => path.resolve(import.
 const EXEMPT = {
   WERKMEISTER_ROOT:
     "the fixture runner sets it to this build's own root (internal fixture, pinWerkmeisterRoot)",
+  WERKMEISTER_TEMP_HOME:
+    "named in the probe guidance text only, never read by src; with-temp-home sets it (SW-1049)",
 };
 
 /** Every binary or path variable a src module reads: process.env.X, process.env["X"], envVar("X"), registryPath(…, "X", …). */

@@ -408,3 +408,29 @@ test("Test commands says exit 137 with a log cut off mid-step is the container g
     { services: SERVICES },
   );
 });
+
+// SW-1049: a probe that writes under ~/.werkmeister guards itself at load time, not in a test().
+test("How to validate names the probe's load-time temp-HOME guard (SW-1049)", async () => {
+  await withSandboxHome(
+    async () =>
+      assert.match(
+        buildSandboxContextMd(
+          "test",
+          1,
+          11100,
+          11119,
+          ["frontend"],
+          loadServices(),
+          "",
+          null,
+          ["frontend"],
+          false,
+          "/ws/.werkmeister/bin/with-temp-home",
+          {},
+          {},
+        ),
+        /if \(process\.env\.WERKMEISTER_TEMP_HOME !== process\.env\.HOME\) throw[^\n]*never a `test\(\)`/,
+      ),
+    { services: SERVICES },
+  );
+});

@@ -379,3 +379,20 @@ test("no uptime: the failure line reads /proc/loadavg, or leaves the load out, w
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// SW-1049: a probe guards itself at load time on this marker, so a run outside the wrapper never reaches the real HOME.
+test("WERKMEISTER_TEMP_HOME is the temp HOME itself, whatever the caller exported (SW-1049)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const r = spawnSync(bin, ["sh", "-c", 'printf "%s|%s" "$WERKMEISTER_TEMP_HOME" "$HOME"'], {
+      encoding: "utf8",
+      env: { ...process.env, WERKMEISTER_TEMP_HOME: "/caller" },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    const [marker, home] = r.stdout.split("|");
+    assert.equal(marker, home);
+    assert.notEqual(home, process.env.HOME);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

@@ -574,8 +574,15 @@ test("each template renders with no undefined and a route per stage", async () =
             `${wt}/${d}`,
           );
         }
-        if (d.endsWith("_reproduce"))
+        if (d.endsWith("_reproduce")) {
           assert.match(c, /A one-off probe is a `node --test` file/, `${wt}/${d}`);
+          // SW-1049: a probe refuses a real HOME at load time, not in a test() that the rest outlive.
+          assert.match(
+            c,
+            /`if \(process\.env\.WERKMEISTER_TEMP_HOME !== process\.env\.HOME\) throw [^`]*`, never a `test\(\)` check/,
+            `${wt}/${d}`,
+          );
+        }
         // SW-506: the host-test step yields to a container recipe in the service's validate text.
         if (c.includes("through `.werkmeister/bin/with-temp-home`, which gives"))
           assert.match(
