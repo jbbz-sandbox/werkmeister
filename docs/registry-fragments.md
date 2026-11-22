@@ -23,7 +23,7 @@ services:
     validate: "..."               # optional; how a person or agent checks a change by hand (overrides the archetype's). See "Test commands and validation guidance"
     internal_port: 3000           # port the process listens on in-container
     port_offset: 9                # slot-relative host port; unique across ALL repos
-    health_endpoint: /health      # or redis | postgres | "" (TCP-only)
+    health_endpoint: /health      # or redis | postgres | "" (TCP-only); unset means /health everywhere
     image: node:22-alpine
     command: "cd services/my-api && exec npm start"
     memory_limit: 1G

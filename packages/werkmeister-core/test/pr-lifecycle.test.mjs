@@ -1936,7 +1936,8 @@ test("gate: baseline uses the probe health_endpoint names, not always an HTTP GE
       ["postgres", "postgres", true, /^postgres localhost:\d+ → ok$/],
       ["redis", "redis", false, /^redis localhost:\d+ → ECONNREFUSED$/],
       ["/health", "/health", true, /^GET http:\/\/localhost:\d+\/health → ok$/],
-      [undefined, "/", true, /^GET http:\/\/localhost:\d+\/ → ok$/],
+      // SW-939: a missing one is the shared default, what compose and forwards probe too.
+      [undefined, "/health", true, /^GET http:\/\/localhost:\d+\/health → ok$/],
     ];
     for (const [health, want, ok, detail] of cases) {
       const probed = [];

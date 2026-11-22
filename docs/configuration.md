@@ -362,7 +362,7 @@ own defaults, `repos:` is derived, and `~/.werkmeister/services.local.yaml` is m
   - `k8s_namespace` (string | null): Kubernetes namespace
   - `k8s_port` (int | null): Port the k8s pod listens on
   - `k8s_pod_prefix` (string | null): Pod name prefix for kubectl
-  - `health_endpoint` (string): HTTP path for health checks
+  - `health_endpoint` (string): the health probe: an HTTP path, `redis` or `postgres` for a handshake, or `""` for TCP only. Unset means `/health` for the compose healthcheck, the k8s forward probe and the gate's baseline row alike
   - `monorepo` (string | null): `turbo` or `nx` if part of a monorepo
   - `setup_service` (string | null): Required setup service name
   - `memory_limit` (string): Docker memory limit (e.g., `2G`, `2560M`)

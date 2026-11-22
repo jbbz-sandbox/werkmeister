@@ -204,6 +204,20 @@ export function baselineUpstream(
   return { host: match[1], port };
 }
 
+/**
+ * The probe a service with no `health_endpoint` gets: the compose healthcheck, its k8s forward
+ * and the gate's baseline row all read it through {@link healthEndpointOf} (SW-939).
+ */
+export const DEFAULT_HEALTH_ENDPOINT = "/health";
+
+/**
+ * The probe a service's `health_endpoint` names, {@link DEFAULT_HEALTH_ENDPOINT} when unset.
+ * `""` stays TCP-only.
+ */
+export function healthEndpointOf(def: { health_endpoint?: string | null }): string {
+  return def.health_endpoint ?? DEFAULT_HEALTH_ENDPOINT;
+}
+
 export interface ForwardSpec {
   name: string;
   listen: number;
@@ -246,7 +260,8 @@ export function forwardSpecs(
         remote: def["internal_port"] as number,
         ns: def["k8s_namespace"] || "",
         prefix: def["k8s_pod_prefix"] || "",
-        health: def["health_endpoint"] || "",
+        // An infrastructure entry with none stays TCP-only (docs/configuration.md).
+        health: nameKey ? healthEndpointOf(def) : def["health_endpoint"] || "",
       });
     }
   };

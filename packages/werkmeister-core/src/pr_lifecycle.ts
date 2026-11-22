@@ -29,6 +29,7 @@ import {
   dotDir,
   envVar,
   getReposRoot,
+  healthEndpointOf,
   IDLE_SERVICE_TYPES,
   isFixture,
   loadArchetypes,
@@ -1923,7 +1924,7 @@ async function gateChecks(
       continue;
     }
     const port = getServicePort(slot, def["port_offset"] ?? 0);
-    const health: string = def["health_endpoint"] ?? "/";
+    const health = healthEndpointOf(def);
     const what = health.startsWith("/")
       ? `GET http://localhost:${port}${health}`
       : `${health || "tcp"} localhost:${port}`;
