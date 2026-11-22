@@ -8,7 +8,8 @@ import { defineConfig } from "vitest/config";
 for (const v of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete process.env[v];
 
 export default defineConfig({
-  plugins: [quickpickle()],
+  // QuickPickle's own 3 s step default failed gate steps on a loaded host (SW-951, SW-1040); a hang still fails at testTimeout.
+  plugins: [quickpickle({ stepTimeout: 60_000 })],
   test: {
     root: import.meta.dirname,
     include: ["**/*.feature"],
