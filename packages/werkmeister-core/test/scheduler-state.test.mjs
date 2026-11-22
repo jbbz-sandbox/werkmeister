@@ -28,6 +28,7 @@ import {
   hostLoadLimit,
   loadBudget,
   portHolders,
+  queuePath,
   readQueue,
   readVmLoad,
   requestAdmission,
@@ -982,5 +983,83 @@ test("two admits before either feature's containers run cannot both take the sam
     });
     await dequeue("f");
     assert.deepEqual(await requestAdmission("g", wg, false, [], budget), { kind: "admit" });
+  });
+});
+
+// SW-989: a budget for one feature and three starved autonomous waiters. The grant pass admits the head, then
+// asks for the next one at once; the one it just started ranks idle (its session has had no turn), so the next
+// head preempted it, and so on down the queue. They must run one after another, each to its release.
+test("three waiters for a one-feature budget run one after another, head first, none preempted (SW-989)", async () => {
+  await withHome(async (home) => {
+    const budget = { memory: 8 * G, cpus: 3, preempt: true }; // COMPOSE costs 3 CPUs
+    const since = new Date(Date.now() - 10 * 60_000).toISOString(); // past STARVE_MS
+    const ws = {};
+    const leases = {};
+    for (const [i, f] of ["a", "b", "c"].entries()) {
+      ws[f] = path.join(home, "features", f);
+      fs.mkdirSync(path.join(ws[f], ".werkmeister", "sessions"), { recursive: true });
+      fs.writeFileSync(path.join(ws[f], "compose.yml"), COMPOSE);
+      fs.writeFileSync(path.join(ws[f], ".werkmeister", "workspace.yml"), "autonomous: true\n");
+      fs.writeFileSync(path.join(ws[f], ".env"), `FEATURE=${f}\n`);
+      // Held as queued since long ago: its session's last record is old and idle.
+      writeSessionState(ws[f], "done", { at: since });
+      writeWaiting(ws[f], { position: i + 1, reason: "preempted", since });
+      leases[f] = { slot: i + 1, workspace: ws[f] };
+    }
+    writeLeases(leases);
+    fs.writeFileSync(queuePath(), JSON.stringify(["a", "b", "c"]));
+    // What Docker shows: *f*'s containers, started just now.
+    const runs = (f) => (cmd) =>
+      cmd[1] === "ps"
+        ? { status: 0, stdout: f ? "id1\n" : "" }
+        : { status: 0, stdout: `${f}\t${ws[f]}\t${new Date().toISOString()}\t0\t3000000000\t0` };
+    const ask = (f, running) =>
+      requestAdmission(f, ws[f], false, runningLeases(runs(running)), budget);
+
+    const order = [];
+    let running = null;
+    for (let turn = 0; turn < 3; turn++) {
+      // The grant pass: each waiter in queue order asks, as grantWaitersNow does.
+      for (const f of readQueue()) {
+        const d = await ask(f, running);
+        assert.notEqual(d.kind, "preempt", `${f} preempted ${d.victims} admitted moments ago`);
+        if (d.kind === "admit") {
+          order.push(f);
+          await dequeue(f); // its start succeeded, as up() records it
+          running = f;
+        }
+      }
+      running = null; // it ran to its release
+    }
+    assert.deepEqual(order, ["a", "b", "c"]);
+    assert.deepEqual(readQueue(), []);
+  });
+});
+
+// SW-989: the hold is the newest container start within STARVE_MS; past it the session's own rank stands.
+test("preemption rank: a feature started within STARVE_MS is working, past it its session decides (SW-989)", async () => {
+  await withHome(async (home) => {
+    const ws = path.join(home, "features", "auto");
+    fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "autonomous: true\n");
+    const old = new Date(Date.now() - 60 * 60_000).toISOString();
+    const rank = (agent, minutesAgo) => {
+      writeSessionState(ws, agent, { at: old });
+      // One container per entry: *minutesAgo* is when each started.
+      const starts = [minutesAgo]
+        .flat()
+        .map((m) => new Date(Date.now() - m * 60_000).toISOString());
+      const run = (cmd) =>
+        cmd[1] === "ps"
+          ? { status: 0, stdout: starts.map((_, i) => `id${i}`).join("\n") }
+          : { status: 0, stdout: starts.map((s) => `auto\t${ws}\t${s}\t0\t0`).join("\n") };
+      return runningLeases(run)[0].rank;
+    };
+    assert.equal(rank("done", 1), "working");
+    assert.equal(rank("needs-you", 1), "working");
+    assert.equal(rank("done", 6), "idle");
+    assert.equal(rank("needs-you", 6), "human-check");
+    // A container Docker restarted a minute ago (restart: unless-stopped) doesn't renew the hold.
+    assert.equal(rank("done", [60, 1]), "idle");
   });
 });

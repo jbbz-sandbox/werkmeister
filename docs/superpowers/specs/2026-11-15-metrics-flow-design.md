@@ -107,6 +107,7 @@ Rejected: inferring capacity waits from transcript tool-call durations (they mix
 | Event | Written beside | Proves |
 |---|---|---|
 | `queue.wait`, `queue.admit` (with `waited_s`) | the `writeWaiting` / `clearWaiting` calls in `requestAdmission` (`scheduler_state.ts:492-503`; both are defined at `agent_state.ts:494-499`). `queue.wait` only when no `waiting.json` existed before the write, since a queued feature re-asks and rewrites it. `queue.admit` only when one existed, with `waited_s` taken from its `since`, since `clearWaiting` also runs on admissions that never waited. | capacity wait |
+| `queue.preempt` (victim, its `rank`, `for`) | each victim's stop in `admitOrQueueHere` (`lifecycle.ts`), added in SW-989 | who preemption stopped, and for whom |
 | `ask`, `answer` (with `waited_s`) | `ask` where `s.ask` is set (`agent_state.ts:316-328`). `answer` at the PostToolUse of that ask's own tool (AskUserQuestion, ExitPlanMode), or at the next prompt for a wrap-up ask, and only when an ask was open. It is not written where `s.ask` is deleted: that runs on every other tool call and prompt (`agent_state.ts:296-330`). This matches how § Why measured the 118 h (`tool_use` → `tool_result`). | waiting on a person |
 | `stage.done` | the record-branch commit that first fills a stage's `output/` | stage time, replacing the mtime guess (SW-774) |
 | `gate.start`, `gate.end` (exit code, retry count) | the gate runner, `pr_lifecycle.ts:947-950`; `apps/cli/src/commands/pr.ts:66-75` | gate first-pass rate, retry loss |

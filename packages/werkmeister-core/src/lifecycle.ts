@@ -101,6 +101,7 @@ import { reconcileGraduating } from "./graduate.js";
 import { writeAgentStateHooks } from "./harness/claude/hooks_gen.js";
 import { hooksAvailable } from "./harness/layout.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
+import { recordEvent } from "./metrics.js";
 import { latestHandoff, type Note } from "./notes.js";
 import { type RunResult, run } from "./proc.js";
 import { workspaceServices } from "./registry_sync.js";
@@ -1222,20 +1223,24 @@ export function runningLeases(runCmd?: (cmd: string[]) => RunResult): Lease[] | 
   if (!found) return null;
   // At least two of the gate's 60 s heartbeats: idle_stop_minutes 0 (reaper off) made every gate preemptable (SW-745).
   const gateCutoff = Date.now() - Math.max(idleStopMinutes(), 2) * 60_000;
+  // Its session's record predates the start, so a grant's next head took it for idle and stopped it (SW-989).
+  const holdCutoff = Date.now() - STARVE_MS;
   return found
     .map((f) => {
       const sessions = readSessions(f.workspace);
       const state = agentOf(sessions);
       // A permission prompt is mid-turn, often on a `docker exec` into this feature: it ranks as its turn (SW-910).
       const prompted = Object.values(sessions).some((s) => s.ask?.kind === "permission");
+      // The oldest start: a crash-looping container restarts on its own and must not hold its feature forever.
+      const justStarted = f.startedAt.length > 0 && Math.min(...f.startedAt) > holdCutoff;
       const rank: Rank =
         f.feature === "infra"
           ? "person"
-          : state?.agent === "needs-you" && !prompted
+          : state?.agent === "needs-you" && !prompted && !justStarted
             ? "human-check"
             : !readAutonomous(f.workspace)
               ? "person"
-              : state?.agent === "working" || prompted
+              : state?.agent === "working" || prompted || justStarted
                 ? "working"
                 : "idle";
       // A running `docker exec` (a session's test run, not only the gate's) is never stopped (SW-856).
@@ -1334,6 +1339,13 @@ async function admitOrQueueHere(
       }
       if (victimWs) await enqueue(victim, victimWs);
       const why = running.find((l) => l.feature === victim)?.rank;
+      recordEvent({
+        event: "queue.preempt",
+        workspace: path.basename(victimWs || victim),
+        feature: victim,
+        rank: why ?? "idle",
+        for: feature,
+      });
       info(
         `Stopped '${victim}' to make room: its session is ` +
           `${why === "human-check" ? "waiting on a person" : why === "working" ? "working" : "idle"} ` +

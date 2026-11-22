@@ -15,6 +15,8 @@ import { warn } from "./reporter.js";
 export type MetricsEvent =
   | { event: "queue.wait"; workspace: string; feature: string; position: number }
   | { event: "queue.admit"; workspace: string; feature: string; waited_s: number }
+  /** *feature* was stopped to make room for *for*; *rank* is what admission read it as (SW-989). */
+  | { event: "queue.preempt"; workspace: string; feature: string; rank: string; for: string }
   | { event: "pr.open" | "pr.merged"; workspace: string; ticket?: string; pr: string }
   | { event: "release"; workspace: string; ticket?: string; pr: string; tag: string }
   | { event: "gate.start"; workspace: string; run: string; retry: number }
