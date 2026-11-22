@@ -1691,6 +1691,7 @@ async function bandTick($: EngineInterface, root: string): Promise<void> {
     const row = buildRows(list, status, []).find((r) => r.path === root) ?? null;
     await $.state.set(BAND_ROW, row);
     await promptHeldWake($, row);
+    await promptNudge($, row);
   } catch {
     // Keep the last card; the next tick tries again.
   } finally {
@@ -1721,6 +1722,27 @@ async function promptHeldWake($: EngineInterface, row: WorkspaceRow | null): Pro
   void $.prompt.submit({ text: HELD_WAKE_PROMPT }).catch(async (e: Error) => {
     $.ui.log(`Held PR wake not prompted: ${e.message}`);
     await $.state.set(WAKE_PROMPTED, "");
+  });
+}
+
+/**
+ * A grant's (or Resume's) "continue" in resume-nudge.json, as this session's own prompt: the pane's
+ * {@link deliverNudges} sends it only while the root pane is open, and an idle session read it never, so the
+ * reaper stopped the containers it had waited for (SW-1024). Same guards as {@link promptHeldWake}; the claim
+ * keeps it to one sender, and a refused prompt puts it back.
+ */
+async function promptNudge($: EngineInterface, row: WorkspaceRow | null): Promise<void> {
+  if (!row?.resumeNudge || row.paused) return;
+  const [turn, asked] = await Promise.all([$.state.get(TURN_RUNNING), $.state.get(WRAP_UP_OPEN)]);
+  if (turn.value || asked.value) return;
+  const { message } = await core<{ message: string | null }>($, "claim-resume-nudge", {
+    name: row.name,
+  });
+  if (!message) return;
+  // Not awaited, as promptHeldWake: the prompt's turn must not hold the band's next poll.
+  void $.prompt.submit({ text: message }).catch(async (e: Error) => {
+    $.ui.log(`"continue" not delivered: ${e.message}`);
+    await core($, "restore-resume-nudge", { name: row.name, message }).catch(() => {});
   });
 }
 
