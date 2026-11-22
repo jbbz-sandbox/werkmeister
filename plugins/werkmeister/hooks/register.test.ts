@@ -13,6 +13,7 @@ import {
   interceptControl,
   metaParts,
   optionGroups,
+  prInput,
   resourcesLine,
   withLivePrs,
 } from "./register";
@@ -3454,3 +3455,28 @@ test("SW-1044: the tab's need-you count is the strip chip's: a paused workspace 
   await ui.unmount();
 });
 
+test("SW-1045: one RepoPr → PrInput mapping, with mergeable, feeds the card and the strip", () => {
+  const p = {
+    repo: "sandbox",
+    branch: "u/ab",
+    url: "https://github.com/o/sandbox/pull/12",
+    state: "OPEN" as const,
+    title: "Fix",
+    labels: [],
+    mergeable: "CONFLICTING" as const,
+  };
+  expect(prInput(p)).toEqual({
+    url: p.url,
+    state: "OPEN",
+    ci: null,
+    failingChecks: 0,
+    mergeable: "CONFLICTING",
+  });
+  expect(prInput({ ...p, ci: "fail", failingChecks: 2, mergeable: undefined })).toEqual({
+    url: p.url,
+    state: "OPEN",
+    ci: "fail",
+    failingChecks: 2,
+    mergeable: undefined,
+  });
+});

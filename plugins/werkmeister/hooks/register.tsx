@@ -14,7 +14,13 @@ import type {
   WorkspaceResources,
   WorkspaceRow,
 } from "../types";
-import { displayModel, statusStrip, type Tone, type WorkspaceDisplay } from "./display-model";
+import {
+  displayModel,
+  type PrInput,
+  statusStrip,
+  type Tone,
+  type WorkspaceDisplay,
+} from "./display-model";
 
 export const PLUGIN = "werkmeister";
 export const PANE = "workspaces";
@@ -765,6 +771,17 @@ const TONE: Record<Tone, Color> = {
   needs: "warning",
 };
 
+/** The one RepoPr → PrInput mapping, for the card and the status strip alike (SW-1045). */
+export function prInput(p: RepoPr): PrInput {
+  return {
+    url: p.url,
+    state: p.state,
+    ci: p.ci ?? null,
+    failingChecks: p.failingChecks ?? 0,
+    mergeable: p.mergeable,
+  };
+}
+
 /** The shared display model (docs/ui-spec.md § The card) for one row; `prs` null when the PR poll failed. */
 export function display(
   r: WorkspaceRow,
@@ -775,15 +792,7 @@ export function display(
 ): WorkspaceDisplay {
   return displayModel(r, {
     // Not `prs?.map`: null (lookup failed) must reach the model as null, not as undefined (no PRs).
-    prs:
-      prs === null
-        ? null
-        : prs.map((p) => ({
-            url: p.url,
-            state: p.state,
-            ci: p.ci ?? null,
-            failingChecks: p.failingChecks ?? 0,
-          })),
+    prs: prs === null ? null : prs.map(prInput),
     lifecycle: r.lifecycle?.state ?? null,
     now,
     usage: r.project ? resources?.projects[r.project] : null,
@@ -2019,13 +2028,7 @@ export const register: Register = (on) => {
       rows.map((r) => ({
         name: r.name,
         ws: r,
-        prs: prs[r.name]?.map((p) => ({
-          url: p.url,
-          state: p.state,
-          ci: p.ci ?? null,
-          failingChecks: p.failingChecks ?? 0,
-          mergeable: p.mergeable,
-        })),
+        prs: prs[r.name]?.map(prInput),
         prNeeds: prNeeds[r.name]?.needs,
       })),
       // No host line before the first sweep lands, `host n/a` once one failed.
