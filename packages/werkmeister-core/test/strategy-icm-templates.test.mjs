@@ -770,6 +770,11 @@ test("autonomous renders self-checks and stop points, and turning it off restore
     );
     assert.match(off.prRules, /without one, squash is the default/);
     assert.doesNotMatch(off.prRules, /Squash is the default/);
+    // SW-982: a trailing echo masked a failed background gate as exit 0, and `pr open` ran before the log was read.
+    assert.match(
+      off.prRules,
+      /Wait for its completion notice, which carries the exit code \(so add no trailing `echo "exit \$\?"`: in a background job its 0 replaces the command's\), then read the log's end\. Run `pr open` only after a `pr gate` log shows `<repo>: gate passed` for every repo\./,
+    );
     // SW-457: rule 6 names the grouped exception.
     assert.match(
       off.prRules,
