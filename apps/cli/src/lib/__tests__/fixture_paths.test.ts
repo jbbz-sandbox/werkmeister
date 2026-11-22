@@ -1,6 +1,6 @@
 /**
- * SW-292: the pre-approved with-fixture-workspace must not read or print files outside the
- * fixture workspace (--print) or the caller's folder (--services).
+ * SW-292, SW-916: the pre-approved with-fixture-workspace must not read or print files outside the
+ * fixture workspace (--print) or the running build's worktree (the file flags).
  */
 
 import * as fs from "node:fs";
@@ -48,35 +48,32 @@ it("--slots-full is a fixture option, before the werkmeister args (SW-634)", () 
 });
 
 it("--running reads five tab-separated columns a line, --queue a comma list (SW-685)", () => {
-  const cwd = process.cwd();
-  process.chdir(tmp);
-  try {
-    fs.writeFileSync("running.tsv", "holder\tws\t2026-11-13T00:00:00Z\t0\t6000000000\n\n");
-    fs.writeFileSync("short.tsv", "holder\tws\t2026-11-13T00:00:00Z\t0\n");
-    const r = parse(["--running", "running.tsv", "--queue", "a,b", "budget", "status"]);
-    expect(r.opts?.containers).toEqual([
-      {
-        feature: "holder",
-        workspace: "ws",
-        startedAt: "2026-11-13T00:00:00Z",
-        memory: 0,
-        nanoCpus: 6e9,
-      },
-    ]);
-    expect(r.opts?.queue).toEqual(["a", "b"]);
-    // SW-809: an entry with a wait is one waiter, its commas are services; --queue repeats.
-    expect(
-      parse(["--queue", "a,b", "--queue", "head:239:api,web", "budget", "status"]).opts?.queue,
-    ).toEqual(["a", "b", "head:239:api,web"]);
-    expect(r.steps).toEqual([["budget", "status"]]);
-    expect(parse(["--running", "short.tsv", "budget", "status"])).toEqual({ bad: "--running" });
-    expect(parse(["--running", "secret-missing", "budget", "status"])).toEqual({
-      bad: "--running",
-    });
-    expect(parse(["--running", "../secret", "budget", "status"])).toEqual({ bad: "--running" });
-  } finally {
-    process.chdir(cwd);
-  }
+  fs.writeFileSync(
+    path.join(tmp, "running.tsv"),
+    "holder\tws\t2026-11-13T00:00:00Z\t0\t6000000000\n\n",
+  );
+  fs.writeFileSync(path.join(tmp, "short.tsv"), "holder\tws\t2026-11-13T00:00:00Z\t0\n");
+  const r = parse(["--running", "running.tsv", "--queue", "a,b", "budget", "status"], tmp);
+  expect(r.opts?.containers).toEqual([
+    {
+      feature: "holder",
+      workspace: "ws",
+      startedAt: "2026-11-13T00:00:00Z",
+      memory: 0,
+      nanoCpus: 6e9,
+    },
+  ]);
+  expect(r.opts?.queue).toEqual(["a", "b"]);
+  // SW-809: an entry with a wait is one waiter, its commas are services; --queue repeats.
+  expect(
+    parse(["--queue", "a,b", "--queue", "head:239:api,web", "budget", "status"], tmp).opts?.queue,
+  ).toEqual(["a", "b", "head:239:api,web"]);
+  expect(r.steps).toEqual([["budget", "status"]]);
+  expect(parse(["--running", "short.tsv", "budget", "status"], tmp)).toEqual({ bad: "--running" });
+  expect(parse(["--running", "secret-missing", "budget", "status"], tmp)).toEqual({
+    bad: "--running",
+  });
+  expect(parse(["--running", "../secret", "budget", "status"], tmp)).toEqual({ bad: "--running" });
 });
 
 it("--pr-field sets only fields that reach no git or Claude call, keeping any = in the value (SW-514)", () => {
@@ -133,12 +130,12 @@ it("--issue takes only owner/repo#number, never a gh flag (SW-509)", () => {
   expect(parse(["--issue"])).toEqual({ bad: "--issue" });
 });
 
-it("--services outside the current folder is refused before any fixture is made", async () => {
+it("--services outside the worktree is refused before any fixture is made", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   try {
     await run(["--services", "/etc/hosts", "--version"]);
     expect(process.exitCode).toBe(2);
-    expect(error.mock.calls[0]?.[0]).toMatch(/--services: a file under the current folder/);
+    expect(error.mock.calls[0]?.[0]).toMatch(/--services: a file under the worktree/);
   } finally {
     error.mockRestore();
     process.exitCode = 0;
@@ -163,7 +160,7 @@ it("--change takes a path inside the code repo, never one out of it or into .git
     expect(parse(["--gate", "--change", p, "pr", "gate"])).toEqual({ bad: "--change" });
 });
 
-it("--fragment-change outside the current folder is refused, and either option needs --gate (SW-664)", async () => {
+it("--fragment-change outside the worktree is refused, and either option needs --gate (SW-664)", async () => {
   expect(parse(["--gate", "--fragment-change", "/etc/hosts", "pr", "gate"])).toEqual({
     bad: "--fragment-change",
   });
@@ -178,13 +175,13 @@ it("--fragment-change outside the current folder is refused, and either option n
   }
 });
 
-it("--change-base and --change-branch read a file under the current folder and need --change (SW-696)", async () => {
+it("--change-base and --change-branch read a file under the worktree and need --change (SW-696)", async () => {
   expect(parse(["--gate", "--change-base", "/etc/hosts", "pr", "gate"])).toEqual({
     bad: "--change-base",
   });
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
   try {
-    await run(["--gate", "--change-branch", "package.json", "--version"]);
+    await run(["--gate", "--change-branch", "secret", "--version"], tmp);
     expect(process.exitCode).toBe(2);
     expect(error.mock.calls[0]?.[0]).toMatch(/--change-base and --change-branch need --change/);
   } finally {
@@ -193,35 +190,32 @@ it("--change-base and --change-branch read a file under the current folder and n
   }
 });
 
-it("--config takes only a YAML mapping under the current folder, holding only budget (SW-670)", async () => {
+it("--config takes only a YAML mapping under the worktree, holding only budget (SW-670)", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
-  const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmp);
   fs.writeFileSync(path.join(tmp, "cfg.yml"), "budget:\n  host_load: 0.01\n");
   fs.writeFileSync(path.join(tmp, "paths.yml"), "paths:\n  repos_root: /\n");
   try {
-    expect(parse(["--config", "cfg.yml", "budget", "status"]).opts?.config).toEqual({
+    expect(parse(["--config", "cfg.yml", "budget", "status"], tmp).opts?.config).toEqual({
       budget: { host_load: 0.01 },
     });
     for (const [args, msg] of [
-      [["--config", "/etc/hosts"], /--config: a file under the current folder/],
-      [["--config", "../secret"], /--config: a file under the current folder/],
+      [["--config", "/etc/hosts"], /--config: a file under the worktree/],
+      [["--config", "../secret"], /--config: a file under the worktree/],
       [["--config", "paths.yml"], /--config may not set paths/],
     ] as const) {
       error.mockClear();
-      await run([...args, "--version"]);
+      await run([...args, "--version"], tmp);
       expect(process.exitCode).toBe(2);
       expect(error.mock.calls[0]?.[0]).toMatch(msg);
     }
   } finally {
-    cwd.mockRestore();
     error.mockRestore();
     process.exitCode = 0;
   }
 });
 
-it("--workspace takes only a YAML mapping under the current folder (SW-464)", async () => {
+it("--workspace takes only a YAML mapping under the worktree (SW-464)", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
-  const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmp);
   for (const [name, body] of [
     ["list.yml", "- a\n"],
     ["scalar.yml", "x\n"],
@@ -236,14 +230,13 @@ it("--workspace takes only a YAML mapping under the current folder (SW-464)", as
       ["--workspace", "/etc/hosts"],
     ]) {
       error.mockClear();
-      await run([...args, "--version"]);
+      await run([...args, "--version"], tmp);
       expect(process.exitCode).toBe(2);
       expect(error.mock.calls[0]?.[0]).toMatch(
-        /--workspace: a file under the current folder, holding a YAML mapping/,
+        /--workspace: a file under the worktree, holding a YAML mapping/,
       );
     }
   } finally {
-    cwd.mockRestore();
     error.mockRestore();
     process.exitCode = 0;
   }
@@ -257,14 +250,12 @@ it("--postmortem, --worktrees and --jira are fixture options, not werkmeister ar
 
 it("--workspace refuses a key outside its allowlist with exit 2 (SW-900)", async () => {
   const error = vi.spyOn(console, "error").mockImplementation(() => {});
-  const cwd = vi.spyOn(process, "cwd").mockReturnValue(tmp);
   fs.writeFileSync(path.join(tmp, "feature.yml"), "group: [SW-2]\nfeature: ../x\n");
   try {
-    await run(["--workspace", "feature.yml", "--version"]);
+    await run(["--workspace", "feature.yml", "--version"], tmp);
     expect(process.exitCode).toBe(2);
     expect(error.mock.calls[0]?.[0]).toMatch(/--workspace may not set feature: only /);
   } finally {
-    cwd.mockRestore();
     error.mockRestore();
     process.exitCode = 0;
   }

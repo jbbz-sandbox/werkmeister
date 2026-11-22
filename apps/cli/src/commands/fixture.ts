@@ -32,7 +32,7 @@ const LINE_BREAK = /[\r\n\u2028\u2029\u0085]/;
 /**
  * *p* resolved under *base*, real path, or null when it escapes it (absolute, `..`, a symlink out).
  * The wrapper is pre-approved, so it must not read or print files outside the fixture (or, for
- * --services, outside the caller's folder).
+ * a file flag, outside the worktree of the running build: SW-916).
  */
 export function inside(base: string, p: string): string | null {
   const b = fs.realpathSync(base);
@@ -41,7 +41,10 @@ export function inside(base: string, p: string): string | null {
   return r.startsWith(b + path.sep) ? r : null;
 }
 
-export function parse(argv: string[]) {
+/** The worktree of the running build (`<wt>/apps/cli/dist/main.js`): file flags resolve here, whatever the shell's cwd, since the allow rule doesn't pin it (SW-916). */
+const cliWorktree = () => path.resolve(path.dirname(process.argv[1] as string), "../../..");
+
+export function parse(argv: string[], base = cliWorktree()) {
   const opts = {
     gate: false,
     bare: false,
@@ -90,7 +93,7 @@ export function parse(argv: string[]) {
       opts.queue = [...(opts.queue ?? []), ...(v.includes(":") ? [v] : v.split(","))];
     } else if (a === "--running" && argv[i + 1] !== undefined) {
       // fixturePreset checks each value; here only the shape: five tab-separated columns a line, or six with the running execs (SW-856).
-      const file = inside(process.cwd(), argv[++i] as string);
+      const file = inside(base, argv[++i] as string);
       if (!file || !fs.existsSync(file)) return { bad: a };
       const rows = fs
         .readFileSync(file, "utf8")
@@ -131,7 +134,7 @@ export function parse(argv: string[]) {
         a === "--change-branch") &&
       argv[i + 1] !== undefined
     ) {
-      const file = inside(process.cwd(), argv[++i] as string);
+      const file = inside(base, argv[++i] as string);
       if (!file || !fs.existsSync(file)) return { bad: a };
       const keys = {
         "--services": "services",
@@ -155,7 +158,7 @@ export function parse(argv: string[]) {
         return { bad: a };
       opts.change = p;
     } else if ((a === "--workspace" || a === "--config") && argv[i + 1] !== undefined) {
-      const file = inside(process.cwd(), argv[++i] as string);
+      const file = inside(base, argv[++i] as string);
       let yml: unknown = null;
       try {
         if (file && fs.existsSync(file)) yml = YAML.parse(fs.readFileSync(file, "utf8"));
@@ -189,8 +192,8 @@ function show(label: string, file: string): void {
   process.stdout.write(`--- ${label}\n${text}${text.endsWith("\n") ? "" : "\n"}`);
 }
 
-export async function run(argv: string[]): Promise<void> {
-  const parsed = parse(argv);
+export async function run(argv: string[], base = cliWorktree()): Promise<void> {
+  const parsed = parse(argv, base);
   if ("bad" in parsed || parsed.steps.some((s) => s.length === 0)) {
     if ("bad" in parsed)
       console.error(
@@ -203,8 +206,8 @@ export async function run(argv: string[]): Promise<void> {
               : parsed.bad === "--change"
                 ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
                 : parsed.bad === "--running"
-                  ? "--running: a file under the current folder, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus[<TAB>execs] line per container"
-                  : `${parsed.bad}: a file under the current folder${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
+                  ? "--running: a file under the worktree, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus[<TAB>execs] line per container"
+                  : `${parsed.bad}: a file under the worktree${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
       );
     console.error(USAGE);
     process.exitCode = 2;
