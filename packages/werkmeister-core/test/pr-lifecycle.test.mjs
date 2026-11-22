@@ -749,6 +749,37 @@ test("gate: a start that failed, then succeeded as the gate's on-demand start, d
   }
 });
 
+test("gate: a capacity wait prints once; the lint and test rows it left without a container print as not run (SW-981)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([], {
+      repos: { app: { ...REGISTRY.repos.app, lint: "pnpm lint" } },
+    });
+    const r = stubRun([
+      [/^docker ps/, { stdout: "" }],
+      [/diff --name-only/, { stdout: "apps/api/x.ts\n" }],
+    ]);
+    d.run = r.run;
+    d.startService = async (_ws, _feature, svc) => {
+      throw Object.assign(new Error(`No capacity to start ${svc} for 'feat' after 30 min`), {
+        code: "NO_CAPACITY",
+      });
+    };
+    const g = await gate(ws, d);
+    assert.equal(g.retry, true, JSON.stringify(g.checks));
+    const lines = formatGate("app", g);
+    const out = lines.join("\n");
+    const waits = lines.filter((l) => /No capacity/.test(l));
+    assert.ok(waits.length >= 1, out);
+    assert.equal(new Set(waits).size, waits.length, `each wait once:\n${out}`);
+    assert.ok(!lines.some((l) => l.startsWith("  ✗")), `no failed row:\n${out}`);
+    for (const name of ["lint", "test api"])
+      assert.match(out, new RegExp(`^  - ${name}: not run: waiting on capacity`, "m"), out);
+  } finally {
+    clean(ws);
+  }
+});
+
 // T8. SW-668: a gate whose only failures are capacity waits is a retry (exit 75), not a FAIL.
 test("gate: failing only for want of capacity is a retry; a real failure beside it is not (SW-668)", async () => {
   const ws = icmWorkspace();
