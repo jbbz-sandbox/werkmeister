@@ -1,1 +1,6 @@
 packages/werkmeister-core/test/strategy-jit.snapshot.json merge=union
+# SW-987: pr open's base row names these when a clean rebase leaves one both sides changed.
+packages/werkmeister-core/test/strategy-jit.snapshot.json linguist-generated
+apps/cli/man/*.1 linguist-generated
+docs/cli-reference.md linguist-generated
+pnpm-lock.yaml linguist-generated

@@ -1397,6 +1397,17 @@ async function gateChecks(
           `origin/${base}`,
         ])
       : null;
+    // SW-987: a clean rebase line-merges a generated file both sides changed and can leave it stale.
+    const attrs =
+      rebased?.code === 0 && overlap.length
+        ? await deps.run("git", ["-C", dir, "check-attr", "linguist-generated", "--", ...overlap])
+        : null;
+    const generated = attrs?.code
+      ? []
+      : (attrs?.stdout ?? "")
+          .split("\n")
+          .map((l) => /^(.*): linguist-generated: (?:set|true)$/.exec(l)?.[1])
+          .filter((f): f is string => Boolean(f));
     let conflict = "";
     if (rebased?.code) {
       const unmerged = await names("--diff-filter=U");
@@ -1412,17 +1423,19 @@ async function gateChecks(
     }
     add(
       "base",
-      behind.code === 0 && (count === 0 || pushed || rebased?.code === 0),
+      behind.code === 0 && (count === 0 || pushed || (rebased?.code === 0 && !generated.length)),
       behind.code
         ? `cannot check against origin/${base}: ${(behind.stderr || behind.stdout).trim()}`
         : pushed
           ? `${commits}; ${branch} is already pushed, so \`pr watch\` flags a conflict; after a rebase \`werkmeister pr push\` force-pushes it with a lease (rule 5)${also}`
-          : rebased?.code === 0
-            ? `rebased onto origin/${base} (was ${commits}); the tests below run on the rebased branch${changedToo && `${changedToo}recheck the spec and tests that name them`}`
-            : conflict ||
-              (count
-                ? `${commits} — \`git -C ${file.dir} rebase origin/${base}\` (keeps one commit per ticket), rerun the tests, then rerun; \`werkmeister pr open\` does this rebase by itself when it applies cleanly${also}`
-                : `up to date with origin/${base}`),
+          : generated.length
+            ? `rebased onto origin/${base} (was ${commits}); both sides changed generated ${generated.join(", ")}: regenerate it with the repo's generator (\`.werkmeister/werkmeister-context.md\` names it), amend it into its ticket's commit, then rerun (rule 5)`
+            : rebased?.code === 0
+              ? `rebased onto origin/${base} (was ${commits}); the tests below run on the rebased branch${changedToo && `${changedToo}recheck the spec and tests that name them`}`
+              : conflict ||
+                (count
+                  ? `${commits} — \`git -C ${file.dir} rebase origin/${base}\` (keeps one commit per ticket), rerun the tests, then rerun; \`werkmeister pr open\` does this rebase by itself when it applies cleanly${also}`
+                  : `up to date with origin/${base}`),
     );
     if (behind.code === 0) {
       const merges = await mergesFromBase(dir, base, deps.run);
