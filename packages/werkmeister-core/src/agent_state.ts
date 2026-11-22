@@ -807,7 +807,7 @@ function featureOf(root: string): string | undefined {
   }
 }
 
-function leftOver(root: string): boolean {
+export function leftOver(root: string): boolean {
   const at = fs.statSync(waitingPath(root), { throwIfNoEntry: false })?.mtimeMs ?? Date.now();
   if (Date.now() - at < 5_000) return false;
   const feature = featureOf(root);

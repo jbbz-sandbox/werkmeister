@@ -33,6 +33,7 @@ import {
   clearPaused,
   clearWaiting,
   type LastStop,
+  leftOver,
   nudgePath,
   readPaused,
   readSessions,
@@ -1190,6 +1191,10 @@ export function idleStopFeature(input: IdleStopInput): string | null {
   // A headless turn ends its "session" every turn; the next turn needs the containers.
   if (entrypoint?.startsWith("sdk")) return null;
   if (otherLiveSessions(workspaceRoot, sessionId).length) return null;
+  // A live whole-feature wait: its containers are already stopped, and a plain stop would drop the queued
+  // start (SW-1017, SW-1033). A left-over waiting.json (out of the queue) does not hold the stop.
+  const w = readWaiting(workspaceRoot);
+  if (w && !w.services && !leftOver(workspaceRoot)) return null;
   return feature;
 }
 
