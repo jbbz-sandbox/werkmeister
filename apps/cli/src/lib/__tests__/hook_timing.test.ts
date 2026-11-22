@@ -13,6 +13,11 @@ import { afterAll, describe, expect, it } from "vitest";
 const CLI_DIR = path.resolve(fileURLToPath(import.meta.url), "../../../..");
 const RUNS = 11;
 const BUDGET_MS = 200;
+// An idle bare start measures 30-50 ms; above this, load is stretching the bare start and the gap alike (SW-921).
+const IDLE_BARE_MS = 80;
+
+/** The budget for a hook gap measured beside a bare start of *bare* ms: 200 ms idle, scaled by how much load slowed node itself. */
+const budgetMs = (bare: number) => BUDGET_MS * Math.max(1, bare / IDLE_BARE_MS);
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "hook-timing-")));
 
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -79,14 +84,14 @@ describe.skipIf(Boolean(process.env.CI))("hook entry cold start (SW-223)", () =>
       const file = path.join(CLI_DIR, "dist", "lib", `${entry}.js`);
       let { bare, hook } = await measure(file, payload);
       // Load stretches both medians and their gap with them (SW-834): one re-measure, so a real regression still fails twice.
-      if (hook - bare >= BUDGET_MS) ({ bare, hook } = await measure(file, payload));
+      if (hook - bare >= budgetMs(bare)) ({ bare, hook } = await measure(file, payload));
       // The load can rise during the 44 spawns too; a breach under it is the host's, not the entry's.
-      if (hook - bare >= BUDGET_MS) {
+      if (hook - bare >= budgetMs(bare)) {
         const note = loadNote(os.loadavg(), MAX_LOAD);
         ctx.skip(Boolean(note), `${note}; bare ${bare.toFixed(0)} ms, hook ${hook.toFixed(0)} ms`);
       }
       expect(hook - bare, `bare ${bare.toFixed(0)} ms, hook ${hook.toFixed(0)} ms`).toBeLessThan(
-        BUDGET_MS,
+        budgetMs(bare),
       );
     }, 120_000);
   }
@@ -101,4 +106,12 @@ it("a 1-minute load over the limit turns a breach into a load note (SW-868)", ()
 
 it("a missing hook entry fails the measurement instead of timing fast", async () => {
   await expect(measure(path.join(CLI_DIR, "dist", "lib", "missing.js"), payload)).rejects.toThrow();
+});
+
+it("the budget scales with a slow bare start, so load below the skip line can't breach it (SW-921)", () => {
+  // Breaches seen under load at 4.3 and 11.3 on 12 cores (SW-921): bare 109 ms gap 217, bare 197 ms gap 287.
+  expect(budgetMs(109)).toBeGreaterThan(217);
+  expect(budgetMs(197)).toBeGreaterThan(287);
+  // An idle start (30-50 ms) keeps the plain budget.
+  expect(budgetMs(40)).toBe(BUDGET_MS);
 });
