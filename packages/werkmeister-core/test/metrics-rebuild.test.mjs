@@ -235,3 +235,30 @@ test("no workspace repo: rebuild throws and writes nothing", async () => {
     assert.equal(fs.existsSync(path.join(sandboxHome(), "metrics")), false);
   });
 });
+
+// SW-1025: a live stage.done already in the log is not written again by rebuild.
+test("rebuild adds no stage.done for a stage the live writer already logged at that commit", async () => {
+  await withSandboxHome(
+    async () => {
+      const fx = seed();
+      const prevGh = process.env.WERKMEISTER_GH_BIN;
+      process.env.WERKMEISTER_GH_BIN = fx.gh;
+      try {
+        fs.appendFileSync(
+          path.join(sandboxHome(), "metrics", "events-2026-11.jsonl"),
+          `${JSON.stringify({ v: 1, at: new Date(fx.a1[1]).toISOString(), event: "stage.done", workspace: "ws-a", stage: "01_research", commit: fx.a1[0] })}\n`,
+        );
+        await rebuildMetrics();
+        const done = logLines().filter(
+          (e) => e.event === "stage.done" && e.workspace === "ws-a" && e.stage === "01_research",
+        );
+        assert.equal(done.length, 1);
+      } finally {
+        if (prevGh === undefined) delete process.env.WERKMEISTER_GH_BIN;
+        else process.env.WERKMEISTER_GH_BIN = prevGh;
+        fs.rmSync(fx.root, { recursive: true, force: true });
+      }
+    },
+    { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
+  );
+});
