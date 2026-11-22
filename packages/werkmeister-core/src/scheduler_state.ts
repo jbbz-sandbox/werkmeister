@@ -159,6 +159,14 @@ export function enqueue(feature: string, workspace: string): Promise<void> {
         since: new Date().toISOString(),
       });
       writeQueue([...queue, feature]);
+      // Every writer that queues a feature is an event, so a stale waiting.json names its writer (SW-991).
+      recordEvent({
+        event: "queue.wait",
+        workspace: path.basename(workspace),
+        feature,
+        position: queue.length + 1,
+        reason: "preempted",
+      });
     },
     { timeout: LOCK_TIMEOUT },
   );
@@ -180,6 +188,13 @@ export function requeueFirst(
         since: new Date().toISOString(),
       });
       writeQueue([feature, ...readQueue().filter((f) => f !== feature)]);
+      recordEvent({
+        event: "queue.wait",
+        workspace: path.basename(workspace),
+        feature,
+        position: 1,
+        reason: "requeued",
+      });
       return 1;
     },
     { timeout: LOCK_TIMEOUT },
@@ -687,7 +702,13 @@ export function requestAdmission(
           since: prev?.since ?? new Date().toISOString(),
         });
         if (!prev)
-          recordEvent({ event: "queue.wait", workspace: name, feature, position: d.position });
+          recordEvent({
+            event: "queue.wait",
+            workspace: name,
+            feature,
+            position: d.position,
+            reason: "waiting for capacity",
+          });
         if (!queue.includes(feature)) next = [...queue, feature];
       } else {
         next = queue.filter((f) => f !== feature);

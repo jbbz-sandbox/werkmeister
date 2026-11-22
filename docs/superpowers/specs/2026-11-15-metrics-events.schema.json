@@ -41,6 +41,10 @@
       "type": "string",
       "description": "queue.wait, queue.admit: the feature asking for capacity; queue.preempt: the feature stopped"
     },
+    "reason": {
+      "enum": ["waiting for capacity", "preempted", "requeued"],
+      "description": "queue.wait: which writer queued it (SW-991)"
+    },
     "rank": {
       "enum": ["idle", "human-check", "working", "person"],
       "description": "queue.preempt: how admission ranked the stopped feature"

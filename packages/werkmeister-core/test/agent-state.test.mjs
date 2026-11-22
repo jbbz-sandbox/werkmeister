@@ -635,6 +635,11 @@ test("waiting gate: denies a container command with the queue position", () => {
     /docker ps --filter label=com\.werkmeister\.feature=/,
   );
   assert.match(pre.hookSpecificOutput.permissionDecisionReason, /grant/);
+  // SW-991: an agent stopped and asked a person over a stale entry; the text says how to check it itself.
+  assert.match(
+    pre.hookSpecificOutput.permissionDecisionReason,
+    /run `werkmeister budget status`\. If it lists this workspace under Running, this queue entry is stale: rerun/,
+  );
   assert.equal(pre.hookSpecificOutput.permissionDecision, "deny");
   // The check the text names must pass the hook; a chained or other docker command still waits.
   assert.equal(pauseGate(bash("docker ps --filter label=com.werkmeister.feature=demo"), dir), null);

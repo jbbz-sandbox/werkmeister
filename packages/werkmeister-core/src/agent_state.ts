@@ -891,8 +891,10 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
     ? `Waiting for capacity (position ${waiting.position}): this workspace is queued, so containers and ` +
       "tests wait until it starts. Not a failure: `docker ps --filter " +
       `label=com.werkmeister.feature=${feature ?? "<feature>"}\` showed none of its containers running (or ` +
-      "could not be read). Go on with edits and git, and rerun this command once they run (`werkmeister budget " +
-      "status` shows the queue); or end the turn, and a grant notice tells this session to continue."
+      "could not be read). Check it yourself, without asking a person: run `werkmeister budget status`. If it " +
+      "lists this workspace under Running, this queue entry is stale: rerun the command, which goes through. " +
+      "If it lists it under Waiting, go on with edits and git and rerun the command once it starts; or end the " +
+      "turn, and a grant notice tells this session to continue."
     : PAUSED_REASON;
   switch (input["hook_event_name"]) {
     case "PreToolUse": {

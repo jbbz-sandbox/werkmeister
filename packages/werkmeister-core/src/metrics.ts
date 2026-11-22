@@ -13,7 +13,8 @@ import { dotDir } from "./dot_dir.js";
 import { warn } from "./reporter.js";
 
 export type MetricsEvent =
-  | { event: "queue.wait"; workspace: string; feature: string; position: number }
+  /** *reason*: which writer queued it, "preempted", "requeued" or "waiting for capacity" (SW-991). */
+  | { event: "queue.wait"; workspace: string; feature: string; position: number; reason?: string }
   | { event: "queue.admit"; workspace: string; feature: string; waited_s: number }
   /** *feature* was stopped to make room for *for*; *rank* is what admission read it as (SW-989). */
   | { event: "queue.preempt"; workspace: string; feature: string; rank: string; for: string }

@@ -105,6 +105,7 @@ test("a capacity wait writes one queue.wait however often it re-asks, then one q
           workspace: "mine",
           feature: "mine",
           position: 1,
+          reason: "waiting for capacity",
         },
       );
       assert.equal(admit.event, "queue.admit");
@@ -467,4 +468,38 @@ test("a headless turn on an interactive session's id writes nothing", async () =
     if (was === undefined) delete process.env.CLAUDE_CODE_ENTRYPOINT;
     else process.env.CLAUDE_CODE_ENTRYPOINT = was;
   }
+});
+
+// SW-991: a waiting.json that enqueue() or requeueFirst() wrote left no line, so its writer was unknown.
+test("every writer that queues a feature writes a queue.wait naming it", async () => {
+  const { enqueue, requeueFirst } = await import("../dist/scheduler_state.js");
+  await withFixtureWorkspace(async (fx) => {
+    await enqueue("victim", workspace(fx, "victim"));
+    await requeueFirst("head", workspace(fx, "head"));
+    assert.deepEqual(
+      lines().map(({ event, workspace, feature, position, reason }) => ({
+        event,
+        workspace,
+        feature,
+        position,
+        reason,
+      })),
+      [
+        {
+          event: "queue.wait",
+          workspace: "victim",
+          feature: "victim",
+          position: 1,
+          reason: "preempted",
+        },
+        {
+          event: "queue.wait",
+          workspace: "head",
+          feature: "head",
+          position: 1,
+          reason: "requeued",
+        },
+      ],
+    );
+  });
 });
