@@ -119,13 +119,14 @@ server. Until that is widened, use:
 
 <!-- generated:mcp-tools -->
 
-58 tools (5 UI-only).
+59 tools (5 UI-only).
 
 | Tool | What it does |
 | --- | --- |
 | `clean` | Remove orphaned volumes and stale slots |
 | `stats` | Container resource usage |
 | `optimize` | Usage against configured limits |
+| `metrics` | Flow metrics |
 | `cache` | Prune the shared build caches |
 | `registry` | Regenerate the service registry |
 | `resources` | CPU and memory per workspace |

@@ -18,6 +18,7 @@ import {
   planClean,
   runClean,
 } from "werkmeister-core/lifecycle";
+import { METRICS_RANGES, type MetricsRange, metricsReport } from "werkmeister-core/metrics_report";
 import { syncRegistry } from "werkmeister-core/registry_sync";
 import { getWorkspaceResources } from "werkmeister-core/resources";
 import { waitingQueue } from "werkmeister-core/scheduler_client";
@@ -40,6 +41,81 @@ const COLLECT = {
     .optional()
     .describe("Minutes to sample for before reporting. Default 0: one snapshot."),
   interval: z.number().int().positive().optional().describe("Seconds between samples. Default 10."),
+};
+
+const MINUTES = z.number().nullable();
+const WAITS = z.object({
+  person: z.number(),
+  capacity: z.number(),
+  pr: z.number(),
+  gateRetry: z.number(),
+  release: z.number(),
+});
+const PERCENTILES = z.object({ p50Minutes: MINUTES, p90Minutes: MINUTES });
+const METRICS_OUTPUT = {
+  range: z.enum(METRICS_RANGES as [MetricsRange, ...MetricsRange[]]),
+  from: z.string().nullable(),
+  to: z.string(),
+  board: z.array(
+    z.object({
+      column: z.enum(["working", "ready", "pr-open", "awaiting-release"]),
+      wip: z.number(),
+      p50Minutes: MINUTES,
+      p90Minutes: MINUTES,
+      cards: z.array(
+        z.object({
+          workspace: z.string(),
+          ticket: z.string().nullable(),
+          stage: z.object({ index: z.number(), total: z.number(), name: z.string() }).nullable(),
+          enteredAt: z.string().nullable(),
+          ageMinutes: MINUTES,
+          overP90: z.boolean(),
+          wait: z
+            .object({
+              cause: z.enum(["person", "capacity", "pr", "gateRetry", "release"]),
+              since: z.string(),
+              minutes: z.number(),
+            })
+            .nullable(),
+        }),
+      ),
+    }),
+  ),
+  waitsByWeek: z.array(z.object({ week: z.string(), seconds: WAITS })),
+  waits: WAITS,
+  tickets: z.array(
+    z.object({
+      ticket: z.string(),
+      workspace: z.string(),
+      firstTurn: z.string(),
+      mergedAt: z.string(),
+      releasedAt: z.string().nullable(),
+      cycleMinutes: z.number(),
+      leadMinutes: z.number(),
+    }),
+  ),
+  cycle: PERCENTILES,
+  lead: PERCENTILES,
+  usage: z.object({
+    workspaces: z.number(),
+    estUsd: z.number().nullable(),
+    costUnknown: z.number(),
+    tokens: z.object({
+      input: z.number(),
+      output: z.number(),
+      cacheCreation: z.number(),
+      cacheRead: z.number(),
+    }),
+    cacheReadShare: z.number().nullable(),
+    activeMinutes: z.number(),
+    wallClockMinutes: z.number(),
+    turns: z.number(),
+  }),
+  gate: z.object({
+    firstPassRate: z.number().nullable(),
+    passed: z.number(),
+    workspaces: z.number(),
+  }),
 };
 
 export function registerDaemonTools(server: McpServer): void {
@@ -105,6 +181,30 @@ export function registerDaemonTools(server: McpServer): void {
     },
     async (args): Promise<CallToolResult> =>
       adapt(async () => ({ ...(await optimizeReport(args.collect ?? 0, args.interval ?? 10)) })),
+  );
+
+  server.registerTool(
+    "metrics",
+    {
+      title: "Flow metrics",
+      annotations: { readOnlyHint: true },
+      description:
+        "Where work waits, over a range (default 7d): the flow board of open workspaces (working with " +
+        "its ICM stage, ready, pr-open, awaiting-release) with each card's age and current wait, each " +
+        "column's age p50/p90, waits by cause per ISO week in seconds (person, capacity, pr open → " +
+        "merge, gateRetry, release), cycle and lead time per ticket, and cost, tokens, active and wall " +
+        "time, turns and gate first-pass rate for workspaces closed in the range. Reads the metrics " +
+        "event log, workspace state and usage.json from the record branches on this machine.",
+      inputSchema: {
+        range: z
+          .enum(METRICS_RANGES as [MetricsRange, ...MetricsRange[]])
+          .optional()
+          .describe("7d, 30d, 90d or all. Default 7d."),
+      },
+      outputSchema: METRICS_OUTPUT,
+    },
+    async (args): Promise<CallToolResult> =>
+      adapt(async () => ({ ...(await metricsReport({ range: args.range })) })),
   );
 
   server.registerTool(

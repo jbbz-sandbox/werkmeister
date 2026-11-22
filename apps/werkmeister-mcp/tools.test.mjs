@@ -266,6 +266,7 @@ const DAEMON_TOOLS = [
   "clean",
   "stats",
   "optimize",
+  "metrics",
   "cache",
   "registry",
   "resources",
@@ -284,6 +285,10 @@ test("the daemon tools are listed, and clean/cache prune default to a dry run", 
     const dryRun = tools.find((t) => t.name === n)?.inputSchema.properties?.dryRun;
     assert.match(dryRun?.description ?? "", /Default true/, n);
   }
+  // SW-781: the Flow tab's range buttons.
+  const range = tools.find((t) => t.name === "metrics")?.inputSchema.properties?.range;
+  assert.deepEqual(range?.enum, ["7d", "30d", "90d", "all"]);
+  assert.ok(!tools.find((t) => t.name === "metrics")?.inputSchema.required?.includes("range"));
 });
 
 test("a workspace-scoped server lists only the workspace verbs", async () => {
