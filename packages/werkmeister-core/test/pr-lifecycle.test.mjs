@@ -2240,6 +2240,61 @@ test("openPrs: an unpushed branch behind origin/<base> rebases, then tests and o
   }
 });
 
+// SW-987: a clean rebase line-merges a generated file both sides changed, and left it stale (a
+// duplicate snapshot entry) until the test row failed on it minutes later.
+test("openPrs: a clean rebase over a generated file both sides changed stops before the tests and names it (SW-987)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const ours = [DIFF_API[0], { stdout: "apps/api/x.ts\napps/api/snap.json\n" }];
+    const theirs = [
+      /diff --name-only HEAD\.\.\.origin\/main$/,
+      { stdout: "apps/api/x.ts\napps/api/snap.json\n" },
+    ];
+    const attr = [
+      /check-attr linguist-generated -- apps\/api\/x\.ts apps\/api\/snap\.json$/,
+      {
+        stdout:
+          "apps/api/x.ts: linguist-generated: unspecified\napps/api/snap.json: linguist-generated: set\n",
+      },
+    ];
+    const d = deps([ours, BEHIND, UNPUSHED, ON_BRANCH, theirs, attr]);
+    const r = await open(ws, d);
+    assert.equal(r.ok, false);
+    const out = r.lines.join("\n");
+    assert.match(
+      out,
+      /✗ base: rebased onto origin\/main \(was 3 commits behind origin\/main\); both sides changed generated apps\/api\/snap\.json: regenerate it with the repo's generator/,
+    );
+    assert.doesNotMatch(out, /generated apps\/api\/x\.ts/);
+    assert.deepEqual(
+      d.calls.filter((c) => /push -u origin|^gh pr create/.test(c)),
+      [],
+      "pushes and opens nothing",
+    );
+    // A file both sides changed that no one generates: rebased, tested and opened as before.
+    const plain = [
+      attr[0],
+      {
+        stdout:
+          "apps/api/x.ts: linguist-generated: unspecified\napps/api/snap.json: linguist-generated: unspecified\n",
+      },
+    ];
+    const d2 = deps([
+      ours,
+      BEHIND,
+      UNPUSHED,
+      ON_BRANCH,
+      theirs,
+      plain,
+      [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }],
+    ]);
+    const r2 = await open(ws, d2);
+    assert.ok(r2.ok, r2.lines.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
 test("openPrs: a rebase that conflicts aborts, names the files, pushes and opens nothing (SW-857)", async () => {
   const ws = icmWorkspace();
   try {
