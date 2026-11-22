@@ -1124,3 +1124,25 @@ test("enqueue: a preempted feature keeps its place ahead of later waiters (SW-10
     assert.ok(queuePath().startsWith(`${sandbox}/`), queuePath());
   });
 });
+
+// SW-1028: the budget tool ran a `docker run` per call (one per pane poll) only to learn the VM's cores.
+test("vmCores: two reads in one process run docker once (SW-1028)", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vm-cores-"));
+  const calls = path.join(dir, "calls");
+  const bin = path.join(dir, "docker");
+  fs.writeFileSync(bin, `#!/bin/sh\necho x >> "${calls}"\nprintf '0.5 0.4 0.3 1/100 1\\n6\\n'\n`, {
+    mode: 0o755,
+  });
+  const prev = process.env.WERKMEISTER_DOCKER_BIN;
+  process.env.WERKMEISTER_DOCKER_BIN = bin;
+  try {
+    const { vmCores } = await import("../dist/budget_status.js");
+    assert.equal(await vmCores(), 6);
+    assert.equal(await vmCores(), 6);
+    assert.equal(fs.readFileSync(calls, "utf8").split("\n").filter(Boolean).length, 1);
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_DOCKER_BIN;
+    else process.env.WERKMEISTER_DOCKER_BIN = prev;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

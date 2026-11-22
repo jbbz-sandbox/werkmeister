@@ -18,11 +18,26 @@ import {
   waiters,
 } from "./scheduler_state.js";
 
+let cores: Promise<number | undefined> | undefined;
+
+/**
+ * The Docker VM's core count, read once per process: `readVmLoad` runs a container, and the pane polls
+ * the `budget` tool every 30 s (SW-1028). A failed read is not kept, so the next call tries again.
+ * shortcut: a VM resized while the daemon runs keeps its old count until the daemon restarts.
+ */
+export function vmCores(): Promise<number | undefined> {
+  cores ??= readVmLoad().then((r) => {
+    if (!r) cores = undefined;
+    return r?.cores;
+  });
+  return cores;
+}
+
 export async function budgetStatus() {
   const budget = await loadBudget();
   // macOS and Windows scale the limit by the Docker VM's cores, as the wait does (SW-888).
   const vm = process.platform === "darwin" || process.platform === "win32";
-  const hostLoad = hostLoadLimit((vm && (await readVmLoad())?.cores) || os.availableParallelism());
+  const hostLoad = hostLoadLimit((vm && (await vmCores())) || os.availableParallelism());
   // A snapshot for display: no `allocate` lock, so a lease taken mid-read shows next time.
   const leases = readLeases();
   const waiting = await waitingQueue();
