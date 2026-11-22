@@ -279,3 +279,39 @@ test("stalledAfterMs: 30/30/90 min by default, overrides.stalled_*_minutes when 
     process.env.WERKMEISTER_CONFIG_FILE = prev;
   }
 });
+
+// SW-1024: a grant writes its "continue" to resume-nudge.json; an idle session never read it, and
+// the reaper stopped the granted containers before the session had run anything.
+test("stopIdle: a granted start whose continue is undelivered keeps its containers while a session is open (SW-1024)", async () => {
+  const ws = workspaceWith({ s1: { status: "idle", at: new Date(NOW - 60 * MIN).toISOString() } });
+  const nudge = path.join(ws, ".werkmeister", "resume-nudge.json");
+  // Left 5 min ago by a grant whose containers came up before the cutoff (a parked service, a Resume).
+  const leftAgo = (ms) => {
+    fs.writeFileSync(nudge, JSON.stringify({ message: "Capacity freed" }));
+    fs.utimesSync(nudge, (NOW - ms) / 1000, (NOW - ms) / 1000);
+  };
+  leftAgo(5 * MIN);
+  const run = docker([["granted", ws, new Date(NOW - 45 * MIN).toISOString()]]);
+  const r = await stopIdle(10, { now: NOW, run, stop: async () => assert.fail("reaped") });
+  assert.deepEqual(r.lines, ["granted: kept (continue not yet delivered)"]);
+  // Left past the cutoff and still not taken (session asking, closed, no mod): the hold ends.
+  leftAgo(45 * MIN);
+  const late = [];
+  await stopIdle(10, { now: NOW, run, stop: async (f) => late.push(f) });
+  assert.deepEqual(late, ["granted"]);
+  // Delivered (the claim removes the file): the idle clock runs again.
+  fs.rmSync(nudge);
+  const stopped = [];
+  await stopIdle(10, { now: NOW, run, stop: async (f) => stopped.push(f) });
+  assert.deepEqual(stopped, ["granted"]);
+  // No open session to deliver to: nothing to wait for.
+  const closed = workspaceWith({});
+  fs.writeFileSync(path.join(closed, ".werkmeister", "resume-nudge.json"), '{"message":"x"}');
+  const gone = [];
+  await stopIdle(10, {
+    now: NOW,
+    run: docker([["closed", closed, new Date(NOW - 45 * MIN).toISOString()]]),
+    stop: async (f) => gone.push(f),
+  });
+  assert.deepEqual(gone, ["closed"]);
+});

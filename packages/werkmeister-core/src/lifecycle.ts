@@ -1003,6 +1003,8 @@ export interface IdleInput {
   queued?: boolean;
   /** Epoch ms the gate last ran `docker exec` in *workspace*, or null. */
   lastExec: (workspace: string) => number | null;
+  /** Epoch ms a "continue" was left in *workspace*'s resume-nudge.json, undelivered; null when none. */
+  nudgedAt?: (workspace: string) => number | null;
 }
 
 /** Why a running feature is not idle, or null when it is. */
@@ -1016,6 +1018,10 @@ function busyReason(f: RunningFeature, input: IdleInput, cutoff: number): string
     .sessions(f.workspace)
     .some((s) => (s.asking && input.queued ? recent(s) : s.status !== "idle" || recent(s)));
   if (active) return "session active";
+  // A grant's "continue" left within the cutoff: the session hasn't acted on these containers yet (SW-1024).
+  // Bounded like a container start, so a session that never takes it (closed, asking, no mod) is still reaped.
+  if ((input.nudgedAt?.(f.workspace) ?? 0) > cutoff && input.sessions(f.workspace).length)
+    return "continue not yet delivered";
   if (f.startedAt.some((t) => t > cutoff)) return `started < ${input.minutes} min ago`;
   if ((input.lastExec(f.workspace) ?? 0) > cutoff) return `gate ran < ${input.minutes} min ago`;
   return null;
@@ -1140,6 +1146,7 @@ export async function stopIdle(
     running,
     sessions: (ws) => liveSessions(ws, now),
     lastExec: (ws) => mtimeMs(lastExecMarker(ws)),
+    nudgedAt: (ws) => mtimeMs(nudgePath(ws)),
     queued: opts.queued ?? readQueue().length > 0,
   };
   const cutoff = input.now - minutes * 60_000;

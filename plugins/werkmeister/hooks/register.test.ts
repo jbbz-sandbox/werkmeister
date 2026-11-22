@@ -3218,6 +3218,81 @@ test("a held PR wake waits while Desktop's wrap_up box asks the person, then fol
   expect(prompts.map((p) => p.text)).toEqual(["decided", HELD_WAKE_PROMPT]);
 });
 
+/** A band session in abc whose status holds a pending grant "continue" until it is claimed (SW-1024). */
+function grantedSession(on: On, sendFails = false) {
+  let pending: string | null = null;
+  const w = world(
+    on,
+    stubs({
+      [`${WS}/workspace-status`]: () =>
+        ok({
+          ...STATUS,
+          statuses: STATUS.statuses.map((s) => ({
+            ...s,
+            resumeNudge: s.name === "abc" && pending !== null,
+          })),
+        }),
+      [`${WS}/claim-resume-nudge`]: () => {
+        const message = pending;
+        pending = null;
+        return ok({ message });
+      },
+      [`${WS}/restore-resume-nudge`]: (args) => {
+        pending ??= String(args.message);
+        return ok({});
+      },
+    }),
+  );
+  const prompts: string[] = [];
+  on("fs.list", () => ({ value: [] }));
+  on("fs.exists", (_$, e) => ({ value: e.path === "/ws/abc/.werkmeister/workspace.yml" }));
+  on("session.start", (_$, e) => ({ cwd: e.cwd }));
+  on("session.id", () => ({ value: "s-me" }));
+  on("turn.start", (_$, e) => ({ turnId: e.turnId }));
+  on("turn.complete", (_$, e) => ({ text: e.answer }));
+  on("prompt.submit", (_$, e) => {
+    if (sendFails) throw new Error("not now");
+    prompts.push(e.text);
+    return { text: e.text };
+  });
+  const grant = (message = "Capacity freed: this workspace's containers are up.") => {
+    pending = message;
+  };
+  return { w, prompts, grant, pending: () => pending };
+}
+
+// SW-1024: only the root pane's tick delivered resume-nudge.json, so an idle workspace session never got
+// its grant's "continue" and the reaper stopped the containers it had waited for.
+test("a grant's continue reaches this idle session as its own prompt within a band poll, once (SW-1024)", async ($, on) => {
+  const { w, prompts, grant } = grantedSession(on);
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  grant();
+  await w.clock.advance(15000);
+  expect(prompts).toEqual(["Capacity freed: this workspace's containers are up."]);
+  await w.clock.advance(15000);
+  expect(prompts).toHaveLength(1);
+});
+
+test("a grant's continue waits while a turn runs, then follows it (SW-1024)", async ($, on) => {
+  const { w, prompts, grant } = grantedSession(on);
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  await $.turn.start({ text: "work", turnId: "t1" });
+  grant();
+  await w.clock.advance(30000);
+  expect(prompts).toHaveLength(0);
+  await $.turn.complete({ ...ENDED, turnId: "t1" });
+  await w.clock.advance(15000);
+  expect(prompts).toHaveLength(1);
+});
+
+test("a grant's continue the session refused is put back for the next delivery (SW-1024)", async ($, on) => {
+  const { w, grant, pending } = grantedSession(on, true);
+  await $.session.start({ cwd: "/ws/abc/repo", surface: "terminal", isInteractive: true });
+  grant("go on");
+  await w.clock.advance(15000);
+  expect(pending()).toBe("go on");
+});
+
 test("a session outside any workspace starts no band and reads no workspaces", async ($, on) => {
   const w = world(on, stubs());
   on("fs.list", () => ({ value: [] }));
