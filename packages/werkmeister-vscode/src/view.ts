@@ -102,6 +102,9 @@ vscode.postMessage({ cmd: "ready" });
 </html>`;
 }
 
+/** The memento key and the `when` context key the two title-bar commands swap on. */
+const HIDE_MERGED = "sandbox.mergedHidden";
+
 export class WorkspacesView implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
   private roots: WsNode[] = [];
@@ -116,6 +119,20 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
   /** Undefined until the first sweep lands; null when it failed. */
   private resources: WorkspaceResources | null | undefined;
   private sweeping = false;
+  /** SW-1003; kept in the extension, since the webview redraws every 5 s and would reset a control in it. */
+  private hideMerged: boolean;
+
+  constructor(private readonly memento: vscode.Memento) {
+    this.hideMerged = memento.get(HIDE_MERGED, false);
+    void vscode.commands.executeCommand("setContext", HIDE_MERGED, this.hideMerged);
+  }
+
+  setHideMerged(on: boolean): void {
+    this.hideMerged = on;
+    void this.memento.update(HIDE_MERGED, on);
+    void vscode.commands.executeCommand("setContext", HIDE_MERGED, on);
+    this.post();
+  }
 
   toggleLegend(): void {
     this.legend = !this.legend;
@@ -201,6 +218,7 @@ export class WorkspacesView implements vscode.WebviewViewProvider {
         workspacesRoot(),
       ),
       board: currentBoardUrl(),
+      hideMerged: this.hideMerged,
     });
     void this.view?.webview.postMessage({ html });
   }

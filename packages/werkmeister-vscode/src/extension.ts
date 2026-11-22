@@ -49,7 +49,7 @@ export function applySettingsToEnv(): void {
 export function activate(context: vscode.ExtensionContext): void {
   applySettingsToEnv();
 
-  const provider = new WorkspacesView();
+  const provider = new WorkspacesView(context.globalState);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("sandboxWorkspaces", provider),

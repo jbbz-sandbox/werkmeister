@@ -26,6 +26,7 @@ export const CARD_COMMANDS = [
   "sandbox.dashboard",
   "sandbox.openBoard",
   "sandbox.configure",
+  "sandbox.showMerged",
 ];
 
 function esc(s: string): string {
@@ -180,6 +181,18 @@ export interface RenderOptions {
   inTerminal?: InTerminal;
   /** The Jira board link; no button without one. */
   board?: string | null;
+  /** The title-bar toggle (SW-1003): leave out the cards {@link hiddenByToggle} picks. */
+  hideMerged?: boolean;
+}
+
+/** Merged and waiting on a release with nothing asked; a release or a need brings it back on the next poll. */
+const hiddenByToggle = (n: WsNode) =>
+  n.kind === "workspace" && n.card?.waitingRelease === true && !n.card.needsYou;
+
+/** `3 hidden · waiting on release`, a click shows them again, so hidden work is never out of sight. */
+function hiddenLine(count: number): string {
+  if (!count) return "";
+  return `<div>${action("a", "sandbox.showMerged", "", `${count} hidden · waiting on release`, ` class="dim"`)}</div>`;
 }
 
 /** `● 2 need you · 1 PR to review`, each linking to the first card it counts. */
@@ -198,13 +211,14 @@ function summary(nodes: WsNode[]): string {
   return parts.length ? `<div>${parts.join(`<span class="dim"> · </span>`)}</div>` : "";
 }
 
-function masterControl(nodes: WsNode[], o: RenderOptions): string {
+function masterControl(nodes: WsNode[], o: RenderOptions, hidden: number): string {
   const active = o.inTerminal?.kind === "root";
   return [
     `<section class="card master${active ? " in-terminal" : ""}" aria-label="Master control">`,
     `<div class="row"><span class="name">Master control</span>${active ? CHIP : ""}</div>`,
     `<div class="dim">Triage, backlog and close-out</div>`,
     summary(nodes),
+    hiddenLine(hidden),
     `<div class="row">`,
     action("button", "sandbox.masterControl", "", "Master control", ` class="primary"`),
     action("button", "sandbox.dashboard", "", "Dashboard ↗"),
@@ -218,9 +232,11 @@ function masterControl(nodes: WsNode[], o: RenderOptions): string {
 
 export function renderCards(nodes: WsNode[], o: RenderOptions = {}): string {
   const t = o.inTerminal;
+  const shown = o.hideMerged ? nodes.filter((n) => !hiddenByToggle(n)) : nodes;
+  // The counts still read every workspace, hidden or not.
   return [
-    masterControl(nodes, o),
-    ...nodes.map((n) =>
+    masterControl(nodes, o, nodes.length - shown.length),
+    ...shown.map((n) =>
       n.kind === "workspace"
         ? workspaceCard(n, t?.kind === "workspace" && t.name === n.workspace?.name)
         : plainCard(n),

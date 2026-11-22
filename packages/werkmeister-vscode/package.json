@@ -243,6 +243,18 @@
         "title": "Legend",
         "category": "Werkmeister",
         "icon": "$(question)"
+      },
+      {
+        "command": "sandbox.hideMerged",
+        "title": "Hide Waiting on Release",
+        "category": "Werkmeister",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "sandbox.showMerged",
+        "title": "Show Waiting on Release",
+        "category": "Werkmeister",
+        "icon": "$(eye)"
       }
     ],
     "menus": {
@@ -266,6 +278,16 @@
           "command": "sandbox.legend",
           "when": "view == sandboxWorkspaces",
           "group": "navigation@4"
+        },
+        {
+          "command": "sandbox.hideMerged",
+          "when": "view == sandboxWorkspaces && !sandbox.mergedHidden",
+          "group": "navigation@5"
+        },
+        {
+          "command": "sandbox.showMerged",
+          "when": "view == sandboxWorkspaces && sandbox.mergedHidden",
+          "group": "navigation@5"
         },
         {
           "command": "sandbox.detect",

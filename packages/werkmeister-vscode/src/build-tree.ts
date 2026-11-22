@@ -85,6 +85,8 @@ export interface WsCard {
   needsYou: boolean;
   /** The one session button the card shows, if any (`sessionAction`). */
   action: "start" | "pause" | "resume" | null;
+  /** Lifecycle `merged`: the PR merged and no release has it yet (SW-1003). */
+  waitingRelease: boolean;
 }
 
 export interface InterceptRowLike {
@@ -561,6 +563,7 @@ function workspaceNode(
       issueId: ws.issueId,
       needsYou: status?.workspaceState?.agent?.id === "needs-you",
       action: status ? sessionAction(status) : null,
+      waitingRelease: extra.lifecycles?.get(ws.name) === "merged",
     },
     // The `:current` suffix is how the menus hide "switch to workspace" on the
     // window's own workspace; every workspace `when` regex tolerates it.

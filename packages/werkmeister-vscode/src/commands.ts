@@ -433,6 +433,8 @@ export function registerCommands(provider: WorkspacesView): vscode.Disposable[] 
     }),
 
     vscode.commands.registerCommand("sandbox.legend", () => provider.toggleLegend()),
+    vscode.commands.registerCommand("sandbox.hideMerged", () => provider.setHideMerged(true)),
+    vscode.commands.registerCommand("sandbox.showMerged", () => provider.setHideMerged(false)),
 
     vscode.commands.registerCommand("sandbox.connect", async () => {
       await runInTerminal(ARGV.connect, os.homedir(), "infra connect");
