@@ -90,6 +90,8 @@ export interface Stalled {
   since: string | null;
 }
 export const STALLED_DEFAULT_MS = 30 * 60_000;
+/** The idle limit while a foreground tool call runs (SW-1037); a background shell drops out of activity at SESSION_GONE_MS first. */
+export const STALLED_TOOL_DEFAULT_MS = 90 * 60_000;
 
 export interface WorkspaceState {
   phase: Phase;
@@ -135,8 +137,8 @@ export interface StateFacts {
   autonomous: boolean;
   /** When the newest session file was last written; null or unset when unknown. */
   lastActivity?: string | null;
-  /** The stalled limits; {@link STALLED_DEFAULT_MS} each when unset. */
-  stalledAfter?: { idleMs: number; waitMs: number };
+  /** The stalled limits; {@link STALLED_DEFAULT_MS} each when unset, {@link STALLED_TOOL_DEFAULT_MS} for `toolMs`. */
+  stalledAfter?: { idleMs: number; waitMs: number; toolMs?: number };
 }
 
 const BEFORE_RELEASE = new Set<PhaseId>(["building", "pr-open", "merged"]);
@@ -389,14 +391,20 @@ function stalledOf(
   agent: AgentChip,
   needs: NeedItem[],
 ): Stalled | null {
-  const { idleMs, waitMs } = f.stalledAfter ?? {
+  const {
+    idleMs,
+    waitMs,
+    toolMs = STALLED_TOOL_DEFAULT_MS,
+  } = f.stalledAfter ?? {
     idleMs: STALLED_DEFAULT_MS,
     waitMs: STALLED_DEFAULT_MS,
   };
   const age = (at: string) => f.now.getTime() - Date.parse(at);
   // A queue place or a container start reads working too (STILL_ON_IT) but writes no transcript: not idle.
   const sessionWorking = agent.id === "working" && !NOT_THE_SESSION.has(activity.id);
-  if (sessionWorking && f.lastActivity && age(f.lastActivity) > idleMs)
+  // SW-1037: Claude writes nothing during one tool call, so a 35-min gate would read idle at 30; a hung one still trips toolMs.
+  const idleLimit = activity.id === "testing" || activity.id === "tool" ? toolMs : idleMs;
+  if (sessionWorking && f.lastActivity && age(f.lastActivity) > idleLimit)
     return { reason: "idle", since: f.lastActivity };
   if (f.waiting?.since && age(f.waiting.since) > waitMs)
     return { reason: "capacity-wait", since: f.waiting.since };

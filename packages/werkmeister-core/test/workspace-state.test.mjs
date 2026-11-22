@@ -518,4 +518,55 @@ test("stalled: stalledAfter overrides both 30 min limits", () => {
   const waiting = (ms) => ({ position: 1, reason: "budget", since: ago(ms) });
   assert.equal(stalled({ waiting: waiting(5 * MIN) }), null);
   assert.equal(stalled({ waiting: waiting(5 * MIN + 1) }), "capacity-wait");
+  const gate = (ms) => ({
+    sessions: {
+      s: busy({
+        at: ago(ms),
+        last: ago(ms),
+        tool: { name: "Bash", command: "werkmeister pr gate", at: ago(ms) },
+      }),
+    },
+    processOpen: true,
+    signal: working,
+    lastActivity: ago(ms),
+  });
+  assert.equal(stalled(gate(20 * MIN)), null, "default toolMs beats idleMs 10");
+  assert.equal(
+    stalled({ ...gate(20 * MIN + 1), stalledAfter: { ...stalledAfter, toolMs: 20 * MIN } }),
+    "idle",
+  );
+});
+
+// SW-1037: no transcript write during one tool call, so an open tool gets the longer limit.
+test("stalled: an open tool call gets the 90 min limit, not the 30 min one", () => {
+  const TOOL = 90 * MIN;
+  const working = { agent: "working", at: ago(MIN) };
+  const st = (ms, tool) =>
+    workspaceState(
+      facts({
+        sessions: { s: busy({ at: ago(ms), last: ago(ms), tool: { ...tool, at: ago(ms) } }) },
+        processOpen: true,
+        signal: working,
+        lastActivity: ago(ms),
+      }),
+    );
+  const test35 = st(35 * MIN, { name: "Bash", command: "werkmeister pr gate" });
+  assert.equal(test35.activity.label, "Running tests");
+  assert.equal(test35.stalled, null, "35-min test run is not stalled");
+  assert.equal(st(35 * MIN, { name: "Read" }).stalled, null, "any open tool");
+  assert.equal(st(TOOL, { name: "Bash", command: "pnpm test" }).stalled, null, "at the limit");
+  assert.deepEqual(st(TOOL + 1, { name: "Bash", command: "pnpm test" }).stalled, {
+    reason: "idle",
+    since: ago(TOOL + 1),
+  });
+  // No tool open: the 30 min idle limit still applies.
+  const thinking = workspaceState(
+    facts({
+      sessions: { s: busy({ at: ago(MIN), last: ago(MIN) }) },
+      signal: working,
+      lastActivity: ago(30 * MIN + 1),
+    }),
+  );
+  assert.equal(thinking.activity.id, "thinking");
+  assert.equal(thinking.stalled?.reason, "idle");
 });

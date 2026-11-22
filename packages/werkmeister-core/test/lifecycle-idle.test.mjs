@@ -249,20 +249,31 @@ test("idleFeatures: a docker exec in flight keeps the feature (SW-856)", () => {
   assert.deepEqual(idleFeatures(input(busy)), []);
 });
 
-test("stalledAfterMs: 30 min each by default, overrides.stalled_*_minutes when a whole number ≥ 1", () => {
+test("stalledAfterMs: 30/30/90 min by default, overrides.stalled_*_minutes when a whole number ≥ 1", () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "stalled-config-"));
   const prev = process.env.WERKMEISTER_CONFIG_FILE;
   const M = 60_000;
   try {
-    assert.deepEqual(stalledAfterMs(), { idleMs: 30 * M, waitMs: 30 * M });
+    assert.deepEqual(stalledAfterMs(), { idleMs: 30 * M, waitMs: 30 * M, toolMs: 90 * M });
     process.env.WERKMEISTER_CONFIG_FILE = path.join(dir, "config.yaml");
     for (const [yml, want] of [
-      ["overrides:\n  stalled_idle_minutes: 10\n  stalled_wait_minutes: 5\n", [10, 5]],
-      ["overrides:\n  stalled_idle_minutes: 0\n  stalled_wait_minutes: -1\n", [30, 30]],
-      ["overrides:\n  stalled_idle_minutes: soon\n", [30, 30]],
+      [
+        "overrides:\n  stalled_idle_minutes: 10\n  stalled_wait_minutes: 5\n  stalled_tool_minutes: 45\n",
+        [10, 5, 45],
+      ],
+      [
+        "overrides:\n  stalled_idle_minutes: 0\n  stalled_wait_minutes: -1\n  stalled_tool_minutes: 0\n",
+        [30, 30, 90],
+      ],
+      ["overrides:\n  stalled_idle_minutes: soon\n  stalled_tool_minutes: 1.5\n", [30, 30, 90]],
     ]) {
       fs.writeFileSync(process.env.WERKMEISTER_CONFIG_FILE, yml);
-      assert.deepEqual(stalledAfterMs(), { idleMs: want[0] * M, waitMs: want[1] * M }, yml);
+      const [idle, wait, tool] = want;
+      assert.deepEqual(
+        stalledAfterMs(),
+        { idleMs: idle * M, waitMs: wait * M, toolMs: tool * M },
+        yml,
+      );
     }
   } finally {
     process.env.WERKMEISTER_CONFIG_FILE = prev;
