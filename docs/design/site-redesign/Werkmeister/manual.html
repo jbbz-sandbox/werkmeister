@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f8f7f2">
+  <meta name="description" content="A field manual for Werkmeister. Set up your first agent workspace, follow a ticket to release, and explore the CLI and SDK.">
+  <title>Field manual · Werkmeister</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="identity.css">
+  <link rel="stylesheet" href="manual.css">
+  <script src="manual.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#manual-content">Skip to article</a>
+<svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="10.25" cy="10.25" r="6.5"/><path d="m15.1 15.1 4.6 4.6"/></symbol>
+  <symbol id="menu" viewBox="0 0 24 24"><path d="M3 6.5h18M3 12h18M3 17.5h18"/></symbol>
+  <symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h15m-6-6 6 6-6 6"/></symbol>
+  <symbol id="external" viewBox="0 0 24 24"><path d="M6 18 18 6M6 6h12v12"/></symbol>
+  <symbol id="copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M16 8V4H4v12h4"/></symbol>
+  <symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="book" viewBox="0 0 24 24"><path d="M3 4h6q3 0 3 2.3Q12 4 15 4h6v15h-6q-3 0-3 2-0-2-3-2H3zm9 2.3v14"/></symbol>
+</defs></svg>
+<header class="masthead">
+  <div class="mast-inner">
+    <a class="brand" href="index.html" aria-label="Werkmeister home"><span aria-hidden="true" class="wm-mark"></span>Werkmeister</a>
+    <span class="mast-divider" aria-hidden="true"></span><span class="mast-label">Field manual</span>
+    <div class="mast-actions"><a class="overview" href="index.html">Overview</a><button class="search-button" id="search-open" type="button" aria-label="Search manual"><svg aria-hidden="true"><use href="#search"/></svg><span>Search manual</span><kbd>/</kbd></button><button class="icon-button mobile-menu" id="mobile-menu" type="button" aria-controls="manual-nav" aria-expanded="false" aria-label="Open manual navigation"><svg aria-hidden="true"><use href="#menu"/></svg></button></div>
+  </div>
+</header>
+<div class="layout">
+  <nav id="manual-nav" class="side" aria-label="Field manual">
+    <div class="nav-block"><p>Start here</p><a href="#quick-start">Quick start</a><a href="#workspace-lifecycle">Workspace lifecycle</a></div>
+    <div class="nav-block"><p>Architecture</p><a href="#topology">Request routing</a></div>
+    <div class="nav-block"><p>Reference</p><a href="#cli">CLI commands</a><a href="#sdk">SDK guide</a></div>
+    <div class="nav-block"><p>Project</p><a href="#why">Why Werkmeister</a></div>
+    <a class="repo" href="https://github.com/jbbz-sandbox/werkmeister">Source on GitHub <svg aria-hidden="true"><use href="#external"/></svg></a>
+  </nav>
+  <main id="manual-content" tabindex="-1">
+    <article id="quick-start" data-group="Start here" data-source="https://werkmeister.io/docs/quick-start">
+      <p class="crumb">Field manual <span>/</span> Start here</p>
+      <h1>Quick start</h1>
+      <p class="lead">Take one ticket from your tracker into a running workspace, then through review and release.</p>
+      <section data-section="Before you begin">
+        <h2>Before you begin</h2>
+        <p>Have Git, Node.js 22 or later, and an OCI container runtime with Docker Compose v2 available. Choose an agent harness such as Claude Code, Codex, or OpenCode. You can connect Jira, GitHub Issues, or a custom tracker.</p>
+      </section>
+      <section data-section="Set up your machine"><h2>Set up your machine</h2><p>Run the setup wizard from your home directory. It installs the CLI, asks where your repositories live, and configures services, local routing, and your issue tracker.</p>
+        <pre data-lang="Shell"><code>cd ~
+npx werkmeister machine setup</code></pre>
+        <p>Setup asks for elevated permissions when configuring the local TLS certificate and host entries. The Claude Code plugin step requires <code>claude</code> on your PATH.</p>
+      </section>
+      <section data-section="Create a workspace"><h2>Create a workspace</h2><p>Use your own issue ID in place of <code>SW-123</code>. Werkmeister copies the ticket into a new workspace and creates code worktrees on a dedicated branch.</p>
+        <pre data-lang="Shell"><code>werkmeister workspace new my-feature --issue-id SW-123</code></pre>
+        <p>Open the new workspace folder in your harness, or choose <strong>Start</strong> on the workspace card. The agent follows the instructions and stages for this kind of work.</p>
+      </section>
+      <section data-section="Review and close"><h2>Review and close</h2><p>When the workflow asks for a decision, read the stage output and approve it or request changes. Once you approve the PR draft, the agent runs <code>werkmeister pr open</code> to check the work, push the branch, and open the pull request.</p><p>You review and merge the PR. After the change ships, the agent records a short retrospective and runs <code>werkmeister workspace close</code> to close the ticket and clean up its workspace.</p></section>
+    </article>
+    <article id="workspace-lifecycle" data-group="Start here" data-source="https://werkmeister.io/docs/workspace-lifecycle" hidden>
+      <p class="crumb">Field manual <span>/</span> Start here</p><h1>Workspace lifecycle</h1><p class="lead">Each ticket has its own working directory and a record of the decisions that carry it through release.</p>
+      <section data-section="Follow the state"><h2>Follow the state</h2><p>Werkmeister reads the workspace’s PR files to determine its state. More than one code repository can participate in the same ticket.</p>
+        <dl class="state-list"><div><dt>Working</dt><dd>The agent is working. PR files may still be drafts.</dd></div><div><dt>Ready</dt><dd>All PR files have been approved.</dd></div><div><dt>PR open</dt><dd>At least one pull request has opened in a code repository.</dd></div><div><dt>Merged</dt><dd>Every pull request has been merged or progressed further.</dd></div><div><dt>Shipped</dt><dd>All PR files have shipped, closed, or been abandoned.</dd></div><div><dt>Closed out</dt><dd>The workspace has its close-out record.</dd></div></dl>
+      </section>
+      <section data-section="Read the gate"><h2>Read the gate</h2><p>Approval records a person’s decision on the PR draft. The gate checks the evidence for opening it, including acceptance criteria, the state of the worktree, tests for changed services, and evidence that the running change was exercised and reviewed.</p><pre data-lang="Shell"><code>werkmeister pr gate</code></pre><p>This command reports the checks. When the agent runs <code>werkmeister pr open</code>, it checks them again before opening the pull request.</p></section>
+      <section data-section="Merge and release"><h2>Merge and release</h2><p>You decide when to merge. The code worktree supplies the pull request, while the workspace root branch holds its record. Once every PR is shipped, closed, or abandoned, close-out can record the outcome and remove the workspace.</p></section>
+    </article>
+    <article id="topology" data-group="Architecture" data-source="https://werkmeister.io/docs/topology" hidden>
+      <p class="crumb">Field manual <span>/</span> Architecture</p><h1>Request routing</h1><p class="lead">Run the services a ticket changes on your machine. Let the rest of the application come from a shared baseline.</p>
+      <section data-section="Select a workspace"><h2>Select a workspace</h2><p>A local Caddy reverse proxy receives requests for your configured service hostnames. Select a feature in the browser at <code>/__werkmeister</code> or send its name in an <code>X-Feature</code> header.</p>
+        <pre data-lang="Shell"><code>curl -H 'X-Feature: checkout-retry' \
+  https://frontend.local.werkmeister.io/</code></pre><p>The example uses the project’s sample frontend hostname. Your own registry defines the hostnames and services available to the proxy.</p>
+      </section>
+      <section data-section="Resolve the service"><h2>Resolve the service</h2><div class="routes"><div><span class="route-symbol" aria-hidden="true">↳</span><div><h3>Changed service</h3><p>A matching feature container receives the request through its published local port.</p></div></div><div><span class="route-symbol" aria-hidden="true">↳</span><div><h3>Baseline service</h3><p>A service without a matching local container uses its configured upstream. That may be a local baseline, a remote host, or a shared cluster via port-forwarding.</p></div></div></div></section>
+      <section data-section="Understand isolation"><h2>Understand isolation</h2><p>Each feature has its own code worktrees, containers, and routing identity. Features can still use the same baseline database and Redis service. That distinction matters when testing changes that write shared data.</p><p>Running the feature containers and their tests works without Kubernetes. Cluster intercepts are optional and require a configured cluster.</p></section>
+    </article>
+    <article id="cli" data-group="Reference" data-source="https://werkmeister.io/docs/cli-reference" hidden>
+      <p class="crumb">Field manual <span>/</span> Reference</p><h1>CLI commands</h1><p class="lead">Use <code>werkmeister</code> or its short name, <code>w9r</code>, to manage workspaces, inspect services, and prepare pull requests.</p>
+      <section data-section="Discover commands"><h2>Discover commands</h2><p>Ask the CLI for its command groups, then request help for an individual command to see the options supported by your version.</p><pre data-lang="Shell"><code>werkmeister --help
+werkmeister workspace new --help</code></pre></section>
+      <section data-section="Workspaces and services"><h2>Workspaces and services</h2><p>List your workspaces from anywhere. Use the feature commands in the workspace you want to inspect.</p><dl class="commands"><div><dt><code>werkmeister workspace list</code></dt><dd>List feature workspaces on this machine.</dd></div><div><dt><code>werkmeister feature up</code></dt><dd>Bring up the workspace’s declared services.</dd></div><div><dt><code>werkmeister feature status</code></dt><dd>Inspect the state of its feature containers.</dd></div><div><dt><code>werkmeister feature logs</code></dt><dd>Read the running feature’s container logs.</dd></div></dl></section>
+      <section data-section="Pull requests"><h2>Pull requests</h2><dl class="commands"><div><dt><code>werkmeister pr gate</code></dt><dd>Check whether the PR draft and workspace meet the opening requirements.</dd></div><div><dt><code>werkmeister pr open</code></dt><dd>Run the gate, push the code branch, and open the approved PR.</dd></div><div><dt><code>werkmeister pr status</code></dt><dd>Refresh the recorded state of the workspace’s PRs.</dd></div></dl></section>
+    </article>
+    <article id="sdk" data-group="Reference" data-source="https://werkmeister.io/sdk/" hidden>
+      <p class="crumb">Field manual <span>/</span> Reference</p><h1>SDK guide</h1><p class="lead">Build local tools on <code>werkmeister-core/sdk</code>, the public interface for reading workspaces and running workspace actions.</p>
+      <section data-section="Match your CLI version"><h2>Match your CLI version</h2><p>Use Node.js 22 or later. Look up the version of your installed CLI and install the matching release of <code>werkmeister-core</code>. The project's versioned public API is the <code>/sdk</code> entry point.</p><pre data-lang="Shell"><code>werkmeister --version</code></pre></section>
+      <section data-section="Read a workspace"><h2>Read a workspace</h2><p>Run this JavaScript module on the machine holding the workspace directories. Listing workspaces and reading their current ICM stages happen locally and do not require the daemon.</p><pre data-lang="JavaScript"><code>import { icmStage, listWorkspaces } from "werkmeister-core/sdk";
+
+const { workspaces } = await listWorkspaces();
+for (const workspace of workspaces) {
+  const stage = await icmStage(workspace.path);
+  console.log(workspace.name, stage?.name ?? "No ICM stage");
+}</code></pre></section>
+      <section data-section="Call the daemon"><h2>Call the daemon</h2><p>Some operations run in the local daemon. The SDK’s <code>callTool</code> helper sends an authenticated request and returns the tool result. A browser interface should call a local server that uses the SDK, since the daemon rejects requests carrying a browser origin.</p></section>
+    </article>
+    <article id="why" data-group="Project" data-source="https://werkmeister.io/docs/why" hidden>
+      <p class="crumb">Field manual <span>/</span> Project</p><h1>Why Werkmeister</h1><p class="lead">The project began with a team in Pune, a time difference, and new developers waiting days for a working environment.</p>
+      <section data-section="The first problem"><h2>The first problem</h2><p>In the founder’s account, setting up a new engineer meant assembling about ten local containers. A question raised in one office often waited until the other came online.</p><p>The first version ran only the services a developer was changing and drew the rest from a shared environment. The founder reports that onboarding went from days to about half an hour for that team.</p></section>
+      <section data-section="From one ticket to many"><h2>From one ticket to many</h2><p>The original environment handled one feature at a time. Switching to a bug meant tearing down the feature and bringing it back later. Giving every ticket its own worktree and running services allowed several changes to progress side by side.</p><p>Agent workflows added another question for the design. When several agents are working, how does a developer find the one that needs a decision? The workspace view surfaces those questions alongside the status of the other tickets.</p></section>
+      <section data-section="The name"><h2>The name</h2><p><em>Werkmeister</em> is a German term for a workshop foreman. A foreman knows what is happening at each bench and when a job needs attention. The short command <code>w9r</code> counts the nine letters between the first and last letters of the name.</p></section>
+    </article>
+    <div class="article-footer"><a class="canonical" id="source-link" href="https://werkmeister.io/docs/quick-start">Read the full project documentation <svg aria-hidden="true"><use href="#external"/></svg></a><a id="next-page" class="next-page" href="#workspace-lifecycle"><span>Next in manual<strong>Workspace lifecycle</strong></span><svg aria-hidden="true"><use href="#arrow"/></svg></a></div>
+  </main>
+  <aside class="toc" aria-label="Article contents"><p>On this page</p><nav id="section-nav" aria-label="Sections"></nav></aside>
+</div>
+<dialog id="search-dialog" aria-label="Search the field manual">
+  <div class="search-top"><svg aria-hidden="true"><use href="#search"/></svg><input id="query" autocomplete="off" spellcheck="false" type="search" placeholder="Search the manual…" aria-label="Search the manual"><button class="icon-button" id="search-close" type="button" aria-label="Close search"><svg aria-hidden="true"><use href="#close"/></svg></button></div>
+  <p id="result-label" aria-live="polite"></p><div id="results"></div>
+</dialog>
+</body>
+</html>

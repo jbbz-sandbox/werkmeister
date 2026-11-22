@@ -1,0 +1,6 @@
+@font-face{font-family:"Space Grotesk";src:url("fonts/space-grotesk-400.ttf") format("truetype");font-weight:400;font-display:swap}
+@font-face{font-family:"Space Grotesk";src:url("fonts/space-grotesk-500.ttf") format("truetype");font-weight:500 600;font-display:swap}
+@font-face{font-family:"Space Grotesk";src:url("fonts/space-grotesk-700.ttf") format("truetype");font-weight:650 900;font-display:swap}
+@font-face{font-family:"IBM Plex Mono";src:url("fonts/ibm-plex-mono-400.ttf") format("truetype");font-weight:400 700;font-display:swap}
+:root{--sans:"Space Grotesk","Helvetica Neue",Arial,sans-serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Consolas,monospace;--paper:#f8f7f2;--ink:#1e211e;--accent:#ed5127}
+.wm-mark{display:inline-block;flex:none;position:relative;width:38px;height:30px;color:#ed5127;background:currentColor;clip-path:polygon(0 13%,22% 13%,34% 55%,45% 13%,58% 13%,70% 55%,83% 13%,100% 13%,77% 90%,61% 90%,50% 55%,40% 90%,23% 90%)}
