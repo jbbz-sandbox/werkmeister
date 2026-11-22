@@ -436,7 +436,8 @@ export function nextSession(
         text = input["last_assistant_message"];
       else if (typeof input["transcript_path"] === "string")
         text = lastAssistantText(input["transcript_path"]);
-      if (text && asksQuestion(text))
+      // An open wrap_up ask is the real question; the reply text only restates it (SW-1005).
+      if (s.ask?.via !== "wrap_up" && text && asksQuestion(text))
         s.ask = { kind: "question", what: questionOf(text), at, source: "text" };
       else if (s.ask?.via !== "wrap_up") delete s.ask;
       return s;

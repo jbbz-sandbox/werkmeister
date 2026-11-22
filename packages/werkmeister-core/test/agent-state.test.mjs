@@ -197,6 +197,24 @@ test("hooks: a Desktop wrap_up ask is needs-you even when the closing message as
   assert.equal(badge(dir).agent, "done", "a recap with no ask is a finished run");
 });
 
+// SW-1005: a question-shaped Stop message replaced the open wrap_up ask with a text guess.
+test("hooks: a wrap_up ask outlasts a Stop message that also asks", () => {
+  const dir = workspace("h-wrap-up-q", null);
+  const fire = (event, extra = {}) =>
+    record({ hook_event_name: event, cwd: dir, session_id: "s", ...extra });
+  const wrap = { tool_name: "mcp__ccd_turn__wrap_up", tool_input: { ask: "Approve?" } };
+  fire("UserPromptSubmit");
+  fire("PreToolUse", wrap);
+  fire("PostToolUse", wrap);
+  fire("Stop", { last_assistant_message: "PR file is written. Ready to merge?" });
+  assert.deepEqual([badge(dir).agent, badge(dir).question], ["needs-you", "Approve?"]);
+  assert.equal(rec(dir).ask.source, "session", "not the reply-text guess");
+
+  fire("UserPromptSubmit");
+  fire("Stop", { last_assistant_message: "Shall I open the PR?" });
+  assert.equal(rec(dir).ask.source, "text", "no wrap_up ask: the text guess still applies");
+});
+
 // SW-487 fault 4: a new blocking prompt kept the previous question's text.
 test("hooks: the permission prompt for a question keeps the question; a later prompt says what it wants", () => {
   const dir = workspace("h-ask-permission", null);

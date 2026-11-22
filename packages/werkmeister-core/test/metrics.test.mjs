@@ -407,6 +407,25 @@ test("a wrap-up ask is answered at the next prompt, not at its own PostToolUse o
   });
 });
 
+// SW-1005: a Stop message ending in "?" replaced the wrap_up ask, so its answer was never written.
+test("a wrap-up ask keeps its answer when the Stop message also asks", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const fire = hookWorkspace(fx, "wrap-q");
+    const wrap = { tool_name: "mcp__ccd_turn__wrap_up", tool_input: { ask: "Approve?" } };
+    fire("PreToolUse", wrap, 0);
+    fire("PostToolUse", wrap, 1);
+    fire("Stop", { last_assistant_message: "PR file is written. Ready to merge?" }, 2);
+    fire("UserPromptSubmit", {}, 30);
+    assert.deepEqual(
+      hookLines().map((l) => [l.event, l.kind ?? l.waited_s]),
+      [
+        ["ask", "wrap-up"],
+        ["answer", 30],
+      ],
+    );
+  });
+});
+
 test("other hook events write nothing, the ask-deleting ones included", async () => {
   await withFixtureWorkspace(async (fx) => {
     const fire = hookWorkspace(fx, "quiet");
