@@ -15,7 +15,7 @@ Follow this and a refresh needs no retakes for size, width, theme or browser chr
 - Every image on this page is 1280 px wide and under 400 KB.
 - Cut the hero out of that capture with `sips -c`.
 - To resample a capture to 1280 px, render it in an `<img>` through the same headless Chrome. Do not re-encode it with `sips`: that made a PNG larger (412 KB to 427 KB), and no PNG optimizer is installed.
-- The pane render's `.png` needs Chrome: `CHROME`, or Playwright's chrome-headless-shell. Its `.ans` writes the same pane as ANSI text anywhere.
+- The pane render's `.png` needs Chrome. It takes `CHROME` if set, else Playwright's chrome-headless-shell from `PLAYWRIGHT_BROWSERS_PATH`, else from the Playwright cache in your real home (`~/Library/Caches/ms-playwright` or `~/.cache/ms-playwright`), even under a workspace's `.werkmeister/bin/with-temp-home`, whose temporary HOME would hide it. Its `.ans` writes the same pane as ANSI text anywhere.
 - Never screenshot a live session that lists real workspaces. Capture only the demo seed above.
 
 ## Workspaces dashboard
