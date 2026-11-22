@@ -357,7 +357,8 @@ const propose: Stage = {
         (v.group.length
           ? " Start the body with `Rebase and merge, not squash: one commit per ticket, each revertable alone.` and list each member under the summary."
           : ""),
-      "Commit and push this folder's branch — the record. Never open a PR for it.",
+      // SW-1011: `pr push` refuses before a PR is open; `pr open` pushes the record.
+      "Commit this folder's branch — the record. Don't push it yourself: `werkmeister pr open` pushes it (`werkmeister pr push` is only rule 5's conflict push). Never open a PR for it.",
     ],
     outputs: [
       v.group.length
