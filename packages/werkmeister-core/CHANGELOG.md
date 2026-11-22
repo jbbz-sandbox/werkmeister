@@ -1,5 +1,18 @@
 # sandbox-core
 
+## 0.106.2
+
+### Patch Changes
+
+- 67c9bcc: Internal: the activity set that promotes a done signal to Working is built from the one that promotes an idle signal, so the Done and Idle chips cannot disagree again. No behaviour change (SW-1018).
+- ca67044: A passing `pr gate` or `pr gate --tests` now leaves the containers it started running (row: `started … for the gate, left running for \`pr open\``), so the `pr open`after it finds them up instead of queueing for capacity again (SW-1046). The idle reaper and preemption still reclaim them. A failing gate, and`pr open`'s own gate, stop them as before; with several PR files this holds per file.
+- 75d5149: A background test or gate run (`run_in_background`) longer than 30 minutes keeps reading `Running tests` (or `Running in background`) instead of dropping to idle, and gets the same `overrides.stalled_tool_minutes` limit as a foreground tool call, 90 when unset (SW-1047). A hung background run reads `stalled: idle` past that limit; 30 minutes later the card takes it for a missed exit and stops showing it.
+- 1a99112: `pr status` and `pr watch` passes on one workspace now run one at a time, so a PR that merges while both run writes one `pr.merged` (and `release`) metrics line and moves its issue once.
+- 8a52684: A service with no `health_endpoint` now gets the same probe everywhere: `GET /health`, which the compose healthcheck already used (SW-939). The `pr gate` / `pr open` baseline row probed `/` and its k8s forward a TCP connect. An `infrastructure:` forward with none stays TCP-only, and `""` still means TCP. A forwarded _service_ with none changes from a TCP connect to `GET /health` (any answer below 500 passes), so a non-HTTP one registered without the field needs `health_endpoint: ""`, or the k8s-forwards container restarts its tunnel.
+- d329530: A service's compose healthcheck now runs the probe its `health_endpoint` names, the one the `pr gate` baseline row runs, and fails when it fails (SW-940). It ended `|| exit 0`, so a local datastore read healthy before it took connections and `depends_on` ordered nothing. `""` is a TCP connect (`nc`, else bash), `postgres` is `pg_isready`, `redis` is `redis-cli ping`, and a path is an HTTP GET that passes below 500. An image without the probe's tool still passes, as before. A dependency whose probe still fails after its start period and retries (about 6 minutes) now fails `up` for the services that depend on it.
+- 2c5fdf6: `pr gate` / `pr open` skip a `Baseline…` section of `exercise.md` (from its heading down to the next heading of its level or higher), so the FAIL rows that record a bug before its fix no longer fail the exercise check (SW-941). A FAIL anywhere else still fails it. The ICM contracts and the `w9r-test` skill name the heading.
+- f332481: A `pr gate` / `pr open` that waits out capacity no longer reads as a failure (SW-981). Each service's capacity wait prints once (a second attempt that waited again adds no row), the lint, test, baseline and release rows it left without a container read `not run: waiting on capacity`, and every such row is marked `-`, not `✗`. The exit stays 75.
+
 ## 0.106.1
 
 ### Patch Changes
