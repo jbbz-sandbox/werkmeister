@@ -348,7 +348,7 @@ function testCommandLine(
 
 /** SW-720: in sw-700 host `node`, a compound line and `docker exec … node <script>` were each denied before this form ran. */
 const PROBE_FORM = (tempHome: string) =>
-  `A one-off probe is a \`node --test\` file, run as \`${tempHome} --no-wait node --test <file>\` (in the service's container, after its \`docker exec -w <dir> <container>\`, when the host has no node_modules); never host \`node <script>\`, a compound shell line or \`docker exec … node <script>\`. That form, with no \`--cwd\` (pass the file's path instead), is never pre-approved, since it runs any file (SW-510): it prompts, or in auto mode the classifier decides each run; with \`--cwd\` it matches no rule and auto mode denies it (SW-652).`;
+  `A one-off probe is a \`node --test\` file, run as \`${tempHome} --no-wait node --test <file>\` (in the service's container, after its \`docker exec -w <dir> <container>\`, when the host has no node_modules); never host \`node <script>\`, a compound shell line or \`docker exec … node <script>\`. That form, with no \`--cwd\` (pass the file's path instead), is never pre-approved, since it runs any file (SW-510): it prompts, or in auto mode the classifier decides each run; with \`--cwd\` it matches no rule and auto mode denies it (SW-652). A probe that writes under \`~/.werkmeister\` or runs the CLI starts with a load-time guard, \`if (process.env.WERKMEISTER_TEMP_HOME !== process.env.HOME) throw new Error("run me through with-temp-home")\`, never a \`test()\` check: node:test runs the other tests after a failed one (SW-1049).`;
 
 // SW-765: sw-753's spec planned to delete turbo cache entries, not knowing the cache is one volume every workspace shares.
 function sharedCachesLine(caches: CacheRegistry): string {

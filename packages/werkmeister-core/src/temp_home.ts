@@ -38,6 +38,8 @@ fi
 tmp=$(mktemp -d) || exit 1
 # os.tmpdir() scratch from the wrapped command goes with the temp HOME (SW-799); HOME = TMPDIR is also how a test entry knows the HOME is this temp one (SW-662).
 export TMPDIR="$tmp"
+# A probe guards itself at load time on this, equal to HOME only under the wrapper (SW-1049).
+export WERKMEISTER_TEMP_HOME="$tmp"
 trap 'rm -rf "$tmp"' EXIT
 trap 'exit 130' HUP INT TERM
 # Corepack keeps pnpm under HOME; without this a fresh HOME re-downloads it every run.
