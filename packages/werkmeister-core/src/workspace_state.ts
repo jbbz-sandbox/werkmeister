@@ -83,11 +83,23 @@ export interface AgentChip {
   since: string | null;
 }
 
+export type StalledReason = "idle" | "capacity-wait" | "crash-loop" | "session-died";
+/** Why a workspace stopped making progress without asking a person (SW-1007), and since when. */
+export interface Stalled {
+  reason: StalledReason;
+  since: string | null;
+}
+export const STALLED_DEFAULT_MS = 30 * 60_000;
+
 export interface WorkspaceState {
   phase: Phase;
   activity: Activity;
   needs: NeedItem[];
   agent: AgentChip;
+  /** Working with no session write past the idle limit, queued for capacity past the wait limit, a crash loop or a dead session; else null. A need for a person is not stalled. */
+  stalled: Stalled | null;
+  /** Age in ms of the oldest item in `needs` that has a `since`; null when none has. */
+  oldestNeedMs: number | null;
 }
 
 export interface StateFacts {
@@ -121,6 +133,10 @@ export interface StateFacts {
   transcriptAsk: { what: string; at: string } | null;
   /** `autonomous` in workspace.yml: the agent approves its own stage gates; PR files stay the person's (SW-771). */
   autonomous: boolean;
+  /** When the newest session file was last written; null or unset when unknown. */
+  lastActivity?: string | null;
+  /** The stalled limits; {@link STALLED_DEFAULT_MS} each when unset. */
+  stalledAfter?: { idleMs: number; waitMs: number };
 }
 
 const BEFORE_RELEASE = new Set<PhaseId>(["building", "pr-open", "merged"]);
@@ -136,6 +152,7 @@ const STILL_ON_IT = new Set<ActivityId>([
 ]);
 // A session's own work, so it outranks an idle signal too (SW-953); containers starting or a queue place don't.
 const SESSION_WORK = new Set<ActivityId>(["testing", "tool", "subagent", "thinking"]);
+const NOT_THE_SESSION = new Set<ActivityId>(["paused", "queued", "starting"]);
 // shortcut: a command-text match, not the registry's `test:` commands (reading the registry costs every poll); add those if a runner is missed.
 const TEST_COMMAND =
   /\bwerkmeister\s+(pr\s+gate|test)\b|\b(turbo|pnpm|npm|yarn|bun)\b.*\btest\b|\bnode\s+--test\b|\b(vitest|jest|pytest|playwright\s+test|go\s+test|cargo\s+test)\b/;
@@ -352,7 +369,39 @@ export function workspaceState(f: StateFacts): WorkspaceState {
         ...(n.url && { url: n.url }),
         dismiss: id,
       });
-  return { phase, activity, needs, agent: agentChip(f.signal, activity, needs) };
+  const agent = agentChip(f.signal, activity, needs);
+  const now = f.now.getTime();
+  const ages = needs.filter((n) => n.since).map((n) => now - Date.parse(n.since as string));
+  return {
+    phase,
+    activity,
+    needs,
+    agent,
+    stalled: stalledOf(f, activity, agent, needs),
+    oldestNeedMs: ages.length ? Math.max(...ages) : null,
+  };
+}
+
+/** The first of SW-1007's rules that holds, in the ticket's order; each limit is "older than", so exactly at it is not stalled. */
+function stalledOf(
+  f: StateFacts,
+  activity: Activity,
+  agent: AgentChip,
+  needs: NeedItem[],
+): Stalled | null {
+  const { idleMs, waitMs } = f.stalledAfter ?? {
+    idleMs: STALLED_DEFAULT_MS,
+    waitMs: STALLED_DEFAULT_MS,
+  };
+  const age = (at: string) => f.now.getTime() - Date.parse(at);
+  // A queue place or a container start reads working too (STILL_ON_IT) but writes no transcript: not idle.
+  const sessionWorking = agent.id === "working" && !NOT_THE_SESSION.has(activity.id);
+  if (sessionWorking && f.lastActivity && age(f.lastActivity) > idleMs)
+    return { reason: "idle", since: f.lastActivity };
+  if (f.waiting?.since && age(f.waiting.since) > waitMs)
+    return { reason: "capacity-wait", since: f.waiting.since };
+  const crash = needs.find((n) => n.kind === "crash-loop" || n.kind === "session-died");
+  return crash ? { reason: crash.kind as StalledReason, since: crash.since } : null;
 }
 
 /** The needs-you items and phase detail the PR poll adds, one set per workspace. */
