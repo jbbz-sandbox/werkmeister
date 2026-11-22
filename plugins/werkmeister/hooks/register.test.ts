@@ -2897,6 +2897,60 @@ test("SW-41: the pane shows the host line and each card's vitals and crash line"
   expect(await ui.find({ key: "crash:abc" })).toBeUndefined();
   await ui.unmount();
 });
+
+// SW-1010: packages/werkmeister-vscode/src/build-tree.test.mjs feeds this snapshot to stripOf and expects the same text.
+test("SW-1010: the pane shows the shared strip's chips and host line, as the VS Code view does", async ($, on) => {
+  const [ab, abc, empty] = STATUS.statuses;
+  const w = world(
+    on,
+    stubs({
+      [`${WS}/workspace-status`]: () =>
+        ok({
+          infra: {
+            state: "partial",
+            running: 1,
+            total: 2,
+            services: [
+              { name: "registry", state: "healthy" },
+              { name: "caddy", state: "down" },
+            ],
+          },
+          statuses: [ab, { ...abc, ...ag("needs-you", null, "Which port?") }, empty],
+        }),
+      [`${WS}/workspace-prs`]: () =>
+        ok([
+          {
+            name: "ab",
+            repos: [
+              {
+                repo: "sandbox",
+                branch: "u/ab",
+                url: "https://github.com/o/sandbox/pull/12",
+                state: "OPEN",
+                title: "Fix",
+                labels: [],
+                mergeable: "CONFLICTING",
+              },
+            ],
+          },
+        ]),
+    }),
+  );
+  await openPane($);
+  await w.clock.settle();
+  const ui = await $.ui.mount({
+    plugin: "werkmeister",
+    surface: "desktop",
+    component: "Pane",
+    props: PANE_PROPS,
+    requestId: "workspaces",
+  });
+  expect((await ui.find({ key: "chips" }))?.text).toBe(
+    "● 1 needs you  2 running  infra: caddy down  1 CI failed or conflicts",
+  );
+  expect((await ui.find({ key: "host" }))?.text).toBe("host 32% · features 0.5 of 10 cores");
+  await ui.unmount();
+});
 // --- install check at session start and the one-time prompt gate (SW-377) ---
 
 const REPAIRED: CheckAnswer = {

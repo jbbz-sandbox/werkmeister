@@ -682,6 +682,52 @@ test("SW-1009: the host line moved to the strip; no host row leads the tree", ()
   assert.equal(stripOf(nodes, [st("a")]).host, null, "no sweep yet, no host line");
 });
 
+// SW-1010: plugins/werkmeister/hooks/register.test.ts mounts the pane on this snapshot and expects the same text.
+test("SW-1010: stripOf reads the same chips and host as the /workspaces pane for one snapshot", () => {
+  const statuses = [
+    st("ab", { state: "up", running: 3, total: 3, ...ag("working") }),
+    st("abc", { state: "partial", running: 1, total: 3, ...ag("needs-you", null, "Which port?") }),
+    st("empty", ag("idle")),
+  ];
+  const extra = {
+    host: { load: [3.2, 2.8, 2.1], cores: 10, featureCpuPercent: 45 },
+    infra: {
+      state: "partial",
+      services: [
+        { name: "registry", state: "healthy" },
+        { name: "caddy", state: "down" },
+      ],
+    },
+    prs: new Map([
+      [
+        "ab",
+        [
+          {
+            url: "https://github.com/o/sandbox/pull/12",
+            state: "OPEN",
+            ci: null,
+            failingChecks: 0,
+            mergeable: "CONFLICTING",
+          },
+        ],
+      ],
+    ]),
+  };
+  const nodes = buildTree(
+    ["ab", "abc", "empty"].map((n) => ws(n)),
+    statuses,
+    null,
+    [],
+    extra,
+  );
+  const s = stripOf(nodes, statuses, extra);
+  assert.equal(
+    s.chips.map((c) => c.text).join("  "),
+    "● 1 needs you  2 running  infra: caddy down  1 CI failed or conflicts",
+  );
+  assert.equal(s.host.text, "host 32% · features 0.5 of 10 cores");
+});
+
 // SW-184: every Docker read goes through the host daemon, so a daemon that is
 // down is its own row with its own fix, not "could not find the CLI".
 test("a daemon that is down is an error row naming setup and connect", () => {

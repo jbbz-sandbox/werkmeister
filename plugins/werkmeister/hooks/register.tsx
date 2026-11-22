@@ -1980,9 +1980,6 @@ export const register: Register = (on) => {
     const { value: reason = "" } = await $.state.get(REASON);
     const { value: infra = null } = await $.state.get(INFRA);
     const { value: resources } = await $.state.get(RESOURCES);
-    // No line before the first sweep lands, `host n/a` once one failed.
-    const host =
-      resources === undefined ? null : statusStrip([], { host: resources?.host ?? null }).host;
     const { value: snap = null } = await $.state.get(INTERCEPTS);
     const { value: tracker = null } = await $.state.get(TRACKER);
     const { value: polled } = await $.state.get(PRS);
@@ -1998,6 +1995,25 @@ export const register: Register = (on) => {
     const { value: wide = false } = await $.state.get(WIDE);
     const { value: prsPoll } = await $.state.get(PRS_POLL);
     const now = new Date(await $.clock.now());
+    // SW-1010: the same rows and globals as VS Code's stripOf, so both views read the same chips.
+    const strip = statusStrip(
+      rows.map((r) => ({
+        name: r.name,
+        ws: r,
+        prs: prs[r.name]?.map((p) => ({
+          url: p.url,
+          state: p.state,
+          ci: p.ci ?? null,
+          failingChecks: p.failingChecks ?? 0,
+          mergeable: p.mergeable,
+        })),
+        prNeeds: prNeeds[r.name]?.needs,
+      })),
+      // No host line before the first sweep lands, `host n/a` once one failed.
+      { host: resources === undefined ? undefined : (resources?.host ?? null), infra },
+      now,
+    );
+    const host = strip.host;
     const shown = visibleRows(rows, focus).map((r) => withLivePrs(r, prs[r.name] ?? []));
     const needing = rows.filter((r) => r.workspaceState?.agent?.id === "needs-you").length;
     // Mobile draws no Input or Select; there the Create tab hands the form to the model.
@@ -2487,6 +2503,18 @@ export const register: Register = (on) => {
             {host && (
               <Box key="host">
                 <Text color={TONE[host.tone]}>{host.text}</Text>
+              </Box>
+            )}
+            {strip.chips.length > 0 && (
+              <Box key="chips">
+                <Text>
+                  {strip.chips.map((c, i) => (
+                    <Text key={c.kind} color={TONE[c.tone]} bold={c.tone === "needs"}>
+                      {i ? "  " : ""}
+                      {c.text}
+                    </Text>
+                  ))}
+                </Text>
               </Box>
             )}
           </Box>
