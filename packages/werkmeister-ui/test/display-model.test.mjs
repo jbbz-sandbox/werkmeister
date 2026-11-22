@@ -380,3 +380,33 @@ test("SW-487: primary action follows the session's ask, not a gate or lifecycle 
   const paused = model({ paused: { at: minsAgo(1), containers: [] }, workspaceState: asked });
   assert.deepEqual([paused.needsList, paused.needs], [[], false], "paused: nothing is news");
 });
+
+// SW-953: one state word; the activity is its detail, never a second state.
+test("SW-953: the activity line drops what the chip says, and a quiet Thinking reads dim", () => {
+  const act = (id, label, since, agent = "done") =>
+    model({
+      workspaceState: wsState({
+        activity: { id, label, since, session: "s" },
+        agent: { id: agent, since: minsAgo(5) },
+      }),
+    });
+  const done = act("idle", "Idle", null);
+  assert.equal(done.agent.word, "Done");
+  assert.equal(done.activity, null, "no Done beside Idle (sw-891)");
+  assert.equal(act("paused", "Paused", minsAgo(2), "idle").activity, null);
+  assert.equal(act("idle", "Idle", null, "idle").agent.time, "no live turn, nothing asked");
+
+  assert.deepEqual(act("thinking", "Thinking", minsAgo(2), "working").activity, {
+    text: "Thinking",
+    tone: "ok",
+    time: "2 min ago",
+  });
+  assert.deepEqual(
+    act("thinking", "Thinking", minsAgo(6 * 60), "working").activity,
+    { text: "Thinking", tone: "off", time: "last heard 6 h ago" },
+    "a 6 h old Thinking is not styled live",
+  );
+  assert.equal(act("thinking", "Thinking", minsAgo(29), "working").activity.tone, "ok");
+  // A long tool call keeps its live tone: the tool's start is not silence.
+  assert.equal(act("tool", "Running Bash", minsAgo(6 * 60), "working").activity.tone, "ok");
+});
