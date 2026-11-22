@@ -449,7 +449,11 @@ const STARTING_PROMPT_FORMAT =
   "Derive every section from the source material; never invent scope, services, or criteria.\n" +
   "Never list a step that writes machine state under `~/.werkmeister` or installs globally " +
   "(`werkmeister registry sync`, `werkmeister infra proxy-reload`, `npm link`, `npm install -g`) " +
-  "as a step for the agent; where the source asks for one, say it happens after merge.";
+  "as a step for the agent; where the source asks for one, say it happens after merge. " +
+  // SW-996: a check of the real folder contradicts the run limits, so it cannot be run as written.
+  "Never write an acceptance criterion that reads or lists the real `~/.werkmeister` (the run may " +
+  "not read it); prove a write lands only under the test's temporary HOME with a test assertion " +
+  "(the written path is under it).";
 
 // The `<result>` tags are what extractResult pulls the rewrite out of, past any preamble.
 /**
