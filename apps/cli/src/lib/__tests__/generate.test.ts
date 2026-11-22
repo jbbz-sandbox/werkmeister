@@ -1013,7 +1013,7 @@ describe("idle service containers", () => {
     const web = render().web;
     expect(web.init).toBeUndefined();
     expect(web.restart).toBe("unless-stopped");
-    expect(web.healthcheck.test[1]).toContain("curl -sf");
+    expect(web.healthcheck.test[1]).toContain("http://localhost:3000/health");
     expect(web.command[2]).not.toContain("WERKMEISTER_DEV");
     expect(web.depends_on.tool.condition).toBe("service_started");
   });

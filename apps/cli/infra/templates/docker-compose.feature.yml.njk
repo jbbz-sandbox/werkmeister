@@ -266,7 +266,8 @@ services:{% if not local_services | length %} {}{% endif %}
           memory: {{ svc.memory_reservation }}
 {% if not idle %}
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:{{ svc.internal_port }}{{ svc.health_endpoint }} || exit 0"]
+{# SW-940: the probe health_endpoint names (composeHealthcheck), the one the gate runs #}
+      test: {{ svc.healthcheck_test }}
       interval: 15s
       timeout: 10s
       retries: 15

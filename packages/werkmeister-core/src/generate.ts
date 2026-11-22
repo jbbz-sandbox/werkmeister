@@ -709,6 +709,10 @@ function renderFeatureCompose(
         );
       }
       svcObj["health_endpoint"] = healthEndpointOf(svcObj);
+      svcObj["healthcheck_test"] = JSON.stringify([
+        "CMD-SHELL",
+        composeHealthcheck(svcObj["health_endpoint"], svcObj["internal_port"]),
+      ]);
       setdefault(svcObj, "extra_services", null);
       setdefault(svcObj, "depends_on", []);
       svcObj["worktree_gitdir"] = resolveWorktreeGitdir(
@@ -968,6 +972,27 @@ function renderFeatureCompose(
   // keep the block-style shape the generated compose files already have.
   const body = YAML.stringify(compose, { indentSeq: false, singleQuote: true });
   return [outPath, header + body, "built-in"];
+}
+
+/**
+ * The compose healthcheck shell command for a service's resolved `health_endpoint`, the probe
+ * the gate's baseline row runs (SW-940): `""` a TCP connect, `postgres` / `redis` their
+ * handshake, a path an HTTP GET answering below 500. `$` is doubled for compose.
+ *
+ * shortcut: an image without the probe's tool (nc/bash, pg_isready, redis-cli, curl) passes, as every
+ * healthcheck did before; give such an image the tool, or a probe in its own command, to check it.
+ */
+export function composeHealthcheck(health: string, port?: number | string): string {
+  const when = (tool: string, cmd: string) =>
+    `if command -v ${tool} >/dev/null; then ${cmd}; else true; fi`;
+  if (health === "")
+    return `if command -v nc >/dev/null; then nc -z 127.0.0.1 ${port}; elif command -v bash >/dev/null; then bash -c '</dev/tcp/127.0.0.1/${port}'; fi`;
+  if (health === "postgres") return when("pg_isready", `pg_isready -q -h 127.0.0.1 -p ${port}`);
+  if (health === "redis") return when("redis-cli", `redis-cli -p ${port} ping | grep -q PONG`);
+  return when(
+    "curl",
+    `c=$$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${port}${health}"); [ "$$c" -ge 100 ] && [ "$$c" -lt 500 ]`,
+  );
 }
 
 /**
