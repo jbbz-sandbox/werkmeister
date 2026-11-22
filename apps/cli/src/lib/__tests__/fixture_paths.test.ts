@@ -260,3 +260,17 @@ it("--workspace refuses a key outside its allowlist with exit 2 (SW-900)", async
     process.exitCode = 0;
   }
 });
+
+it("refuses every file flag when the running build is not <wt>/apps/cli/dist/main.js (SW-1064)", () => {
+  // An npm global install: `../../..` of <prefix>/lib/node_modules/werkmeister/dist/main.js is <prefix>/lib.
+  const main = path.join(tmp, "lib", "node_modules", "werkmeister", "dist", "main.js");
+  fs.mkdirSync(path.dirname(main), { recursive: true });
+  fs.writeFileSync(path.join(tmp, "lib", "secret.yml"), "a: 1\n");
+  const argv1 = process.argv[1];
+  process.argv[1] = main;
+  try {
+    expect(parse(["--workspace", "secret.yml", "status"])).toEqual({ bad: "--workspace" });
+  } finally {
+    process.argv[1] = argv1;
+  }
+});

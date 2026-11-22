@@ -34,15 +34,26 @@ const LINE_BREAK = /[\r\n\u2028\u2029\u0085]/;
  * The wrapper is pre-approved, so it must not read or print files outside the fixture (or, for
  * a file flag, outside the worktree of the running build: SW-916).
  */
-export function inside(base: string, p: string): string | null {
+export function inside(base: string | null, p: string): string | null {
+  if (base === null) return null;
   const b = fs.realpathSync(base);
   let r = path.resolve(b, p);
   if (fs.existsSync(r)) r = fs.realpathSync(r);
   return r.startsWith(b + path.sep) ? r : null;
 }
 
-/** The worktree of the running build (`<wt>/apps/cli/dist/main.js`): file flags resolve here, whatever the shell's cwd, since the allow rule doesn't pin it (SW-916). */
-const cliWorktree = () => path.resolve(path.dirname(process.argv[1] as string), "../../..");
+const BUILD_ENTRY = path.join("apps", "cli", "dist", "main.js");
+
+/**
+ * The worktree of the running build (`<wt>/apps/cli/dist/main.js`): file flags resolve here, whatever the shell's cwd, since the allow rule doesn't pin it (SW-916).
+ * null for any other layout (an npm global's `<prefix>/lib/node_modules/werkmeister/dist/main.js`), so every file flag is refused (SW-1064).
+ */
+const cliWorktree = (): string | null => {
+  const entry = path.resolve(process.argv[1] as string);
+  return entry.endsWith(path.sep + BUILD_ENTRY)
+    ? path.resolve(path.dirname(entry), "../../..")
+    : null;
+};
 
 export function parse(argv: string[], base = cliWorktree()) {
   const opts = {
