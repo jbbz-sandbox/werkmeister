@@ -410,3 +410,20 @@ test("SW-953: the activity line drops what the chip says, and a quiet Thinking r
   // A long tool call keeps its live tone: the tool's start is not silence.
   assert.equal(act("tool", "Running Bash", minsAgo(6 * 60), "working").activity.tone, "ok");
 });
+
+// SW-962: VS Code's card and the dashboard's Health rows print the same line.
+test("SW-962: needLine: guess, since, no since", async () => {
+  const { needLine } = await import("../dist/display-model.js");
+  const row = {
+    id: "q",
+    what: "Ship it?",
+    action: "Answer it",
+    since: "12 min ago",
+    guess: false,
+    url: null,
+    dismiss: null,
+  };
+  assert.equal(needLine(row), "● Ship it? · 12 min ago — Answer it");
+  assert.equal(needLine({ ...row, guess: true }), "● Ship it? (guess) · 12 min ago — Answer it");
+  assert.equal(needLine({ ...row, since: "" }), "● Ship it? — Answer it");
+});

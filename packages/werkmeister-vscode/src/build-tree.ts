@@ -15,6 +15,7 @@ import {
   displayModel,
   type HostInput,
   hostLine,
+  needLine,
   type PrInput,
   type ServiceHealth,
   type Tone,
@@ -429,11 +430,8 @@ export function sessionAction(s: WorkspaceStatusLike): "start" | "pause" | "resu
   return null;
 }
 
-/** `● <what> · <since> — <action>`, `(guess)` on a reply-text guess: ui-spec § The card, Needs you. */
 function needLines(d: WorkspaceDisplay): string[] {
-  return d.needsList.map(
-    (n) => `● ${n.what}${n.guess ? " (guess)" : ""}${n.since ? ` · ${n.since}` : ""} — ${n.action}`,
-  );
+  return d.needsList.map(needLine);
 }
 
 /** The card's rows as a hover: Containers / PRs / Workflow / Agent, the question, then actions. */

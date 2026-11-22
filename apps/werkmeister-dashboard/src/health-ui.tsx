@@ -6,7 +6,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { NeedItem, WorkspaceStatus } from "werkmeister-core";
-import { type DisplayOptions, displayModel } from "werkmeister-ui/display-model";
+import { type DisplayOptions, displayModel, needLine } from "werkmeister-ui/display-model";
 import { Css } from "werkmeister-ui/theme";
 import { Usage, type WorkspaceUsage } from "werkmeister-ui/usage-widget";
 import type { HostBridge } from "werkmeister-ui/workspace-ui";
@@ -220,9 +220,7 @@ function Features({
         )}
         {d.needsList.map((n) => (
           <div className="row sub need" key={n.id}>
-            ● {n.what}
-            {n.guess ? " (guess)" : ""}
-            {n.since ? ` · ${n.since}` : ""} — {n.action}
+            {needLine(n)}
           </div>
         ))}
         {f.services.map((s) => (
