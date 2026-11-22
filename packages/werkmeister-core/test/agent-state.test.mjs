@@ -859,7 +859,8 @@ test("waiting gate: a parked service start stays live past 60 s and lets tools t
     park();
     assert.equal(liveWaiting(dir)?.parked?.service, "api");
     const ctx = serviceWaitContext({ hook_event_name: "UserPromptSubmit" }, dir);
-    assert.match(ctx, /start of api is queued for capacity \(position 2\)/);
+    // Its place in queue.json now, not the stored 2 (SW-988).
+    assert.match(ctx, /start of api is queued for capacity \(position 1\)/);
     assert.match(ctx, /Nothing polls/);
     assert.equal(pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir), null);
     // Its queue entry gone (`feature down`): the promise is false, so the file goes (SW-701 review).

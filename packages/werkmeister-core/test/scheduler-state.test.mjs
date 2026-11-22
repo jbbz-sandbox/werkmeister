@@ -1063,3 +1063,30 @@ test("preemption rank: a feature started within STARVE_MS is working, past it it
     assert.equal(rank("done", [60, 1]), "idle");
   });
 });
+
+// SW-988: enqueue() stores the back of the queue as a preempted waiter's position, and nothing rewrites it.
+test("a waiter's position is its place in the queue now, as budget status counts it (SW-988)", async () => {
+  await withHome(async (home) => {
+    const ws = {};
+    const leases = {};
+    for (const [i, f] of ["a", "b", "c"].entries()) {
+      ws[f] = path.join(home, "features", f);
+      fs.mkdirSync(path.join(ws[f], ".werkmeister"), { recursive: true });
+      fs.writeFileSync(path.join(ws[f], "compose.yml"), COMPOSE);
+      fs.writeFileSync(path.join(ws[f], ".env"), `FEATURE=${f}\n`);
+      leases[f] = { slot: i + 1, workspace: ws[f] };
+    }
+    writeLeases(leases);
+    for (const f of ["a", "b", "c"]) await enqueue(f, ws[f]);
+    assert.equal(fs.readFileSync(waitingPath(ws.c), "utf8").includes('"position":3'), true);
+    const roomy = { memory: 64 * G, cpus: 64, preempt: true };
+    assert.deepEqual(await requestAdmission("a", ws.a, false, [], roomy), { kind: "admit" });
+    assert.deepEqual([readWaiting(ws.b).position, readWaiting(ws.c).position], [1, 2]);
+    // A gate waiter goes first, as queueOrder has it.
+    writeWaiting(ws.c, { ...readWaiting(ws.c), gate: true });
+    assert.deepEqual([readWaiting(ws.b).position, readWaiting(ws.c).position], [2, 1]);
+    // Not queued: the stored number stands.
+    await dequeue("b");
+    assert.equal(readWaiting(ws.b).position, 2);
+  });
+});
