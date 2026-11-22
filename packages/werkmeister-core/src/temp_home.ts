@@ -55,8 +55,12 @@ unset CLAUDECODE
 for v in $(env | sed -n '/^CLAUDE_CODE_[A-Za-z0-9_]*=/s/=.*//p'); do unset "$v"; done
 HOME=$tmp "$@"
 status=$?
-# A failure under load reads as load (SW-209).
-[ "$status" -eq 0 ] || echo "with-temp-home: exit $status; host load $(uptime | sed 's/.*load averages*: //; s/,//g') on $(getconf _NPROCESSORS_ONLN) cores" >&2
+# A failure under load reads as load (SW-209). Slim images have no uptime (procps): /proc/loadavg, else no load (SW-935).
+[ "$status" -eq 0 ] || {
+  load=$(uptime 2>/dev/null | sed 's/.*load averages*: //; s/,//g')
+  [ -n "$load" ] || { read -r l1 l5 l15 _ </proc/loadavg && load="$l1 $l5 $l15"; } 2>/dev/null
+  echo "with-temp-home: exit $status\${load:+; host load $load on $(getconf _NPROCESSORS_ONLN) cores}" >&2
+}
 exit "$status"
 `;
 
