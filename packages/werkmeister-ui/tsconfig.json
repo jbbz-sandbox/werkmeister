@@ -12,6 +12,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": false,
+    // c8 maps coverage back to src/*.ts through these (SW-405).
+    "sourceMap": true,
     "types": ["node"],
     "jsx": "react-jsx",
     // npm hoists @rjsf/* to the repo root but can keep our @types/react here, so

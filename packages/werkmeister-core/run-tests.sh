@@ -31,21 +31,14 @@ for f in $tests; do
   if [ -f test/shared-process.list ] && grep -qxF "$f" test/shared-process.list; then shared="$shared $f"; else isolated="$isolated $f"; fi
 done
 rc=0
-# Opt-in coverage (SW-756): COVERAGE=1 adds an lcov report per run in $COVERAGE_DIR (default coverage/) beside the spec output.
-cov() {
-  [ -n "${COVERAGE:-}" ] || return 0
-  mkdir -p "${COVERAGE_DIR:=coverage}"
-  echo "--enable-source-maps --experimental-test-coverage --test-coverage-exclude=test/** --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=$COVERAGE_DIR/lcov-$1.info"
-}
-set -f # keep test/** for node, not the shell
 # The container's CPU limit (cgroup-aware), at most 4 so a dev host isn't flooded; SW-101's fixed 2 fit a 1-CPU container (SW-406).
 # More workers don't help: the suite is CPU-bound, and on a 3-CPU container 8 workers took 62 s against 47 s at 4,
 # CPU-heavy files 5x slower while sleep-bound ones didn't grow, so nothing shared but CPU is contended (SW-882).
 # Guarded: `node --test` with no file runs its own default glob.
 # shellcheck disable=SC2086 # test file names have no spaces
-[ -z "$isolated" ] || node --test $(cov isolated) --test-concurrency="$(node -p 'Math.min(os.availableParallelism(), 4)')" ${shard:+--test-shard="$shard"} $isolated || rc=$?
+[ -z "$isolated" ] || node --test --test-concurrency="$(node -p 'Math.min(os.availableParallelism(), 4)')" ${shard:+--test-shard="$shard"} $isolated || rc=$?
 # shellcheck disable=SC2086
-[ -z "$shared" ] || node --test $(cov shared) --experimental-test-isolation=none ${shard:+--test-shard="$shard"} $shared || rc=$?
+[ -z "$shared" ] || node --test --experimental-test-isolation=none ${shard:+--test-shard="$shard"} $shared || rc=$?
 [ "$rc" = 0 ] || exit "$rc"
 if [ -z "$shard" ] || [ "${shard%/*}" = "${shard#*/}" ]; then
   for f in $smokes; do node "$f"; done

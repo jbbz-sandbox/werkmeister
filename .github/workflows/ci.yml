@@ -137,6 +137,50 @@ jobs:
           node-version: 22
       - run: pnpm turbo run test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core
 
+  # SW-405: coverage for every package, as a job summary and artifacts. Report only: no threshold fails it,
+  # and it is not a required check. Main pushes skip it like `test`; the merge-queue run of that commit is
+  # main's baseline, the one a PR's summary compares against.
+  coverage:
+    needs: queued
+    if: ${{ !cancelled() && github.event_name != 'push' && github.head_ref != 'changeset-release/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read # gh run download of the baseline artifact
+    steps:
+      - uses: actions/checkout@v7
+      - name: Configure a git identity for the smoke tests
+        run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@users.noreply.github.com"
+      - uses: ./.github/actions/install
+      - run: pnpm turbo run build test:coverage --continue
+      - name: Baseline from the last merge-queue run
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          id=$(gh run list --workflow ci.yml --event merge_group --status success -L1 --json databaseId --jq '.[0].databaseId') &&
+            gh run download "$id" -n coverage-summary -D base || echo "no baseline"
+      - name: Job summary
+        if: ${{ !cancelled() }}
+        env:
+          # A pull_request run checks out a merge commit; the ledger wants the PR's own head.
+          COVERAGE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/coverage-summary.mjs --base base/summary.json --markdown >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-summary
+          path: coverage/summary.json
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: coverage-html
+          path: |
+            apps/*/coverage/
+            packages/*/coverage/
+
   # Gated on a green queue run of this commit or on this push's test jobs,
   # rather than repeating their checks: a publish cannot be taken back, and this
   # used to be a separate workflow that raced CI on every push.

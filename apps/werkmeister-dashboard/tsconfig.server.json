@@ -11,6 +11,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": false,
+    // c8 maps coverage back to src/*.ts through these (SW-405).
+    "sourceMap": true,
     "types": ["node"]
   },
   // The server entries only: the rest of src/ is the DOM UI, which vite bundles.

@@ -267,6 +267,7 @@ pnpm install        # install all workspace deps (each package gets its own node
 pnpm run build      # turbo run build
 pnpm run typecheck  # turbo run typecheck
 pnpm run test       # turbo run test
+pnpm turbo run test:coverage   # V8 coverage per package + merged summary (docs/coverage.md)
 pnpm run dev        # turbo run dev (dashboard watch/serve)
 pnpm run docs:check # docs vs. code: retired names, paths, commands, MCP tools (after build)
 pnpm turbo run test --filter=werkmeister   # one package (and what it depends on)

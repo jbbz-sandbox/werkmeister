@@ -12,6 +12,7 @@
   "files": [
     "dist",
     "!dist/*.tsbuildinfo",
+    "!dist/*.map",
     "!dist/fixture_fakes.*",
     "!dist/fixture_workspace.*",
     "README.md",
@@ -118,7 +119,7 @@
     "docs:sdk": "node ../../scripts/format-examples.mjs --check && typedoc --options typedoc.sdk.json",
     "test": "sh ./run-tests.sh",
     "test:changed": "node test-changed.mjs",
-    "test:coverage": "tsc --sourceMap && COVERAGE=1 sh ./run-tests.sh",
+    "test:coverage": "node ../../scripts/coverage-run.mjs -- sh ./run-tests.sh",
     "test:no-match": "sh ../../scripts/require-temp-home.sh && unset GIT_DIR GIT_WORK_TREE GIT_COMMON_DIR && WERKMEISTER_GH_BIN=$PWD/test/no-gh.sh node --test --test-concurrency=3 --test-name-pattern=__nomatch__ test/*.test.mjs"
   },
   "dependencies": {

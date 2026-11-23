@@ -9,7 +9,8 @@
     "build": "typedoc && vitepress build .",
     "dev": "vitepress dev .",
     "preview": "vitepress preview .",
-    "test": "node --test"
+    "test": "node --test",
+    "test:coverage": "node ../../scripts/coverage-run.mjs -- node --test"
   },
   "devDependencies": {
     "typedoc": "0.28.20",

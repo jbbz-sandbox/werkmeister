@@ -407,6 +407,7 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "tsc && node --test src/*.test.mjs",
+    "test:coverage": "tsc && node ../../scripts/coverage-run.mjs -- node --test src/*.test.mjs",
     "snapshots": "tsc && node scripts/render-snapshots.mjs",
     "test:integration": "pnpm run build && vscode-test",
     "package": "vsce package --no-dependencies",
