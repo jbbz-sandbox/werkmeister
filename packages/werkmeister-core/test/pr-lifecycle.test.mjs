@@ -812,6 +812,106 @@ test("gate: a capacity wait prints once; the lint and test rows it left without 
   }
 });
 
+// SW-1070: a start's capacity wait stops the containers the gate found running (SW-675) and gives up;
+// the rows meant for them must not exec into them, nor blame an outside stop. pr gate, --tests and pr open.
+test("gate: rows whose container its own capacity wait stopped print as not run, with no exec (SW-1070)", async () => {
+  for (const mode of ["gate", "tests", "open"]) {
+    const ws = icmWorkspace();
+    try {
+      let released = false;
+      const d = deps([], {
+        repos: { app: { ...REGISTRY.repos.app, lint: "pnpm lint" } },
+        services: {
+          ...REGISTRY.services,
+          lib: { ...REGISTRY.services.lib, test: "npm test -w lib" },
+        },
+      });
+      const r = stubRun([
+        [/^docker ps/, { stdout: "feat-api\trunning\n" }],
+        [/diff --name-only/, { stdout: "apps/api/x.ts\npackages/lib/x.ts\n" }],
+        [/ls-files --others/, { stdout: "" }],
+      ]);
+      // After the release, Docker reports feat-api stopped.
+      d.run = async (bin, args) =>
+        released && bin === "docker" && args[0] === "ps"
+          ? { stdout: "", stderr: "", code: 0 }
+          : released && bin === "docker" && args.includes("{{.State.Status}}")
+            ? { stdout: "exited\n", stderr: "", code: 0 }
+            : r.run(bin, args);
+      d.startService = async (_ws, _feature, svc) => {
+        if (svc !== "lib") return;
+        released = true;
+        throw Object.assign(
+          new Error(
+            "No capacity to start lib for 'feat' after 30 min (queue position 1). api stayed stopped",
+          ),
+          { code: "NO_CAPACITY" },
+        );
+      };
+      const { lines, retry } =
+        mode === "open"
+          ? await open(ws, d)
+          : await withSandboxHome(async () => {
+              const g = await runGate(ws, readPrFiles(ws)[0], d, { testsOnly: mode === "tests" });
+              return { lines: formatGate("app", g), retry: g.retry };
+            });
+      const out = lines.join("\n");
+      assert.equal(retry, true, `${mode}:\n${out}`);
+      const execs = r.calls.filter((c) => c.startsWith("docker exec"));
+      // The release row ran before the wait (not under --tests); nothing after it.
+      assert.deepEqual(
+        execs,
+        mode === "tests" ? [] : ["docker exec feat-api sh -c npx changeset status"],
+        `${mode}:\n${out}`,
+      );
+      for (const name of ["lint", "test api"])
+        assert.match(out, new RegExp(`^  - ${name}: not run: waiting on capacity`, "m"), out);
+      assert.match(out, /^ {2}- containers: feat-api stopped while a start above waited/m, out);
+      assert.doesNotMatch(out, /recorded no stop|kept \(feat-api/, out);
+      assert.ok(!lines.some((l) => l.startsWith("  ✗")), `${mode}: no failed row:\n${out}`);
+    } finally {
+      clean(ws);
+    }
+  }
+});
+
+// SW-1070: a released set that compose could not bring back (COMPOSE_UP_FAILED) is stopped too, and a real failure.
+test("gate: a released set that failed to restart runs no row in it and fails, not retry (SW-1070)", async () => {
+  const ws = icmWorkspace();
+  try {
+    let released = false;
+    const d = deps([], {
+      services: {
+        ...REGISTRY.services,
+        lib: { ...REGISTRY.services.lib, test: "npm test -w lib" },
+      },
+    });
+    const r = stubRun([
+      [/^docker ps/, { stdout: "feat-api\trunning\n" }],
+      [/diff --name-only/, { stdout: "apps/api/x.ts\npackages/lib/x.ts\n" }],
+    ]);
+    d.run = async (bin, args) =>
+      released && bin === "docker" && args[0] === "ps"
+        ? { stdout: "", stderr: "", code: 0 }
+        : r.run(bin, args);
+    d.startService = async (_ws, _feature, svc) => {
+      if (svc !== "lib") return;
+      released = true;
+      throw Object.assign(new Error("Could not start api again after waiting for capacity"), {
+        code: "COMPOSE_UP_FAILED",
+      });
+    };
+    const g = await gate(ws, d);
+    const out = formatGate("app", g).join("\n");
+    assert.equal(g.retry, undefined, out);
+    assert.ok(!r.calls.some((c) => /^docker exec feat-api sh -c npm test -w api/.test(c)), out);
+    assert.match(out, /^ {2}✗ containers: feat-api stopped while a start above waited/m, out);
+    assert.match(out, /^ {2}✗ test api: no running container/m, out);
+  } finally {
+    clean(ws);
+  }
+});
+
 // T8. SW-668: a gate whose only failures are capacity waits is a retry (exit 75), not a FAIL.
 test("gate: failing only for want of capacity is a retry; a real failure beside it is not (SW-668)", async () => {
   const ws = icmWorkspace();
