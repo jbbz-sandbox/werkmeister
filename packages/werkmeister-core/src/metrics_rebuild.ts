@@ -12,7 +12,13 @@ import { getReposRoot, sandboxHome, workspacesRoot } from "./config.js";
 import { loadWorkspaceRepo } from "./global_config.js";
 import { findClaudeProjectDir, listSessionFiles } from "./harness/claude/transcript.js";
 import { WORKSPACE_ROOT_REPO, workspaceRepoUrl } from "./machine_setup.js";
-import { firstFill, type MetricsEvent, recordEvent } from "./metrics.js";
+import {
+  branchFiles,
+  firstFill,
+  type MetricsEvent,
+  recordEvent,
+  usageCachePath,
+} from "./metrics.js";
 import { warn } from "./reporter.js";
 import { runCapture } from "./tool_bins.js";
 
@@ -20,6 +26,8 @@ export type TimedEvent = { e: MetricsEvent; at: string };
 export interface RebuildResult {
   added: Record<string, number>;
   total: number;
+  /** Record branches whose `usage.json` was cached, with its author, for the `metrics` report. */
+  usages: number;
   /** The temporary clone, removed before this returns. */
   clone: string;
 }
@@ -68,9 +76,10 @@ const keyOf = (e: Record<string, unknown>): string | null =>
       ? `${e["event"]}|${e["pr"]}`
       : null;
 
-function loggedKeys(): { keys: Set<string>; sessions: Set<string> } {
+function loggedKeys(): { keys: Set<string>; sessions: Set<string>; lines: Set<string> } {
   const keys = new Set<string>();
   const sessions = new Set<string>();
+  const lines = new Set<string>();
   const dir = path.join(sandboxHome(), "metrics");
   let files: string[] = [];
   try {
@@ -84,11 +93,12 @@ function loggedKeys(): { keys: Set<string>; sessions: Set<string> } {
       } catch {
         continue;
       }
+      lines.add(line);
       const k = keyOf(e);
       if (k) keys.add(k);
       if (e["event"] === "ask" || e["event"] === "answer") sessions.add(String(e["session"]));
     }
-  return { keys, sessions };
+  return { keys, sessions, lines };
 }
 
 function git(dir: string, ...args: string[]): string | null {
@@ -168,7 +178,8 @@ async function branchEvents(
 
 /** Backfills the event log; throws when the workspace repo can't be found or cloned. */
 export async function rebuildMetrics(): Promise<RebuildResult> {
-  const { keys, sessions } = loggedKeys();
+  const { keys, sessions, lines } = loggedKeys();
+  const usages: string[] = [];
   const url = originUrl();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-records-"));
   const repo = path.join(tmp, "repo");
@@ -191,15 +202,61 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
     const branches = (git(repo, "for-each-ref", "refs/heads", "--format=%(refname:short)") ?? "")
       .split("\n")
       .filter((b) => b && b !== head);
-    for (const branch of branches)
-      for (const { e, at } of await branchEvents(repo, branch, sessions)) {
-        const k = keyOf(e);
-        if (k && keys.has(k)) continue;
-        if (k) keys.add(k);
-        if (recordEvent(e, at)) added[e.event] = (added[e.event] ?? 0) + 1;
+    const slices = branchFiles(repo, branches, "metrics.jsonl");
+    const usageFiles = branchFiles(repo, branches, "usage.json");
+    const log = ({ e, at }: TimedEvent) => {
+      const k = keyOf(e);
+      if (k && keys.has(k)) return;
+      if (k) keys.add(k);
+      if (recordEvent(e, at)) added[e.event] = (added[e.event] ?? 0) + 1;
+    };
+    for (const branch of branches) {
+      // The slice first (SW-1104): its live times beat the ones rebuilt below, which keyOf then skips.
+      for (const line of (slices.get(branch) ?? "").split("\n")) {
+        if (!line || lines.has(line)) continue; // close-out copies lines verbatim, so the owner's are here
+        lines.add(line);
+        const t = sliceEvent(line);
+        if (!t) continue;
+        if (t.e.event === "ask" || t.e.event === "answer") sessions.add(t.e.session);
+        log(t);
       }
+      for (const t of await branchEvents(repo, branch, sessions)) log(t);
+      const usage = parseUsage(usageFiles.get(branch));
+      if (usage) {
+        const by = git(repo, "log", "-1", "--format=%ae", branch)?.trim() || undefined;
+        usages.push(JSON.stringify({ ...usage, by }));
+      }
+    }
+    fs.mkdirSync(path.dirname(usageCachePath()), { recursive: true });
+    fs.writeFileSync(usageCachePath(), usages.map((u) => `${u}\n`).join(""));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
-  return { added, total: Object.values(added).reduce((a, b) => a + b, 0), clone: tmp };
+  return {
+    added,
+    total: Object.values(added).reduce((a, b) => a + b, 0),
+    usages: usages.length,
+    clone: tmp,
+  };
+}
+
+/** A teammate's slice line as an event; null unless it names its time, event and workspace. */
+function sliceEvent(line: string): TimedEvent | null {
+  try {
+    const { v: _v, at, ...e } = JSON.parse(line);
+    return typeof at === "string" && typeof e.event === "string" && typeof e.workspace === "string"
+      ? { e: e as MetricsEvent, at }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseUsage(text: string | undefined): Record<string, unknown> | null {
+  try {
+    const u = JSON.parse(text ?? "");
+    return typeof u?.workspace === "string" && typeof u?.closedAt === "string" ? u : null;
+  } catch {
+    return null;
+  }
 }

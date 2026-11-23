@@ -59,6 +59,23 @@ const WAITS = z.object({
   release: z.number(),
 });
 const PERCENTILES = z.object({ p50Minutes: MINUTES, p90Minutes: MINUTES });
+const TOKENS = z.object({
+  input: z.number(),
+  output: z.number(),
+  cacheCreation: z.number(),
+  cacheRead: z.number(),
+});
+const BY_MODEL = z.record(z.string(), z.object({ tokens: TOKENS, estUsd: z.number().nullable() }));
+const USAGE_ROLLUP = z.object({
+  workspaces: z.number(),
+  estUsd: z.number().nullable(),
+  costUnknown: z.number(),
+  tokens: TOKENS,
+  cacheReadShare: z.number().nullable(),
+  activeMinutes: z.number(),
+  wallClockMinutes: z.number(),
+  turns: z.number(),
+});
 const METRICS_OUTPUT = {
   range: z.enum(METRICS_RANGES as [MetricsRange, ...MetricsRange[]]),
   from: z.string().nullable(),
@@ -104,20 +121,14 @@ const METRICS_OUTPUT = {
   ),
   cycle: PERCENTILES,
   lead: PERCENTILES,
-  usage: z.object({
-    workspaces: z.number(),
-    estUsd: z.number().nullable(),
-    costUnknown: z.number(),
-    tokens: z.object({
-      input: z.number(),
-      output: z.number(),
-      cacheCreation: z.number(),
-      cacheRead: z.number(),
-    }),
-    cacheReadShare: z.number().nullable(),
-    activeMinutes: z.number(),
-    wallClockMinutes: z.number(),
-    turns: z.number(),
+  releases: z.object({
+    total: z.number(),
+    byWeek: z.array(z.object({ week: z.string(), count: z.number() })),
+  }),
+  usage: USAGE_ROLLUP.extend({
+    byPerson: z.record(z.string(), USAGE_ROLLUP.extend({ lead: PERCENTILES })),
+    byProject: z.record(z.string(), USAGE_ROLLUP),
+    byModel: BY_MODEL,
   }),
   gate: z.object({
     firstPassRate: z.number().nullable(),
@@ -137,12 +148,6 @@ const METRICS_OUTPUT = {
     )
     .optional(),
 };
-const TOKENS = z.object({
-  input: z.number(),
-  output: z.number(),
-  cacheCreation: z.number(),
-  cacheRead: z.number(),
-});
 const COUNTED = PERCENTILES.extend({ count: z.number() });
 const TREND_SLICE = z.object({
   shipped: z.number(),
@@ -153,7 +158,7 @@ const TREND_SLICE = z.object({
   tokens: TOKENS,
   estUsd: z.number().nullable(),
   costUnknown: z.number(),
-  byModel: z.record(z.string(), z.object({ tokens: TOKENS, estUsd: z.number().nullable() })),
+  byModel: BY_MODEL,
   cacheReadShare: z.number().nullable(),
   activeMinutes: z.number(),
   wallClockMinutes: z.number(),

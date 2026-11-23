@@ -7,8 +7,9 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { fixturePreset } from "../dist/fixture_workspace.js";
+import { FIXTURE_BRANCH, fixturePreset } from "../dist/fixture_workspace.js";
 import { startIssue } from "../dist/issue_status.js";
+import { metricsPath, recordEvent } from "../dist/metrics.js";
 import {
   autosquash,
   closeOut,
@@ -256,5 +257,36 @@ test("worktrees: pr autosquash refuses a dirty tree, another branch, a merge com
       await refused(/refused: .* is on origin, so folding it needs a force-push/);
     },
     { worktrees: true },
+  );
+});
+
+// SW-1104: close-out pushes the run's own events as metrics.jsonl on the record branch.
+test("close-out pushes this workspace's metrics slice on the record branch to its origin", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      recordEvent(
+        { event: "issue.start", workspace: "demo", ticket: "SW-2" },
+        "2026-11-20T00:00:00.000Z",
+      );
+      recordEvent(
+        { event: "issue.start", workspace: "other", ticket: "SW-3" },
+        "2026-11-20T00:00:01.000Z",
+      );
+      await closeOut("demo", { abandon: "fixture probe" });
+      const origin = path.join(fx.root, "remotes", "o", "ws.git");
+      const pushed = git(origin, "show", `${FIXTURE_BRANCH}:metrics.jsonl`).split("\n");
+      assert.deepEqual(
+        pushed.map((l) => [JSON.parse(l).workspace, JSON.parse(l).event]),
+        [["demo", "issue.start"]],
+      );
+      assert.ok(
+        metricsPath("2026-11-20T00:00:00.000Z").startsWith(fx.root),
+        "the log is under the fixture",
+      );
+    },
+    { postmortem: true, jira: true, workspace: { issue_id: "SW-2" } },
   );
 });

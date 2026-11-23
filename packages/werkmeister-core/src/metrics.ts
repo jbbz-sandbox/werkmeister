@@ -33,6 +33,9 @@ export function metricsPath(at: string): string {
   return path.join(sandboxHome(), "metrics", `events-${at.slice(0, 7)}.jsonl`);
 }
 
+/** `<sandboxHome()>/metrics/usage-branches.jsonl`: every record branch's `usage.json` plus its author `by`, rewritten by `metrics rebuild` (SW-1104). */
+export const usageCachePath = () => path.join(sandboxHome(), "metrics", "usage-branches.jsonl");
+
 /** Appends *e* to this month's log; false when it could not. A failure warns and never throws: a lost metric must not fail its caller. */
 export function recordEvent(e: MetricsEvent, at = new Date().toISOString()): boolean {
   const file = metricsPath(at);
@@ -45,6 +48,34 @@ export function recordEvent(e: MetricsEvent, at = new Date().toISOString()): boo
     warn(`metrics: could not record ${e.event}: ${(err as Error).message}`);
     return false;
   }
+}
+
+/** *file* at the tip of each of *branches* in *repo*, by branch; a branch without it is left out. One git call; warns and returns what it has on failure. */
+export function branchFiles(repo: string, branches: string[], file: string): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!branches.length) return out;
+  const batch = spawnSync("git", ["-C", repo, "cat-file", "--batch"], {
+    input: branches.map((b) => `${b}:${file}\n`).join(""),
+    maxBuffer: 1 << 28,
+  });
+  if (batch.status !== 0) {
+    warn(`metrics: could not read ${file} from record branches: ${batch.stderr}`);
+    return out;
+  }
+  // Raw bytes: each reply's size is in bytes. A reply is "<sha> blob <size>\n<body>\n", or "<rev> missing\n", in input order.
+  const buf = batch.stdout;
+  let i = 0;
+  for (const branch of branches) {
+    const eol = buf.indexOf(10, i);
+    if (eol < 0) break;
+    const header = buf.toString("utf8", i, eol).split(" ");
+    i = eol + 1;
+    if (header[1] !== "blob") continue;
+    const size = Number(header[2]);
+    out.set(branch, buf.toString("utf8", i, i + size));
+    i += size + 1;
+  }
+  return out;
 }
 
 /** The commit on *rev* (default HEAD) that first added a file other than `.gitkeep` under `stages/<stage>/output/`, or null. */
@@ -124,24 +155,26 @@ export function recordStageDone(ws: string): void {
 }
 
 /**
- * *ws*'s `stage.done` times by stage. The log keys events by workspace name, so an event counts
- * only when its commit is in *ws*'s history: a reused name's earlier run is not this one.
+ * The log lines of *ws*'s current run, oldest month first. The log keys events by workspace name,
+ * so a `stage.done` counts only when its commit is in *ws*'s history: a reused name's earlier run is
+ * not this one.
  */
-export function stageDoneTimes(ws: string): Map<string, string> {
-  const times = new Map<string, string>();
+function* runLines(ws: string): Generator<{ line: string; e: Record<string, unknown> }> {
   const workspace = path.basename(ws);
+  const dir = path.join(sandboxHome(), "metrics");
   let files: string[] = [];
   try {
     files = fs
-      .readdirSync(path.join(sandboxHome(), "metrics"))
-      .filter((f) => /^events-.*\.jsonl$/.test(f));
+      .readdirSync(dir)
+      .filter((f) => /^events-.*\.jsonl$/.test(f))
+      .sort();
   } catch {
-    return times;
+    return;
   }
   for (const f of files) {
     let text = "";
     try {
-      text = fs.readFileSync(path.join(sandboxHome(), "metrics", f), "utf8");
+      text = fs.readFileSync(path.join(dir, f), "utf8");
     } catch {
       continue;
     }
@@ -152,11 +185,36 @@ export function stageDoneTimes(ws: string): Map<string, string> {
       } catch {
         continue;
       }
-      if (e["event"] !== "stage.done" || e["workspace"] !== workspace) continue;
-      const commit = String(e["commit"]);
-      const ancestor = spawnSync("git", ["-C", ws, "merge-base", "--is-ancestor", commit, "HEAD"]);
-      if (ancestor.status === 0) times.set(String(e["stage"]), String(e["at"]));
+      if (e?.["workspace"] !== workspace) continue;
+      if (e["event"] === "stage.done") {
+        const commit = String(e["commit"]);
+        const ancestor = spawnSync("git", [
+          "-C",
+          ws,
+          "merge-base",
+          "--is-ancestor",
+          commit,
+          "HEAD",
+        ]);
+        if (ancestor.status !== 0) continue;
+      }
+      yield { line, e };
     }
   }
+}
+
+/** *ws*'s `stage.done` times by stage, for its current run. */
+export function stageDoneTimes(ws: string): Map<string, string> {
+  const times = new Map<string, string>();
+  for (const { e } of runLines(ws))
+    if (e["event"] === "stage.done") times.set(String(e["stage"]), String(e["at"]));
   return times;
+}
+
+/**
+ * *ws*'s run as raw log lines, for close-out to push as `metrics.jsonl` on the record branch
+ * (SW-1104). Verbatim, so its owner's `metrics rebuild` drops them as already logged.
+ */
+export function workspaceSlice(ws: string): string[] {
+  return [...runLines(ws)].map((r) => r.line);
 }

@@ -5,7 +5,7 @@ The rest of these docs assume one developer on one machine. This page covers wha
 | Section | Status |
 |---|---|
 | [What a team shares, and what stays on your machine](#what-a-team-shares-and-what-stays-on-your-machine) | works today |
-| [Team DORA metrics](#team-dora-metrics) | partial |
+| [Team DORA metrics](#team-dora-metrics) | works today |
 | [Onboarding a teammate](#onboarding-a-teammate) | works today |
 | [Ownership and handoff](#ownership-and-handoff) | partial |
 | [Review](#review) | works today |
@@ -24,10 +24,10 @@ Werkmeister keeps team context in git and in the tracker. Machine state stays on
 | Team | Coding standards | The standards repo, which each machine points at with `overrides.standards_dir` | `git pull` in the standards repo. Each workspace's `_shared/standards.md` points at it and doesn't copy it |
 | Per repo | Services, ports, tests, release rules | The repo's `.werkmeister/services.yaml` fragment ([Registry fragments](registry-fragments.md)) | `git pull`, then `werkmeister registry` merges it into the machine registry |
 | Per repo | Team work types with their own stages | `<repo>/.werkmeister/workflows/<type>/` ([ICM workflows](icm-workflows.md)) | `git pull` |
-| Per workspace | The run's record: stage outputs, PR files, `postmortem.md`, `closeout.md`, `usage.json` | The workspace's record branch in the workspace repo | Fetch the branch. Close-out pushes it ([Close-out](workspace-lifecycle.md#close-out)) |
+| Per workspace | The run's record: stage outputs, PR files, `postmortem.md`, `closeout.md`, `usage.json`, `metrics.jsonl` | The workspace's record branch in the workspace repo | Fetch the branch. Close-out pushes it ([Close-out](workspace-lifecycle.md#close-out)) |
 | Per workspace | PR rules, standards pointers, how to file issues | `_shared/` on the record branch | Same as the record |
 | Per project | Tracker, its scope and statuses | The tracker itself, and `projects:` in each person's `~/.werkmeister/config.yaml` ([Issue trackers](issue-trackers.md)) | The tracker is shared. Each person keeps their own copy of the config entry |
-| Per machine, never shared | Config, secrets, tracker credentials, ports and slots, `services.local.yaml`, the metrics event log, Claude Code transcripts | `~/.werkmeister/` and the harness's own folders | Nothing. Each person sets these up on their own machine |
+| Per machine, never shared | Config, secrets, tracker credentials, ports and slots, `services.local.yaml`, the metrics event log (except each closed run's own events, which close-out pushes as `metrics.jsonl` on its record branch), Claude Code transcripts | `~/.werkmeister/` and the harness's own folders | Nothing. Each person sets these up on their own machine |
 
 Post-mortems close the loop: when a run's `postmortem.md` names a change to a standard, the post-mortem edits your standards tree (`werkmeister standards check` prints where it is) after showing you the edit ([Post-mortem](workspace-lifecycle.md#post-mortem)). Workspaces read that tree live, so the next workspace on your machine sees the change right away. Teammates see it only after you commit it to the standards repo and they pull.
 
@@ -39,13 +39,13 @@ Several people can work against one Kubernetes baseline. `werkmeister infra inte
 
 ## Team DORA metrics
 
-**Status: partial: per machine today, team view planned ([SW-1104](https://jory-group.atlassian.net/browse/SW-1104))**
+**Status: works today**
 
 Werkmeister writes a metrics event log on each machine, `~/.werkmeister/metrics/events-YYYY-MM.jsonl`: `issue.start`, `stage.done`, `pr.open`, `pr.merged`, `release`, `gate.start` / `gate.end`, and `ask` / `answer`. The `metrics` MCP tool reports cycle time, lead time and waits by cause from it. `werkmeister metrics rebuild` backfills the log from record branches, GitHub and transcripts.
 
 | Metric | Data Werkmeister records today | Gap |
 |---|---|---|
-| Deployment frequency | `release` events, each with its tag. Release tags of each repo that sets `ship: tag` and `release_tag` in its fragment | None for one machine. Across people, see below |
+| Deployment frequency | `release` events, each with its tag. Release tags of each repo that sets `ship: tag` and `release_tag` in its fragment | None. Each teammate's `release` events reach your report through `werkmeister metrics rebuild`, and the report counts distinct releases per week (`releases`) |
 | Lead time for changes | The workspace's first Claude turn → `pr.merged` (the PR file's `merge_sha`) → `release`. The `metrics` report measures lead time from the first turn and cycle time from `issue.start`. `werkmeister pr status` finds the first release tag that contains the merge | The first commit isn't in the log. Read it from git if you want DORA's commit-to-release definition |
 | Change failure rate | `gate.end` with a nonzero exit; Auto-fix commits on the PR; bugs filed from a workspace (their `Workspace:` field); abandoned workspaces (`closeout.md`); `postmortem.md` findings | No single "failed change" event. You count these by hand |
 | Time to restore | The bug ticket's creation date in the tracker → the `release` that ships its fix | The tracker side isn't in the event log. Join them by ticket key |
@@ -56,7 +56,7 @@ Three more numbers matter once agents do the work:
 - **Autonomous vs interactive share:** the workspace's `autonomous` setting (`--autonomous` on `werkmeister workspace new`).
 - **How often a run needed a person:** `ask` / `answer` pairs and the `person` wait in the `metrics` report.
 
-**The gap.** The event log is local to each machine, so every `metrics` report covers one person. The record branches already sit in a workspace repo the team shares, and `werkmeister metrics rebuild` already reads them. [SW-1104](https://jory-group.atlassian.net/browse/SW-1104) plans a team view on top of them, including cost per person, per project and per model. Until then, each person runs the report on their own machine.
+**How the team view works.** At close-out, Werkmeister copies the run's own lines of the event log into `metrics.jsonl` and pushes it with the record branch, next to `usage.json`. `werkmeister metrics rebuild` reads every record branch in the workspace repo through a temporary clone, adds each teammate's closed runs to your log, and caches each branch's `usage.json` with the branch's git author email. The `metrics` report then covers the whole team: lead time and `releases` across everyone, and `usage.byPerson` (by git author email, with lead time), `usage.byProject` (the ticket key's prefix) and `usage.byModel`. What is shared is the run's events and `usage.json`, including its cost, under the author already on the branch. A run counts only once it is closed out, and a run closed out before this version adds no `metrics.jsonl`. Run `werkmeister metrics rebuild` before the report to bring in the latest close-outs.
 
 ## Onboarding a teammate
 

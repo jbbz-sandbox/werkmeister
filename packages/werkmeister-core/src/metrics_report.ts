@@ -10,6 +10,7 @@ import * as path from "node:path";
 import { liveWaiting, sessionGone, sessionsDir } from "./agent_state.js";
 import { getReposRoot, sandboxHome } from "./config.js";
 import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
+import { branchFiles, usageCachePath } from "./metrics.js";
 import { lifecycleOf } from "./pr_lifecycle.js";
 import { warn } from "./reporter.js";
 import {
@@ -69,6 +70,29 @@ export interface FlowColumnReport {
   /** Its open cards, oldest first. */
   cards: FlowCard[];
 }
+/** Summed usage of some `usage.json` snapshots. */
+export interface UsageRollup {
+  /** How many snapshots. */
+  workspaces: number;
+  /** Their summed estimated cost in USD, or null when none has one. */
+  estUsd: number | null;
+  /** Snapshots with no cost estimate. */
+  costUnknown: number;
+  /** Their summed tokens. */
+  tokens: UsageTotals;
+  /** Cache reads ÷ (input + cache creation + cache reads), or null with no input tokens. */
+  cacheReadShare: number | null;
+  /** Summed active minutes. */
+  activeMinutes: number;
+  /** Summed wall-clock minutes. */
+  wallClockMinutes: number;
+  /** Summed turns. */
+  turns: number;
+}
+
+/** Tokens and estimated cost per model. */
+export type ModelRollup = Record<string, { tokens: UsageTotals; estUsd: number | null }>;
+
 /** Cycle and lead time of one ticket whose PR merged in the range. */
 export interface TicketTimes {
   /** The tracker key, or the workspace name when there is none. */
@@ -131,24 +155,32 @@ export interface MetricsReport {
   cycle: Percentiles;
   /** Percentiles of `tickets` lead minutes. */
   lead: Percentiles;
+  /** Deployment frequency: distinct (repo, tag) `release`s in the range, and per ISO week. */
+  releases: {
+    /** Releases in the range. */
+    total: number;
+    /** ISO weeks (Monday, UTC), oldest first. */
+    byWeek: {
+      /** The week's Monday, `YYYY-MM-DD`. */
+      week: string;
+      /** Releases first shipped that week. */
+      count: number;
+    }[];
+  };
   /** Workspaces whose `usage.json` closedAt is in the range. */
-  usage: {
-    /** How many snapshots. */
-    workspaces: number;
-    /** Their summed estimated cost in USD, or null when none has one. */
-    estUsd: number | null;
-    /** Snapshots with no cost estimate. */
-    costUnknown: number;
-    /** Their summed tokens. */
-    tokens: UsageTotals;
-    /** Cache reads ÷ (input + cache creation + cache reads), or null with no input tokens. */
-    cacheReadShare: number | null;
-    /** Summed active minutes. */
-    activeMinutes: number;
-    /** Summed wall-clock minutes. */
-    wallClockMinutes: number;
-    /** Summed turns. */
-    turns: number;
+  usage: UsageRollup & {
+    /** Per person: the git author of the record branch, cached by `metrics rebuild`; `"unknown"` before one. `lead` covers their `tickets`. */
+    byPerson: Record<
+      string,
+      UsageRollup & {
+        /** Percentiles of that person's `tickets` lead minutes. */
+        lead: Percentiles;
+      }
+    >;
+    /** Per tracker project: the ticket key's prefix, `"none"` without a ticket. */
+    byProject: Record<string, UsageRollup>;
+    /** Per model, from each snapshot's `byModel`. */
+    byModel: ModelRollup;
   };
   /** The asked-for workspace's current run, oldest first; only when `metricsReport` got a `workspace`. */
   timeline?: TimelineEvent[];
@@ -215,7 +247,10 @@ export type UsageRow = Pick<
   | "wallClockMinutes"
   | "turns"
 > &
-  Partial<Pick<UsageSnapshot, "outcome" | "stages" | "byModel" | "werkmeister">>;
+  Partial<Pick<UsageSnapshot, "outcome" | "stages" | "byModel" | "werkmeister">> & {
+    /** The record branch's git author email, from the `metrics rebuild` cache (SW-1104). */
+    by?: string;
+  };
 export interface FlowInput {
   events: Record<string, unknown>[];
   open: OpenWorkspace[];
@@ -244,6 +279,44 @@ const percentiles = (values: number[]): Percentiles => ({
   p50Minutes: percentile(values, 0.5),
   p90Minutes: percentile(values, 0.9),
 });
+
+function groupBy<T>(rows: T[], key: (r: T) => string): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const r of rows) out.set(key(r), [...(out.get(key(r)) ?? []), r]);
+  return out;
+}
+
+/** Summed cost, tokens, minutes and turns of *rows*. */
+function usageRollup(rows: UsageRow[]): UsageRollup {
+  const tokens = zeroTokens();
+  for (const u of rows) addTokens(tokens, u.totals);
+  const priced = rows.filter((u) => u.estUsd != null);
+  const inputSide = tokens.input + tokens.cacheCreation + tokens.cacheRead;
+  const sum = (f: (u: UsageRow) => number | null | undefined) =>
+    rows.reduce((a, u) => a + (f(u) ?? 0), 0);
+  return {
+    workspaces: rows.length,
+    estUsd: priced.length ? priced.reduce((a, u) => a + (u.estUsd ?? 0), 0) : null,
+    costUnknown: rows.length - priced.length,
+    tokens,
+    cacheReadShare: inputSide ? tokens.cacheRead / inputSide : null,
+    activeMinutes: sum((u) => u.activeMinutes),
+    wallClockMinutes: sum((u) => u.wallClockMinutes),
+    turns: sum((u) => u.turns),
+  };
+}
+
+/** Tokens and cost per model over *rows*' `byModel`. */
+function modelRollup(rows: UsageRow[]): ModelRollup {
+  const byModel: ModelRollup = {};
+  for (const u of rows)
+    for (const m of u.byModel ?? []) {
+      const row = (byModel[m.model] ??= { tokens: zeroTokens(), estUsd: null });
+      addTokens(row.tokens, m.totals);
+      if (m.estUsd != null) row.estUsd = (row.estUsd ?? 0) + m.estUsd;
+    }
+  return byModel;
+}
 
 /** The Monday (UTC) of *t*'s ISO week, as YYYY-MM-DD. */
 function weekOf(t: number): string {
@@ -506,13 +579,34 @@ export function flowMetrics(
   tickets.sort((a, b) => ms(a.mergedAt) - ms(b.mergedAt));
 
   const closed = input.usages.filter((u) => inRange(u.closedAt));
-  const tokens: UsageTotals = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };
-  for (const u of closed)
-    for (const k of Object.keys(tokens) as (keyof UsageTotals)[]) tokens[k] += u.totals?.[k] ?? 0;
-  const priced = closed.filter((u) => u.estUsd != null);
-  const inputSide = tokens.input + tokens.cacheCreation + tokens.cacheRead;
-  const sum = (f: (u: UsageRow) => number | null | undefined) =>
-    closed.reduce((a, u) => a + (f(u) ?? 0), 0);
+  const personOf = new Map(input.usages.map((u) => [u.workspace, u.by ?? "unknown"]));
+  const byPerson: MetricsReport["usage"]["byPerson"] = {};
+  for (const [person, rows] of groupBy(closed, (u) => u.by ?? "unknown"))
+    byPerson[person] = {
+      ...usageRollup(rows),
+      lead: percentiles(
+        tickets.filter((t) => personOf.get(t.workspace) === person).map((t) => t.leadMinutes),
+      ),
+    };
+  const byProject: MetricsReport["usage"]["byProject"] = {};
+  for (const [project, rows] of groupBy(
+    closed,
+    (u) => /^([A-Z][A-Z0-9]*)-\d+$/.exec(u.ticket ?? "")?.[1] ?? "none",
+  ))
+    byProject[project] = usageRollup(rows);
+
+  // Deployment frequency (SW-1104): distinct (repo, tag) releases, by the week each first shipped.
+  const releaseAt = new Map<string, string>();
+  for (const e of events)
+    if (e["event"] === "release" && inRange(String(e["at"]))) {
+      const key = `${String(e["pr"]).replace(/\/pull\/\d+$/, "")}|${e["tag"]}`;
+      releaseAt.set(key, min(releaseAt.get(key), String(e["at"])));
+    }
+  const releaseWeeks = new Map([...byWeek.keys()].map((w): [string, number] => [w, 0]));
+  for (const at of releaseAt.values()) {
+    const w = weekOf(ms(at));
+    releaseWeeks.set(w, (releaseWeeks.get(w) ?? 0) + 1);
+  }
 
   const finished = [...tl.values()].flatMap((t) =>
     t.firstFinished && inRange(t.firstFinished.at) ? [t.firstFinished] : [],
@@ -529,16 +623,13 @@ export function flowMetrics(
     tickets,
     cycle: percentiles(tickets.map((t) => t.cycleMinutes)),
     lead: percentiles(tickets.map((t) => t.leadMinutes)),
-    usage: {
-      workspaces: closed.length,
-      estUsd: priced.length ? priced.reduce((a, u) => a + (u.estUsd ?? 0), 0) : null,
-      costUnknown: closed.length - priced.length,
-      tokens,
-      cacheReadShare: inputSide ? tokens.cacheRead / inputSide : null,
-      activeMinutes: sum((u) => u.activeMinutes),
-      wallClockMinutes: sum((u) => u.wallClockMinutes),
-      turns: sum((u) => u.turns),
+    releases: {
+      total: releaseAt.size,
+      byWeek: [...releaseWeeks]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([week, count]) => ({ week, count })),
     },
+    usage: { ...usageRollup(closed), byPerson, byProject, byModel: modelRollup(closed) },
     gate: {
       firstPassRate: finished.length ? passed / finished.length : null,
       passed,
@@ -608,31 +699,18 @@ function recordBranchUsages(): UsageRow[] {
     return [];
   }
   const branches = refs.stdout.split("\n").filter(Boolean);
-  if (!branches.length) return [];
-  // Raw bytes: each reply's size is in bytes. A reply is "<sha> blob <size>\n<body>\n", or "<rev> missing\n".
-  const batch = spawnSync("git", ["-C", repo, "cat-file", "--batch"], {
-    input: branches.map((b) => `${b}:usage.json\n`).join(""),
-    maxBuffer: 1 << 28,
-  });
-  if (batch.status !== 0) {
-    warn(`metrics: could not read usage.json from record branches: ${batch.stderr}`);
+  return [...branchFiles(repo, branches, "usage.json").values()].flatMap((t) => usageRow(t) ?? []);
+}
+
+/** Every branch's `usage.json` with its author, as `metrics rebuild` last cached it (SW-1104). */
+function cachedUsages(): UsageRow[] {
+  let text = "";
+  try {
+    text = fs.readFileSync(usageCachePath(), "utf8");
+  } catch {
     return [];
   }
-  const out: UsageRow[] = [];
-  const buf = batch.stdout;
-  let i = 0;
-  while (i < buf.length) {
-    const eol = buf.indexOf(10, i);
-    if (eol < 0) break;
-    const header = buf.toString("utf8", i, eol).split(" ");
-    i = eol + 1;
-    if (header[1] !== "blob") continue;
-    const size = Number(header[2]);
-    const row = usageRow(buf.toString("utf8", i, i + size));
-    if (row) out.push(row);
-    i += size + 1;
-  }
-  return out;
+  return text.split("\n").flatMap((t) => usageRow(t) ?? []);
 }
 
 /** The oldest open ask of *root*'s live sessions. Reads the files itself: readSessions deletes stale ones, and this tool is read-only. */
@@ -724,9 +802,14 @@ async function flowInput(now: Date): Promise<FlowInput> {
     ),
   );
   const open = rows.flatMap((r) => r.open ?? []);
-  const usages = rows.flatMap((r) => r.usage ?? []);
-  const seen = new Set(usages.map((u) => `${u.workspace}|${u.closedAt}`));
-  for (const u of recordBranchUsages())
+  const usages: UsageRow[] = [];
+  const seen = new Set<string>();
+  // The rebuild cache first: of one snapshot's copies, only it carries `by`.
+  for (const u of [
+    ...cachedUsages(),
+    ...rows.flatMap((r) => r.usage ?? []),
+    ...recordBranchUsages(),
+  ])
     if (!seen.has(`${u.workspace}|${u.closedAt}`)) {
       seen.add(`${u.workspace}|${u.closedAt}`);
       usages.push(u);
@@ -848,15 +931,8 @@ function trendSlice(items: TrendItem[]): TrendSlice {
     if (i.kind === "stage")
       stageMinutes.set(i.stage, [...(stageMinutes.get(i.stage) ?? []), i.minutes]);
   const tokens = zeroTokens();
-  const byModel: TrendSlice["byModel"] = {};
-  for (const u of closed) {
-    addTokens(tokens, u.totals);
-    for (const m of u.byModel ?? []) {
-      const row = (byModel[m.model] ??= { tokens: zeroTokens(), estUsd: null });
-      addTokens(row.tokens, m.totals);
-      if (m.estUsd != null) row.estUsd = (row.estUsd ?? 0) + m.estUsd;
-    }
-  }
+  for (const u of closed) addTokens(tokens, u.totals);
+  const byModel = modelRollup(closed);
   const priced = closed.filter((u) => u.estUsd != null);
   const inputSide = tokens.input + tokens.cacheCreation + tokens.cacheRead;
   const firstGates = items.flatMap((i) => (i.kind === "firstGate" ? [i.passed] : []));
