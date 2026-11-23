@@ -1,0 +1,6 @@
+version: 1
+stages:
+  - name: triage
+    job: sort it
+    writes: out.md
+    check: read it

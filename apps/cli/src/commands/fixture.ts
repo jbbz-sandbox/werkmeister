@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <args> [--then <args>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--workflow <dir> [--workflow-in repo]] [--print <file>]... <args> [--then <args> | --then-append <path> <text>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -14,14 +14,16 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { startFakeDaemon, startFakeJira } from "werkmeister-core/fixture_fakes";
 import {
+  type Fixture,
   type FixtureContainer,
+  type FixtureWorkflow,
   fixturePreset,
   seedFixture,
 } from "werkmeister-core/fixture_workspace";
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--print <file>]... <werkmeister args> [--then <werkmeister args>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--workflow <dir> [--workflow-in repo]] [--print <file>]... <werkmeister args> [--then <werkmeister args> | --then-append <path> <text>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /** PR-file keys the pre-approved wrapper may set: none reaches a git or Claude call (SW-514). */
 const PR_KEYS = "skip_release|skip_exercise|skip_review|release|status";
@@ -81,6 +83,8 @@ export function parse(argv: string[], base = cliWorktree()) {
     config: undefined as Record<string, unknown> | undefined,
     containers: undefined as FixtureContainer[] | undefined,
     queue: undefined as string[] | undefined,
+    workflow: undefined as FixtureWorkflow | undefined,
+    workflowIn: undefined as "repo" | undefined,
   };
   const print: string[] = [];
   let i = 0;
@@ -176,14 +180,66 @@ export function parse(argv: string[], base = cliWorktree()) {
       } catch {}
       if (!yml || typeof yml !== "object" || Array.isArray(yml)) return { bad: a };
       opts[a === "--workspace" ? "workspace" : "config"] = yml as Record<string, unknown>;
+    } else if (a === "--workflow" && argv[i + 1] !== undefined) {
+      const dir = inside(base, argv[++i] as string);
+      const yml = dir && inside(dir, "workflow.yaml");
+      if (!dir || !yml || !fs.existsSync(yml)) return { bad: a };
+      // Resolved before listing: a symlinked stages/ must not list a folder out of the worktree.
+      const stages = inside(base, path.join(dir, "stages"));
+      if (!stages && fs.existsSync(path.join(dir, "stages"))) return { bad: a };
+      const names =
+        stages && fs.existsSync(stages)
+          ? fs.readdirSync(stages).filter((f) => f.endsWith(".md"))
+          : [];
+      const files: Record<string, string> = { "workflow.yaml": fs.readFileSync(yml, "utf8") };
+      for (const n of names) {
+        // Each file again: a symlinked stage file could point out of the worktree.
+        const f = inside(base, path.join(dir, "stages", n));
+        if (!f) return { bad: a };
+        files[`stages/${n}`] = fs.readFileSync(f, "utf8");
+      }
+      opts.workflow = { type: path.basename(dir), files };
+    } else if (a === "--workflow-in") {
+      if (argv[++i] !== "repo") return { bad: a };
+      opts.workflowIn = "repo";
     } else break;
   }
-  const steps: string[][] = [[]];
-  for (const a of argv.slice(i)) {
+  const steps: Step[] = [[]];
+  for (let j = i; j < argv.length; j++) {
+    const a = argv[j] as string;
+    const last = steps.at(-1) as Step;
     if (a === "--then") steps.push([]);
-    else (steps.at(-1) as string[]).push(a);
+    else if (a === "--then-append") {
+      const [target, text] = [argv[j + 1], argv[j + 2]];
+      if (target === undefined || text === undefined || !appendable(target))
+        return { bad: "--then-append" };
+      steps.push({ append: target, text });
+      j += 2;
+    } else if (Array.isArray(last)) last.push(a);
+    // Werkmeister args right after an append, with no --then between them.
+    else return { bad: "--then-append" };
   }
+  if (opts.workflow && opts.workflowIn) opts.workflow.in = opts.workflowIn;
   return { opts, print, steps };
+}
+
+/** A werkmeister step's args, or a `--then-append` edit (SW-1108). */
+type Step = string[] | { append: string; text: string };
+
+/**
+ * The wrapper is pre-approved, so an edit may reach only text nothing executes: the seeded workflow's
+ * files, or markdown in the fixture workspace (never `.git`, where an appended config runs commands).
+ */
+function appendable(target: string): boolean {
+  if (target.startsWith("workflow:"))
+    return /^(workflow\.yaml|stages\/[a-z0-9-]+\.md)$/.test(target.slice("workflow:".length));
+  const parts = target.split(/[\\/]/);
+  return (
+    target.endsWith(".md") &&
+    !path.isAbsolute(target) &&
+    !target.startsWith("-") &&
+    !parts.some((s) => s === ".." || s.toLowerCase() === ".git")
+  );
 }
 
 const runStep = (args: string[], cwd: string, env: NodeJS.ProcessEnv) =>
@@ -198,6 +254,19 @@ const runStep = (args: string[], cwd: string, env: NodeJS.ProcessEnv) =>
     child.on("exit", (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   });
 
+/** A `--then-append` step: exit 2 when the target is missing or resolves out of the fixture. */
+function append(step: { append: string; text: string }, fx: Fixture): number {
+  const inWorkflow = step.append.startsWith("workflow:");
+  const rel = inWorkflow ? step.append.slice("workflow:".length) : step.append;
+  const file = inside(inWorkflow ? (fx.workflowDir ?? null) : fx.workspace, rel);
+  if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) {
+    console.error(`--then-append: ${step.append}: no such file in the fixture`);
+    return 2;
+  }
+  fs.appendFileSync(file, `${step.text}\n`);
+  return 0;
+}
+
 function show(label: string, file: string): void {
   const text = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "(none)\n";
   process.stdout.write(`--- ${label}\n${text}${text.endsWith("\n") ? "" : "\n"}`);
@@ -205,28 +274,41 @@ function show(label: string, file: string): void {
 
 export async function run(argv: string[], base = cliWorktree()): Promise<void> {
   const parsed = parse(argv, base);
-  if ("bad" in parsed || parsed.steps.some((s) => s.length === 0)) {
+  if ("bad" in parsed || parsed.steps.some((s) => Array.isArray(s) && s.length === 0)) {
     if ("bad" in parsed)
       console.error(
-        parsed.bad === "--pr-field"
-          ? "--pr-field: skip_release, skip_exercise, skip_review, release or status (one line) =<value>, with --gate"
-          : parsed.bad === "--pr-line"
-            ? '--pr-line: one raw line "<key>: <value>", key skip_release, skip_exercise, skip_review or release (status: --pr-field), with --gate'
-            : parsed.bad === "--issue"
-              ? "--issue: a GitHub issue as owner/repo#number, e.g. o/app#1"
-              : parsed.bad === "--change"
-                ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
-                : parsed.bad === "--running"
-                  ? "--running: a file under the worktree, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus[<TAB>execs] line per container"
-                  : `${parsed.bad}: a file under the worktree${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
+        parsed.bad === "--then-append"
+          ? "--then-append <path> <text>: after a werkmeister step, followed by --then or the end; <path> an existing .md in the fixture workspace (no .git), or workflow:workflow.yaml / workflow:stages/<name>.md"
+          : parsed.bad === "--workflow"
+            ? "--workflow: a folder under the worktree holding workflow.yaml (and stages/*.md)"
+            : parsed.bad === "--workflow-in"
+              ? "--workflow-in: only repo (the default is the temp HOME)"
+              : parsed.bad === "--pr-field"
+                ? "--pr-field: skip_release, skip_exercise, skip_review, release or status (one line) =<value>, with --gate"
+                : parsed.bad === "--pr-line"
+                  ? '--pr-line: one raw line "<key>: <value>", key skip_release, skip_exercise, skip_review or release (status: --pr-field), with --gate'
+                  : parsed.bad === "--issue"
+                    ? "--issue: a GitHub issue as owner/repo#number, e.g. o/app#1"
+                    : parsed.bad === "--change"
+                      ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
+                      : parsed.bad === "--running"
+                        ? "--running: a file under the worktree, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus[<TAB>execs] line per container"
+                        : `${parsed.bad}: a file under the worktree${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
       );
     console.error(USAGE);
     process.exitCode = 2;
     return;
   }
-  const { opts, print, steps } = parsed;
+  const {
+    opts: { workflowIn, ...opts },
+    print,
+    steps,
+  } = parsed;
   let seed: ReturnType<typeof fixturePreset>;
   try {
+    if (workflowIn && !opts.workflow) throw new Error("--workflow-in needs --workflow");
+    if (!opts.workflow && steps.some((s) => !Array.isArray(s) && s.append.startsWith("workflow:")))
+      throw new Error("--then-append workflow:<path> needs --workflow");
     seed = fixturePreset({ ...opts, daemon: undefined, jira: undefined });
     // Only --gate seeds a PR file, so the fields would otherwise vanish silently.
     if (opts.prFields && !seed.prFile) throw new Error("--pr-field needs --gate");
@@ -262,7 +344,7 @@ export async function run(argv: string[], base = cliWorktree()): Promise<void> {
       if (code === 0) fx.applyFragmentChange();
     }
     for (const step of code === 0 ? steps : []) {
-      code = await runStep(step, fx.workspace, env);
+      code = Array.isArray(step) ? await runStep(step, fx.workspace, env) : append(step, fx);
       if (code !== 0) break;
     }
     for (const p of print) {

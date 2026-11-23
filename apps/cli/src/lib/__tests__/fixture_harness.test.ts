@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { promisify } from "node:util";
 
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { writeFixtureWrapper, writeTempHomeWrapper } from "werkmeister-core/temp_home";
 
@@ -142,3 +142,97 @@ it("file flags resolve against the CLI's worktree, never the shell's cwd (SW-916
   expect(own.code, own.out).toBe(0);
   expect(own.out).toMatch(/--- app\/leak\.txt\n\{[\s\S]*"name": "werkmeister"/);
 }, 120_000);
+
+// SW-1108: one harness call builds an icm workspace from a workflow folder, and an edit to it
+// between steps shows as drift, with no hand-made probe.
+describe("--workflow and --then-append", () => {
+  const WORKFLOW = "apps/cli/src/lib/__tests__/fixtures/workflows/review";
+  let wrapper: string;
+  let home: string;
+  let scratch: string;
+  beforeAll(() => {
+    const ws = path.join(tmp, "ws1108");
+    fs.mkdirSync(ws);
+    fs.symlinkSync(REPO, path.join(ws, "werkmeister"));
+    writeTempHomeWrapper(ws);
+    wrapper = writeFixtureWrapper(ws);
+    home = path.join(tmp, "home1108");
+    fs.mkdirSync(home);
+    scratch = path.join(tmp, "tmp1108");
+    fs.mkdirSync(scratch);
+  });
+  const harness = (args: string[]) =>
+    promisify(execFile)(wrapper, ["--no-wait", ...args], {
+      env: { ...process.env, HOME: home, TMPDIR: scratch },
+      maxBuffer: 16 * 1024 * 1024,
+    }).then(
+      (r) => ({ code: 0, out: r.stdout + r.stderr }),
+      (e: { code: number; stdout: string; stderr: string }) => ({
+        code: e.code,
+        out: e.stdout + e.stderr,
+      }),
+    );
+  // The folder init names, from this run's fixture root (`<tmp>/werkmeister-fixture-*`) down.
+  const seededAt = (out: string) =>
+    /workflow from \S*?(werkmeister-fixture-[^/\s]+\/\S*?workflows\/review)/.exec(out)?.[1];
+
+  it("seeds the folder under the fixture's temp HOME, inits from it and skills check is fresh", async () => {
+    const r = await harness([
+      "--workflow",
+      WORKFLOW,
+      "workspace",
+      "init",
+      "--no-build",
+      "--then",
+      "skills",
+      "check",
+    ]);
+    expect(r.code, r.out).toBe(0);
+    // <fixture root>/home is the steps' HOME (seedFixture), so this is the temp HOME's own folder.
+    expect(seededAt(r.out)).toMatch(
+      /^werkmeister-fixture-[^/]+\/home\/\.werkmeister\/workflows\/review$/,
+    );
+    expect(r.out).toMatch(/Context layer fresh \(icm\)/);
+    expect(fs.readdirSync(home), "the caller's HOME is untouched").toEqual([]);
+    expect(fs.readdirSync(scratch), "the fixture and temp HOME are removed").toEqual([]);
+  }, 120_000);
+
+  it("--workflow-in repo seeds it in the fixture's code repo", async () => {
+    const r = await harness([
+      "--workflow",
+      WORKFLOW,
+      "--workflow-in",
+      "repo",
+      "workspace",
+      "init",
+      "--no-build",
+      "--then",
+      "skills",
+      "check",
+    ]);
+    expect(r.code, r.out).toBe(0);
+    expect(seededAt(r.out)).toMatch(
+      /^werkmeister-fixture-[^/]+\/ws\/demo\/app\/\.werkmeister\/workflows\/review$/,
+    );
+  }, 120_000);
+
+  it("--then-append to a stage template after init makes skills check name the template", async () => {
+    const r = await harness([
+      "--workflow",
+      WORKFLOW,
+      "workspace",
+      "init",
+      "--no-build",
+      "--then-append",
+      "workflow:stages/triage.md",
+      "An edit after init.",
+      "--then",
+      "skills",
+      "check",
+    ]);
+    expect(r.code, r.out).toBe(1);
+    expect(r.out).toMatch(
+      /template changed since init: \S+\/home\/\.werkmeister\/workflows\/review/,
+    );
+  }, 120_000);
+});
