@@ -1,5 +1,18 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.108.0
+
+### Minor Changes
+
+- 16bfbf5: ICM workflows load from `<repo>/.werkmeister/workflows/<type>/` and `~/.werkmeister/workflows/<type>/` before the built-ins, and the create form, wizard and MCP create path accept those work types. An invalid workflow fails init with an `[err]` line before any file is written. See "Adding your own workflow" in `docs/icm-workflows.md`.
+- b1ce5d1: An ICM workspace built from a repo or `~/.werkmeister/workflows/` workflow records it in `.werkmeister/workflow.lock` (source folder, `version`, content hash). After that folder is edited, `werkmeister skills check` reports `template changed since init: <folder>` and names the folder, instead of saying the context layer lags the werkmeister repo; `werkmeister skills sync` updates the lock only when it re-renders. Workspaces built from a built-in workflow get no lock (SW-1078).
+
+### Patch Changes
+
+- 14260fb: `werkmeister workspace close` and `abandon` write `context.md` and `context.json` into the workspace record, next to `usage.md`, and commit them on the record branch (SW-318). Per Claude Code session they record the peak context size and % of the model's window, each compaction (turn, stage, size before and after), the first-turn baseline with the `/context` breakdown by category (MCP tools per server and tool, each memory file, agents, skills), estimated tool-result tokens by tool with the 10 largest results, and the context size at the end of each stage. A summary row adds sessions, max peak %, total compactions and `context_strategy`. `closeout.md` gets a `Context:` line. The breakdown and window come from `claude -p /context` run in the workspace before removal (no model turn, no transcript left behind); without `claude` the files say the breakdown was not read and the rest is still written.
+- 625a76f: `gate.start`'s `retry` counts reruns per PR file, so in a multi-repo or grouped workspace the first `pr gate` writes `retry 0` for every repo, not 0, 1, 2…. The counts live in `.werkmeister/gate-runs-<pr file>`, which `pr open` commits to the record with the gate logs, along with an older workspace's single `gate-runs` (SW-1001).
+- 6926147: The dashboard has a Flow tab (SW-782): the flow board from the `metrics` tool, four columns with WIP counts, each card's stage, age and current wait, red once older than its column's p90, with 7d / 30d / 90d / All ranges. A card opens its workspace's timeline (stages, waits, gate runs, PR) and session rows; a session row opens the chat panel on that session. The `metrics` tool takes an optional `workspace` and then also returns that workspace's run as `timeline`.
+
 ## 0.107.1
 
 ### Patch Changes
