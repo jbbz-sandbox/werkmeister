@@ -9,7 +9,14 @@ import { test } from "node:test";
 
 import { fixturePreset } from "../dist/fixture_workspace.js";
 import { startIssue } from "../dist/issue_status.js";
-import { closeOut, openPrs, pushPrs, readPrFiles, writePrFields } from "../dist/pr_lifecycle.js";
+import {
+  autosquash,
+  closeOut,
+  openPrs,
+  pushPrs,
+  readPrFiles,
+  writePrFields,
+} from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { initWorkspace } from "../dist/workspace_init.js";
 import { pinWerkmeisterRoot, withFixtureWorkspace } from "./fixtures.mjs";
@@ -170,5 +177,84 @@ test("withFixtureWorkspace with jira rejects a refused preset and closes the fak
   await assert.rejects(
     withFixtureWorkspace(() => {}, { jira: true, workspace: { bogus: 1 } }),
     /--workspace may not set bogus/,
+  );
+});
+
+// SW-1059: auto mode refused both non-interactive forms of the contracts' `git rebase --autosquash`.
+test("worktrees: pr autosquash folds a fixup! commit into its ticket's commit and keeps the tree", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const file = path.join(fx.repo, "first.txt");
+      fs.writeFileSync(file, "first\n");
+      git(fx.repo, "add", "first.txt");
+      git(fx.repo, "commit", "-qm", "SW-1 first");
+      const first = git(fx.repo, "rev-parse", "HEAD");
+      fs.writeFileSync(path.join(fx.repo, "second.txt"), "second\n");
+      git(fx.repo, "add", "second.txt");
+      git(fx.repo, "commit", "-qm", "SW-2 second");
+      fs.writeFileSync(file, "first, fixed\n");
+      git(fx.repo, "commit", "-qa", "--fixup", first);
+      const tree = git(fx.repo, "rev-parse", "HEAD^{tree}");
+      const r = await autosquash(fx.workspace);
+      assert.equal(r.ok, true, r.lines.join("\n"));
+      assert.equal(git(fx.repo, "rev-parse", "HEAD^{tree}"), tree);
+      assert.deepEqual(git(fx.repo, "log", "--format=%s", "origin/main..HEAD").split("\n"), [
+        "SW-2 second",
+        "SW-1 first",
+      ]);
+    },
+    { worktrees: true },
+  );
+});
+
+test("worktrees: pr autosquash refuses a dirty tree, another branch, a merge commit, a pushed branch and another name", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const branch = git(fx.repo, "branch", "--show-current");
+      const name = path.basename(fx.repo);
+      const commit = (file, msg) => {
+        fs.writeFileSync(path.join(fx.repo, file), `${msg}\n`);
+        git(fx.repo, "add", file);
+        git(fx.repo, "commit", "-qm", msg);
+        return git(fx.repo, "rev-parse", "HEAD");
+      };
+      const first = commit("a.txt", "SW-1 first");
+      commit("a2.txt", `fixup! SW-1 first`);
+      const head = git(fx.repo, "rev-parse", "HEAD");
+      const refused = async (pattern) => {
+        const r = await autosquash(fx.workspace);
+        assert.equal(r.ok, false, r.lines.join("\n"));
+        assert.match(r.lines.join("\n"), pattern);
+        assert.equal(git(fx.repo, "rev-parse", "HEAD"), head, "nothing rewritten");
+      };
+
+      fs.writeFileSync(path.join(fx.repo, "dirty.txt"), "x\n");
+      await refused(/refused: not clean/);
+      fs.rmSync(path.join(fx.repo, "dirty.txt"));
+
+      git(fx.repo, "switch", "-q", "-c", "other");
+      await refused(/refused: other is checked out, not this workspace's/);
+      git(fx.repo, "switch", "-q", branch);
+
+      const missing = await autosquash(fx.workspace, "nope");
+      assert.equal(missing.ok, false);
+      assert.match(missing.lines[0], /No code worktree named nope/);
+      assert.equal((await autosquash(fx.workspace, name)).ok, true, "its own name runs");
+      git(fx.repo, "reset", "-q", "--hard", head);
+
+      git(fx.repo, "switch", "-q", "-c", "side", first);
+      commit("side.txt", "side");
+      git(fx.repo, "switch", "-q", branch);
+      git(fx.repo, "merge", "-q", "--no-ff", "-m", "merge side", "side");
+      const merged = git(fx.repo, "rev-parse", "HEAD");
+      const m = await autosquash(fx.workspace);
+      assert.match(m.lines[0], /refused: 1 merge commit/);
+      assert.equal(git(fx.repo, "rev-parse", "HEAD"), merged);
+      git(fx.repo, "reset", "-q", "--hard", head);
+
+      git(fx.repo, "push", "-q", "origin", branch);
+      await refused(/refused: .* is on origin, so folding it needs a force-push/);
+    },
+    { worktrees: true },
   );
 });

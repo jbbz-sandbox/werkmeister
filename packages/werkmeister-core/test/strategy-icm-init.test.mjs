@@ -814,10 +814,10 @@ test("SW-807: each bugfix contract lists its own pre-approved commands and steer
         section("03_exercise"),
         /^- `werkmeister workspace serve …`\n- Every other command asks\./,
       );
-      // SW-717: rule 5's conflict fix pushes the session's own rebased branch.
+      // SW-717: rule 5's conflict fix pushes the session's own rebased branch. SW-1059: the fixup fold.
       assert.match(
         section("04_propose"),
-        /^- `werkmeister pr push …`\n- Every other command asks\./,
+        /^- `werkmeister pr push …`\n- `werkmeister pr autosquash …`\n- Every other command asks\./,
       );
       for (const d of ["01_reproduce", "02_fix", "03_exercise", "04_propose"])
         assert.match(section(d), /never a `python3` heredoc or `python3 -c`/);

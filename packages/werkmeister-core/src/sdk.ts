@@ -95,6 +95,7 @@ export { type MigrateOptions, migrate } from "./migrate.js";
 export { listNotes, type Note, parseNote } from "./notes.js";
 export {
   adoptPr,
+  autosquash,
   type Deps,
   defaultDeps,
   gatePrs,

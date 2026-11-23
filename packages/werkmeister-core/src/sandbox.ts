@@ -179,6 +179,7 @@ import { hasGit, listRepoWorktrees } from "./worktrees.js";
 
 export {
   adoptPr,
+  autosquash,
   callbackMessage,
   closeOut,
   gatePrs,

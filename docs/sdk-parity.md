@@ -96,6 +96,7 @@ werkmeister's own apps (the MCP server and the CLI) import internal entries, not
 | `pr gate` | `gatePrs` | |
 | `pr open` | `openPrs` | |
 | `pr push` | `pushPrs` | |
+| `pr autosquash` | `autosquash` | |
 | `pr status` | `refreshPrStatus` | |
 | `pr adopt` | `adoptPr` | |
 | `pr watch` | `watchPrs` | |

@@ -122,6 +122,8 @@ test("SW-632: everyday commands run under the real matcher; escapes are refused"
     "w9r pr gate --tests",
     // SW-963: the static-page server the contracts name.
     "werkmeister workspace serve stages",
+    // SW-1059: the fixup fold the grouped contracts name.
+    "werkmeister pr autosquash",
     ...f.wrapped,
   ];
   const mustDeny = [
@@ -142,6 +144,10 @@ test("SW-632: everyday commands run under the real matcher; escapes are refused"
     // SW-963: python3 stays denied, raw or chained after the allowed serve.
     "python3 -I -u -m http.server 0 -b 127.0.0.1 -d stages",
     "werkmeister workspace serve stages && touch serve.mark",
+    // SW-1059: both raw non-interactive autosquash forms stay refused.
+    "git -c sequence.editor=true rebase -q -i --autosquash HEAD",
+    "GIT_SEQUENCE_EDITOR=true git rebase -q -i --autosquash HEAD",
+    "werkmeister pr autosquash && touch squash.mark",
   ];
   // Sequential: parallel haiku sessions in one folder would share its transcript dir.
   for (const cmd of mustRun) {
@@ -162,6 +168,7 @@ test("SW-632: everyday commands run under the real matcher; escapes are refused"
     "fetch.mark",
     "output.mark",
     "serve.mark",
+    "squash.mark",
   ])
     assert.ok(!fs.existsSync(path.join(f.repo, mark)), mark);
   assert.doesNotMatch(calls(f), /feature test/);

@@ -3998,13 +3998,13 @@ export async function pushPrs(
 }
 
 /**
- * The PR file's worktree, when it is one of this workspace's own (a direct child whose `.git`
+ * The worktree named *name*, when it is one of this workspace's own (a direct child whose `.git`
  * file points into a repo under the repos root), else null. Plain fs, so no git runs on a
  * folder or git config the agent chose: git can run commands from config (`core.fsmonitor`).
  */
-function ownWorktree(ws: string, f: PrFile): string | null {
-  if (!f.dir || f.dir !== path.basename(f.dir)) return null;
-  const dir = path.join(ws, f.dir);
+function ownWorktree(ws: string, name: string): string | null {
+  if (!name || name !== path.basename(name)) return null;
+  const dir = path.join(ws, name);
   if (!repoDirs(ws).includes(dir)) return null;
   let gitdir: string;
   try {
@@ -4017,7 +4017,7 @@ function ownWorktree(ws: string, f: PrFile): string | null {
 }
 
 async function pushOne(ws: string, all: PrFile[], f: PrFile, deps: Deps): Promise<string> {
-  const dir = ownWorktree(ws, f);
+  const dir = ownWorktree(ws, f.dir);
   if (!dir)
     return `refused: ${f.dir || "the PR file's worktree"} is not one of this workspace's worktrees of a repo under ${getReposRoot()} (a standalone clone keeps its git config in the workspace, so push it by hand)`;
   const branch = String(f.fm["branch"] ?? "");
@@ -4069,6 +4069,111 @@ async function pushOne(ws: string, all: PrFile[], f: PrFile, deps: Deps): Promis
   writePrFields(f, { conflict_head: pushed });
   await deps.commitRecord(ws, "chore: record pushed PR head", [path.relative(ws, f.path)]);
   return `pushed ${branch} (lease ${lease.slice(0, 12)}); rerun the gate's tests (rule 5)`;
+}
+
+/**
+ * Folds each `fixup!` commit into the commit it names, in this workspace's own worktrees:
+ * `git rebase --autosquash` onto the merge-base with `origin/<base>`, with a no-op editor and hooks
+ * off, set here rather than by the agent (auto mode denies `git -c` and refuses `GIT_SEQUENCE_EDITOR=`).
+ * Refuses, and rewrites nothing in that worktree, unless: it is one of this workspace's own; it has
+ * this workspace's `<user>/<workspace>` branch checked out; it is clean; it holds no merge commit from
+ * its base; and it has no `origin/<branch>` tracking ref (pushed), since folding a pushed commit needs a force-push.
+ *
+ * @param ws - The workspace folder.
+ * @param only - A code worktree's directory name; omitted, every worktree.
+ * @param deps - The services it uses; leave it at its default.
+ * @returns `ok`, false when any worktree was refused or its rebase failed; `lines`, one per worktree.
+ *
+ * @example
+ * ```ts
+ * import { autosquash } from "werkmeister-core/sdk";
+ *
+ * const { ok, lines } = await autosquash("/work/my-workspace");
+ * console.log(ok, lines.join("\n"));
+ * ```
+ */
+export async function autosquash(
+  ws: string,
+  only?: string,
+  deps: Deps = defaultDeps(),
+): Promise<{
+  /** False when any worktree was refused or its rebase failed. */
+  ok: boolean;
+  /** One line per worktree: folded, nothing to fold, refused and why, or failed. */
+  lines: string[];
+}> {
+  const names = repoDirs(ws)
+    .map((d) => path.basename(d))
+    .filter((n) => !only || n === only);
+  if (!names.length)
+    return { ok: false, lines: [`No code worktree${only ? ` named ${only}` : ""} in ${ws}.`] };
+  const lines: string[] = [];
+  let ok = true;
+  for (const name of names) {
+    const line = await autosquashOne(ws, name, deps);
+    if (line.startsWith("refused") || line.startsWith("failed")) ok = false;
+    lines.push(`${name}: ${line}`);
+  }
+  return { ok, lines };
+}
+
+async function autosquashOne(ws: string, name: string, deps: Deps): Promise<string> {
+  const dir = ownWorktree(ws, name);
+  if (!dir)
+    return `refused: not one of this workspace's worktrees of a repo under ${getReposRoot()}`;
+  const git = (...args: string[]) => deps.run("git", ["-C", dir, ...args]);
+  // shortcut: only the workspace's first branch; a `pr new` follow-up branch folds by hand until one needs it.
+  const branch = `${os.userInfo().username}/${path.basename(ws)}`;
+  const head = (await git("rev-parse", "--abbrev-ref", "HEAD")).stdout.trim();
+  if (head !== branch)
+    return `refused: ${head || "no branch"} is checked out, not this workspace's ${branch}`;
+  const status = await git("status", "--porcelain");
+  if (status.code || status.stdout.trim())
+    return `refused: not clean — commit first:\n${status.stdout.trimEnd() || status.stderr.trim()}`;
+  const base = String(readPrFiles(ws).find((f) => f.dir === name)?.fm["base"] ?? "main");
+  const merges = await mergesFromBase(dir, base, deps.run);
+  if (merges !== 0)
+    return `refused: ${merges === null ? "cannot count" : merges} merge commit(s) from origin/${base} — rebase instead: git -C ${name} rebase origin/${base}`;
+  // The tracking ref a push from this checkout (`pr open`) leaves, not `ls-remote`: a pre-approved
+  // command makes no credentialed network call. A branch pushed from elsewhere still can't be overwritten, only push-rejected.
+  const pushed = await git("rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`);
+  if (pushed.stdout.trim())
+    return `refused: ${branch} is on origin, so folding it needs a force-push: after a conflict that is \`werkmeister pr push\`, otherwise ask the person`;
+  const mb = await git("merge-base", "HEAD", `origin/${base}`);
+  if (mb.code) return `failed: no merge-base with origin/${base}: ${mb.stderr.trim()}`;
+  const onto = mb.stdout.trim();
+  const folds = async () =>
+    (await git("log", "--format=%s", `${onto}..HEAD`)).stdout
+      .split("\n")
+      .filter((s) => /^(fixup|squash|amend)! /.test(s)).length;
+  const n = await folds();
+  if (!n) return `nothing to fold: no fixup! commit since origin/${base}`;
+  const tree = (await git("rev-parse", "HEAD^{tree}")).stdout.trim();
+  const rebase = await git(
+    "-c",
+    "sequence.editor=true",
+    "-c",
+    "core.editor=true",
+    "-c",
+    "core.hooksPath=/dev/null",
+    "rebase",
+    "-q",
+    // Before git 2.44 `--autosquash` needs `-i`; the no-op sequence editor keeps it non-interactive.
+    "-i",
+    "--autosquash",
+    // A global `rebase.updateRefs` would also move other branches that point into the range.
+    "--no-update-refs",
+    onto,
+  );
+  if (rebase.code) {
+    await git("rebase", "--abort");
+    return `failed: the rebase stopped and was aborted, so the branch is as it was:\n${(rebase.stderr || rebase.stdout).trim()}`;
+  }
+  if (await folds()) return `failed: a fixup! commit is still there: git -C ${name} log --oneline`;
+  if ((await git("rev-parse", "HEAD^{tree}")).stdout.trim() !== tree)
+    return `failed: the tree changed — check git -C ${name} reflog`;
+  const log = (await git("log", "--oneline", `origin/${base}..HEAD`)).stdout.trimEnd();
+  return `folded ${n} commit(s), tree unchanged:\n${log}`;
 }
 
 /** `--abandon`: record *why* on every unsettled PR file and in closeout.md. */

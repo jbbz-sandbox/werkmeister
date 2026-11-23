@@ -153,9 +153,10 @@ const PER_SERVICE =
 
 // SW-438: a grouped PR commits per ticket as it goes; the uncommitted-diff contracts contradicted it (sw-323).
 const keys = (group: string[]) => group.map((k) => `\`${k}\``).join(", ");
-// The merge-base keeps the fold in place; `origin/main` would also move every commit onto an untested base.
+// SW-1059: auto mode denies `git -c sequence.editor=…` and refuses `GIT_SEQUENCE_EDITOR=…`, so the fold is a pre-approved command.
 const FOLD =
-  "`git commit --fixup <sha>`, then `git rebase --autosquash $(git merge-base HEAD origin/main)`";
+  "`git commit --fixup <sha>`, then `werkmeister pr autosquash` (it rebases onto the merge-base with the base, so nothing moves onto an untested base, and refuses a pushed branch)";
+const AUTOSQUASH_GRANTS = ["pr autosquash:*"];
 // SW-669: the gate's base row fails a branch behind its base; a rebase after the first push needs a force-push the agent can't run.
 const REBASE =
   " Then, in each worktree, `git fetch origin <base>`; if `git rev-list --count HEAD..origin/<base>` is not 0, `git rebase origin/<base>` (keeping one commit per ticket) and rerun the tests before the PR file.";
@@ -328,7 +329,8 @@ const START_GRANTS = ["issue start", "issue view"];
 const propose: Stage = {
   name: "propose",
   // SW-717: rule 5's conflict fix pushes its own rebased branch; pr push refuses any other.
-  grants: ["pr push:*"],
+  // Granted for the whole run (stageGrants), so the build stages' FOLD runs too.
+  grants: ["pr push:*", ...AUTOSQUASH_GRANTS],
   job: "acceptance walk and PR files",
   writes:
     "the code commits (one per repo, or one per ticket in a grouped PR), `output/pr-<worktree>.md` per repo",

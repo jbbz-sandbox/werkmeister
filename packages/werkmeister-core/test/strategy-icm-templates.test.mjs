@@ -943,8 +943,9 @@ test("group renders per-ticket commits, a range review and kept commits; unset k
     );
     assert.doesNotMatch(propose, /One commit per code repo touched/);
     assert.match(propose, /never squash to one per repo/);
-    // The fold keeps the base; lint runs before it so its fixes land in a commit.
-    assert.match(propose, /git rebase --autosquash \$\(git merge-base HEAD origin\/main\)/);
+    // SW-1059: the fold is the pre-approved command, which keeps the base; lint runs before it so its fixes land in a commit.
+    assert.match(propose, /`git commit --fixup <sha>`, then `werkmeister pr autosquash`/);
+    for (const c of [implement, propose]) assert.doesNotMatch(c, /git rebase --autosquash/);
     assert.ok(
       propose.indexOf("Run the repo's lint command") <
         propose.indexOf("Then fold everything uncommitted"),

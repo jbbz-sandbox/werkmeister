@@ -1566,6 +1566,12 @@ const SPECS: CommandSpec[] = [
         ["[repo]"],
         ["json"],
       ],
+      [
+        "autosquash",
+        "Fold each fixup! commit into its ticket's commit on this workspace's own unpushed, clean branch",
+        ["[repo]"],
+        ["json"],
+      ],
       ["status", "Record merged, shipped or closed for each PR file", ["[repo]"], ["json"]],
       ["adopt", "Record a PR opened outside the workspace", ["[pr]", "[repo]"], ["no-pr", "json"]],
       [
