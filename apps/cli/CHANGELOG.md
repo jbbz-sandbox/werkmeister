@@ -1,5 +1,18 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.109.0
+
+### Minor Changes
+
+- d4e7820: Team view of the metrics (SW-1104). Close-out pushes the run's own lines of the event log as `metrics.jsonl` on its record branch. `werkmeister metrics rebuild` adds every teammate's slice to your log and caches each record branch's `usage.json` with the branch's git author email (`~/.werkmeister/metrics/usage-branches.jsonl`). The `metrics` report (`metricsReport`) now covers everyone: it adds `releases` (distinct release tags in the range, per week, for deployment frequency) and `usage.byPerson` (with lead time), `usage.byProject` (ticket key prefix) and `usage.byModel`.
+- 39205f9: `werkmeister workflow export <workspace> --to <dir>` writes an icm workspace's stages as a workflow folder (`workflow.yaml` and `stages/<name>.md`) that loads back into the same contracts, hand edits kept. A workflow in `~/.werkmeister/workflows/` may now also grant `pr autosquash:*` and `workspace serve:*`, the built-ins' other two grants, so an exported built-in loads there; a repo's workflow still may not. See "Turn it into a template" in `docs/icm-workflows.md`.
+
+### Patch Changes
+
+- 12a61e1: Flow tab: a range click with a card open no longer refetches that card's timeline (it is the whole run either way), and showing the tab again refreshes it, so its open bars reach the current time (SW-1094).
+- 8802d01: `with-fixture-workspace --workflow <dir>` seeds an ICM workflow folder (`workflow.yaml` and `stages/*.md`) at the fixture's temp HOME `.werkmeister/workflows/<folder name>/`, or with `--workflow-in repo` in its code repo, and makes the fixture an icm workspace of that type. `--then-append <path> <text>` edits a seeded workflow file (`workflow:<path>`) or a fixture `.md` between steps, so `workspace init --then-append workflow:stages/<name>.md "…" --then skills check` shows a template edited after init in one call (SW-1108).
+- f5479fd: `metrics-trends`: the first row covers its whole week or day. `from` is the range's start rounded down to that bucket's start (Monday or midnight, UTC), so a chart no longer dips at its left edge (SW-1112).
+
 ## 0.108.1
 
 ### Patch Changes
