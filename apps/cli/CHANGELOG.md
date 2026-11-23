@@ -1,5 +1,21 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.107.0
+
+### Minor Changes
+
+- b29e983: New `werkmeister pr autosquash [repo]`: folds each `fixup!` commit into its ticket's commit with `git rebase --autosquash` onto the merge-base with `origin/<base>`, a no-op editor and hooks off, in the workspace's own worktrees. It refuses another worktree or branch, a dirty tree, a merge commit from the base and a branch already on origin. The grouped ICM contracts name it in place of the raw rebase, which auto mode refused both ways it can run non-interactively (`git -c` is denied, `GIT_SEQUENCE_EDITOR=` is refused), and every ICM run pre-approves it (SW-1059).
+- db41b12: New `werkmeister workspace serve <dir>`: serves a folder inside the workspace on 127.0.0.1 at an ephemeral port (`python3 -I -u -m http.server 0 -b 127.0.0.1 -d <dir>`), and refuses one whose real path is outside it, the workspace folder itself or a dot-folder (its token and `.env` files). The ICM stage contracts name it for a static-page browser check in place of the raw `python3` line, which the autonomous deny list's `Bash(python3:*)` refused (sw-961), and every ICM run pre-approves it (SW-963).
+
+### Patch Changes
+
+- 5a4a58a: An `extra_services` sidecar's `health_endpoint` now reads as a service's does (SW-1056): `""` is a TCP connect, where it used to mean no healthcheck at all, so `depends_on: service_healthy` can order an app after a MySQL, MariaDB or memcached sidecar. `redis`, `postgres` and a path run the same probes a service runs (each passes when its tool is missing from the image), and an unset one is still the Redis probe.
+- 1d84661: A background test or tool run past 30 minutes keeps reading as working for preemption and `feature pause`, as it already did on the workspace card: both now keep a background shell for `stalled_tool_minutes` plus 30 minutes (SW-1058).
+- cbde546: `werkmeister registry sync` and `werkmeister machine setup` (and `--check`) now list each forwarded service with no `health_endpoint` (SW-1061). Since SW-939 such a service is probed as `GET /health`, so a gRPC or raw-TCP one fails its probe and the k8s forwarder restarts its tunnel every 45 s. Set `health_endpoint: ""` on a non-HTTP service. The default is unchanged.
+- d7ccbd9: `with-fixture-workspace` (the CLI's internal fixture command) now reads its file flags (`--workspace`, `--config`, `--services`, `--running` and the rest) only when the running build is a worktree's `apps/cli/dist/main.js`. Under any other layout, such as an npm global install, where `../../..` of the entry was `<prefix>/lib`, it refuses every file flag (SW-1064).
+- e42f4d1: While a workspace waits for capacity, the hook holds a command only when it runs `docker`, `pnpm`, `node` and the other held programs, not when a commit message, `printf`, `sed` or heredoc only mentions them (SW-1065).
+- ca828cc: When `werkmeister pr open`'s auto-rebase applies cleanly but both sides changed a file the repo marks `linguist-generated` in `.gitattributes` (a snapshot, a lockfile), the base row now fails and names it before the tests run, so the agent regenerates it instead of a stale line-merge failing the test row minutes later (SW-987). PR rule 5 says the same for a manual clean rebase. werkmeister marks its JIT snapshot, man pages, `docs/cli-reference.md` and `pnpm-lock.yaml`.
+
 ## 0.106.2
 
 ### Patch Changes
