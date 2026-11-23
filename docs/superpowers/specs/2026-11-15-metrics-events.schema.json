@@ -85,7 +85,7 @@
     "retry": {
       "type": "integer",
       "minimum": 0,
-      "description": "gate.start: 0 for the first run in this workspace, n for the nth rerun"
+      "description": "gate.start: 0 for the first run of this PR's gate in this workspace, n for the nth rerun"
     },
     "pr": { "type": "string", "format": "uri", "description": "pr.*, release: the PR URL" },
     "tag": { "type": "string", "description": "release: the release tag" }
