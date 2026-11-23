@@ -267,6 +267,7 @@ const DAEMON_TOOLS = [
   "stats",
   "optimize",
   "metrics",
+  "metrics-trends",
   "cache",
   "registry",
   "resources",
@@ -293,6 +294,24 @@ test("the daemon tools are listed, and clean/cache prune default to a dry run", 
   const metricsIn = tools.find((t) => t.name === "metrics")?.inputSchema;
   assert.equal(metricsIn?.properties?.workspace?.type, "string");
   assert.ok(!metricsIn?.required?.includes("workspace"));
+  // SW-1097: the Metrics tab's series.
+  const trends = tools.find((t) => t.name === "metrics-trends");
+  assert.deepEqual(trends?.inputSchema.properties?.range?.enum, ["7d", "30d", "90d", "all"]);
+  assert.deepEqual(trends?.inputSchema.properties?.bucket?.enum, ["day", "week"]);
+  assert.deepEqual(trends?.inputSchema.required ?? [], []);
+  assert.equal(trends?.annotations?.readOnlyHint, true);
+  const row = trends?.outputSchema?.properties?.rows?.items;
+  for (const k of [
+    "bucket",
+    "byVersion",
+    "stages",
+    "byModel",
+    "leadToMerge",
+    "leadToRelease",
+    "gate",
+  ])
+    assert.ok(row?.properties?.[k], `rows[] has ${k}`);
+  assert.equal(row?.properties?.byVersion?.type, "object");
 });
 
 test("a workspace-scoped server lists only the workspace verbs", async () => {

@@ -333,6 +333,9 @@ test("a reused name's cycle starts at its own run's issue.start, not the earlier
 const git = (cwd, ...a) =>
   execFileSync("git", ["-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", ...a], {
     cwd,
+    env: Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => !/^GIT_(DIR|WORK_TREE|COMMON_DIR)$/.test(k)),
+    ), // a caller's GIT_DIR beats cwd (SW-520)
     encoding: "utf8",
   });
 

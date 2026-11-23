@@ -77,7 +77,7 @@ UI-only tools render an interface in an MCP App client and return little to a sc
 
 <!-- generated:sdk-call-tools -->
 
-59 tools.
+60 tools.
 
 | Tool | What it does | Arguments |
 | --- | --- | --- |
@@ -134,6 +134,7 @@ UI-only tools render an interface in an MCP App client and return little to a sc
 | `stats` | Container resource usage | `collect?: number`, `interval?: integer`, `save?: boolean` |
 | `optimize` | Usage against configured limits | `collect?: number`, `interval?: integer` |
 | `metrics` | Flow metrics | `range?: "7d" \| "30d" \| "90d" \| "all"`, `workspace?: string` |
+| `metrics-trends` | Metrics trends | `range?: "7d" \| "30d" \| "90d" \| "all"`, `bucket?: "day" \| "week"` |
 | `cache` | Prune the shared build caches | `name?: string`, `reset?: boolean`, `force?: boolean`, `dryRun?: boolean` |
 | `registry` | Regenerate the service registry | `check?: boolean` |
 | `resources` | CPU and memory per workspace | none |
