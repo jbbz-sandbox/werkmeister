@@ -2421,9 +2421,9 @@ test("openPrs: refuses a failed gate, opens an approved one and records it", asy
         "stages/03_propose/output/pr-app.md",
         ".werkmeister/gate-app-release.log",
         ".werkmeister/gate-app-test-api.log",
-        ".werkmeister/gate-runs",
+        ".werkmeister/gate-runs-app",
       ],
-      "the record commit names the PR file and the gate logs (SW-401) and the gate run count (SW-778)",
+      "the record commit names the PR file and the gate logs (SW-401) and the PR's gate run count (SW-778, SW-1001)",
     );
     assert.ok(d.calls.some((c) => c.startsWith("git -C") && c.endsWith("push -u origin me/ws")));
     assert.deepEqual(d.stopped, [ws], "containers stop once the PR is open (SW-39)");
@@ -4630,6 +4630,8 @@ test("spike: a doc PR file in 02_findings passes the gate with skip_exercise and
       "every earlier stage has output",
     );
 
+    // An older workspace's single counter still goes on the record (SW-1001).
+    fs.writeFileSync(path.join(dotDir(ws), "gate-runs"), "3\n");
     let recorded = null;
     const d = deps(
       [DIFF_DOCS, [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }]],
@@ -4647,6 +4649,7 @@ test("spike: a doc PR file in 02_findings passes the gate with skip_exercise and
       "stages/02_findings/output/pr-app.md",
       ".werkmeister/gate-app-release.log",
       ".werkmeister/gate-runs",
+      ".werkmeister/gate-runs-app",
     ]);
   } finally {
     clean(ws);

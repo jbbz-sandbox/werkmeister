@@ -354,6 +354,35 @@ test("an exit-75 gate writes exit 75, and the next run in the workspace has retr
   );
 });
 
+test("in a two-worktree workspace each repo's first gate is retry 0 and its second retry 1 (SW-1001)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const { gates, results } = await gateRuns(fx, defaultDeps(), defaultDeps());
+      for (const r of results) assert.equal(r.ok, true, r.lines.join("\n"));
+      assert.deepEqual(
+        gates.filter((g) => g.event === "gate.start").map((g) => g.retry),
+        [0, 0, 1, 1],
+      );
+      for (const repo of ["app", "web"]) {
+        const counter = path.join(fx.workspace, ".werkmeister", `gate-runs-${repo}`);
+        assert.ok(counter.startsWith(fx.root), "counter outside the fixture");
+        assert.equal(fs.readFileSync(counter, "utf8"), "2\n");
+      }
+    },
+    {
+      gate: true,
+      repos: [
+        { name: "app", change: "packages/lib/index.js" },
+        { name: "web", change: "packages/site/index.js" },
+      ],
+      services:
+        'services:\n  lib: { type: cli, repo: app, path: packages/lib, test: "true" }\n  site: { type: cli, repo: web, path: packages/site, test: "true" }\nrepos:\n  app: { services: [lib], path_mappings: { packages/lib: lib } }\n  web: { services: [site], path_mappings: { packages/site: site } }\n',
+      running: ["demo-lib", "demo-site"],
+      workspaceServices: ["lib", "site"],
+    },
+  );
+});
+
 test("a gate failure that is not a capacity wait writes its exit 1, not 75", async () => {
   await withFixtureWorkspace(
     async (fx) => {

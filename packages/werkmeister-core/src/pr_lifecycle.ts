@@ -449,12 +449,13 @@ function touchExecMarker(ws: string): void {
 }
 
 /**
- * This workspace's gate runs so far, then one more: `gate.start`'s `retry` (SW-778). Kept in the
- * workspace, not counted from the metrics log, so a re-created workspace of the same name starts at 0.
+ * This PR file's gate runs in this workspace so far, then one more: `gate.start`'s `retry` (SW-778).
+ * Counted per PR file, since `pr gate` gates each in turn and the second repo's first run is no rerun (SW-1001).
+ * Kept in the workspace, not counted from the metrics log, so a re-created workspace of the same name starts at 0.
  */
 // shortcut: read-then-write, two gates starting together in one workspace get the same retry; lock it if that shows in the data.
-function nextGateRun(ws: string): number {
-  const file = path.join(dotDir(ws), "gate-runs");
+function nextGateRun(ws: string, stem: string): number {
+  const file = path.join(dotDir(ws), `gate-runs-${stem}`);
   let n = 0;
   try {
     n = Number.parseInt(fs.readFileSync(file, "utf8"), 10) || 0;
@@ -919,7 +920,7 @@ export async function runGate(
   beat.unref();
   const workspace = path.basename(ws);
   const run = randomUUID();
-  recordEvent({ event: "gate.start", workspace, run, retry: nextGateRun(ws) });
+  recordEvent({ event: "gate.start", workspace, run, retry: nextGateRun(ws, file.stem) });
   try {
     result = await gateChecks(ws, file, deps, started, recreated, testsOnly, rebase);
   } finally {
@@ -2389,13 +2390,16 @@ export async function openPrs(
         : "pr watch: NOT scheduled; a failing check or a conflict will not wake a terminal session. Run `werkmeister pr watch --install`",
     );
     // SW-401: the gate and pr-open logs are the evidence behind the PR file; keep them on the record,
-    // with the gate run count (SW-778). Only files that exist: `git add` fails on a pathspec that matches nothing.
+    // with the gate run counts (SW-778): one per PR file, and an older workspace's single `gate-runs` (SW-1001).
+    // Only files that exist: `git add` fails on a pathspec that matches nothing.
     const logs = fs
       .readdirSync(dotDir(ws), { withFileTypes: true })
       .filter(
         (e) =>
           e.isFile() &&
-          (/^gate-.*\.log$/.test(e.name) || e.name === "pr-open.log" || e.name === "gate-runs"),
+          (/^gate-.*\.log$/.test(e.name) ||
+            e.name === "pr-open.log" ||
+            e.name.startsWith("gate-runs")),
       )
       .map((e) => path.join(".werkmeister", e.name));
     lines.push(
