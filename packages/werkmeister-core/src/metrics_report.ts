@@ -214,7 +214,8 @@ export type UsageRow = Pick<
   | "activeMinutes"
   | "wallClockMinutes"
   | "turns"
->;
+> &
+  Partial<Pick<UsageSnapshot, "outcome" | "stages" | "byModel" | "werkmeister">>;
 export interface FlowInput {
   events: Record<string, unknown>[];
   open: OpenWorkspace[];
@@ -276,19 +277,16 @@ function firstPerPr(): (e: Record<string, unknown>) => boolean {
   };
 }
 
-/** The report for *input* over *range*, as of *now*. Pure: the formulas of § Definitions. */
-export function flowMetrics(
-  input: FlowInput,
-  range: MetricsRange,
-  now: Date,
-  workspace?: string,
-): MetricsReport {
-  const to = now.getTime();
-  const from = range === "all" ? null : to - Number.parseInt(range, 10) * DAY_MS;
-  const inRange = (t: string | undefined | null): t is string =>
-    !!t && ms(t) <= to && (from === null || ms(t) >= from);
-
-  // An open workspace's own run wins over a closed run of the same name.
+/**
+ * Each workspace's first turn (an open workspace's own run wins over a closed run of its name),
+ * where each run's events start, and *input*'s events of those runs, oldest first, with doubled
+ * `pr.*` / `release` lines dropped.
+ */
+function runEvents(input: FlowInput): {
+  firstTurn: Map<string, string>;
+  runStart: Map<string, string>;
+  events: Record<string, unknown>[];
+} {
   const firstTurn = new Map<string, string>();
   for (const u of input.usages) if (u.firstTurn) firstTurn.set(u.workspace, u.firstTurn);
   for (const o of input.open) if (o.firstTurn) firstTurn.set(o.workspace, o.firstTurn);
@@ -304,13 +302,6 @@ export function flowMetrics(
     if (closed) runStart.set(o.workspace, closed);
     else runStart.delete(o.workspace);
   }
-
-  const tl = new Map<string, Timeline>();
-  const waitAt: { cause: WaitCause; at: string; s: number }[] = [];
-  const opened = new Map<string, string>();
-  const merged = new Map<string, string>();
-  const released = new Map<string, string>();
-  const gateStart = new Map<string, string>();
   const events = input.events
     .filter((e) => {
       const at = String(e["at"]);
@@ -321,6 +312,28 @@ export function flowMetrics(
     })
     .sort((a, b) => ms(String(a["at"])) - ms(String(b["at"])))
     .filter(firstPerPr());
+  return { firstTurn, runStart, events };
+}
+
+/** The report for *input* over *range*, as of *now*. Pure: the formulas of § Definitions. */
+export function flowMetrics(
+  input: FlowInput,
+  range: MetricsRange,
+  now: Date,
+  workspace?: string,
+): MetricsReport {
+  const to = now.getTime();
+  const from = range === "all" ? null : to - Number.parseInt(range, 10) * DAY_MS;
+  const inRange = (t: string | undefined | null): t is string =>
+    !!t && ms(t) <= to && (from === null || ms(t) >= from);
+  const { firstTurn, runStart, events } = runEvents(input);
+
+  const tl = new Map<string, Timeline>();
+  const waitAt: { cause: WaitCause; at: string; s: number }[] = [];
+  const opened = new Map<string, string>();
+  const merged = new Map<string, string>();
+  const released = new Map<string, string>();
+  const gateStart = new Map<string, string>();
   for (const e of events) {
     const at = String(e["at"]);
     const ws = String(e["workspace"]);
@@ -673,6 +686,11 @@ export async function metricsReport(
   opts: { range?: MetricsRange; workspace?: string } = {},
   now = new Date(),
 ): Promise<MetricsReport> {
+  return flowMetrics(await flowInput(now), opts.range ?? "7d", now, opts.workspace);
+}
+
+/** The event log, open workspaces' state, and `usage.json` from workspace folders and local record branches. */
+async function flowInput(now: Date): Promise<FlowInput> {
   const rows = await Promise.all(
     (await listWorkspaces()).workspaces.map(
       async (w): Promise<{ open?: OpenWorkspace; usage?: UsageRow }> => {
@@ -713,10 +731,286 @@ export async function metricsReport(
       seen.add(`${u.workspace}|${u.closedAt}`);
       usages.push(u);
     }
-  return flowMetrics(
-    { events: readMetricsEvents(), open, usages },
-    opts.range ?? "7d",
-    now,
-    opts.workspace,
-  );
+  return { events: readMetricsEvents(), open, usages };
+}
+
+/** A `metrics-trends` bucket size. */
+export type TrendBucket = "day" | "week";
+/** Every `TrendBucket`. */
+export const TREND_BUCKETS: readonly TrendBucket[] = ["day", "week"];
+/** Nearest-rank percentiles and how many values they came from. */
+export interface CountedPercentiles extends Percentiles {
+  /** How many values. */
+  count: number;
+}
+/** One bucket's numbers, for every version or for one. */
+export interface TrendSlice {
+  /** `usage.json` snapshots with outcome shipped, closed in the bucket. */
+  shipped: number;
+  /** Snapshots with outcome abandoned, closed in the bucket. */
+  abandoned: number;
+  /** Minutes per ICM stage (`02_spec`, …), by the bucket each stage finished in. */
+  stages: Record<string, CountedPercentiles>;
+  /** First turn → last `pr.merged`, by the merge's bucket. */
+  leadToMerge: CountedPercentiles;
+  /** First turn → last `release`, by the release's bucket. */
+  leadToRelease: CountedPercentiles;
+  /** Summed tokens of the snapshots closed in the bucket. */
+  tokens: UsageTotals;
+  /** Their summed estimated cost in USD, or null when none has one. */
+  estUsd: number | null;
+  /** Snapshots with no cost estimate. */
+  costUnknown: number;
+  /** Tokens and cost per model. */
+  byModel: Record<
+    string,
+    {
+      /** That model's summed tokens. */
+      tokens: UsageTotals;
+      /** Its summed estimated cost in USD, or null when no snapshot priced it. */
+      estUsd: number | null;
+    }
+  >;
+  /** Cache reads ÷ (input + cache creation + cache reads), or null with no input tokens. */
+  cacheReadShare: number | null;
+  /** Summed active minutes. */
+  activeMinutes: number;
+  /** Summed wall-clock minutes. */
+  wallClockMinutes: number;
+  /** Gate runs that finished (exit ≠ 75; a 75 is a capacity retry, a `gateRetry` wait in `metrics`), by their end. */
+  gate: {
+    /** How many. */
+    runs: number;
+    /** Their summed `gate.start` → `gate.end` minutes. */
+    wallMinutes: number;
+    /** `passed ÷ workspaces`, or null with none. */
+    firstPassRate: number | null;
+    /** Workspaces whose first finished run, ending in the bucket, exited 0. */
+    passed: number;
+    /** Workspaces whose first finished run ended in the bucket. */
+    workspaces: number;
+  };
+}
+/** One bucket of {@link MetricsTrends}. */
+export interface TrendRow extends TrendSlice {
+  /** `week`: its Monday (UTC); `day`: the UTC date; `YYYY-MM-DD`. */
+  bucket: string;
+  /** The same numbers per `usage.json` `werkmeister.version` of each item's workspace, `"unknown"` with none. */
+  byVersion: Record<string, TrendSlice>;
+}
+/**
+ * What {@link metricsTrends} returns.
+ *
+ * @example
+ * ```ts
+ * import { type MetricsTrends, metricsTrends } from "werkmeister-core/sdk";
+ *
+ * const trends: MetricsTrends = await metricsTrends({ bucket: "day" });
+ * console.log(trends.rows.map((r) => [r.bucket, Object.keys(r.byVersion)]));
+ * ```
+ */
+export interface MetricsTrends {
+  /** The range asked for. */
+  range: MetricsRange;
+  /** The bucket size asked for. */
+  bucket: TrendBucket;
+  /** The range's start, or null for `all`. */
+  from: string | null;
+  /** The range's end: now. */
+  to: string;
+  /** One row per bucket from the range's start (for `all`, the oldest item) to now, oldest first, no gaps. */
+  rows: TrendRow[];
+}
+
+type TrendItem = { at: string; version: string } & (
+  | { kind: "closed"; usage: UsageRow }
+  | { kind: "stage"; stage: string; minutes: number }
+  | { kind: "leadToMerge" | "leadToRelease"; minutes: number }
+  | { kind: "gate"; minutes: number }
+  | { kind: "firstGate"; passed: boolean }
+);
+
+const zeroTokens = (): UsageTotals => ({ input: 0, output: 0, cacheCreation: 0, cacheRead: 0 });
+const addTokens = (a: UsageTotals, b: UsageTotals | undefined) => {
+  for (const k of Object.keys(a) as (keyof UsageTotals)[]) a[k] += b?.[k] ?? 0;
+};
+const counted = (values: number[]): CountedPercentiles => ({
+  ...percentiles(values),
+  count: values.length,
+});
+
+function trendSlice(items: TrendItem[]): TrendSlice {
+  const closed = items.flatMap((i) => (i.kind === "closed" ? [i.usage] : []));
+  const minutesOf = (kind: TrendItem["kind"]) =>
+    items.flatMap((i) => (i.kind === kind && "minutes" in i ? [i.minutes] : []));
+  const stageMinutes = new Map<string, number[]>();
+  for (const i of items)
+    if (i.kind === "stage")
+      stageMinutes.set(i.stage, [...(stageMinutes.get(i.stage) ?? []), i.minutes]);
+  const tokens = zeroTokens();
+  const byModel: TrendSlice["byModel"] = {};
+  for (const u of closed) {
+    addTokens(tokens, u.totals);
+    for (const m of u.byModel ?? []) {
+      const row = (byModel[m.model] ??= { tokens: zeroTokens(), estUsd: null });
+      addTokens(row.tokens, m.totals);
+      if (m.estUsd != null) row.estUsd = (row.estUsd ?? 0) + m.estUsd;
+    }
+  }
+  const priced = closed.filter((u) => u.estUsd != null);
+  const inputSide = tokens.input + tokens.cacheCreation + tokens.cacheRead;
+  const firstGates = items.flatMap((i) => (i.kind === "firstGate" ? [i.passed] : []));
+  const passed = firstGates.filter(Boolean).length;
+  const gateMinutes = minutesOf("gate");
+  return {
+    shipped: closed.filter((u) => u.outcome === "shipped").length,
+    abandoned: closed.filter((u) => u.outcome === "abandoned").length,
+    stages: Object.fromEntries([...stageMinutes].map(([s, v]) => [s, counted(v)])),
+    leadToMerge: counted(minutesOf("leadToMerge")),
+    leadToRelease: counted(minutesOf("leadToRelease")),
+    tokens,
+    estUsd: priced.length ? priced.reduce((a, u) => a + (u.estUsd ?? 0), 0) : null,
+    costUnknown: closed.length - priced.length,
+    byModel,
+    cacheReadShare: inputSide ? tokens.cacheRead / inputSide : null,
+    activeMinutes: closed.reduce((a, u) => a + (u.activeMinutes ?? 0), 0),
+    wallClockMinutes: closed.reduce((a, u) => a + (u.wallClockMinutes ?? 0), 0),
+    gate: {
+      runs: gateMinutes.length,
+      wallMinutes: Math.round(gateMinutes.reduce((a, m) => a + m, 0)),
+      firstPassRate: firstGates.length ? passed / firstGates.length : null,
+      passed,
+      workspaces: firstGates.length,
+    },
+  };
+}
+
+/**
+ * *input* as one row per *bucket* over *range*, as of *now*, each split by werkmeister version.
+ * Pure. Every item lands in the bucket of the time it ended (SW-1097 Q3).
+ */
+export function trendSeries(
+  input: FlowInput,
+  range: MetricsRange,
+  bucket: TrendBucket,
+  now: Date,
+): MetricsTrends {
+  const to = now.getTime();
+  const from = range === "all" ? null : to - Number.parseInt(range, 10) * DAY_MS;
+  const inRange = (t: string | undefined | null): t is string =>
+    !!t && !Number.isNaN(ms(t)) && ms(t) <= to && (from === null || ms(t) >= from);
+  const bucketOf = (t: number) =>
+    bucket === "week" ? weekOf(t) : new Date(t).toISOString().slice(0, 10);
+
+  // The newest snapshot of a workspace names its version (SW-1097 Q4).
+  const version = new Map<string, { closedAt: string; v: string }>();
+  for (const u of input.usages) {
+    const seen = version.get(u.workspace);
+    if (!seen || ms(u.closedAt) > ms(seen.closedAt))
+      version.set(u.workspace, { closedAt: u.closedAt, v: u.werkmeister?.version ?? "unknown" });
+  }
+  const versionOf = (ws: string) => version.get(ws)?.v ?? "unknown";
+
+  const items: TrendItem[] = [];
+  for (const u of input.usages) {
+    const v = versionOf(u.workspace);
+    items.push({ at: u.closedAt, version: v, kind: "closed", usage: u });
+    for (const s of u.stages ?? [])
+      if (s.finishedAt && s.minutes != null)
+        items.push({
+          at: s.finishedAt,
+          version: v,
+          kind: "stage",
+          stage: s.stage,
+          minutes: s.minutes,
+        });
+  }
+  const { firstTurn, events } = runEvents(input);
+  const lastMerged = new Map<string, string>();
+  const lastRelease = new Map<string, string>();
+  const gateStart = new Map<string, string>();
+  const firstFinished = new Set<string>();
+  for (const e of events) {
+    const at = String(e["at"]);
+    const ws = String(e["workspace"]);
+    if (e["event"] === "pr.merged") lastMerged.set(ws, max(lastMerged.get(ws), at));
+    else if (e["event"] === "release") lastRelease.set(ws, max(lastRelease.get(ws), at));
+    else if (e["event"] === "gate.start") gateStart.set(String(e["run"]), at);
+    else if (e["event"] === "gate.end" && Number(e["exit"]) !== 75) {
+      const start = gateStart.get(String(e["run"]));
+      if (start)
+        items.push({
+          at,
+          version: versionOf(ws),
+          kind: "gate",
+          minutes: (ms(at) - ms(start)) / 60_000,
+        });
+      if (!firstFinished.has(ws)) {
+        firstFinished.add(ws);
+        items.push({
+          at,
+          version: versionOf(ws),
+          kind: "firstGate",
+          passed: Number(e["exit"]) === 0,
+        });
+      }
+    }
+  }
+  for (const [kind, last] of [
+    ["leadToMerge", lastMerged],
+    ["leadToRelease", lastRelease],
+  ] as const)
+    for (const [ws, at] of last) {
+      const start = firstTurn.get(ws);
+      if (start) items.push({ at, version: versionOf(ws), kind, minutes: minutes(start, at) });
+    }
+
+  const kept = items.filter((i) => inRange(i.at));
+  const byBucket = new Map<string, TrendItem[]>();
+  const first = from ?? (kept.length ? Math.min(...kept.map((i) => ms(i.at))) : null);
+  if (first !== null)
+    for (let d = ms(bucketOf(first)); d <= to; d += (bucket === "week" ? 7 : 1) * DAY_MS)
+      byBucket.set(bucketOf(d), []);
+  for (const i of kept) byBucket.get(bucketOf(ms(i.at)))?.push(i);
+
+  return {
+    range,
+    bucket,
+    from: from === null ? null : new Date(from).toISOString(),
+    to: now.toISOString(),
+    rows: [...byBucket].map(([b, its]) => {
+      const versions = new Map<string, TrendItem[]>();
+      for (const i of its) versions.set(i.version, [...(versions.get(i.version) ?? []), i]);
+      return {
+        bucket: b,
+        ...trendSlice(its),
+        byVersion: Object.fromEntries([...versions].map(([v, vi]) => [v, trendSlice(vi)])),
+      };
+    }),
+  };
+}
+
+/**
+ * Daily or weekly series over *range* (default `30d`, bucket `week`): shipped and abandoned
+ * workspaces, ICM stage minutes p50/p90, lead time from the first turn to merge and to release,
+ * tokens and cost by model, cache-read share, active and wall minutes, and gate runs, minutes and
+ * first-pass rate, each row also split by werkmeister version. Reads what {@link metricsReport}
+ * reads; never fetches.
+ *
+ * @param opts - `range`: `"7d"`, `"30d"`, `"90d"` or `"all"`; `bucket`: `"day"` or `"week"`.
+ * @returns The {@link MetricsTrends}.
+ *
+ * @example
+ * ```ts
+ * import { metricsTrends } from "werkmeister-core/sdk";
+ *
+ * const { rows } = await metricsTrends({ range: "90d" });
+ * for (const r of rows) console.log(r.bucket, r.stages["03_implement"]?.p90Minutes, r.estUsd);
+ * ```
+ */
+export async function metricsTrends(
+  opts: { range?: MetricsRange; bucket?: TrendBucket } = {},
+  now = new Date(),
+): Promise<MetricsTrends> {
+  return trendSeries(await flowInput(now), opts.range ?? "30d", opts.bucket ?? "week", now);
 }

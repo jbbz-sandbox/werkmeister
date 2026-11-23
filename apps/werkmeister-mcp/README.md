@@ -119,7 +119,7 @@ server. Until that is widened, use:
 
 <!-- generated:mcp-tools -->
 
-59 tools (5 UI-only).
+60 tools (5 UI-only).
 
 | Tool | What it does |
 | --- | --- |
@@ -127,6 +127,7 @@ server. Until that is widened, use:
 | `stats` | Container resource usage |
 | `optimize` | Usage against configured limits |
 | `metrics` | Flow metrics |
+| `metrics-trends` | Metrics trends |
 | `cache` | Prune the shared build caches |
 | `registry` | Regenerate the service registry |
 | `resources` | CPU and memory per workspace |

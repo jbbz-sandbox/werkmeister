@@ -18,7 +18,14 @@ import {
   planClean,
   runClean,
 } from "werkmeister-core/lifecycle";
-import { METRICS_RANGES, type MetricsRange, metricsReport } from "werkmeister-core/metrics_report";
+import {
+  METRICS_RANGES,
+  type MetricsRange,
+  metricsReport,
+  metricsTrends,
+  TREND_BUCKETS,
+  type TrendBucket,
+} from "werkmeister-core/metrics_report";
 import { syncRegistry } from "werkmeister-core/registry_sync";
 import { getWorkspaceResources } from "werkmeister-core/resources";
 import { waitingQueue } from "werkmeister-core/scheduler_client";
@@ -130,6 +137,43 @@ const METRICS_OUTPUT = {
     )
     .optional(),
 };
+const TOKENS = z.object({
+  input: z.number(),
+  output: z.number(),
+  cacheCreation: z.number(),
+  cacheRead: z.number(),
+});
+const COUNTED = PERCENTILES.extend({ count: z.number() });
+const TREND_SLICE = z.object({
+  shipped: z.number(),
+  abandoned: z.number(),
+  stages: z.record(z.string(), COUNTED),
+  leadToMerge: COUNTED,
+  leadToRelease: COUNTED,
+  tokens: TOKENS,
+  estUsd: z.number().nullable(),
+  costUnknown: z.number(),
+  byModel: z.record(z.string(), z.object({ tokens: TOKENS, estUsd: z.number().nullable() })),
+  cacheReadShare: z.number().nullable(),
+  activeMinutes: z.number(),
+  wallClockMinutes: z.number(),
+  gate: z.object({
+    runs: z.number(),
+    wallMinutes: z.number(),
+    firstPassRate: z.number().nullable(),
+    passed: z.number(),
+    workspaces: z.number(),
+  }),
+});
+const TRENDS_OUTPUT = {
+  range: z.enum(METRICS_RANGES as [MetricsRange, ...MetricsRange[]]),
+  bucket: z.enum(TREND_BUCKETS as [TrendBucket, ...TrendBucket[]]),
+  from: z.string().nullable(),
+  to: z.string(),
+  rows: z.array(
+    TREND_SLICE.extend({ bucket: z.string(), byVersion: z.record(z.string(), TREND_SLICE) }),
+  ),
+};
 
 export function registerDaemonTools(server: McpServer): void {
   server.registerTool(
@@ -222,6 +266,37 @@ export function registerDaemonTools(server: McpServer): void {
       adapt(async () => ({
         ...(await metricsReport({ range: args.range, workspace: args.workspace })),
       })),
+  );
+
+  server.registerTool(
+    "metrics-trends",
+    {
+      title: "Metrics trends",
+      annotations: { readOnlyHint: true },
+      description:
+        "The same work over time, one row per day or ISO week (Monday, UTC) over a range (default 30d, " +
+        "week): shipped and abandoned workspaces, minutes per ICM stage (p50, p90, count), lead time from " +
+        "the first turn to merge and to release (p50, p90), tokens and estimated cost in total and by " +
+        "model, cache-read share, active and wall minutes, and gate runs, gate minutes and first-pass rate " +
+        "(exit-75 capacity retries left out). Each item counts in the bucket it ended in: a workspace by " +
+        "its close-out, a stage when it finished, a lead time at its merge or release, a gate run at its " +
+        "end. Every row also has byVersion: the same numbers per werkmeister version from each " +
+        "workspace's usage.json, `unknown` when it has none. Reads the metrics event log, workspace state " +
+        "and usage.json from the record branches on this machine.",
+      inputSchema: {
+        range: z
+          .enum(METRICS_RANGES as [MetricsRange, ...MetricsRange[]])
+          .optional()
+          .describe("7d, 30d, 90d or all. Default 30d."),
+        bucket: z
+          .enum(TREND_BUCKETS as [TrendBucket, ...TrendBucket[]])
+          .optional()
+          .describe("day or week. Default week."),
+      },
+      outputSchema: TRENDS_OUTPUT,
+    },
+    async (args): Promise<CallToolResult> =>
+      adapt(async () => ({ ...(await metricsTrends({ range: args.range, bucket: args.bucket })) })),
   );
 
   server.registerTool(
