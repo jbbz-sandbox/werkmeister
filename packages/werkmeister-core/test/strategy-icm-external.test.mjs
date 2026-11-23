@@ -2,7 +2,7 @@
 // Every write goes under withSandboxHome; run-tests.sh refuses a HOME holding the real ~/.werkmeister (SW-662).
 
 import assert from "node:assert/strict";
-import { execFile, execFileSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -14,6 +14,7 @@ import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { createWorkspace, getFormSchema } from "../dist/sandbox.js";
 import { ICM_TEMPLATES, stageGrants, templateFor } from "../dist/strategies/icm_templates.js";
 import { strategyById } from "../dist/strategies/index.js";
+import { initWorkspace, WorkspaceInitError } from "../dist/workspace_init.js";
 import { _WIZARD_PROMPTS } from "../dist/workspace_prompts.js";
 import { pinWerkmeisterRoot, useDockerEngine, withSandboxHome } from "./fixtures.mjs";
 
@@ -417,7 +418,8 @@ test("an invalid workflow fails init with one [err] line before .env or .werkmei
   });
 });
 
-test("`werkmeister workspace init` prints the workflow error as [err], not Error:", async () => {
+// In-process, as `werkmeister workspace init` runs it: CI's core jobs don't build the CLI bundle (SW-1063).
+test("`workspace init` on the failed workspace prints the workflow error as [err], not Error:", async () => {
   await withRepos({ review: BROKEN }, async (tmp) => {
     const ws = path.join(tmp, "ws", "demo");
     await withReporter(collectingReporter(), () =>
@@ -426,27 +428,22 @@ test("`werkmeister workspace init` prints the workflow error as [err], not Error
         { ...CREATE, cwd: tmp },
       ).catch(() => {}),
     );
-    const cli = path.resolve(
-      import.meta.dirname,
-      "..",
-      "..",
-      "..",
-      "apps",
-      "cli",
-      "dist",
-      "main.js",
-    );
-    const out = await new Promise((resolve) =>
-      execFile(
-        process.execPath,
-        [cli, "workspace", "init", "--no-build"],
-        { cwd: ws, env: { ...process.env, NO_COLOR: "1" } },
-        (e, stdout, stderr) => resolve({ code: e?.code ?? 0, text: stdout + stderr }),
+    const log = collectingReporter();
+    const err = await withReporter(log, () =>
+      initWorkspace({}, ws, { build: false }).then(
+        () => null,
+        (e) => e,
       ),
     );
-    assert.equal(out.code, 1, out.text);
-    assert.match(out.text, /\[err\] +ICM workflow .*unknown variable \{\{oops\}\}/);
-    assert.doesNotMatch(out.text, /Error:/);
+    // The CLI's init command exits 1 on a WorkspaceInitError without printing it again.
+    assert.ok(err instanceof WorkspaceInitError, `got ${err}`);
+    const errs = log
+      .text()
+      .split("\n")
+      .filter((l) => l.includes("[err]"));
+    assert.equal(errs.length, 1, log.text());
+    assert.match(errs[0], /\[err\] {2}ICM workflow .*unknown variable \{\{oops\}\}/);
+    assert.doesNotMatch(log.text(), /Error:/);
     assert.ok(!fs.existsSync(path.join(ws, ".env")), "still no .env");
   });
 });
