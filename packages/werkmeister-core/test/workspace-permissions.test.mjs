@@ -884,10 +884,13 @@ test("SW-807: an ICM run pre-approves only its own issue's start and view, exact
   yml('context_strategy: "icm "\nwork_type: bugfix\n');
   // SW-717: pr push refuses anything but the workspace's own clean, merge-free branch with a live lease.
   // SW-963: workspace serve refuses a folder outside the workspace and runs one loopback server line.
-  const grants = ["issue start", "issue view", "workspace serve:*", "pr push:*"].flatMap((g) => [
-    `Bash(werkmeister ${g})`,
-    `Bash(w9r ${g})`,
-  ]);
+  const grants = [
+    "issue start",
+    "issue view",
+    "workspace serve:*",
+    "pr push:*",
+    "pr autosquash:*",
+  ].flatMap((g) => [`Bash(werkmeister ${g})`, `Bash(w9r ${g})`]);
   const interactive = workspaceAllowRules(root, false);
   assert.deepEqual(
     new Set(interactive),
