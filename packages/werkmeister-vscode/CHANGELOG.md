@@ -1,5 +1,14 @@
 # vscode-plugin
 
+## 0.107.1
+
+### Patch Changes
+
+- 64c6772: A workspace card in the VS Code Workspaces view shows only `▶ Start work` until the workspace has been started; `Open terminal` appears once a run has begun and stays after a stop (SW-1052).
+- cb9333a: The status strip's infra chip names each service by its state, in the /workspaces pane and the VS Code strip: `infra: caddy down, k8s-forwards starting`. A service still starting no longer reads `down`, and the chip is amber while every named service is only starting; red once one is down or unhealthy (SW-1069).
+  - werkmeister-core@0.107.1
+  - werkmeister-ui@0.7.92
+
 ## 0.107.0
 
 ### Patch Changes
