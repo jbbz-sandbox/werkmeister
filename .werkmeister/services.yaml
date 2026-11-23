@@ -28,7 +28,6 @@ repo:
   # Changes here touch no service, so the gate runs no service tests for them.
   # scripts/: its tests and checks all run in the lint row above (licenses, docs:check, name:check); SW-563.
   # Anything else outside a service's `path` still touches every service, and the gate's tests row names it.
-  # packages/werkmeister-ui stays unmapped on purpose: the dashboard, the MCP app and the vscode extension all import it.
   no_service_paths: [.changeset, .gitignore, README.md, .github, .vscode, .claude, scripts, bin, LICENSE, NOTICE, .git-blame-ignore-revs]
   # SW-450: paths no service owns by path, so a change there doesn't test every service.
   path_mappings:
@@ -36,6 +35,8 @@ repo:
     apps/werkmeister-mcp: werkmeister-core # ships inside the CLI (dist/mcp.js)
     docs: docs-site # SW-644: the site builds from docs/, so a docs change runs its build and dead-link check
     plugins: werkmeister-core # plugin tests live in core; core's row also runs the plugin's typecheck + test (SW-580)
+    # SW-1087: its importers; the MCP app and the plugin's copy are tested in core's row.
+    packages/werkmeister-ui: [werkmeister-dashboard, werkmeister-vscode, werkmeister-core]
   # Tracker components: one per ticket, the subsystem its fix lands in. Backlog triage sets them and groups tickets
   # by them (one workspace and PR per group). Each project lists its own here; werkmeister has no built-in list.
   # A new component is a change to this map, never a name made up in the tracker.

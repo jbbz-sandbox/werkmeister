@@ -755,12 +755,15 @@ function reviewRequired(ws: string): boolean {
 }
 
 /**
- * The longest `path_mappings` or `no_service_paths` prefix covering *file*: its service,
+ * The longest `path_mappings` or `no_service_paths` prefix covering *file*: its services,
  * `null` for a no-service path (e.g. .github), `undefined` when nothing covers it.
  */
-function mappingFor(file: string, repo: RepoEntry): string | null | undefined {
-  const mappings: [string, string | null][] = [
-    ...Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>),
+function mappingFor(file: string, repo: RepoEntry): string[] | null | undefined {
+  const mappings: [string, string[] | null][] = [
+    ...Object.entries(repo["path_mappings"] ?? {}).map(([p, s]): [string, string[]] => [
+      p,
+      [s].flat(),
+    ]),
     ...((repo["no_service_paths"] ?? []) as string[]).map((p): [string, null] => [
       p.replace(/\/+$/, ""),
       null,
@@ -777,7 +780,7 @@ export function mapTouched(files: string[], repo: RepoEntry): string[] {
   for (const f of files) {
     const hit = mappingFor(f, repo);
     if (hit === undefined) for (const s of (repo["services"] ?? []) as string[]) out.add(s);
-    else if (hit !== null) out.add(hit);
+    else if (hit !== null) for (const s of hit) out.add(s);
   }
   return [...out].sort();
 }
@@ -811,7 +814,8 @@ export function fragmentTouched(
   const br = branch.repos[dir] ?? {};
   const mr = before.repos[dir] ?? {};
   const mappingKeys = ["path_mappings", "no_service_paths"];
-  const moved = files.some((f) => mappingFor(f, br) !== mappingFor(f, mr));
+  // Deep: a list mapping is a new array on each side (SW-1087).
+  const moved = files.some((f) => !isDeepStrictEqual(mappingFor(f, br), mappingFor(f, mr)));
   const reasons = [...new Set([...Object.keys(br), ...Object.keys(mr)])]
     .filter((k) => k !== "services" && !isDeepStrictEqual(br[k], mr[k]))
     .filter((k) => moved || !mappingKeys.includes(k))
@@ -1650,12 +1654,10 @@ async function gateChecks(
   // A branch id maps to the compose id that owns the same path.
   const toRendered = (s: string): string | undefined => {
     if (rendered.includes(s)) return s;
-    const at = Object.entries((repo["path_mappings"] ?? {}) as Record<string, string>).find(
-      ([, name]) => name === s,
-    )?.[0];
-    return at === undefined
-      ? undefined
-      : ((machineRepo["path_mappings"] ?? {}) as Record<string, string>)[at];
+    // A list mapping (SW-1087) names no one owner, so only a one-service path renames.
+    const at = Object.entries(repo["path_mappings"] ?? {}).find(([, name]) => name === s)?.[0];
+    const id = at === undefined ? undefined : machineRepo["path_mappings"]?.[at];
+    return typeof id === "string" ? id : undefined;
   };
   const repoServices = (repo["services"] ?? []) as string[];
   const repoContainer = () =>

@@ -123,7 +123,7 @@ Code that comes after a worktree's PR merged (a problem found while cutting or d
 
 A failed lint, test or release row shows the lines naming failing tests (`not ok`, `✖`, `×`, `FAIL`) from anywhere in its output, then its last 15 lines (5 for release), then `full log: <path>`. Each of these rows writes its whole output to `.werkmeister/gate-<repo dir>-<row>.log` in the workspace root (e.g. `gate-werkmeister-test-cli.log`), overwritten on every run and committed on the record branch by `pr open` with `pr-open.log`, so finding a failing test never means re-running the gate by hand.
 
-**Touched services** come from `git diff --name-only origin/<base>...HEAD`. Each file maps to a service through the registry's `repos.<repo>.path_mappings`, by longest prefix. A file under one of the repo's `no_service_paths` (registry `repo:`, below) touches no service, so a docs-only diff runs no service tests; the release check still runs. Any other file under no mapping marks every service in the repo as touched.
+**Touched services** come from `git diff --name-only origin/<base>...HEAD`. Each file maps to a service through the registry's `repos.<repo>.path_mappings`, by longest prefix; a mapping may name a list of services, e.g. a shared package's importers. A file under one of the repo's `no_service_paths` (registry `repo:`, below) touches no service, so a docs-only diff runs no service tests; the release check still runs. Any other file under no mapping marks every service in the repo as touched.
 
 The repo's own `.werkmeister/services.yaml` (when no mapping covers it) is the exception. The gate renders the branch's fragment, as it does for the test commands, and compares it with the fragment at the diff's base (`git merge-base origin/<base> HEAD`), rendered the same way; not with the machine registry, which `werkmeister registry --from` may have synced from this branch. Only the repo's services whose rendered entries differ are touched, so a changed `test:` runs that one service. Every service is touched by a change to a `repo:` key (`lint`, `release_check`, …), or to one of the repo's own `setup_services` entries, since its install serves every container. A `path_mappings` or `no_service_paths` change touches every service only when it maps a file of this diff differently. A change to comments or anchors that renders the same touches nothing. With no fragment on the branch or its base, the file stays unmapped and every service runs.
 
@@ -143,7 +143,7 @@ repo:
   lint: pnpm exec biome ci .                  # the gate's lint row; any ship mode
   format: pnpm exec biome check --write {files}  # run by the agent on the files it touched, before tests
   no_service_paths: [docs, .changeset, .gitignore, README.md]  # prefixes that touch no service in the gate
-  path_mappings: { plugins: werkmeister-core }  # paths no service's `path:` owns → the service that tests them
+  path_mappings: { plugins: werkmeister-core, packages/ui: [web, admin] }  # paths no service's `path:` owns → the service(s) that test them
   components: { gate: "pr gate, test rows" }  # the project's tracker components (name → what it covers); triage groups tickets by them
   sync_on_merge: warn                         # warn (default) | auto: when a merged PR changes this fragment
 ```
