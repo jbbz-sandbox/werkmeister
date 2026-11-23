@@ -11,3 +11,8 @@ export const DOT_DIR = ".werkmeister";
 export function dotDir(parent: string): string {
   return path.join(parent, DOT_DIR);
 }
+
+/** The workspace's `.werkmeister/logs/`: every log werkmeister writes for it, apart from its state (SW-1091). */
+export function logsDir(workspaceRoot: string): string {
+  return path.join(dotDir(workspaceRoot), "logs");
+}

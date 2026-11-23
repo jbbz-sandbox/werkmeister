@@ -70,7 +70,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
               : args.action === "autosquash"
                 ? await autosquash(ws, repo)
                 : { ok: true, ...(await refreshPrStatus(ws)) };
-  // SW-527: a bare redirected `pr open > pr-open.log` has no echo, so the log ends with its own exit line.
+  // SW-527: a bare redirected `pr open > .werkmeister/logs/pr-open.log` has no echo, so the log ends with its own exit line.
   if (args.action === "open" && !args.json)
     result.lines.push(
       `pr open: ${"retry" in result && result.retry ? "retry later, " : ""}exit ${exitOf(result)}`,

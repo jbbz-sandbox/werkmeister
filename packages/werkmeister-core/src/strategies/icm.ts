@@ -12,6 +12,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { COMPOSE_FILE } from "../compose_file.js";
 import { dotDir, IDLE_SERVICE_TYPES, sandboxHome } from "../config.js";
+import { logsDir } from "../dot_dir.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import {
   removeWorkspaceHooks,
@@ -619,6 +620,8 @@ export const icm: ContextStrategy = {
       info(`${lock ? "wrote" : "removed"} ${WORKFLOW_LOCK}`);
       wrote.push(WORKFLOW_LOCK);
     }
+    // Its rule 3 redirects into logs/, and a shell redirect makes no folder (SW-1091).
+    if (wrote.includes("_shared/pr-rules.md")) fs.mkdirSync(logsDir(root), { recursive: true });
     return { wrote };
   },
   // Re-injection is the route table the agent reads by itself; there is no hook.

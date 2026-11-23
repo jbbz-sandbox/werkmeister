@@ -177,7 +177,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
     // SW-568: the pr open log goes to the absolute workspace path, so a drifted cwd cannot write it into a code worktree.
     assert.match(
       fs.readFileSync(path.join(root, "_shared", "pr-rules.md"), "utf8"),
-      /`werkmeister pr open > <absolute workspace path>\/\.werkmeister\/pr-open\.log 2>&1`/,
+      /`werkmeister pr open > <absolute workspace path>\/\.werkmeister\/logs\/pr-open\.log 2>&1`/,
       "SW-568",
     );
     assert.match(
@@ -272,6 +272,18 @@ test("check is empty right after init, and sync repairs an edited contract", asy
     assert.deepEqual(icm.sync(root), { wrote: ["stages/02_spec/CONTEXT.md"] });
     assert.deepEqual(icm.check(root), []);
     assert.equal(fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"), "hand edit\n");
+  });
+});
+
+// SW-1091: a synced pr-rules.md redirects into .werkmeister/logs/, which a workspace from before it lacks.
+test("sync that rewrites pr-rules.md creates the logs folder its redirects need", async () => {
+  await withIcmWorkspace(async (root, ctx) => {
+    icm.init(ctx);
+    const logs = path.join(root, ".werkmeister", "logs");
+    fs.rmSync(logs, { recursive: true, force: true });
+    fs.writeFileSync(path.join(root, "_shared", "pr-rules.md"), "old rules\n");
+    assert.deepEqual(icm.sync(root), { wrote: ["_shared/pr-rules.md"] });
+    assert.ok(fs.statSync(logs).isDirectory());
   });
 });
 

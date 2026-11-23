@@ -43,6 +43,7 @@ import {
 } from "./config.js";
 // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 import { writeContextSnapshot } from "./context_snapshot.js";
+import { logsDir } from "./dot_dir.js";
 import { GATE_COMPOSE_FILE, renderGateCompose } from "./generate.js";
 import { updateNoteStatus } from "./graduate.js";
 import { eachIssue, type IssueStatuses, issueStatuses, moveIssue } from "./issue_status.js";
@@ -1241,9 +1242,10 @@ async function gateChecks(
       lines[0] = `${cmd} → exit ${res.code}, retried once after ${why}${waited ? `; ${waited}` : ""}`;
     }
     // Written on a pass too, so a fixed row never leaves its old failing log behind (SW-317).
-    const log = path.join(dotDir(ws), `gate-${file.dir}-${name.replace(/\s+/g, "-")}.log`);
+    const log = path.join(logsDir(ws), `gate-${file.dir}-${name.replace(/\s+/g, "-")}.log`);
     let saved = `full log: ${log}`;
     try {
+      fs.mkdirSync(logsDir(ws), { recursive: true });
       fs.writeFileSync(log, res.stdout + res.stderr);
     } catch (e) {
       saved = `full log not saved: ${e instanceof Error ? e.message : String(e)}`;
@@ -2418,16 +2420,22 @@ export async function openPrs(
     // SW-401: the gate and pr-open logs are the evidence behind the PR file; keep them on the record,
     // with the gate run counts (SW-778): one per PR file, and an older workspace's single `gate-runs` (SW-1001).
     // Only files that exist: `git add` fails on a pathspec that matches nothing.
-    const logs = fs
-      .readdirSync(dotDir(ws), { withFileTypes: true })
-      .filter(
-        (e) =>
-          e.isFile() &&
-          (/^gate-.*\.log$/.test(e.name) ||
-            e.name === "pr-open.log" ||
-            e.name.startsWith("gate-runs")),
-      )
-      .map((e) => path.join(".werkmeister", e.name));
+    // The loose logs too: a workspace initialised before SW-1091 still writes them beside the state.
+    const logs = [
+      ...fs
+        .readdirSync(dotDir(ws), { withFileTypes: true })
+        .filter(
+          (e) =>
+            e.isFile() &&
+            (/^gate-.*\.log$/.test(e.name) ||
+              e.name === "pr-open.log" ||
+              e.name.startsWith("gate-runs")),
+        )
+        .map((e) => path.join(".werkmeister", e.name)),
+      ...(fs.existsSync(logsDir(ws)) ? fs.readdirSync(logsDir(ws), { withFileTypes: true }) : [])
+        .filter((e) => e.isFile())
+        .map((e) => path.join(".werkmeister", "logs", e.name)),
+    ];
     lines.push(
       (await deps.commitRecord(ws, "chore: record opened PR(s)", [...opened, ...logs])).message,
     );
