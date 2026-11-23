@@ -814,7 +814,7 @@ export interface MetricsTrends {
   range: MetricsRange;
   /** The bucket size asked for. */
   bucket: TrendBucket;
-  /** The range's start, or null for `all`. */
+  /** The range's start rounded down to its bucket's start (Monday or midnight, UTC), or null for `all`. */
   from: string | null;
   /** The range's end: now. */
   to: string;
@@ -896,11 +896,12 @@ export function trendSeries(
   now: Date,
 ): MetricsTrends {
   const to = now.getTime();
-  const from = range === "all" ? null : to - Number.parseInt(range, 10) * DAY_MS;
-  const inRange = (t: string | undefined | null): t is string =>
-    !!t && !Number.isNaN(ms(t)) && ms(t) <= to && (from === null || ms(t) >= from);
   const bucketOf = (t: number) =>
     bucket === "week" ? weekOf(t) : new Date(t).toISOString().slice(0, 10);
+  // Snapped to its bucket's start, so the first row holds its whole week or day (SW-1112).
+  const from = range === "all" ? null : ms(bucketOf(to - Number.parseInt(range, 10) * DAY_MS));
+  const inRange = (t: string | undefined | null): t is string =>
+    !!t && !Number.isNaN(ms(t)) && ms(t) <= to && (from === null || ms(t) >= from);
 
   // The newest snapshot of a workspace names its version (SW-1097 Q4).
   const version = new Map<string, { closedAt: string; v: string }>();

@@ -210,7 +210,7 @@ test("byVersion splits each row by its workspaces' usage.json version, unknown w
 
 test("day buckets over 7d cover every date from the range's start to now; nothing logged, no rows", () => {
   const r = trendSeries(INPUT, "7d", "day", NOW);
-  assert.equal(r.from, "2026-11-13T12:00:00.000Z");
+  assert.equal(r.from, "2026-11-13T00:00:00.000Z");
   assert.deepEqual(
     r.rows.map((x) => x.bucket),
     [
@@ -227,6 +227,22 @@ test("day buckets over 7d cover every date from the range's start to now; nothin
   const d17 = r.rows.find((x) => x.bucket === "2026-11-17");
   assert.deepEqual([d17.abandoned, d17.gate.runs], [1, 1]);
   assert.deepEqual(trendSeries({ events: [], open: [], usages: [] }, "all", "week", NOW).rows, []);
+});
+
+test("the first bucket counts from its start, before now − range; the Sunday before stays out", () => {
+  // 30d before NOW is Wednesday 2026-10-21 12:00Z; its week starts Monday 2026-10-19.
+  const usages = [
+    usage("ws-mon", "1.4.0", "shipped", "2026-10-19T07:00:00Z", "2026-10-19T08:00:00Z", {}),
+    usage("ws-sun", "1.4.0", "shipped", "2026-10-18T07:00:00Z", "2026-10-18T23:59:00Z", {}),
+  ];
+  const r = trendSeries({ events: [], open: [], usages }, "30d", "week", NOW);
+  assert.equal(r.from, "2026-10-19T00:00:00.000Z");
+  assert.equal(r.rows[0].bucket, "2026-10-19");
+  assert.equal(r.rows[0].shipped, 1);
+  assert.equal(
+    r.rows.reduce((a, x) => a + x.shipped, 0),
+    1,
+  );
 });
 
 test("no test-minutes field until SW-1101 logs test events", () => {
