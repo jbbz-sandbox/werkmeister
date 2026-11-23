@@ -212,7 +212,7 @@ test("docs-site validate runs in the container and installs nothing on the host 
   const v = fragment.services["docs-site"].validate;
   assert.match(
     v,
-    /`docker exec -w \/app <feature>-docs-site pnpm turbo run test --continue --filter=docs-site`/,
+    /`docker exec -w \/app <feature>-docs-site pnpm turbo run test:coverage --continue --filter=docs-site`/,
   );
   assert.doesNotMatch(v, /pnpm install/);
 });

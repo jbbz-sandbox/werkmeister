@@ -45,6 +45,19 @@ The `coverage` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) 
 
 There is no threshold: the job fails only when a test command can't run its tests, never on the numbers, and it isn't a required check.
 
+## In the metrics ledger
+
+Each package's numbers become a `coverage` event in `~/.werkmeister/metrics/events-YYYY-MM.jsonl`, one per package per run: lines, branches, functions and statements %, the test count and duration, the measured commit, and `version` as `<package version>+<short sha>`. `source` says where the run happened:
+
+| `source` | Written by |
+|---|---|
+| `gate` | `werkmeister pr gate`, for each `coverage/coverage-summary.json` its test rows wrote. werkmeister's own rows run `test:coverage`; a repo whose test command writes that file is read the same way |
+| `ci-pr`, `ci-main` | `werkmeister metrics rebuild`, from the `coverage-summary` artifacts of the GitHub repos its PR files point at, through the `gh` login it already uses. A merge-queue run counts as main. Each run is read once |
+
+At close-out, `coverage.json` on the record branch holds the coverage of each PR's changed files, from the reports newer than its last commit, with `notMeasured` listing changed source files no test loaded. With no such report, close-out writes no file.
+
+Nothing to set up: after upgrading, the gate rows change with the repo's `services.yaml`, and the next `metrics rebuild` imports the CI runs still in GitHub's artifact retention.
+
 ## Limits
 
 - Only files a test loads are counted. A source file no test imports doesn't appear in the report, rather than showing as 0 %.

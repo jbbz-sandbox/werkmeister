@@ -3,6 +3,7 @@
 // HTTP and the issue tracker are stubbed at the `deps` seam.
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -4165,6 +4166,57 @@ test("closeOut writes usage.md + usage.json before removal, and a summary line i
     assert.match(
       fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
       /^Usage: 2\.3M tokens, ~\$3\.70 across 2 sessions; see usage\.md$/m,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+test("closeOut writes coverage.json for the PR's changed files before removal (SW-405)", async () => {
+  const ws = icmWorkspace({ files: { app: prFile({ status: "shipped", extra: "url: u\n" }) } });
+  // The PR's code worktree: one commit past origin/main, then a test:coverage report newer than it.
+  const wt = path.join(ws, "app");
+  fs.mkdirSync(path.join(wt, "coverage"), { recursive: true });
+  const git = (...a) =>
+    execFileSync("git", [
+      "-C",
+      wt,
+      "-c",
+      "user.email=t@t",
+      "-c",
+      "user.name=t",
+      "-c",
+      "commit.gpgsign=false",
+      ...a,
+    ]);
+  git("init", "-q", "-b", "main");
+  git("commit", "-q", "--allow-empty", "-m", "base");
+  git("update-ref", "refs/remotes/origin/main", "HEAD");
+  fs.writeFileSync(path.join(wt, "a.ts"), "a\n");
+  git("add", "a.ts");
+  git("commit", "-q", "-m", "change");
+  const c = { total: 4, covered: 3, skipped: 0, pct: 75 };
+  const m = { lines: c, branches: c, functions: c, statements: c };
+  fs.writeFileSync(
+    path.join(wt, "coverage", "coverage-summary.json"),
+    JSON.stringify({ total: m, "/app/a.ts": m }),
+  );
+  try {
+    let atRemoval = [];
+    const d = deps([[/ls-remote/, { code: 2 }]], {
+      remove: async () => {
+        atRemoval = ["usage.json", "coverage.json"].filter((f) => fs.existsSync(path.join(ws, f)));
+        return { output: "removed" };
+      },
+    });
+    await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
+    assert.deepEqual(atRemoval, ["usage.json", "coverage.json"]);
+    const snap = JSON.parse(fs.readFileSync(path.join(ws, "coverage.json"), "utf8"));
+    assert.deepEqual(snap.repos.app.files, [
+      { path: "a.ts", lines: 75, branches: 75, functions: 75, statements: 75 },
+    ]);
+    assert.match(
+      fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+      /^Coverage of changed files: 75 % of lines, 75 % of branches; see coverage\.json$/m,
     );
   } finally {
     clean(ws);

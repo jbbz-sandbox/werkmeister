@@ -26,7 +26,23 @@ export type MetricsEvent =
   /** `werkmeister issue start` moved *ticket* to in progress; where cycle time starts (SW-1034). */
   | { event: "issue.start"; workspace: string; ticket: string }
   | { event: "ask"; workspace: string; session: string; kind: "question" | "plan" | "wrap-up" }
-  | { event: "answer"; workspace: string; session: string; waited_s: number };
+  | { event: "answer"; workspace: string; session: string; waited_s: number }
+  /** One package's unit-test coverage for one run (SW-405); a CI row has no workspace. *version* is `<package version>+<short sha>`. */
+  | {
+      event: "coverage";
+      workspace?: string;
+      source: "ci-main" | "ci-pr" | "gate";
+      commit: string;
+      run?: string;
+      package: string;
+      version?: string;
+      lines: number;
+      branches: number;
+      functions: number;
+      statements: number;
+      tests?: number;
+      duration_ms?: number;
+    };
 
 /** `<sandboxHome()>/metrics/events-YYYY-MM.jsonl`, the UTC month of *at* (an ISO time). */
 export function metricsPath(at: string): string {

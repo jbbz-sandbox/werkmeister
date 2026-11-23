@@ -4,7 +4,7 @@
   "title": "werkmeister metrics event (one line of ~/.werkmeister/metrics/events-YYYY-MM.jsonl)",
   "description": "Proposed in SW-772. Append-only, one JSON object per line, one appendFileSync (a single write() on an O_APPEND file) per line so concurrent writers don't interleave; lines stay under 4096 bytes as a sanity cap. Never leaves the machine. The examples are illustrative shapes, not recorded data.",
   "type": "object",
-  "required": ["v", "at", "event", "workspace"],
+  "required": ["v", "at", "event"],
   "properties": {
     "v": { "const": 1 },
     "at": {
@@ -25,7 +25,8 @@
         "gate.end",
         "pr.open",
         "pr.merged",
-        "release"
+        "release",
+        "coverage"
       ]
     },
     "workspace": {
@@ -72,11 +73,11 @@
     },
     "commit": {
       "type": "string",
-      "description": "stage.done: record-branch commit that first filled output/"
+      "description": "stage.done: record-branch commit that first filled output/; coverage: the measured commit"
     },
     "run": {
       "type": "string",
-      "description": "gate.*: id shared by a gate.start and its gate.end"
+      "description": "gate.*: id shared by a gate.start and its gate.end; coverage: the gate run or CI run id"
     },
     "exit": {
       "type": "integer",
@@ -88,10 +89,50 @@
       "description": "gate.start: 0 for the first run of this PR's gate in this workspace, n for the nth rerun"
     },
     "pr": { "type": "string", "format": "uri", "description": "pr.*, release: the PR URL" },
-    "tag": { "type": "string", "description": "release: the release tag" }
+    "tag": { "type": "string", "description": "release: the release tag" },
+    "source": {
+      "enum": ["ci-main", "ci-pr", "gate"],
+      "description": "coverage: where the run happened; merge-queue runs count as ci-main (SW-405)"
+    },
+    "package": { "type": "string", "description": "coverage: the measured package name" },
+    "lines": { "type": "number", "minimum": 0, "maximum": 100, "description": "coverage: lines %" },
+    "branches": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "coverage: branches %"
+    },
+    "functions": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "coverage: functions %"
+    },
+    "statements": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "coverage: statements %"
+    },
+    "tests": { "type": "integer", "minimum": 0, "description": "coverage: tests the run counted" },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "coverage: wall time of the test command"
+    }
   },
   "additionalProperties": false,
   "allOf": [
+    {
+      "if": { "properties": { "event": { "not": { "const": "coverage" } } } },
+      "then": { "required": ["workspace"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "coverage" } } },
+      "then": {
+        "required": ["source", "commit", "package", "lines", "branches", "functions", "statements"]
+      }
+    },
     {
       "if": { "properties": { "event": { "const": "queue.wait" } } },
       "then": { "required": ["feature", "position"] }
@@ -228,6 +269,22 @@
       "workspace": "sw-753-incremental-tsc",
       "pr": "https://github.com/jbbz-sandbox/werkmeister/pull/871",
       "tag": "werkmeister@0.91.4"
+    },
+    {
+      "v": 1,
+      "at": "2026-11-24T10:00:00Z",
+      "event": "coverage",
+      "source": "ci-pr",
+      "commit": "d7b749c0",
+      "run": "45208589128",
+      "package": "werkmeister-core",
+      "version": "0.9.100+d7b749c0",
+      "lines": 54.8,
+      "branches": 52.82,
+      "functions": 34.15,
+      "statements": 54.8,
+      "tests": 1715,
+      "duration_ms": 121000
     }
   ]
 }
