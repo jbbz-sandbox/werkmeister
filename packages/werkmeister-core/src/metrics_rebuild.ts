@@ -1,6 +1,6 @@
 /**
  * `werkmeister metrics rebuild` (SW-780, design SW-772 § Q4): backfill the metrics event log from
- * record branches (`usage.json`, stage commits), GitHub PR times and the transcripts still on disk.
+ * record branches (`usage.json`, stage commits), GitHub PR times, CI coverage artifacts (SW-405) and the transcripts still on disk.
  * Re-running adds nothing; the shared workspace repo is only read, through a temporary bare clone.
  */
 import { spawnSync } from "node:child_process";
@@ -9,6 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 
 import { getReposRoot, sandboxHome, workspacesRoot } from "./config.js";
+import { coverageRows, type PackageCoverage } from "./coverage.js";
 import { loadWorkspaceRepo } from "./global_config.js";
 import { findClaudeProjectDir, listSessionFiles } from "./harness/claude/transcript.js";
 import { WORKSPACE_ROOT_REPO, workspaceRepoUrl } from "./machine_setup.js";
@@ -76,10 +77,17 @@ const keyOf = (e: Record<string, unknown>): string | null =>
       ? `${e["event"]}|${e["pr"]}`
       : null;
 
-function loggedKeys(): { keys: Set<string>; sessions: Set<string>; lines: Set<string> } {
+function loggedKeys(): {
+  keys: Set<string>;
+  sessions: Set<string>;
+  lines: Set<string>;
+  runs: Set<string>;
+} {
   const keys = new Set<string>();
   const sessions = new Set<string>();
   const lines = new Set<string>();
+  // CI runs whose coverage is logged: each run's artifact is read once (SW-405).
+  const runs = new Set<string>();
   const dir = path.join(sandboxHome(), "metrics");
   let files: string[] = [];
   try {
@@ -97,8 +105,9 @@ function loggedKeys(): { keys: Set<string>; sessions: Set<string>; lines: Set<st
       const k = keyOf(e);
       if (k) keys.add(k);
       if (e["event"] === "ask" || e["event"] === "answer") sessions.add(String(e["session"]));
+      if (e["event"] === "coverage" && e["run"]) runs.add(String(e["run"]));
     }
-  return { keys, sessions, lines };
+  return { keys, sessions, lines, runs };
 }
 
 function git(dir: string, ...args: string[]): string | null {
@@ -176,9 +185,63 @@ async function branchEvents(
   return out;
 }
 
+/**
+ * `coverage` rows from each code repo's CI `coverage-summary` artifacts (SW-405), one per package per
+ * run, skipping runs already logged. gh failing warns and imports nothing from that repo.
+ */
+async function ciCoverage(repos: Set<string>, runs: Set<string>): Promise<TimedEvent[]> {
+  const out: TimedEvent[] = [];
+  for (const slug of repos) {
+    let list: { artifacts?: Array<{ expired?: boolean; workflow_run?: { id?: number } }> };
+    try {
+      // shortcut: the newest 100 only; page when a repo makes more than that between rebuilds.
+      const r = await runCapture("gh", [
+        "api",
+        `repos/${slug}/actions/artifacts?name=coverage-summary&per_page=100`,
+      ]);
+      if (r.code !== 0) throw new Error(r.stderr.trim() || `gh exit ${r.code}`);
+      list = JSON.parse(r.stdout);
+    } catch (err) {
+      warn(`metrics rebuild: CI coverage of ${slug}: ${(err as Error).message}`);
+      continue;
+    }
+    for (const a of list.artifacts ?? []) {
+      const run = String(a.workflow_run?.id ?? "");
+      if (!run || a.expired || runs.has(run)) continue;
+      runs.add(run);
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-coverage-"));
+      try {
+        const args = ["run", "download", run, "-R", slug, "-n", "coverage-summary", "-D", dir];
+        const r = await runCapture("gh", args);
+        if (r.code !== 0) throw new Error(r.stderr.trim() || `gh exit ${r.code}`);
+        const s = JSON.parse(fs.readFileSync(path.join(dir, "summary.json"), "utf8"));
+        // The artifact's own fields: a bad time or commit would break the log's month file or every row.
+        if (typeof s.generatedAt !== "string" || Number.isNaN(Date.parse(s.generatedAt)))
+          throw new Error("summary.json has no valid generatedAt");
+        if (typeof s.commit !== "string" || !/^[0-9a-f]{7,40}$/.test(s.commit))
+          throw new Error("summary.json has no valid commit");
+        s.generatedAt = new Date(s.generatedAt).toISOString();
+        // A merge-queue run tests what main becomes, so it counts as main.
+        const source = s.ci?.event === "pull_request" ? "ci-pr" : "ci-main";
+        const pkgs = Object.entries(s.packages ?? {}).map(([name, p]) => ({
+          ...(p as Omit<PackageCoverage, "name">),
+          name,
+        }));
+        for (const e of coverageRows(pkgs, { source, commit: String(s.commit), run }))
+          out.push({ e, at: s.generatedAt });
+      } catch (err) {
+        warn(`metrics rebuild: CI coverage of ${slug} run ${run}: ${(err as Error).message}`);
+      } finally {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  }
+  return out;
+}
+
 /** Backfills the event log; throws when the workspace repo can't be found or cloned. */
 export async function rebuildMetrics(): Promise<RebuildResult> {
-  const { keys, sessions, lines } = loggedKeys();
+  const { keys, sessions, lines, runs } = loggedKeys();
   const usages: string[] = [];
   const url = originUrl();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-records-"));
@@ -189,7 +252,10 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
     "pr.merged": 0,
     ask: 0,
     answer: 0,
+    coverage: 0,
   };
+  // The code repos, from the PR links on record branches: where CI coverage is (SW-405).
+  const repos = new Set<string>();
   try {
     // Never fetch into the shared checkout (SW-780): a bare clone of its origin, removed below.
     const clone = spawnSync("git", ["clone", "--bare", "--quiet", url, repo], {
@@ -220,7 +286,12 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
         if (t.e.event === "ask" || t.e.event === "answer") sessions.add(t.e.session);
         log(t);
       }
-      for (const t of await branchEvents(repo, branch, sessions)) log(t);
+      for (const t of await branchEvents(repo, branch, sessions)) {
+        const slug =
+          "pr" in t.e ? /github\.com\/([^/]+\/[^/]+)\/pull\//.exec(t.e.pr)?.[1] : undefined;
+        if (slug) repos.add(slug);
+        log(t);
+      }
       const usage = parseUsage(usageFiles.get(branch));
       if (usage) {
         const by = git(repo, "log", "-1", "--format=%ae", branch)?.trim() || undefined;
@@ -229,6 +300,7 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
     }
     fs.mkdirSync(path.dirname(usageCachePath()), { recursive: true });
     fs.writeFileSync(usageCachePath(), usages.map((u) => `${u}\n`).join(""));
+    for (const t of await ciCoverage(repos, runs)) log(t);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

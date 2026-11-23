@@ -1188,9 +1188,10 @@ Backfill the metrics event log from record branches, GitHub and transcripts
 2. On each record branch except the default one, first: copies the lines of its `metrics.jsonl`, the events its close-out pushed (a teammate's too), and caches its `usage.json` with the branch's git author email in `~/.werkmeister/metrics/usage-branches.jsonl`, rewritten each run, for the `metrics` report's per-person rollups
 3. On each record branch: writes `stage.done` for each stage at the commit that first filled its `output/`, and `pr.open` / `pr.merged` at GitHub's `createdAt` / `mergedAt` for each PR file's `url:` (through `gh`). The ticket comes from the branch's `usage.json`
 4. Writes `ask` / `answer` pairs (AskUserQuestion, ExitPlanMode) from the workspace's Claude Code transcripts still on disk
-5. Appends each new line to `~/.werkmeister/metrics/events-YYYY-MM.jsonl`, the month of the event's own time
+5. Writes `coverage` rows from the CI `coverage-summary` artifacts of each GitHub repo those PRs are in (through `gh`), one per package per run: `ci-pr` for a pull request run, `ci-main` for a merge-queue run
+6. Appends each new line to `~/.werkmeister/metrics/events-YYYY-MM.jsonl`, the month of the event's own time
 
-Re-running adds nothing: a stage, a PR event, a transcript session or a slice line already in the log is skipped.
+Re-running adds nothing: a stage, a PR event, a transcript session, a slice line or a CI run already in the log is skipped.
 
 For a run closed out before its slice was pushed, it cannot rebuild `queue.*`, `gate.*`, `release` or wrap-up asks: nothing on disk holds them.
 

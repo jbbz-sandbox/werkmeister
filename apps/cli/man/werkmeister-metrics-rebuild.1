@@ -15,9 +15,11 @@ On each record branch: writes \fBstage.done\fR for each stage at the commit that
 .IP 4. 3
 Writes \fBask\fR / \fBanswer\fR pairs (AskUserQuestion, ExitPlanMode) from the workspace's Claude Code transcripts still on disk
 .IP 5. 3
+Writes \fBcoverage\fR rows from the CI \fBcoverage\-summary\fR artifacts of each GitHub repo those PRs are in (through \fBgh\fR), one per package per run: \fBci\-pr\fR for a pull request run, \fBci\-main\fR for a merge\-queue run
+.IP 6. 3
 Appends each new line to \fB~/.werkmeister/metrics/events\-YYYY\-MM.jsonl\fR, the month of the event's own time
 .PP
-Re\-running adds nothing: a stage, a PR event, a transcript session or a slice line already in the log is skipped.
+Re\-running adds nothing: a stage, a PR event, a transcript session, a slice line or a CI run already in the log is skipped.
 .PP
 For a run closed out before its slice was pushed, it cannot rebuild \fBqueue.*\fR, \fBgate.*\fR, \fBrelease\fR or wrap\-up asks: nothing on disk holds them.
 .PP

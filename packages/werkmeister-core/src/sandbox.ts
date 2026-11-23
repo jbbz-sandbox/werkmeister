@@ -3227,7 +3227,7 @@ export async function removeWorkspace(
   //    the handoff commit, and that becomes a junk PR (SW-91). The record branch always goes.
   const abandoned = !!opts.abandon?.trim();
   const keepDir = path.join(sandboxHome(), "handoff", name);
-  // close-out writes closeout.md and the usage (SW-206) and context (SW-318) snapshots just before
+  // close-out writes closeout.md and the usage (SW-206), context (SW-318) and coverage (SW-405) snapshots just before
   // this, and postmortem.md (SW-108) may be uncommitted; all belong on the record branch, but the
   // handoff only commits tracked changes, so stage them by name (docs/workspace-lifecycle.md).
   for (const record of [
@@ -3238,6 +3238,7 @@ export async function removeWorkspace(
     "context.md",
     "context.json",
     "metrics.jsonl",
+    "coverage.json",
   ])
     if (existsSync(path.join(target, record)))
       await runCapture("git", ["-C", target, "add", "--", record]).catch(() => {});

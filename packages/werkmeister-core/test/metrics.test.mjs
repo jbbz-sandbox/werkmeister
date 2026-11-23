@@ -716,3 +716,60 @@ test("workspaceSlice keeps this run's lines verbatim, oldest month first", async
     assert.deepEqual([...stageDoneTimes(ws)], [["01_r", "2026-11-02T00:00:00.000Z"]]);
   });
 });
+
+test("schema: a coverage row needs no workspace; every other event still does (SW-405)", () => {
+  const coverage = {
+    v: 1,
+    at: "2026-11-24T10:00:00Z",
+    event: "coverage",
+    source: "ci-main",
+    commit: "d7b749c0",
+    package: "werkmeister-core",
+    lines: 54.8,
+    branches: 52.82,
+    functions: 34.15,
+    statements: 54.8,
+  };
+  assert.ok(validate(coverage), JSON.stringify(validate.errors));
+  assert.ok(validate({ ...coverage, workspace: "ws", source: "gate", run: "g1", tests: 3 }));
+  assert.equal(validate({ ...coverage, lines: undefined }), false, "a metric is required");
+  assert.equal(validate({ ...coverage, source: "local" }), false);
+  assert.equal(validate({ ...coverage, lines: 100.5 }), false);
+  assert.equal(
+    validate({ v: 1, at: "2026-11-24T10:00:00Z", event: "gate.start", run: "g1", retry: 0 }),
+    false,
+    "gate.start without a workspace",
+  );
+});
+
+test("a gate logs a coverage row per report its test rows wrote, with the gate's run id (SW-405)", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const base = defaultDeps();
+      const lib = path.join(fx.workspace, "app", "packages", "lib");
+      const c = { total: 4, covered: 3, skipped: 0, pct: 75 };
+      const run = async (bin, args, ...rest) => {
+        const r = await base.run(bin, args, ...rest);
+        // What a `test:coverage` row leaves behind in the worktree.
+        if (bin === "docker" && args[0] === "exec") {
+          fs.mkdirSync(path.join(lib, "coverage"), { recursive: true });
+          fs.writeFileSync(
+            path.join(lib, "coverage", "coverage-summary.json"),
+            JSON.stringify({ total: { lines: c, branches: c, functions: c, statements: c } }),
+          );
+        }
+        return r;
+      };
+      const { results } = await gateRuns(fx, { ...base, run });
+      assert.equal(results[0].ok, true, results[0].lines.join("\n"));
+      const start = lines().find((l) => l.event === "gate.start");
+      const rows = lines().filter((l) => l.event === "coverage");
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].source, "gate");
+      assert.equal(rows[0].run, start.run);
+      assert.equal(rows[0].workspace, path.basename(fx.workspace));
+      assert.equal(rows[0].lines, 75);
+    },
+    { gate: true },
+  );
+});

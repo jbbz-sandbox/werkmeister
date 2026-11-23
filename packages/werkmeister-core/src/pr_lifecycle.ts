@@ -43,6 +43,7 @@ import {
 } from "./config.js";
 // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 import { writeContextSnapshot } from "./context_snapshot.js";
+import { recordGateCoverage, writeCoverageSnapshot } from "./coverage.js";
 import { logsDir } from "./dot_dir.js";
 import { GATE_COMPOSE_FILE, renderGateCompose } from "./generate.js";
 import { updateNoteStatus } from "./graduate.js";
@@ -925,6 +926,7 @@ export async function runGate(
   beat.unref();
   const workspace = path.basename(ws);
   const run = randomUUID();
+  const startedMs = Date.now();
   recordEvent({ event: "gate.start", workspace, run, retry: nextGateRun(ws, file.stem) });
   try {
     result = await gateChecks(ws, file, deps, started, recreated, testsOnly, rebase);
@@ -957,6 +959,8 @@ export async function runGate(
           : `started ${started.join(", ")} for the gate, stopped again`,
       });
     }
+    // SW-405: the test rows' `test:coverage` reports, pass or fail; one written before this run measured other code.
+    recordGateCoverage(path.join(ws, file.dir), workspace, run, startedMs);
     // The CLI's exit codes (pr.ts exitOf): 75 retry later; no result means gateChecks threw.
     const exit = result?.ok ? 0 : result?.retry ? 75 : 1;
     recordEvent({ event: "gate.end", workspace, run, exit });
@@ -4565,6 +4569,10 @@ async function closeOutLocked(
     // The team view (SW-1104): the record-branch push at removal shares this run's events.
     const slice = workspaceSlice(ws);
     if (slice.length) fs.writeFileSync(path.join(ws, "metrics.jsonl"), `${slice.join("\n")}\n`);
+    const coverage = writeCoverageSnapshot(
+      ws,
+      files.map((f) => ({ dir: f.dir, base: String(f.fm["base"] ?? "main") })),
+    );
     fs.writeFileSync(
       path.join(ws, "closeout.md"),
       renderCloseout(
@@ -4578,6 +4586,7 @@ async function closeOutLocked(
             : fs.existsSync(postmortem) && "Post-mortem: postmortem.md",
           usage,
           context,
+          coverage,
         ]
           .filter(Boolean)
           .join("\n") || undefined,

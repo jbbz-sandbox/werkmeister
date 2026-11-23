@@ -440,3 +440,130 @@ test("rebuild brings in every teammate's slice and usage, and the report covers 
     { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
   );
 });
+
+/** A gh serving o/app's CI coverage artifacts for runs 501 (merge queue) and 502 (pull request), else the seed's fake. */
+function ciGh(fx) {
+  const dir = path.join(fx.root, "ci-gh");
+  fs.mkdirSync(dir);
+  const artifacts = [501, 502, 400].map((id) => ({ expired: id === 400, workflow_run: { id } }));
+  fs.writeFileSync(path.join(dir, "artifacts.json"), JSON.stringify({ artifacts }));
+  const pkg = {
+    version: "0.9.1",
+    lines: 54.8,
+    branches: 52.82,
+    functions: 34.15,
+    statements: 54.8,
+  };
+  for (const [run, event, commit] of [
+    ["501", "merge_group", "aaaaaaaa1111"],
+    ["502", "pull_request", "bbbbbbbb2222"],
+  ])
+    fs.writeFileSync(
+      path.join(dir, `summary-${run}.json`),
+      JSON.stringify({
+        schema: 1,
+        generatedAt: "2026-11-20T09:00:00.000Z",
+        commit,
+        ci: { event, run },
+        packages: {
+          "werkmeister-core": { ...pkg, tests: 1715, duration_ms: 121000 },
+          "werkmeister-dashboard": { ...pkg, version: "0.1.0", tests: null, duration_ms: 17000 },
+        },
+      }),
+    );
+  const bin = path.join(dir, "gh");
+  fs.writeFileSync(
+    bin,
+    `#!/bin/sh
+case "$1 $2" in
+  "api repos/o/app/actions/artifacts?name=coverage-summary&per_page=100") cat "${dir}/artifacts.json" ;;
+  "run download")
+    echo "$3" >> "${dir}/downloads"
+    run=$3
+    while [ $# -gt 0 ]; do [ "$1" = -D ] && d=$2; shift; done
+    cp "${dir}/summary-$run.json" "$d/summary.json" ;;
+  *) exec "${fx.gh}" "$@" ;;
+esac
+`,
+    { mode: 0o755 },
+  );
+  return {
+    bin,
+    downloads: () =>
+      fs.readFileSync(path.join(dir, "downloads"), "utf8").split("\n").filter(Boolean),
+  };
+}
+
+test("rebuild imports each CI run's coverage once: merge queue as ci-main, PRs as ci-pr (SW-405)", async () => {
+  await withSandboxHome(
+    async (home) => {
+      const fx = seed();
+      const gh = ciGh(fx);
+      const prevGh = process.env.WERKMEISTER_GH_BIN;
+      process.env.WERKMEISTER_GH_BIN = gh.bin;
+      try {
+        const first = await rebuildMetrics();
+        assert.equal(first.added.coverage, 4);
+        const rows = logLines()
+          .filter((e) => e.event === "coverage")
+          .map((e) => [e.run, e.source, e.package, e.commit, e.version, e.tests, e.at]);
+        assert.deepEqual(rows, [
+          [
+            "501",
+            "ci-main",
+            "werkmeister-core",
+            "aaaaaaaa1111",
+            "0.9.1+aaaaaaaa",
+            1715,
+            "2026-11-20T09:00:00.000Z",
+          ],
+          [
+            "501",
+            "ci-main",
+            "werkmeister-dashboard",
+            "aaaaaaaa1111",
+            "0.1.0+aaaaaaaa",
+            undefined,
+            "2026-11-20T09:00:00.000Z",
+          ],
+          [
+            "502",
+            "ci-pr",
+            "werkmeister-core",
+            "bbbbbbbb2222",
+            "0.9.1+bbbbbbbb",
+            1715,
+            "2026-11-20T09:00:00.000Z",
+          ],
+          [
+            "502",
+            "ci-pr",
+            "werkmeister-dashboard",
+            "bbbbbbbb2222",
+            "0.1.0+bbbbbbbb",
+            undefined,
+            "2026-11-20T09:00:00.000Z",
+          ],
+        ]);
+        assert.ok(metricsPathUnder(home));
+        const second = await rebuildMetrics();
+        assert.equal(second.added.coverage, 0);
+        assert.deepEqual(
+          gh.downloads(),
+          ["501", "502"],
+          "a logged run, or an expired artifact, is never downloaded",
+        );
+      } finally {
+        if (prevGh === undefined) delete process.env.WERKMEISTER_GH_BIN;
+        else process.env.WERKMEISTER_GH_BIN = prevGh;
+        fs.rmSync(fx.root, { recursive: true, force: true });
+      }
+    },
+    { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
+  );
+});
+
+const metricsPathUnder = (home) =>
+  fs
+    .readdirSync(path.join(sandboxHome(), "metrics"))
+    .every((f) => path.join(sandboxHome(), "metrics", f).startsWith(home));
