@@ -13,18 +13,18 @@ const TEST_DIR = import.meta.dirname;
 /** Another workspace package's dist, as a slash path or as path segments from the checkout. */
 const OTHER_DIST = [
   /\b(?:apps|packages)\/(?!werkmeister-core\/)[\w.-]+\/dist\b/,
-  /\((?:import\.meta\.dirname|REPO|monorepoRoot\(\))(?:,\s*"\.\.")*,\s*"(?:apps|packages)",\s*"(?!werkmeister-core")[\w.-]+",\s*"dist"/,
-  /\((?:CLI_ROOT|sandboxRoot\(\)),\s*"dist"/,
+  /\(\s*(?:import\.meta\.dirname|REPO|monorepoRoot\(\))(?:,\s*"\.\.")*,\s*"(?:apps|packages)",\s*"(?!werkmeister-core")[\w.-]+",\s*"dist"/,
+  /\(\s*(?:CLI_ROOT|sandboxRoot\(\)),\s*"dist"/,
 ];
 
-/** `file:line: text` for each line of *text* that reaches another package's build. */
+/** `file:line: text` for each line of *text* where a call (or a line) reaches another package's build. */
 function otherBuildRefs(file, text) {
-  return text
-    .split("\n")
-    .map((line, i) =>
-      OTHER_DIST.some((re) => re.test(line)) ? `${file}:${i + 1}: ${line.trim()}` : null,
-    )
-    .filter(Boolean);
+  const lines = text.split("\n");
+  const hits = new Set();
+  for (const re of OTHER_DIST)
+    for (const m of text.matchAll(new RegExp(re.source, "g")))
+      hits.add(text.slice(0, m.index).split("\n").length); // `\s*` spans lines; the match starts at the call's `(`
+  return [...hits].sort((a, b) => a - b).map((n) => `${file}:${n}: ${lines[n - 1].trim()}`);
 }
 
 test("the scan catches each way a core test names another package's build (SW-1063)", () => {
@@ -37,6 +37,19 @@ test("the scan catches each way a core test names another package's build (SW-10
     'path.join(sandboxRoot(), "dist", "main.js")',
   ];
   for (const line of caught) assert.equal(otherBuildRefs("x", line).length, 1, line);
+  // biome splits a long call over lines (SW-1102): reported at the line the call starts
+  const split = [
+    "const a = 1;",
+    "const cli = path.resolve(",
+    "  import.meta.dirname,",
+    '  "..",',
+    '  "apps",',
+    '  "cli",',
+    '  "dist",',
+    '  "main.js",',
+    ");",
+  ].join("\n");
+  assert.deepEqual(otherBuildRefs("x", split), ["x:2: const cli = path.resolve("]);
   const passed = [
     'await import("../dist/config.js")', // core's own build: CI builds it
     'path.join(wt, "apps", "cli", "dist", "main.js")', // a fake CLI in a temp folder (SW-548)
