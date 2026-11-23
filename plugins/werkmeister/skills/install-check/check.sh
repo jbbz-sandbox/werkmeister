@@ -2,7 +2,8 @@
 # Check that the global werkmeister CLI, its MCP server and the Claude Code
 # plugin all run from the repo checkout. Pass --fix to repair drift; --pull
 # first fast-forwards the checkout's main (after a merge or a release), then
-# fixes and builds every package.
+# fixes and builds every package, reinstalls a stale VS Code extension, syncs
+# the registry and restarts the daemon.
 set -uo pipefail
 
 REPO="${WERKMEISTER_REPO:-$HOME/repos/werkmeister}"
@@ -99,12 +100,27 @@ else ok "no marketplace werkmeister plugin installed"; fi
 cmd="$(node -e 'console.log(require(process.argv[1]).mcpServers.werkmeister.command)' "$PLUGIN/.mcp.json" 2>/dev/null)"
 [ "$cmd" = werkmeister ] && ok "plugin MCP runs '$cmd mcp' from PATH" || bad "plugin MCP command is '$cmd' (expected werkmeister)"
 
-# 6. VS Code extension is not older than its source (report only: installing needs the person's yes)
+# 6. VS Code extension is not older than its source. --fix only reports (the session-start hook runs it);
+# --pull, the person's own rebuild, reinstalls it.
 ext="$(ls -td "$HOME"/.vscode/extensions/jbbz.werkmeister-vscode-* 2>/dev/null | head -1)"
 if [ -n "$ext" ]; then
   newer="$(find "$REPO/packages/werkmeister-vscode/src" -type f -newer "$ext" 2>/dev/null | head -1)"
-  if [ -n "$newer" ]; then bad "VS Code extension ${ext##*/} is older than $newer (run: pnpm --filter werkmeister-vscode install:local)"
+  if [ -n "$newer" ]; then
+    bad "VS Code extension ${ext##*/} is older than $newer (run: pnpm --filter werkmeister-vscode install:local)"
+    if [ $PULL = 1 ]; then
+      if out="$(cd "$REPO" && corepack pnpm --filter werkmeister-vscode install:local 2>&1)"; then
+        echo "FIX   corepack pnpm --filter werkmeister-vscode install:local (reload the VS Code window to load it)"
+      else echo "ERROR VS Code extension install failed: $(grep -m3 -iE 'error' <<<"$out" | tr '\n' ' ')"; fi
+    fi
   else ok "VS Code extension ${ext##*/} is up to date"; fi
+fi
+
+# 7. --pull: regenerate the registry from the repos' fragments, then restart the daemon on the new build.
+if [ $PULL = 1 ]; then
+  if out="$("$CLI/werkmeister" registry sync 2>&1)"; then ok "registry synced"
+  else echo "ERROR werkmeister registry sync failed: $(tail -3 <<<"$out" | tr '\n' ' ')"; drift=1; fi
+  if out="$("$CLI/werkmeister" daemon restart 2>&1)"; then ok "daemon restarted"
+  else echo "ERROR werkmeister daemon restart failed: $(tail -3 <<<"$out" | tr '\n' ' ')"; drift=1; fi
 fi
 
 [ $drift = 0 ] && echo "RESULT clean" || echo "RESULT drift found$([ $FIX = 1 ] && echo ', fixes applied: rerun to confirm')"
