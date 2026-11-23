@@ -1170,9 +1170,13 @@ async function gateChecks(
         : { name, ok, detail },
     );
   };
+  // A capacity wait gives up, or fails to restart what it released (SW-675), only with these codes.
+  let released = false;
   const startFailed = (name: string, e: unknown, prefix = "") => {
+    const code = (e as { code?: string }).code ?? "";
+    if (["NO_CAPACITY", "COMPOSE_UP_FAILED"].includes(code)) released = true;
     // HOST_LOAD: a setup start that waited out load or low memory is the host, not the change (SW-620).
-    const capacity = ["NO_CAPACITY", "HOST_LOAD"].includes((e as { code?: string }).code ?? "");
+    const capacity = ["NO_CAPACITY", "HOST_LOAD"].includes(code);
     if (capacity) capacityShort = true;
     const detail = prefix + (e instanceof Error ? e.message : String(e));
     // A second attempt that waited again is the same wait: one row (SW-981).
@@ -1496,14 +1500,22 @@ async function gateChecks(
       .map((s) => s.trim())
       .filter(Boolean),
   );
-  const ps = await deps.run("docker", ["ps", "--format", "{{.Names}}\t{{.State}}"]);
-  const listed = ps.stdout
-    .split("\n")
-    .map((l) => l.trim().split("\t"))
-    .filter(([name]) => name);
+  const ps = async () =>
+    (await deps.run("docker", ["ps", "--format", "{{.Names}}\t{{.State}}"])).stdout
+      .split("\n")
+      .map((l) => l.trim().split("\t"))
+      .filter(([name]) => name);
+  const listed = await ps();
   // `docker ps` lists paused containers too: they stay in `running` (their ports are held) but are no ✓ (SW-391).
   const running = new Set(listed.map(([name]) => name));
   const paused = new Set(listed.filter(([, state]) => state === "paused").map(([name]) => name));
+  // SW-1070: a start that waited for capacity stops the containers read above while it waits (SW-675),
+  // and they stay stopped when it gives up; a row run in one fails and blames an outside stop.
+  const dropStopped = async () => {
+    if (!released) return;
+    const now = new Set((await ps()).map(([name]) => name));
+    for (const c of [...running]) if (!now.has(c)) running.delete(c);
+  };
   // compose.yml is rendered from the machine registry, which can still carry ids the
   // branch has renamed (SW-87); containers and on-demand starts use its ids.
   const machineRepo = deps.repos[file.dir] ?? {};
@@ -1856,6 +1868,7 @@ async function gateChecks(
       startFailed(`start ${svc}`, e);
     }
   }
+  await dropStopped();
 
   const needsContainer = releaseRuns || Boolean(repo["lint"]) || tested.some((s) => !toRendered(s));
   const serving = needsContainer ? repoServices.map(containerFor).find(Boolean) : null;
@@ -1885,14 +1898,25 @@ async function gateChecks(
       } catch (e) {
         startFailed(`start ${rerun}`, e);
       }
+      await dropStopped();
     }
-    add(
-      "containers",
-      !frozen.length,
-      frozen.length
-        ? `kept (${alreadyUp.join(", ")} already up; ${frozen.join(", ")} paused)`
-        : `kept (${alreadyUp.join(", ")} already running${rerun || setupRerun ? ", setup one-shot re-run unless current" : ""})`,
-    );
+    const lost = alreadyUp.filter((c) => !running.has(c));
+    const up = alreadyUp.filter((c) => running.has(c));
+    if (lost.length)
+      checks.push({
+        name: "containers",
+        ok: false,
+        detail: `${lost.join(", ")} stopped while a start above waited, so no row runs in it (see the start row)`,
+        ...(capacityShort ? { retry: true as const } : {}),
+      });
+    if (up.length)
+      add(
+        "containers",
+        !frozen.length,
+        frozen.length
+          ? `kept (${up.join(", ")} already up; ${frozen.join(", ")} paused)`
+          : `kept (${up.join(", ")} already running${rerun || setupRerun ? ", setup one-shot re-run unless current" : ""})`,
+      );
   }
   if (needsContainer && !repoServices.some(containerFor) && !(await startRepoContainer()))
     return { ...done(), ok: false };
