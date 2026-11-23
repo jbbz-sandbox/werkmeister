@@ -71,7 +71,10 @@ export class RegistryError extends Error {}
 type YamlMap = Record<string, unknown>;
 
 /** `repos.<repo>` as the merge builds it. */
-type MergedRepo = RepoEntry & { services: string[]; path_mappings: Record<string, string> };
+type MergedRepo = RepoEntry & {
+  services: string[];
+  path_mappings: Record<string, string | string[]>;
+};
 
 /** The merged registry document; local-overlay keys such as `k8s_context` ride along untyped. */
 export type MergedRegistry = {

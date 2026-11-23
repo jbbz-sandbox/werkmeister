@@ -617,7 +617,8 @@ export interface CacheEntry {
 /** One entry under services.yaml `repos:`. */
 export interface RepoEntry {
   services?: string[];
-  path_mappings?: Record<string, string>;
+  /** Path prefix → the service, or services (SW-1087), whose tests cover it. */
+  path_mappings?: Record<string, string | string[]>;
   no_service_paths?: string[];
   /** Read by pr_lifecycle.ts: `ship: tag` runs `release_check` in the repo's container. */
   ship?: string;

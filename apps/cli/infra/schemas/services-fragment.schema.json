@@ -57,8 +57,13 @@
         },
         "path_mappings": {
           "type": "object",
-          "additionalProperties": { "type": "string" },
-          "description": "Extra repo paths → the service whose test covers them, for paths no service's `path:` owns; each service's `path:` is added on top (SW-450)."
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+            ]
+          },
+          "description": "Extra repo paths → the service whose test covers them, or a list of services (a shared package → the services that import it, SW-1087), for paths no service's `path:` owns; each service's `path:` is added on top (SW-450)."
         },
         "components": {
           "type": "object",

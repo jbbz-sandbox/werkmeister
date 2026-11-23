@@ -43,6 +43,7 @@ import {
   releaseVscodeSessions,
   removalBlockers,
   runGate,
+  unmappedFiles,
   waitForHostLoadNow,
   wakeMessage,
   watchPrs,
@@ -282,6 +283,17 @@ test("mapTouched: longest prefix wins; an unmapped file touches every service", 
 test("mapTouched: a path_mappings entry for a non-service path touches only its service (SW-450)", () => {
   const repo = { services: ["a", "b"], path_mappings: { "apps/a": "a", plugins: "b" } };
   assert.deepEqual(mapTouched(["plugins/x/SKILL.md"], repo), ["b"]);
+});
+
+// SW-1087: a shared package maps to the services that import it, not to every service.
+test("mapTouched: a path_mappings list touches each service it names", () => {
+  const repo = {
+    services: ["a", "b", "c", "d"],
+    path_mappings: { "apps/a": "a", "packages/ui": ["a", "c"] },
+  };
+  assert.deepEqual(mapTouched(["packages/ui/x.tsx"], repo), ["a", "c"]);
+  assert.deepEqual(mapTouched(["packages/ui/x.tsx", "apps/a/y.ts"], repo), ["a", "c"]);
+  assert.deepEqual(unmappedFiles(["packages/ui/x.tsx"], repo), []);
 });
 
 test("mapTouched: no_service_paths touch nothing; other unmapped files still touch every service", () => {
@@ -550,6 +562,26 @@ test("fragmentTouched: a mapping change counts only when it moves a file of this
   assert.equal(
     fragmentTouched("app", [FRAG, "scripts/x.mjs"], nsp, MACHINE).all,
     "repo: no_service_paths",
+  );
+  // SW-1087: an equal list on both sides moves nothing; a changed one does.
+  const ui = (list, nsp = REGISTRY.repos.app.no_service_paths) =>
+    withApp({
+      path_mappings: { ...REGISTRY.repos.app.path_mappings, ui: list },
+      no_service_paths: nsp,
+    });
+  assert.equal(
+    fragmentTouched("app", [FRAG, "ui/x.ts"], ui(["api", "lib"]), ui(["api", "lib"])).all,
+    null,
+  );
+  assert.equal(
+    fragmentTouched("app", [FRAG, "ui/x.ts"], ui(["api", "lib"]), ui(["api"])).all,
+    "repo: path_mappings",
+  );
+  // So a no_service_paths change that moves no file still counts for nothing.
+  assert.equal(
+    fragmentTouched("app", [FRAG, "ui/x.ts"], ui(["api", "lib"], ["docs", "x"]), ui(["api", "lib"]))
+      .all,
+    null,
   );
   const remap = withApp({ path_mappings: { ...REGISTRY.repos.app.path_mappings, tools: "api" } });
   assert.equal(

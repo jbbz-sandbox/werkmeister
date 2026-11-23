@@ -33,6 +33,19 @@ test("repo: rejects ship: tag without release_tag, unknown keys and unknown ship
   assert.equal(validate({ ...withoutRepo, repo: { components: { gate: ["pr gate"] } } }), false);
 });
 
+test("repo: path_mappings takes a service or a non-empty list of them (SW-1087)", () => {
+  const ok = (m) => validate({ ...withoutRepo, repo: { path_mappings: m } });
+  assert.ok(ok({ plugins: "core" }));
+  assert.ok(ok({ "packages/ui": ["web", "core"] }));
+  assert.equal(ok({ "packages/ui": [] }), false);
+  assert.equal(ok({ "packages/ui": [1] }), false);
+  assert.deepEqual(fragment.repo.path_mappings["packages/werkmeister-ui"], [
+    "werkmeister-dashboard",
+    "werkmeister-vscode",
+    "werkmeister-core",
+  ]);
+});
+
 test("repo: lint runs core's docs:links like CI's test job (SW-312)", () => {
   assert.match(fragment.repo.lint, /pnpm --filter werkmeister-core run docs:links/);
 });
