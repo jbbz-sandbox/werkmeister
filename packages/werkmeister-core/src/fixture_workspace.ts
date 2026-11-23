@@ -316,7 +316,7 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
   // or icm's propose output, with every earlier stage's output non-empty for the stages row.
   let notes = path.join(dotDir(workspace), "notes");
   if (opts.prFile && yml["context_strategy"] === "icm") {
-    const stages = templateFor(String(yml["work_type"] ?? ""));
+    const stages = templateFor(String(yml["work_type"] ?? ""), workspace);
     const dirs = stageDirs(stages);
     const own = prDir(stages);
     notes = path.join(workspace, "stages", own, "output");

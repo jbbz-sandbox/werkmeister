@@ -82,6 +82,8 @@ import { run as procRun } from "./proc.js";
 import { syncRegistry } from "./registry_sync.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { repoDirs } from "./standards.js";
+import { WorkflowError } from "./strategies/icm_external.js";
+import { templateFor } from "./strategies/icm_templates.js";
 import {
   parseStrategyId,
   reportLeftovers,
@@ -818,6 +820,16 @@ export async function initWorkspace(
       warn(`Unknown service(s) in workspace.yml (no owning repo): ${unknown.join(", ")}`);
     }
     reconcileWorktrees(workspaceRoot, desiredRepos, Boolean(args["force"]));
+  }
+
+  // SW-1077: after the worktrees (a repo's workflow lives in one), before .env and bin/ (SW-1071 UAT scenario 3).
+  if (strategy.id === "icm") {
+    try {
+      templateFor(inputs["work_type"] ?? "", workspaceRoot);
+    } catch (e) {
+      if (e instanceof WorkflowError) fail(e.message);
+      throw e;
+    }
   }
 
   // 4. Check if CLAUDE.md already exists

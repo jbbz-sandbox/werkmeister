@@ -37,6 +37,7 @@ import { resolveModel } from "./model_tiers.js";
 import { ProcError, run as procRun } from "./proc.js";
 import { loadProjects } from "./projects.js";
 import { info, warn } from "./reporter.js";
+import { listWorkflowTypes } from "./strategies/icm_external.js";
 import { stageGrants } from "./strategies/icm_templates.js";
 import { STRATEGY_IDS } from "./strategies/types.js";
 
@@ -160,7 +161,7 @@ export function readAutonomous(workspaceRoot: string): boolean {
 export function readGrants(workspaceRoot: string): string[] {
   if (String(readWorkspaceField(workspaceRoot, "context_strategy") ?? "").trim() !== "icm")
     return [];
-  return stageGrants(String(readWorkspaceField(workspaceRoot, "work_type") ?? ""));
+  return stageGrants(String(readWorkspaceField(workspaceRoot, "work_type") ?? ""), workspaceRoot);
 }
 
 /** The workspace's `auto_stop` input (#231); unset follows `autonomous` (SW-39). */
@@ -528,11 +529,13 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     label: "Work type",
     help:
       "What kind of work this is; selects the phase sequence and the " +
-      "pre-implementation gate in CLAUDE.md.",
+      "pre-implementation gate in CLAUDE.md. Types from `~/.werkmeister/workflows/` and " +
+      "repos' `.werkmeister/workflows/` are listed too.",
     acceptEmpty: false,
-    pattern: "^(" + Object.keys(WORK_TYPE_PHASES).join("|") + ")$",
+    // Lowercase-hyphen, not the built-ins: a workflow on a repo branch isn't in the choices (SW-1077).
+    pattern: "^[a-z0-9]+(-[a-z0-9]+)*$",
     default: "feature",
-    choicesFn: () => [...WORK_TYPES],
+    choicesFn: () => [...new Set([...WORK_TYPES, ...listWorkflowTypes()])],
   },
   {
     key: "context_strategy",
