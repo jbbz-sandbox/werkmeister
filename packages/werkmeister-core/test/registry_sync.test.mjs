@@ -786,7 +786,7 @@ test("syncRegistry warns once per forwarded service with no health_endpoint, and
         [
           "service grpc",
           true,
-          'no health_endpoint, probed as GET /health since SW-939; set health_endpoint: "" for a non-HTTP service',
+          'no health_endpoint, probed as GET /health since SW-939; set health_endpoint: "" for a non-HTTP service, or /health to keep the probe',
         ],
       ],
       `checkOnly ${checkOnly}`,

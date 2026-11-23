@@ -652,7 +652,7 @@ export function syncRegistry(opts: SyncRegistryOptions = {}): Step[] {
       label: `service ${key}`,
       ok: true,
       detail:
-        'no health_endpoint, probed as GET /health since SW-939; set health_endpoint: "" for a non-HTTP service',
+        'no health_endpoint, probed as GET /health since SW-939; set health_endpoint: "" for a non-HTTP service, or /health to keep the probe',
     }));
   const report = (step: Step): Step[] => [step, ...skips, ...unprobed];
 
