@@ -50,6 +50,7 @@ import {
   removeGeneratedDevcontainer,
   writeWorkspaceDevcontainer,
 } from "./devcontainer_gen.js";
+import { logsDir } from "./dot_dir.js";
 import { WorkspaceError } from "./errors.js";
 import { workspaceUnder } from "./gate.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
@@ -877,6 +878,8 @@ export async function initWorkspace(
   success(`Wrote ${envPath}`);
   success(`Wrote ${writeTempHomeWrapper(workspaceRoot)}`);
   success(`Wrote ${writeFixtureWrapper(workspaceRoot)}`);
+  // pr-rules.md redirects `pr open` and `pr gate` here, and a shell redirect makes no folder (SW-1091).
+  fs.mkdirSync(logsDir(workspaceRoot), { recursive: true });
 
   // 5b–6c. The context layer — CLAUDE.md and everything the agent reads
   // beside it — belongs to the workspace's strategy (docs/context-strategies.md).

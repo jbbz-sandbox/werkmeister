@@ -52,7 +52,13 @@ test("compose and runtime state are ignored; the record's own files are not", ()
     assert.deepEqual(ignored(generated), generated);
     // SW-401: the gate and pr-open logs belong on the record.
     assert.deepEqual(
-      ignored([".werkmeister/gate-app-test-api.log", ".werkmeister/pr-open.log"]),
+      ignored([
+        ".werkmeister/gate-app-test-api.log",
+        ".werkmeister/pr-open.log",
+        // SW-1091: their folder since.
+        ".werkmeister/logs/gate-app-test-api.log",
+        ".werkmeister/logs/pr-open.log",
+      ]),
       [],
     );
     assert.deepEqual(
@@ -149,6 +155,8 @@ test("up's settings refresh is a no-op after a fresh init", async () => {
     await withSandboxHome(
       async () => {
         await withReporter(collectingReporter(), () => initWorkspace({}, root, { build: false }));
+        // SW-1091: pr-rules.md redirects into logs/, and a shell redirect makes no folder.
+        assert.ok(fs.statSync(path.join(root, ".werkmeister", "logs")).isDirectory());
         const afterInit = settings();
         withReporter(collectingReporter(), () => strategyById("icm").refresh(root));
         assert.equal(settings(), afterInit);
