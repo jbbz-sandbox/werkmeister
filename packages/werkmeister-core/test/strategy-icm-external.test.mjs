@@ -70,7 +70,8 @@ function withWs(fn, workType) {
     );
     const ctx = {
       workspaceRoot: root,
-      workspaceName: "demo",
+      // check() names the workspace by its folder, so init must too.
+      workspaceName: path.basename(root),
       repos: [["demo-repo", "me/demo"]],
       task: "t",
       meta: { FEATURE: "demo", SERVICES: "api" },
@@ -147,8 +148,8 @@ test("override precedence: repo beats user beats built-in, reported at init", as
     const spike2 = { stages: [{ name: "repo-one", job: "repo spike" }], files: { "repo-one": STAGE("REPO-SPIKE") } };
     writeWorkflow(path.join(root, "demo-repo", ".werkmeister", "workflows", "spike"), spike2);
     assert.deepEqual(templateFor("spike", root).map((s) => s.name), ["repo-one"]);
-    // Without a workspace (e.g. the form's choices) only the built-in is seen.
-    assert.deepEqual(templateFor("spike").map((s) => s.name), ["questions", "findings"]);
+    // Without a workspace (e.g. the form's choices) repo folders are unseen; the user folder still applies.
+    assert.deepEqual(templateFor("spike").map((s) => s.name), ["only"]);
   }, "spike");
 });
 
