@@ -1,5 +1,16 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.108.1
+
+### Patch Changes
+
+- 93a7182: `pr gate` and `pr open` no longer run lint or test rows in containers that their own capacity wait stopped. After a start that waited and gave up, the gate reads Docker again: the stopped containers get a `containers` row naming the wait, and their rows print `not run: waiting on capacity` (exit 75) instead of failing with `container is not running` and a note blaming an outside stop (SW-1070).
+- 10c0695: A service start that waits for capacity in an autonomous workspace no longer stops the workspace's containers while a `docker exec` runs in them (another gate's row, an agent's tests); it holds them and looks again at the next poll. When it does stop them it records why, so a gate row that finds its container stopped names that wait instead of saying werkmeister recorded no stop, and the record is cleared once the set starts again (SW-1080).
+- f4c3f94: `registry sync`'s warning for a forwarded service with no `health_endpoint` also names the other fix: set it to `/health` to keep the probe, or `""` for a non-HTTP service (SW-1082).
+- 4875b02: A registry `path_mappings` entry can name a list of services, so a shared package maps to the services that import it instead of touching every service in the gate. The werkmeister repo maps `packages/werkmeister-ui` to werkmeister-dashboard, werkmeister-vscode and werkmeister-core (SW-1087).
+- 8c9ed2a: A workspace's logs go in `.werkmeister/logs/`, so `.werkmeister/` holds only state and config: the gate's per-row logs (`gate-<repo>-<row>.log`), and the `pr open` / `pr gate --tests` redirects that `pr-rules.md` gives (`logs/pr-open.log`, `logs/gate-run.log`). `workspace init` creates the folder, and so does a contract sync that rewrites an ICM workspace's `pr-rules.md`. `pr open` commits everything in it to the record, plus the loose logs a workspace initialised before this change still writes (SW-1091).
+- 3aacd1c: New `metrics-trends` MCP tool and `metricsTrends` SDK call (SW-1097): one row per day or week over 7d, 30d, 90d or all, with shipped and abandoned workspaces, minutes per ICM stage (p50, p90), lead time from the first turn to merge and to release, tokens and estimated cost by model, cache-read share, active and wall minutes, and gate runs, minutes and first-pass rate. Every row is also split by werkmeister version (`byVersion`), so a release's effect shows. It reads the metrics event log and `usage.json` already on the machine.
+
 ## 0.108.0
 
 ### Minor Changes
