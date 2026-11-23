@@ -23,6 +23,7 @@ const GROUPS = [
       ["The UIs", "docs/uis.md"],
       ["Workspace lifecycle", "docs/workspace-lifecycle.md"],
       ["ICM workflows and stages", "docs/icm-workflows.md"],
+      ["Werkmeister for teams", "docs/teams.md"],
     ],
   ],
   [
