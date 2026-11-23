@@ -612,12 +612,26 @@ export async function admitServiceStart(
         grant &&
         ownRunning.length &&
         !released.length &&
-        readAutonomous(workspace)
+        readAutonomous(workspace) &&
+        // SW-1080: not under a running `docker exec` (another gate's row, an agent's tests): it would
+        // get SIGTERM. Held for now; the next poll looks again.
+        !(await runningExecCommands(ownRunning.map((c) => c.name))).length
       ) {
         // Release instead of hold (SW-675): two gates each holding core while waiting for one more
         // service deadlock a full budget. Stopped, not removed: one request then brings back the set.
         await stop(feature, { grant: false });
         released = ownRunning.map((c) => c.name);
+        // So a gate row that finds its container stopped names this stop, not an outside one (SW-1080).
+        // Best effort, as in stop(): a folder unseen from a container must not end the wait.
+        try {
+          writeLastStop(workspace, {
+            at: new Date().toISOString(),
+            why: `the capacity wait to start ${services.join(", ")} released it`,
+            killed: [],
+          });
+        } catch (e) {
+          warn(`Could not record why '${feature}' stopped: ${(e as Error).message}`);
+        }
         starting = { services: [...up, ...services], gate: true };
         info(`Stopped ${[...up].join(", ")} while waiting, so '${feature}' holds no capacity`);
         position = await admitOrQueue(feature, workspace, false, starting);
@@ -641,6 +655,8 @@ export async function admitServiceStart(
             "COMPOSE_UP_FAILED",
           );
         }
+        // The set is back: its stop is over, and a later grant must not report it (SW-702).
+        if (released.length) claimLastStop(workspace);
         return;
       }
       if (waited >= waitMs) {

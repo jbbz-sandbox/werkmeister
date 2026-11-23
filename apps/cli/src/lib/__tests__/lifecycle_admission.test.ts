@@ -36,16 +36,20 @@ vi.mock("werkmeister-core/slots", async (orig) => ({
   getSlot: vi.fn(async () => 1),
 }));
 const started: string[] = [];
+/** Containers with a `docker exec` still running in them (a gate row, an agent's test run). */
+const execsIn = new Set<string>();
 vi.mock("werkmeister-core/docker", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/docker")>()),
   docker: () => ({ getContainer: (name: string) => ({ start: async () => started.push(name) }) }),
+  runningExecCommands: async (names: string[]) =>
+    names.filter((n) => execsIn.has(n)).map(() => "sh -c npm test"),
 }));
 vi.mock("werkmeister-core/reporter", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/reporter")>()),
   info: vi.fn(),
 }));
 
-import { readWaiting } from "werkmeister-core/agent_state";
+import { readLastStop, readWaiting } from "werkmeister-core/agent_state";
 import {
   composeStop,
   composeUpServiceAsync,
@@ -509,9 +513,12 @@ describe("admitServiceStart", () => {
       // Released: it holds nothing and waits for core + api (4 CPUs) as one gate request.
       expect(composeStop).toHaveBeenCalledWith("mine");
       expect(readWaiting(mine)).toMatchObject({ services: ["core", "api"], gate: true });
+      expect(readLastStop(mine)?.why).toBe("the capacity wait to start api released it");
       both(other, mine, 0, () => mineCpus); // the other gate finished
     };
     await admitServiceStart("mine", mine, "api", { sleep });
+    // SW-1080: back up, so the stop is over and no later grant reports it.
+    expect(readLastStop(mine)).toBeNull();
     // SW-686: through compose, in its dependency order with health waits, not docker start by name.
     expect(composeUpServiceAsync).toHaveBeenCalledWith(
       "mine",
@@ -594,6 +601,68 @@ describe("admitServiceStart", () => {
     );
     expect(err.message).toContain("Rerun the same command; nothing to ask a person.");
     expect(readQueue()).toEqual([]);
+  });
+
+  // SW-1080: the gate's rows read "werkmeister recorded no stop" for the gate's own release.
+  it("a release records why it stopped the set, for the gate's stopped-while-this-row-ran note", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ other: { slot: 1, workspace: other }, mine: { slot: 2, workspace: mine } });
+    let mineCpus = 3;
+    both(other, mine, 3, () => mineCpus);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      { name: "mine-core", status: "running", service: "core" } as never,
+    ]);
+    vi.mocked(composeStop).mockImplementation(async (f: string) => {
+      if (f === "mine") mineCpus = 0;
+      return true;
+    });
+    await expect(
+      admitServiceStart("mine", mine, "api", { sleep: async () => {}, waitMs: 0 }),
+    ).rejects.toMatchObject({ code: "NO_CAPACITY" });
+    expect(readLastStop(mine)).toMatchObject({
+      why: "the capacity wait to start api released it",
+      killed: [],
+    });
+  });
+
+  // SW-1080: a release while another process's row ran in the set SIGTERMed it (exit 143).
+  it("holds its set while a docker exec runs in it, and releases once it ends", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ other: { slot: 1, workspace: other }, mine: { slot: 2, workspace: mine } });
+    let mineCpus = 3;
+    both(other, mine, 3, () => mineCpus);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      { name: "mine-core", status: "running", service: "core" } as never,
+    ]);
+    vi.mocked(composeStop).mockClear();
+    vi.mocked(composeStop).mockImplementation(async (f: string) => {
+      if (f === "mine") mineCpus = 0;
+      return true;
+    });
+    execsIn.add("mine-core");
+    let polls = 0;
+    const sleep = async () => {
+      polls++;
+      expect(composeStop).not.toHaveBeenCalledWith("mine");
+      execsIn.delete("mine-core"); // the row ended
+    };
+    try {
+      await expect(
+        admitServiceStart("mine", mine, "api", { sleep, waitMs: 15_000 }),
+      ).rejects.toMatchObject({ code: "NO_CAPACITY" });
+    } finally {
+      execsIn.clear();
+    }
+    expect(polls).toBe(1);
+    expect(composeStop).toHaveBeenCalledWith("mine");
   });
 
   // SW-737: it released core with stop(grant: false); giving up left that room to nobody.
