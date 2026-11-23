@@ -16,7 +16,7 @@ In an `autonomous` workspace the agent runs each check itself, and you review on
 
 ## Picking a work type
 
-`--work-type` takes `feature` (the default), `bugfix`, `incident`, `refactor` or `spike` on `werkmeister workspace new` (and `workspace init`). `incident` gets the bugfix stages. Any other `work_type` written into `workspace.yml` gets the feature stages.
+`--work-type` takes `feature` (the default), `bugfix`, `incident`, `refactor` or `spike` on `werkmeister workspace new` (and `workspace init`). `incident` gets the bugfix stages. A type found in a repo's or your own `.werkmeister/workflows/` folder uses that workflow (see [Adding your own workflow](#adding-your-own-workflow)). Any other `work_type` gets the feature stages, with a warning.
 
 ```sh
 werkmeister workspace new my-fix --work-type bugfix
@@ -95,6 +95,101 @@ werkmeister workspace new my-fix --work-type bugfix
 | `02_findings`: answer them with evidence | `findings.md` | decide the next piece of work |
 
 A spike has no propose stage. The recommendation in `findings.md` becomes the brief of the next workspace, or the spike ends there. Only when the brief asks for a repo deliverable does findings also write a `pr-<worktree>.md`, and then the gate applies to it ([Spikes](workspace-lifecycle.md#spikes)).
+
+## Adding your own workflow
+
+A team can add its own work type, with its own stages, without changing werkmeister. A workflow is a folder named after the type:
+
+```text
+review/
+  workflow.yaml        the stage list
+  stages/
+    triage.md          one contract per stage
+    report.md
+```
+
+### Where werkmeister looks
+
+For `--work-type review`, init uses the first `review/workflow.yaml` it finds in:
+
+1. each repo in the workspace, at `<repo>/.werkmeister/workflows/review/` (repos in name order)
+2. your own folder, `~/.werkmeister/workflows/review/`
+3. the built-in of that name, if there is one, else the feature stages
+
+The first one found replaces the rest whole: a folder named `spike` replaces the built-in spike, and stages are never mixed. Init prints where the workflow came from:
+
+```text
+[info] work_type "review": workflow from ~/repos/api/.werkmeister/workflows/review.
+[info] work_type "spike": workflow from ~/.werkmeister/workflows/spike (replaces the built-in spike).
+```
+
+When two repos in one workspace both define the type, init warns that the second is shadowed. The create form lists the types it finds in `~/.werkmeister/workflows/` and in each registered repo's checkout. For a type that exists only on a branch, type it under the wizard's "Other" choice or pass `--work-type`.
+
+### `workflow.yaml`
+
+```yaml
+version: 1
+stages:
+  - name: triage                # lowercase-hyphen; also the file stages/triage.md
+    job: sort the findings      # the stage's one-line job
+    writes: findings.md         # what its output/ holds
+    check: read findings.md     # the human check, in a few words
+    grants: [issue view]        # optional, from the allowlist below
+  - name: report
+    job: write the report
+    writes: report.md
+    check: approve the report
+```
+
+Optional per stage: `enter`, `gate`, `standards` and `grants`. Init renders the stages as `stages/01_triage/`, `stages/02_report/` and so on, in this order.
+
+`grants` pre-approves commands for the whole run, so a workflow may only ask for the ones the built-ins use: `issue start`, `issue view` and `pr push:*`. A workflow in a cloned repo can't pre-approve anything else, such as `feature up` or `pr open`.
+
+### Stage files
+
+Each `stages/<name>.md` uses the sections of a rendered stage `CONTEXT.md`. The text before the first `##` is the stage's one job. Then come `## Inputs`, `## Do NOT load`, `## Process`, `## Outputs` and `## Human check`, plus an optional `## Self-check`. A `##` line inside a code fence is text, not a section. Leave out `## Pre-approved` and the issue-start step: werkmeister adds them.
+
+Three variables are filled in:
+
+| Variable | Becomes |
+|---|---|
+| <code v-pre>{{repos}}</code> | the workspace's code worktrees |
+| <code v-pre>{{restart}}</code> | how to reload the running code |
+| <code v-pre>{{at:&lt;stage&gt;}}</code> | the path from this stage to another, e.g. `../01_triage` |
+
+### Errors
+
+Init checks the whole workflow after it makes the worktrees (a repo's workflow lives in one) and before it writes `.env`, `.werkmeister/bin/` or any stage file. A mistake fails init with the folder and the reason, and never falls back to a built-in:
+
+```text
+[err]  ICM workflow ~/.werkmeister/workflows/review: stages[0]: grants pr open not allowed (allowed: issue start, issue view, pr push:*)
+```
+
+It also fails on a `version` other than 1, an empty `stages:`, a stage without `name`, `job`, `writes` or `check`, a missing `stages/<name>.md`, an unknown or empty section, and an unknown <code v-pre>{{variable}}</code>.
+
+### Create a workflow
+
+1. Run the icm-architect skill on the recurring job. It finds the stages where a person stops to check, and writes one `CONTEXT.md` per stage.
+2. Walk-test it once by hand in a scratch folder.
+
+### Turn it into a template
+
+1. Make `<repo>/.werkmeister/workflows/<type>/` for the team, or `~/.werkmeister/workflows/<type>/` for yourself.
+2. Copy each stage's `CONTEXT.md` to `stages/<name>.md`, without the `NN_` prefix: the order comes from `workflow.yaml`.
+3. Replace paths to other stages with <code v-pre>{{at:&lt;stage&gt;}}</code> and repo paths with <code v-pre>{{repos}}</code>. Delete `## Pre-approved` and the issue-start step.
+4. Write `workflow.yaml` as above.
+5. Run `werkmeister workspace new <ws> --work-type <type>` and check the `workflow from` line.
+6. For the repo level, commit the folder, so everyone who checks the repo out gets it.
+
+To start from a built-in, copy the rendered `stages/*/CONTEXT.md` of any workspace of that type.
+
+### Update a workflow
+
+1. Edit the folder. For the repo level, do it on a branch and merge it like code: a workspace reads the workflow from its own worktree, so it sees the version its branch has.
+2. New workspaces get the new version.
+3. To move an existing workspace onto it, run `werkmeister skills check` to list the contracts that differ, then `werkmeister skills sync`. If the stage list changed during a run, init and sync leave the stages alone. Move `stages/` aside to regenerate them.
+
+A workflow that stops loading after init (an edit with a mistake) pre-approves nothing until it is fixed, and `skills check` and `sync` fail with its error.
 
 ## The propose stage and the gate
 

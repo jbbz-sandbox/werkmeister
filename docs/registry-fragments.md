@@ -2,6 +2,8 @@
 
 The fields of a repo's registry fragment, `<repo>/.werkmeister/services.yaml`, and how its `test:` and `validate:` are used.
 
+A repo can also ship its own ICM workflows in `<repo>/.werkmeister/workflows/`: see [Adding your own workflow](icm-workflows.md#adding-your-own-workflow).
+
 ## Writing a fragment
 
 A fragment is a slice of the registry committed at `<repo>/.werkmeister/services.yaml`. `werkmeister machine detect` writes a first draft of this file for you; see [werkmeister machine detect](cli-reference.md#werkmeister-machine-detect).
