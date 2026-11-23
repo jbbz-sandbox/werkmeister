@@ -1,5 +1,12 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.107.1
+
+### Patch Changes
+
+- 18a19db: The dashboard's `● Needs you · N` count and its needs-only filter count what the status strip's needs chip counts: a paused workspace is left out and a workspace with only a PR need is in, and that card names the need (SW-1053).
+- cb9333a: The status strip's infra chip names each service by its state, in the /workspaces pane and the VS Code strip: `infra: caddy down, k8s-forwards starting`. A service still starting no longer reads `down`, and the chip is amber while every named service is only starting; red once one is down or unhealthy (SW-1069).
+
 ## 0.107.0
 
 ### Minor Changes
