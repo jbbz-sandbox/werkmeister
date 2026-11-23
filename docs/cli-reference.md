@@ -430,6 +430,20 @@ Opens a workspace in VS Code. The dashboard's `open-workspace` tool does the sam
 werkmeister workspace code my-feature
 ```
 
+#### werkmeister workspace serve
+
+Serve a folder inside this workspace on 127.0.0.1 at an ephemeral port, for a browser check of a static page
+
+`werkmeister workspace serve <dir>`
+
+Runs `python3 -I -u -m http.server 0 -b 127.0.0.1 -d <dir>` in the foreground: loopback only, a port the OS picks (the first line prints it). Refuses a `<dir>` whose real path is outside the workspace, is the workspace folder itself, or is in a dot-folder: those hold its daemon token and `.env` files. It resolves only `<dir>` itself, so a symlink inside it is still followed. The ICM stage contracts name it for a browser check of a static HTML page, since the Chrome tool refuses `file://`; each ICM run pre-approves it. Run it as a background job and stop it by its task ID.
+
+**Examples**
+
+```bash
+werkmeister workspace serve stages
+```
+
 #### werkmeister workspace init
 
 Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktrees to match the `repos`/`services` fields, then (re)generate CLAUDE.md / .env / compose.yml. Idempotent — edit workspace.yml and rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.

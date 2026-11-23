@@ -57,6 +57,9 @@ List the workspaces under the workspaces root with their issue and labels
 \fBworkspace code\fR [feature]
 Open a workspace in VS Code
 .TP
+\fBworkspace serve\fR <dir>
+Serve a folder inside this workspace on 127.0.0.1 at an ephemeral port, for a browser check of a static page
+.TP
 \fBworkspace init\fR
 Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktrees to match the \fBrepos\fR/\fBservices\fR fields, then (re)generate CLAUDE.md / .env / compose.yml. Idempotent — edit workspace.yml and rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.
 .TP
@@ -215,6 +218,7 @@ Restart the daemon, through launchd when launchd owns it
 \fBwerkmeister\-workspace\-new\fR(1),
 \fBwerkmeister\-workspace\-list\fR(1),
 \fBwerkmeister\-workspace\-code\fR(1),
+\fBwerkmeister\-workspace\-serve\fR(1),
 \fBwerkmeister\-workspace\-init\fR(1),
 \fBwerkmeister\-workspace\-close\fR(1),
 \fBwerkmeister\-workspace\-abandon\fR(1),

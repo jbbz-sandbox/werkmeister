@@ -808,8 +808,12 @@ test("SW-807: each bugfix contract lists its own pre-approved commands and steer
         section("01_reproduce"),
         /^- `werkmeister issue start`\n- `werkmeister issue view`\n/,
       );
-      for (const d of ["02_fix", "03_exercise"])
-        assert.match(section(d), /^- Every other command asks\./);
+      assert.match(section("02_fix"), /^- Every other command asks\./);
+      // SW-963: the browser check's static-page server.
+      assert.match(
+        section("03_exercise"),
+        /^- `werkmeister workspace serve …`\n- Every other command asks\./,
+      );
       // SW-717: rule 5's conflict fix pushes the session's own rebased branch.
       assert.match(
         section("04_propose"),
