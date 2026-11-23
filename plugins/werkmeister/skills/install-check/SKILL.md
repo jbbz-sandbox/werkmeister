@@ -12,7 +12,7 @@ The global `werkmeister`/`w9r` CLI, the plugin's MCP server (which runs `werkmei
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/skills/install-check/check.sh"         # report only, exits 1 on drift
 bash "${CLAUDE_PLUGIN_ROOT}/skills/install-check/check.sh" --fix   # repair, then run it again to confirm
-bash "${CLAUDE_PLUGIN_ROOT}/skills/install-check/check.sh" --pull  # fast-forward main first, then --fix and build every package
+bash "${CLAUDE_PLUGIN_ROOT}/skills/install-check/check.sh" --pull  # fast-forward main, --fix, build every package, reinstall a stale VS Code extension, registry sync, daemon restart
 ```
 
 Run the check first and show the person its output. If it finds drift, run `--fix`, then run the check again, and report the final `RESULT` line.
@@ -27,7 +27,9 @@ Run the check first and show the person its output. If it finds drift, run `--fi
 | `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json` includes `plugins/werkmeister` | adds it, and sets `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` |
 | No marketplace `werkmeister@…` plugin installed | reports only: `claude plugin uninstall werkmeister` (ask the person first) |
 | Plugin `.mcp.json` runs `werkmeister` from PATH | reports only |
-| No file in `packages/werkmeister-vscode/src` is newer than the installed `~/.vscode/extensions/jbbz.werkmeister-vscode-*` | reports only: `pnpm --filter werkmeister-vscode install:local` (ask the person first) |
+| No file in `packages/werkmeister-vscode/src` is newer than the installed `~/.vscode/extensions/jbbz.werkmeister-vscode-*` | reports only; `--pull` runs `corepack pnpm --filter werkmeister-vscode install:local` (reload the VS Code window after) |
+
+`--pull` then runs `werkmeister registry sync` (a pull can change a repo's `.werkmeister/services.yaml` fragment) and `werkmeister daemon restart`, so the daemon serves the new build without waiting to go idle. A restart while features wait in the queue can race a queue start (SW-1110). Each prints `OK` or `ERROR`.
 
 `--pull` refuses (exit 2, nothing pulled or built) when the checkout isn't on `main`, has uncommitted changes, or can't fast-forward. Its `PULL` line names the commit it moved from, for rollback.
 
@@ -43,7 +45,7 @@ On a machine without the checkout (`$WERKMEISTER_REPO/apps/cli` missing) the scr
 
 The dev link is current when it is built from an up-to-date `main`; this machine doesn't install the npm release (that would overwrite the link).
 
-1. A PR merged: `check.sh --pull`. It pulls, installs, runs the full `turbo run build`, and prints `PULL  main <old> -> <new>`. Note `<old>` for rollback.
+1. A PR merged: `check.sh --pull`. It pulls, installs, runs the full `turbo run build`, reinstalls the VS Code extension if its source changed, syncs the registry, restarts the daemon, and prints `PULL  main <old> -> <new>`. Note `<old>` for rollback.
 2. A release: the Changesets version PR merged and npm shows the version (`npm view werkmeister version`). Releases are daily (the version PR is queued at 06:00 UTC and carries every merge since the last one); force one with `gh workflow run queue-version-pr.yml`. Then `check.sh --pull`, as above; the pull brings the version commit.
 3. `werkmeister --version` prints no stale-build warning. Running MCP servers keep the old build: `/mcp` to reconnect them.
 

@@ -151,6 +151,34 @@ test("--pull fast-forwards main, prints the commit to roll back to, and builds e
   assert.match(r.stdout, /^FIX .*turbo run build$/m);
 });
 
+test("--pull reinstalls a stale VS Code extension, then syncs the registry and restarts the daemon", () => {
+  // the repo's werkmeister records its calls too; written before the commit so --pull sees a clean tree
+  write(path.join(repo, "apps/cli/werkmeister"), `#!/bin/sh\necho "werkmeister $*" >>"${log}"\n`, 0o755);
+  behindOrigin();
+  extension(60_000);
+  fake("pnpm");
+  fake("corepack");
+  const r = run("--pull");
+  const at = (re) => r.calls.findIndex((c) => re.test(c));
+  const build = at(/ turbo run build/);
+  const ext = at(/--filter werkmeister-vscode install:local/);
+  const sync = at(/^werkmeister registry sync/);
+  const restart = at(/^werkmeister daemon restart/);
+  assert.ok(build >= 0 && ext > build, `extension install not after the build in ${JSON.stringify(r.calls)}`);
+  assert.ok(sync > build && restart > sync, `no sync then restart after the build in ${JSON.stringify(r.calls)}`);
+  assert.match(r.stdout, /^FIX .*werkmeister-vscode install:local/m);
+  assert.match(r.stdout, /^OK {4}daemon restarted/m);
+});
+
+test("--fix never installs the extension, syncs the registry or restarts the daemon", () => {
+  extension(60_000);
+  fake("pnpm");
+  fake("corepack");
+  write(path.join(repo, "apps/cli/werkmeister"), `#!/bin/sh\necho "werkmeister $*" >>"${log}"\n`, 0o755);
+  const r = run("--fix");
+  assert.doesNotMatch(r.calls.join("\n"), /install:local|^werkmeister /m);
+});
+
 test("--pull off main pulls and builds nothing", () => {
   behindOrigin("jayboyer/feature");
   fake("pnpm");
