@@ -3,11 +3,12 @@
  * surface for MCP hosts that don't render `ui://` resources (Claude Code CLI,
  * the VS Code extension).
  *
- * The dashboard is a five-tab shell:
+ * The dashboard is a six-tab shell:
  *   • Workspaces          — the shared list UI (werkmeister-ui/workspace-ui)
  *   • New workspace       — the create form (werkmeister-ui/create-form)
  *   • Open Pull Requests  — the PR review tab (prs-ui.tsx)
  *   • Health              — infra/k8s/kube status (health-ui.tsx)
+ *   • Flow                — the flow board and workspace timelines (flow-ui.tsx)
  *   • Links               — werkmeister feature-selector links (werkmeister-links-ui.tsx)
  * All drive their tool calls through the same bridge (same-origin `POST
  * /api/tool`, dispatched into the real MCP tools by lib/browser-ui.ts).
@@ -21,7 +22,9 @@ import { CreateForm } from "werkmeister-ui/create-form";
 import { renderMarkdown } from "werkmeister-ui/lib/markdown";
 import { appRoot, Css } from "werkmeister-ui/theme";
 import { type HostBridge, WorkspaceList } from "werkmeister-ui/workspace-ui";
+import { FlowTab } from "./flow-ui.js";
 import { HealthTab } from "./health-ui.js";
+import { isTab, TABS, type Tab } from "./lib/flow-board.js";
 import { PrsTab } from "./prs-ui.js";
 import { LinksTab } from "./werkmeister-links-ui.js";
 
@@ -70,7 +73,7 @@ const SHELL_CSS = `
     border-bottom: 1px solid var(--sd-line); position: sticky; top: 0; z-index: 5;
     font-family: var(--sd-sans);
   }
-  .wsd-tabrow { display: flex; gap: 4px; padding: 0 20px; }
+  .wsd-tabrow { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 20px; box-sizing: border-box; }
   .wsd-tab {
     font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
     padding: 8px 14px; border: none; border-bottom: 2px solid transparent;
@@ -82,27 +85,18 @@ const SHELL_CSS = `
   body { margin: 0; background: var(--sd-bg); }
 `;
 
-type Tab = "list" | "new" | "prs" | "health" | "links";
-
-const TABS: [Tab, string][] = [
-  ["list", "Workspaces"],
-  ["new", "New workspace"],
-  ["prs", "Open Pull Requests"],
-  ["health", "Health"],
-  ["links", "Links"],
-];
-
 const TAB_TITLES: Record<Tab, string> = {
   list: "Werkmeister Workspaces",
   new: "New workspace · Werkmeister Workspaces",
   prs: "Open Pull Requests · Werkmeister Workspaces",
   health: "Health · Werkmeister Workspaces",
+  flow: "Flow · Werkmeister Workspaces",
   links: "Links · Werkmeister Workspaces",
 };
 
 function tabFromHash(): Tab {
   const h = location.hash.replace(/^#/, "");
-  return h === "new" || h === "prs" || h === "health" || h === "links" ? h : "list";
+  return isTab(h) ? h : "list";
 }
 
 // Each top-level tab is a page addressed by the URL hash (…/#list, …/#new), so
@@ -177,6 +171,7 @@ function Dashboard() {
       )}
       {pane("prs", <PrsTab bridge={bridge} />)}
       {pane("health", <HealthTab bridge={bridge} active={tab === "health"} />)}
+      {pane("flow", <FlowTab bridge={bridge} />)}
       {pane("links", <LinksTab />)}
     </>
   );

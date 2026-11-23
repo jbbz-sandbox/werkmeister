@@ -414,3 +414,33 @@ test("metricsReport reads the log, workspace folders and local record branches u
     { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
   );
 });
+
+// SW-782: a Flow card's timeline is its workspace's current run.
+test("a workspace's timeline keeps its own run's events, oldest first, and only when asked for", () => {
+  const input = { events: EVENTS, open: OPEN, usages: USAGES };
+  assert.equal("timeline" in flowMetrics(input, "7d", NOW), false);
+  const tl = flowMetrics(input, "7d", NOW, "ws-a").timeline;
+  // The 11-15 answer predates ws-a's first turn (an earlier run); issue.start is not a timeline event.
+  assert.deepEqual(
+    tl.map((e) => e.event),
+    [
+      "start",
+      "answer",
+      "queue.admit",
+      "gate.start",
+      "gate.end",
+      "gate.start",
+      "gate.end",
+      "gate.start",
+      "gate.end",
+      "pr.open",
+      "pr.merged",
+      "release",
+    ],
+  );
+  assert.deepEqual(tl[0], { at: "2026-11-16T08:00:00Z", event: "start" }, "the run's first turn");
+  assert.deepEqual(tl[1], { at: "2026-11-16T09:00:00Z", event: "answer", waitedS: 600 });
+  assert.deepEqual(tl[4], { at: "2026-11-16T10:02:00Z", event: "gate.end", exit: 75 });
+  assert.equal(tl[9].pr, PR(1));
+  assert.deepEqual(flowMetrics(input, "7d", NOW, "nope").timeline, []);
+});

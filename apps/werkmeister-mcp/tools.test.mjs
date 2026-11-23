@@ -289,6 +289,10 @@ test("the daemon tools are listed, and clean/cache prune default to a dry run", 
   const range = tools.find((t) => t.name === "metrics")?.inputSchema.properties?.range;
   assert.deepEqual(range?.enum, ["7d", "30d", "90d", "all"]);
   assert.ok(!tools.find((t) => t.name === "metrics")?.inputSchema.required?.includes("range"));
+  // SW-782: a Flow card asks for its workspace's timeline.
+  const metricsIn = tools.find((t) => t.name === "metrics")?.inputSchema;
+  assert.equal(metricsIn?.properties?.workspace?.type, "string");
+  assert.ok(!metricsIn?.required?.includes("workspace"));
 });
 
 test("a workspace-scoped server lists only the workspace verbs", async () => {

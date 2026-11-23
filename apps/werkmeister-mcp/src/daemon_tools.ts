@@ -117,6 +117,18 @@ const METRICS_OUTPUT = {
     passed: z.number(),
     workspaces: z.number(),
   }),
+  timeline: z
+    .array(
+      z.object({
+        at: z.string(),
+        event: z.string(),
+        stage: z.string().optional(),
+        waitedS: z.number().optional(),
+        exit: z.number().optional(),
+        pr: z.string().optional(),
+      }),
+    )
+    .optional(),
 };
 
 export function registerDaemonTools(server: McpServer): void {
@@ -194,18 +206,22 @@ export function registerDaemonTools(server: McpServer): void {
         "its ICM stage, ready, pr-open, awaiting-release) with each card's age and current wait, each " +
         "column's age p50/p90, waits by cause per ISO week in seconds (person, capacity, pr open → " +
         "merge, gateRetry, release), cycle and lead time per ticket, and cost, tokens, active and wall " +
-        "time, turns and gate first-pass rate for workspaces closed in the range. Reads the metrics " +
+        "time, turns and gate first-pass rate for workspaces closed in the range. With a workspace, also " +
+        "that workspace's run as a timeline: stage.done, waits, gate runs, PR open, merge and release. Reads the metrics " +
         "event log, workspace state and usage.json from the record branches on this machine.",
       inputSchema: {
         range: z
           .enum(METRICS_RANGES as [MetricsRange, ...MetricsRange[]])
           .optional()
           .describe("7d, 30d, 90d or all. Default 7d."),
+        workspace: z.string().optional().describe("A workspace name: adds its run's timeline."),
       },
       outputSchema: METRICS_OUTPUT,
     },
     async (args): Promise<CallToolResult> =>
-      adapt(async () => ({ ...(await metricsReport({ range: args.range })) })),
+      adapt(async () => ({
+        ...(await metricsReport({ range: args.range, workspace: args.workspace })),
+      })),
   );
 
   server.registerTool(

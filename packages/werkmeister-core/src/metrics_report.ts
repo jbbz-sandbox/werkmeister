@@ -150,6 +150,8 @@ export interface MetricsReport {
     /** Summed turns. */
     turns: number;
   };
+  /** The asked-for workspace's current run, oldest first; only when `metricsReport` got a `workspace`. */
+  timeline?: TimelineEvent[];
   /** Gate first-pass rate over workspaces whose first finished gate run (exit ≠ 75) ended in the range. */
   gate: {
     /** `passed ÷ workspaces`, or null with none. */
@@ -160,6 +162,34 @@ export interface MetricsReport {
     workspaces: number;
   };
 }
+
+/** One event of a workspace's current run, for its Flow timeline. */
+export interface TimelineEvent {
+  /** When it happened. */
+  at: string;
+  /** start (the run's first turn), stage.done, ask, answer, queue.wait, queue.admit, gate.start, gate.end, pr.open, pr.merged or release. */
+  event: string;
+  /** stage.done: the stage. */
+  stage?: string;
+  /** answer, queue.admit: seconds waited before `at`. */
+  waitedS?: number;
+  /** gate.end: the exit code (75 = retry later). */
+  exit?: number;
+  /** pr.open, pr.merged, release: the PR URL. */
+  pr?: string;
+}
+const TIMELINE_EVENTS: readonly string[] = [
+  "stage.done",
+  "ask",
+  "answer",
+  "queue.wait",
+  "queue.admit",
+  "gate.start",
+  "gate.end",
+  "pr.open",
+  "pr.merged",
+  "release",
+];
 
 export interface OpenWorkspace {
   workspace: string;
@@ -247,7 +277,12 @@ function firstPerPr(): (e: Record<string, unknown>) => boolean {
 }
 
 /** The report for *input* over *range*, as of *now*. Pure: the formulas of § Definitions. */
-export function flowMetrics(input: FlowInput, range: MetricsRange, now: Date): MetricsReport {
+export function flowMetrics(
+  input: FlowInput,
+  range: MetricsRange,
+  now: Date,
+  workspace?: string,
+): MetricsReport {
   const to = now.getTime();
   const from = range === "all" ? null : to - Number.parseInt(range, 10) * DAY_MS;
   const inRange = (t: string | undefined | null): t is string =>
@@ -496,7 +531,34 @@ export function flowMetrics(input: FlowInput, range: MetricsRange, now: Date): M
       passed,
       workspaces: finished.length,
     },
+    ...(workspace === undefined
+      ? {}
+      : { timeline: timelineOf(events, workspace, firstTurn.get(workspace)) }),
   };
+}
+
+/**
+ * *workspace*'s events among *events* (already filtered to each run and sorted), as timeline rows,
+ * after a `start` row at the run's first turn when that is known and comes first.
+ */
+function timelineOf(
+  events: Record<string, unknown>[],
+  workspace: string,
+  firstTurn: string | undefined,
+): TimelineEvent[] {
+  const rows = events
+    .filter((e) => e["workspace"] === workspace && TIMELINE_EVENTS.includes(String(e["event"])))
+    .map((e) => ({
+      at: String(e["at"]),
+      event: String(e["event"]),
+      ...(typeof e["stage"] === "string" ? { stage: e["stage"] } : {}),
+      ...(typeof e["waited_s"] === "number" ? { waitedS: e["waited_s"] } : {}),
+      ...(typeof e["exit"] === "number" ? { exit: e["exit"] } : {}),
+      ...(typeof e["pr"] === "string" ? { pr: e["pr"] } : {}),
+    }));
+  return firstTurn && (!rows.length || ms(firstTurn) <= ms(rows[0].at))
+    ? [{ at: firstTurn, event: "start" }, ...rows]
+    : rows;
 }
 
 /** Every line of `<sandboxHome()>/metrics/events-*.jsonl` that parses and names its time, event and workspace. */
@@ -595,7 +657,7 @@ function usageRow(text: string): UsageRow | null {
  * gate first-pass rate. Reads the metrics event log, `usage.json` from workspace folders and from
  * the record branches already on this machine (it never fetches), and each workspace's state.
  *
- * @param opts - `range`: `"7d"`, `"30d"`, `"90d"` or `"all"`.
+ * @param opts - `range`: `"7d"`, `"30d"`, `"90d"` or `"all"`; `workspace`: a workspace name, to add its run's `timeline`.
  * @returns The {@link MetricsReport}.
  *
  * @example
@@ -608,7 +670,7 @@ function usageRow(text: string): UsageRow | null {
  * ```
  */
 export async function metricsReport(
-  opts: { range?: MetricsRange } = {},
+  opts: { range?: MetricsRange; workspace?: string } = {},
   now = new Date(),
 ): Promise<MetricsReport> {
   const rows = await Promise.all(
@@ -651,5 +713,10 @@ export async function metricsReport(
       seen.add(`${u.workspace}|${u.closedAt}`);
       usages.push(u);
     }
-  return flowMetrics({ events: readMetricsEvents(), open, usages }, opts.range ?? "7d", now);
+  return flowMetrics(
+    { events: readMetricsEvents(), open, usages },
+    opts.range ?? "7d",
+    now,
+    opts.workspace,
+  );
 }
