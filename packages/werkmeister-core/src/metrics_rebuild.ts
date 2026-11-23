@@ -14,6 +14,7 @@ import { loadWorkspaceRepo } from "./global_config.js";
 import { findClaudeProjectDir, listSessionFiles } from "./harness/claude/transcript.js";
 import { WORKSPACE_ROOT_REPO, workspaceRepoUrl } from "./machine_setup.js";
 import {
+  appendLogLine,
   branchFiles,
   firstFill,
   type MetricsEvent,
@@ -270,11 +271,13 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
       .filter((b) => b && b !== head);
     const slices = branchFiles(repo, branches, "metrics.jsonl");
     const usageFiles = branchFiles(repo, branches, "usage.json");
-    const log = ({ e, at }: TimedEvent) => {
+    /** *line*: a slice line, appended as is (SW-1116); re-serialised, a later `v` or key order would miss `lines` next run. */
+    const log = ({ e, at }: TimedEvent, line?: string) => {
       const k = keyOf(e);
       if (k && keys.has(k)) return;
       if (k) keys.add(k);
-      if (recordEvent(e, at)) added[e.event] = (added[e.event] ?? 0) + 1;
+      const ok = line === undefined ? recordEvent(e, at) : appendLogLine(line, at, e.event);
+      if (ok) added[e.event] = (added[e.event] ?? 0) + 1;
     };
     for (const branch of branches) {
       // The slice first (SW-1104): its live times beat the ones rebuilt below, which keyOf then skips.
@@ -284,7 +287,7 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
         const t = sliceEvent(line);
         if (!t) continue;
         if (t.e.event === "ask" || t.e.event === "answer") sessions.add(t.e.session);
-        log(t);
+        log(t, line);
       }
       for (const t of await branchEvents(repo, branch, sessions)) {
         const slug =
@@ -316,7 +319,12 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
 function sliceEvent(line: string): TimedEvent | null {
   try {
     const { v: _v, at, ...e } = JSON.parse(line);
-    return typeof at === "string" && typeof e.event === "string" && typeof e.workspace === "string"
+    // *at* names the month file the line is copied to, so it must be a real time.
+    return typeof at === "string" &&
+      /^\d{4}-\d{2}-/.test(at) &&
+      !Number.isNaN(Date.parse(at)) &&
+      typeof e.event === "string" &&
+      typeof e.workspace === "string"
       ? { e: e as MetricsEvent, at }
       : null;
   } catch {

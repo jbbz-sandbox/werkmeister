@@ -567,3 +567,64 @@ const metricsPathUnder = (home) =>
   fs
     .readdirSync(path.join(sandboxHome(), "metrics"))
     .every((f) => path.join(sandboxHome(), "metrics", f).startsWith(home));
+
+const TEAM_CONFIG = { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" };
+
+/** An origin with one record branch per entry of *branches* ({ name, email, files }) and the shared checkout cloned from it. */
+function teamRepo(branches) {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "team-")));
+  const work = path.join(root, "work");
+  fs.mkdirSync(work);
+  git(work, "init", "-q", "-b", "main");
+  const commitAs = (email, files) => {
+    for (const [rel, body] of Object.entries(files))
+      fs.writeFileSync(path.join(work, rel), `${body}\n`);
+    git(work, "add", "-A");
+    git(work, "-c", `user.email=${email}`, "-c", "user.name=n", "commit", "-q", "-m", "c");
+  };
+  commitAs("t@t", { "README.md": "scaffold" });
+  for (const b of branches) {
+    git(work, "checkout", "-q", "-b", b.name, "main");
+    commitAs(b.email, b.files);
+  }
+  git(work, "checkout", "-q", "main");
+  const origin = path.join(root, "origin.git");
+  git(root, "clone", "-q", "--bare", work, origin);
+  fs.mkdirSync(path.join(os.homedir(), "repos"));
+  git(root, "clone", "-q", origin, path.join(os.homedir(), "repos", "sandbox-workspace"));
+  fs.mkdirSync(path.join(os.homedir(), "ws"));
+  return root;
+}
+
+// SW-1116: a slice line from a later version (v: 2) of an event with no keyOf key is copied as is, so a rebuild finds it next time.
+test("a teammate's v: 2 slice line is copied verbatim and only once over two rebuilds (SW-1116)", async () => {
+  await withSandboxHome(async (home) => {
+    const line = JSON.stringify({
+      v: 2,
+      at: "2026-11-18T05:00:00.000Z",
+      event: "issue.start",
+      workspace: "ws-b",
+      ticket: "APP-7",
+    });
+    // `at` names the month file: a path or a non-time is refused, not copied.
+    const bad = ["../../evil", "2026-11-xx"].map((at) =>
+      JSON.stringify({ v: 1, at, event: "issue.start", workspace: "ws-b", ticket: "APP-7" }),
+    );
+    const slice = [line, ...bad].join("\n");
+    const root = teamRepo([{ name: "b/ws-b", email: "b@x", files: { "metrics.jsonl": slice } }]);
+    try {
+      assert.equal((await rebuildMetrics()).added["issue.start"], 1, "counted");
+      await rebuildMetrics();
+      const file = path.join(sandboxHome(), "metrics", "events-2026-11.jsonl");
+      assert.ok(file.startsWith(home), "written under the temp home");
+      assert.deepEqual(fs.readFileSync(file, "utf8").split("\n").filter(Boolean), [line]);
+      assert.deepEqual(
+        fs.readdirSync(path.join(sandboxHome(), "metrics")).sort(),
+        ["events-2026-11.jsonl", "usage-branches.jsonl"],
+        "no file from a bad at",
+      );
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }, TEAM_CONFIG);
+});

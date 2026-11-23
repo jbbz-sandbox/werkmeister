@@ -717,6 +717,56 @@ test("workspaceSlice keeps this run's lines verbatim, oldest month first", async
   });
 });
 
+// SW-1116: a reused name's earlier run logged lines under this name before this run's record branch
+// had its first commit; only stage.done was checked against history, so the rest leaked in.
+test("workspaceSlice drops a reused name's lines from before the record branch's first commit (SW-1116)", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const run = (cwd, date, ...a) =>
+      execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], {
+        cwd,
+        encoding: "utf8",
+        env: { ...process.env, ...(date && { GIT_COMMITTER_DATE: date, GIT_AUTHOR_DATE: date }) },
+      }).trim();
+    const main = path.join(fx.root, "main");
+    fs.mkdirSync(main);
+    run(main, null, "init", "-q", "-b", "main");
+    run(main, "2026-10-01T00:00:00Z", "commit", "-q", "--allow-empty", "-m", "scaffold");
+    const ws = path.join(fx.root, "ws-r");
+    run(fx.root, null, "clone", "-q", main, ws);
+    run(ws, null, "checkout", "-q", "-b", "me/ws-r");
+    run(ws, "2026-11-05T00:00:00Z", "commit", "-q", "--allow-empty", "-m", "init");
+    // A later rebase or amend moves the committer time, not the author time: the run still starts 11-05.
+    execFileSync(
+      "git",
+      [
+        "-c",
+        "user.email=t@t",
+        "-c",
+        "user.name=t",
+        "commit",
+        "-q",
+        "--amend",
+        "--no-edit",
+        "--allow-empty",
+      ],
+      { cwd: ws, env: { ...process.env, GIT_COMMITTER_DATE: "2026-11-20T00:00:00Z" } },
+    );
+    const head = run(ws, null, "rev-parse", "HEAD");
+    const issue = (ticket, at) =>
+      recordEvent({ event: "issue.start", workspace: "ws-r", ticket }, at);
+    issue("SW-1", "2026-11-01T00:00:00.000Z"); // the earlier run: no stage.done commit to check
+    issue("SW-2", "2026-11-05T00:00:01.000Z");
+    recordEvent(
+      { event: "stage.done", workspace: "ws-r", stage: "01_r", commit: head },
+      "2026-11-05T00:00:00.000Z",
+    );
+    assert.deepEqual(
+      workspaceSlice(ws).map((l) => JSON.parse(l).ticket ?? JSON.parse(l).stage),
+      ["SW-2", "01_r"],
+    );
+  });
+});
+
 test("schema: a coverage row needs no workspace; every other event still does (SW-405)", () => {
   const coverage = {
     v: 1,
