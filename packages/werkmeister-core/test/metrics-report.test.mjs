@@ -235,7 +235,8 @@ test("the board: four columns, age against each column's past p50/p90, one wait 
 });
 
 test("usage sums the snapshots closed in the range", () => {
-  assert.deepEqual(report("7d").usage, {
+  const { byPerson, byProject, byModel, ...sum } = report("7d").usage;
+  const want = {
     workspaces: 2,
     estUsd: 1.5,
     costUnknown: 1,
@@ -244,8 +245,70 @@ test("usage sums the snapshots closed in the range", () => {
     activeMinutes: 50,
     wallClockMinutes: 540,
     turns: 14,
-  });
+  };
+  assert.deepEqual(sum, want);
+  // No ticket and no `by` (rebuild never ran): one "none" project and one "unknown" person.
+  assert.deepEqual(byProject, { none: want });
+  assert.deepEqual(Object.keys(byPerson), ["unknown"]);
+  assert.deepEqual(byModel, {});
   assert.equal(report("all").usage.workspaces, 3);
+});
+
+// SW-1104: the team rollups and deployment frequency.
+test("usage rolls up per person, project and model, and releases count distinct (repo, tag)", () => {
+  const ZERO = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };
+  const u = (workspace, ticket, by, estUsd, firstTurn, closedAt, byModel) => ({
+    ...usage(workspace, closedAt, firstTurn, estUsd, ZERO, 10, 20, 3),
+    ticket,
+    ...(by && { by }),
+    byModel,
+  });
+  const m = (model, input, estUsd) => ({ model, totals: { ...ZERO, input }, estUsd });
+  const r = flowMetrics(
+    {
+      events: [
+        ev("2026-11-17T10:00:00Z", "pr.merged", "t-a", { pr: PR(1) }),
+        ev("2026-11-17T11:00:00Z", "release", "t-a", { pr: PR(1), tag: "v1" }),
+        ev("2026-11-18T05:00:00Z", "pr.merged", "t-b", { pr: PR(2) }),
+        ev("2026-11-18T06:00:00Z", "release", "t-b", { pr: PR(2), tag: "v1" }), // same tag, same repo
+        ev("2026-11-18T07:00:00Z", "release", "t-c", {
+          pr: "https://github.com/o/web/pull/3",
+          tag: "v1", // same tag, other repo
+        }),
+      ],
+      open: [],
+      usages: [
+        u("t-a", "SW-1", "a@x", 2, "2026-11-17T01:00:00Z", "2026-11-17T12:00:00Z", [
+          m("opus", 5, 2),
+        ]),
+        u("t-b", "SW-2", "b@x", 1, "2026-11-18T00:00:00Z", "2026-11-18T08:00:00Z", [
+          m("opus", 1, 0.5),
+          m("haiku", 2, 0.5),
+        ]),
+        u("t-c", null, undefined, null, "2026-11-18T01:00:00Z", "2026-11-18T09:00:00Z", []),
+      ],
+    },
+    "7d",
+    NOW,
+  );
+  assert.deepEqual(r.releases, {
+    total: 2,
+    byWeek: [
+      { week: "2026-11-09", count: 0 },
+      { week: "2026-11-16", count: 2 },
+    ],
+  });
+  assert.deepEqual(Object.keys(r.usage.byPerson).sort(), ["a@x", "b@x", "unknown"]);
+  assert.equal(r.usage.byPerson["a@x"].estUsd, 2);
+  assert.deepEqual(r.usage.byPerson["a@x"].lead, { p50Minutes: 600, p90Minutes: 600 });
+  assert.deepEqual(r.usage.byPerson["b@x"].lead, { p50Minutes: 360, p90Minutes: 360 });
+  assert.equal(r.usage.byProject.SW.workspaces, 2);
+  assert.equal(r.usage.byProject.SW.estUsd, 3);
+  assert.equal(r.usage.byProject.none.workspaces, 1);
+  assert.deepEqual(r.usage.byModel, {
+    opus: { tokens: { ...ZERO, input: 6 }, estUsd: 2.5 },
+    haiku: { tokens: { ...ZERO, input: 2 }, estUsd: 0.5 },
+  });
 });
 
 const NO_TOKENS = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };

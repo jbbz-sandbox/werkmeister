@@ -9,7 +9,13 @@ import { test } from "node:test";
 
 import { record } from "../dist/agent_state.js";
 import { sandboxHome } from "../dist/config.js";
-import { metricsPath, recordEvent, recordStageDone } from "../dist/metrics.js";
+import {
+  metricsPath,
+  recordEvent,
+  recordStageDone,
+  stageDoneTimes,
+  workspaceSlice,
+} from "../dist/metrics.js";
 import { defaultDeps, gatePrs, openPrs, refreshPrStatus } from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { requestAdmission } from "../dist/scheduler_state.js";
@@ -674,5 +680,39 @@ test("every writer that queues a feature writes a queue.wait naming it", async (
         },
       ],
     );
+  });
+});
+
+// SW-1104: close-out pushes this slice; a reused name's earlier run (a commit not in HEAD) stays out.
+test("workspaceSlice keeps this run's lines verbatim, oldest month first", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const ws = path.join(fx.root, "ws-s");
+    fs.mkdirSync(ws);
+    const g = (...a) =>
+      execFileSync("git", ["-C", ws, "-c", "user.email=t@t", "-c", "user.name=t", ...a], {
+        encoding: "utf8",
+      }).trim();
+    g("init", "-q");
+    g("commit", "-q", "--allow-empty", "-m", "x");
+    const head = g("rev-parse", "HEAD");
+    const old = "0".repeat(40);
+    recordEvent({ event: "pr.merged", workspace: "ws-s", pr: "u" }, "2026-12-01T00:00:00.000Z");
+    recordEvent(
+      { event: "stage.done", workspace: "ws-s", stage: "01_r", commit: head },
+      "2026-11-02T00:00:00.000Z",
+    );
+    recordEvent(
+      { event: "stage.done", workspace: "ws-s", stage: "02_s", commit: old },
+      "2026-11-03T00:00:00.000Z",
+    );
+    recordEvent({ event: "pr.merged", workspace: "other", pr: "u" }, "2026-11-04T00:00:00.000Z");
+    const slice = workspaceSlice(ws);
+    assert.deepEqual(
+      slice.map((l) => JSON.parse(l).at),
+      ["2026-11-02T00:00:00.000Z", "2026-12-01T00:00:00.000Z"],
+    );
+    const nov = fs.readFileSync(metricsPath("2026-11-02T00:00:00.000Z"), "utf8").split("\n");
+    assert.equal(slice[0], nov[0], "copied verbatim");
+    assert.deepEqual([...stageDoneTimes(ws)], [["01_r", "2026-11-02T00:00:00.000Z"]]);
   });
 });

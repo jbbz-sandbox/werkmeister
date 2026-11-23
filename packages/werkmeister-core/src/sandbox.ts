@@ -3237,6 +3237,7 @@ export async function removeWorkspace(
     "usage.json",
     "context.md",
     "context.json",
+    "metrics.jsonl",
   ])
     if (existsSync(path.join(target, record)))
       await runCapture("git", ["-C", target, "add", "--", record]).catch(() => {});

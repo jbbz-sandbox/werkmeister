@@ -12,6 +12,7 @@ import { test } from "node:test";
 import { sandboxHome, workspacesRoot } from "../dist/config.js";
 import { writeFakes } from "../dist/fixture_fakes.js";
 import { rebuildMetrics } from "../dist/metrics_rebuild.js";
+import { metricsReport } from "../dist/metrics_report.js";
 import { withSandboxHome } from "./fixtures.mjs";
 
 const Ajv2020 = createRequire(import.meta.url)("ajv/dist/2020.js").default;
@@ -120,6 +121,7 @@ function logLines() {
   const dir = path.join(sandboxHome(), "metrics");
   return fs
     .readdirSync(dir)
+    .filter((f) => f.startsWith("events-"))
     .sort()
     .flatMap((f) => fs.readFileSync(path.join(dir, f), "utf8").trimEnd().split("\n"))
     .map((l) => {
@@ -257,6 +259,182 @@ test("rebuild adds no stage.done for a stage the live writer already logged at t
         if (prevGh === undefined) delete process.env.WERKMEISTER_GH_BIN;
         else process.env.WERKMEISTER_GH_BIN = prevGh;
         fs.rmSync(fx.root, { recursive: true, force: true });
+      }
+    },
+    { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
+  );
+});
+
+// SW-1104: two people's close-outs against one workspace repo show up in one report.
+test("rebuild brings in every teammate's slice and usage, and the report covers both people", async () => {
+  await withSandboxHome(
+    async (home) => {
+      const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "team-")));
+      try {
+        const line = (o) => JSON.stringify({ v: 1, ...o });
+        const PR_A = "https://github.com/o/app/pull/1";
+        const PR_B = "https://github.com/o/web/pull/2";
+        const sliceA = [
+          line({
+            at: "2026-11-17T00:30:00.000Z",
+            event: "issue.start",
+            workspace: "ws-a",
+            ticket: "SW-1",
+          }),
+          line({
+            at: "2026-11-17T09:00:00.000Z",
+            event: "pr.merged",
+            workspace: "ws-a",
+            ticket: "SW-1",
+            pr: PR_A,
+          }),
+          line({
+            at: "2026-11-17T11:00:00.000Z",
+            event: "release",
+            workspace: "ws-a",
+            ticket: "SW-1",
+            pr: PR_A,
+            tag: "v1",
+          }),
+        ];
+        const sliceB = [
+          line({
+            at: "2026-11-18T05:00:00.000Z",
+            event: "pr.merged",
+            workspace: "ws-b",
+            ticket: "APP-7",
+            pr: PR_B,
+          }),
+          line({
+            at: "2026-11-18T06:00:00.000Z",
+            event: "release",
+            workspace: "ws-b",
+            ticket: "APP-7",
+            pr: PR_B,
+            tag: "v2",
+          }),
+        ];
+        const usage = (workspace, ticket, firstTurn, closedAt, estUsd, model) =>
+          JSON.stringify({
+            schema: 1,
+            workspace,
+            ticket,
+            closedAt,
+            firstTurn,
+            estUsd,
+            totals: { input: 10, output: 1, cacheCreation: 0, cacheRead: 0 },
+            activeMinutes: 5,
+            wallClockMinutes: 60,
+            turns: 2,
+            byModel: [
+              { model, totals: { input: 10, output: 1, cacheCreation: 0, cacheRead: 0 }, estUsd },
+            ],
+          });
+
+        const work = path.join(root, "work");
+        fs.mkdirSync(work);
+        git(work, "init", "-q", "-b", "main");
+        const commitAs = (email, files) => {
+          for (const [rel, body] of Object.entries(files))
+            fs.writeFileSync(path.join(work, rel), `${body}\n`);
+          git(work, "add", "-A");
+          git(
+            work,
+            "-c",
+            `user.email=${email}`,
+            "-c",
+            "user.name=n",
+            "commit",
+            "-q",
+            "-m",
+            "close-out",
+          );
+        };
+        commitAs("t@t", { "README.md": "scaffold" });
+        git(work, "checkout", "-q", "-b", "a/ws-a");
+        commitAs("a@x", {
+          "metrics.jsonl": sliceA.join("\n"),
+          "usage.json": usage(
+            "ws-a",
+            "SW-1",
+            "2026-11-17T01:00:00.000Z",
+            "2026-11-17T12:00:00.000Z",
+            2,
+            "opus",
+          ),
+        });
+        git(work, "checkout", "-q", "main");
+        git(work, "checkout", "-q", "-b", "b/ws-b");
+        commitAs("b@x", {
+          "metrics.jsonl": sliceB.join("\n"),
+          "usage.json": usage(
+            "ws-b",
+            "APP-7",
+            "2026-11-18T00:00:00.000Z",
+            "2026-11-18T07:00:00.000Z",
+            1,
+            "haiku",
+          ),
+        });
+        git(work, "checkout", "-q", "main");
+        const origin = path.join(root, "origin.git");
+        git(root, "clone", "-q", "--bare", work, origin);
+        fs.mkdirSync(path.join(os.homedir(), "repos"));
+        git(root, "clone", "-q", origin, path.join(os.homedir(), "repos", "sandbox-workspace"));
+        fs.mkdirSync(path.join(os.homedir(), "ws"));
+        // Person A's own machine: their live log already holds their slice, verbatim.
+        fs.mkdirSync(path.join(sandboxHome(), "metrics"), { recursive: true });
+        fs.writeFileSync(
+          path.join(sandboxHome(), "metrics", "events-2026-11.jsonl"),
+          `${sliceA.join("\n")}\n`,
+        );
+
+        const first = await rebuildMetrics();
+        const lines = logLines();
+        assert.equal(
+          lines.filter((e) => e.workspace === "ws-a").length,
+          3,
+          "A's own lines are not re-added",
+        );
+        assert.deepEqual(
+          lines.filter((e) => e.workspace === "ws-b").map((e) => e.event),
+          ["pr.merged", "release"],
+          "B's slice arrives",
+        );
+        assert.equal(first.usages, 2);
+        const cache = fs
+          .readFileSync(path.join(sandboxHome(), "metrics", "usage-branches.jsonl"), "utf8")
+          .trimEnd()
+          .split("\n")
+          .map((l) => JSON.parse(l));
+        assert.deepEqual(cache.map((u) => [u.workspace, u.by]).sort(), [
+          ["ws-a", "a@x"],
+          ["ws-b", "b@x"],
+        ]);
+        for (const f of fs.readdirSync(path.join(sandboxHome(), "metrics")))
+          assert.ok(
+            path.join(sandboxHome(), "metrics", f).startsWith(home),
+            "writes stay under the temp home",
+          );
+        assert.equal((await rebuildMetrics()).total, 0, "a second run adds nothing");
+
+        const r = await metricsReport({ range: "all" }, new Date("2026-11-20T12:00:00.000Z"));
+        assert.deepEqual(
+          r.tickets.map((t) => [t.workspace, t.leadMinutes]),
+          [
+            ["ws-a", 600],
+            ["ws-b", 360],
+          ],
+        );
+        assert.deepEqual(r.lead, { p50Minutes: 360, p90Minutes: 600 });
+        assert.equal(r.releases.total, 2);
+        assert.deepEqual(Object.keys(r.usage.byPerson).sort(), ["a@x", "b@x"]);
+        assert.deepEqual(r.usage.byPerson["a@x"].lead, { p50Minutes: 600, p90Minutes: 600 });
+        assert.equal(r.usage.byPerson["b@x"].estUsd, 1);
+        assert.deepEqual(Object.keys(r.usage.byProject).sort(), ["APP", "SW"]);
+        assert.deepEqual(Object.keys(r.usage.byModel).sort(), ["haiku", "opus"]);
+      } finally {
+        fs.rmSync(root, { recursive: true, force: true });
       }
     },
     { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },

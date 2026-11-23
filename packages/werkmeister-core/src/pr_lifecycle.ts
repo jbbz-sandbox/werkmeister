@@ -68,7 +68,7 @@ import {
   prWatchScheduleState,
   type Step,
 } from "./machine_setup.js";
-import { recordEvent } from "./metrics.js";
+import { recordEvent, workspaceSlice } from "./metrics.js";
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import {
@@ -4562,6 +4562,9 @@ async function closeOutLocked(
     const outcome = abandoned ? "abandoned" : "shipped";
     const usage = await writeUsageSnapshot(ws, name, cfg, outcome);
     const context = await writeContextSnapshot(ws, name, cfg, outcome);
+    // The team view (SW-1104): the record-branch push at removal shares this run's events.
+    const slice = workspaceSlice(ws);
+    if (slice.length) fs.writeFileSync(path.join(ws, "metrics.jsonl"), `${slice.join("\n")}\n`);
     fs.writeFileSync(
       path.join(ws, "closeout.md"),
       renderCloseout(

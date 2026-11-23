@@ -9,22 +9,26 @@ werkmeister\-metrics\-rebuild \- Backfill the metrics event log from record bran
 .IP 1. 3
 Clones the workspace repo (the origin of \fB<repos_root>/sandbox\-workspace\fR, else \fBoverrides.workspace_repo\fR) into a temporary bare clone, removed when the command ends. The shared checkout is never fetched into or written \" name-check: ignore
 .IP 2. 3
-On each record branch except the default one: writes \fBstage.done\fR for each stage at the commit that first filled its \fBoutput/\fR, and \fBpr.open\fR / \fBpr.merged\fR at GitHub's \fBcreatedAt\fR / \fBmergedAt\fR for each PR file's \fBurl:\fR (through \fBgh\fR). The ticket comes from the branch's \fBusage.json\fR
+On each record branch except the default one, first: copies the lines of its \fBmetrics.jsonl\fR, the events its close\-out pushed (a teammate's too), and caches its \fBusage.json\fR with the branch's git author email in \fB~/.werkmeister/metrics/usage\-branches.jsonl\fR, rewritten each run, for the \fBmetrics\fR report's per\-person rollups
 .IP 3. 3
-Writes \fBask\fR / \fBanswer\fR pairs (AskUserQuestion, ExitPlanMode) from the workspace's Claude Code transcripts still on disk
+On each record branch: writes \fBstage.done\fR for each stage at the commit that first filled its \fBoutput/\fR, and \fBpr.open\fR / \fBpr.merged\fR at GitHub's \fBcreatedAt\fR / \fBmergedAt\fR for each PR file's \fBurl:\fR (through \fBgh\fR). The ticket comes from the branch's \fBusage.json\fR
 .IP 4. 3
+Writes \fBask\fR / \fBanswer\fR pairs (AskUserQuestion, ExitPlanMode) from the workspace's Claude Code transcripts still on disk
+.IP 5. 3
 Appends each new line to \fB~/.werkmeister/metrics/events\-YYYY\-MM.jsonl\fR, the month of the event's own time
 .PP
-Re\-running adds nothing: a stage, a PR event or a transcript session already in the log is skipped.
+Re\-running adds nothing: a stage, a PR event, a transcript session or a slice line already in the log is skipped.
 .PP
-It cannot rebuild \fBqueue.*\fR, \fBgate.*\fR, \fBrelease\fR or wrap\-up asks: nothing on disk holds them.
+For a run closed out before its slice was pushed, it cannot rebuild \fBqueue.*\fR, \fBgate.*\fR, \fBrelease\fR or wrap\-up asks: nothing on disk holds them.
 .PP
 \fBWhen to use:\fR
 .IP \(bu 3
 Once after upgrading to a version with the metrics event log, to cover earlier work
 .IP \(bu 3
+Before the \fBmetrics\fR report, for the team view: it brings in every teammate's closed\-out runs
+.IP \(bu 3
 Before transcripts age out (Claude Code prunes them after about 30 days), to keep their ask/answer times
 .PP
-The command only appends. Copy \fB~/.werkmeister/metrics\fR first if you want to undo a run.
+The command only appends to the event log; \fBusage\-branches.jsonl\fR is a cache it rewrites. Copy \fB~/.werkmeister/metrics\fR first if you want to undo a run.
 .SH SEE ALSO
 \fBwerkmeister\fR(1)
