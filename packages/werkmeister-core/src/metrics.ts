@@ -54,14 +54,19 @@ export const usageCachePath = () => path.join(sandboxHome(), "metrics", "usage-b
 
 /** Appends *e* to this month's log; false when it could not. A failure warns and never throws: a lost metric must not fail its caller. */
 export function recordEvent(e: MetricsEvent, at = new Date().toISOString()): boolean {
+  return appendLogLine(JSON.stringify({ v: 1, at, ...e }), at, e.event);
+}
+
+/** Appends one already-serialised *line* of *event* to the log of *at*'s month; as {@link recordEvent}, warns and returns false on failure. */
+export function appendLogLine(line: string, at: string, event: string): boolean {
   const file = metricsPath(at);
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     // One appendFileSync is one write() on an O_APPEND file, so concurrent writers' lines don't interleave.
-    fs.appendFileSync(file, `${JSON.stringify({ v: 1, at, ...e })}\n`);
+    fs.appendFileSync(file, `${line}\n`);
     return true;
   } catch (err) {
-    warn(`metrics: could not record ${e.event}: ${(err as Error).message}`);
+    warn(`metrics: could not record ${event}: ${(err as Error).message}`);
     return false;
   }
 }
@@ -170,13 +175,30 @@ export function recordStageDone(ws: string): void {
   }
 }
 
+/** Author time (ms) of the oldest commit on *ws*'s record branch that its base lacks; null with no base or no own commit. */
+function runStart(ws: string): number | null {
+  // Local refs only: this runs from the agent-state hook, which must not reach the network (baseRef can).
+  const base = ["origin/HEAD", "origin/main", "origin/master"].find(
+    (ref) => spawnSync("git", ["-C", ws, "rev-parse", "--verify", "--quiet", ref]).status === 0,
+  );
+  if (!base) return null;
+  // Author time: a rebase or amend resets the committer time to now, and would drop the run's earlier lines.
+  const r = spawnSync("git", ["-C", ws, "log", "--format=%aI", `${base}..HEAD`], {
+    encoding: "utf8",
+  });
+  const first = r.status === 0 ? r.stdout.trim().split("\n").pop() : ""; // newest first
+  return first ? Date.parse(first) : null;
+}
+
 /**
  * The log lines of *ws*'s current run, oldest month first. The log keys events by workspace name,
- * so a `stage.done` counts only when its commit is in *ws*'s history: a reused name's earlier run is
- * not this one.
+ * so a reused name's earlier run is not this one: a line older than the record branch's first
+ * commit is left out (SW-1116), and a `stage.done` counts only when its commit is in *ws*'s history.
+ * With no first commit to go by (no origin, or no commit of its own), every line of the name counts.
  */
 function* runLines(ws: string): Generator<{ line: string; e: Record<string, unknown> }> {
   const workspace = path.basename(ws);
+  const start = runStart(ws);
   const dir = path.join(sandboxHome(), "metrics");
   let files: string[] = [];
   try {
@@ -202,6 +224,7 @@ function* runLines(ws: string): Generator<{ line: string; e: Record<string, unkn
         continue;
       }
       if (e?.["workspace"] !== workspace) continue;
+      if (start !== null && !(Date.parse(String(e["at"])) >= start)) continue;
       if (e["event"] === "stage.done") {
         const commit = String(e["commit"]);
         const ancestor = spawnSync("git", [
