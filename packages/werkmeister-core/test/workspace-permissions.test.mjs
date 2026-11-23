@@ -883,7 +883,8 @@ test("SW-807: an ICM run pre-approves only its own issue's start and view, exact
   assert.deepEqual(workspaceAllowRules(root, false), [...READ_ONLY_GIT_RULES, ...COMMIT_RULES]);
   yml('context_strategy: "icm "\nwork_type: bugfix\n');
   // SW-717: pr push refuses anything but the workspace's own clean, merge-free branch with a live lease.
-  const grants = ["issue start", "issue view", "pr push:*"].flatMap((g) => [
+  // SW-963: workspace serve refuses a folder outside the workspace and runs one loopback server line.
+  const grants = ["issue start", "issue view", "workspace serve:*", "pr push:*"].flatMap((g) => [
     `Bash(werkmeister ${g})`,
     `Bash(w9r ${g})`,
   ]);
@@ -1435,4 +1436,34 @@ test("SW-893, SW-912: git commit takes its message on the line, in both modes, o
   ])
     for (const deny of [AUTONOMOUS_DENY, workspaceDenyRules("/ws", false)])
       assert.ok(claudeDenies(deny, cmd), cmd);
+});
+
+// SW-963: sw-961 ran the contract's `python3 … http.server` for its browser check and AUTONOMOUS_DENY's
+// `Bash(python3:*)` refused it; with no allow rule an interactive run asks too.
+test("SW-963: the ICM contract's static-page command is allowed in either mode and no deny rule catches it", async () => {
+  const { templateFor } = await import("../dist/strategies/icm_templates.js");
+  const root = workspace();
+  fs.mkdirSync(dotDir(root), { recursive: true });
+  fs.writeFileSync(
+    path.join(dotDir(root), "workspace.yml"),
+    "context_strategy: icm\nwork_type: bugfix\n",
+  );
+  const vars = {
+    at: (n) => `../${n}`,
+    repos: "`../../app`",
+    restart: "`docker restart feat-app`",
+    standards: "",
+    autonomous: false,
+    group: [],
+  };
+  const text = templateFor("bugfix")
+    .flatMap((s) => s.contract(vars).process)
+    .join("\n");
+  const cmd = /run `([^`]*<dir>[^`]*)` as a background Bash job/.exec(text)?.[1];
+  assert.ok(cmd, "the contract names one static-page command");
+  const run = cmd.replace("<dir>", "stages");
+  for (const autonomous of [false, true]) {
+    assert.ok(claudeAllows(workspaceAllowRules(root, autonomous), run), `${run} (${autonomous})`);
+    assert.ok(!claudeDenies(workspaceDenyRules(root, autonomous), run), `${run} (${autonomous})`);
+  }
 });

@@ -88,6 +88,7 @@ werkmeister's own apps (the MCP server and the CLI) import internal entries, not
 | `workspace new` | `createWorkspace` | |
 | `workspace list` | `listWorkspaces` | |
 | `workspace code` | `openWorkspace` | |
+| `workspace serve` | | excluded: a foreground python3 server for an agent's browser check (SW-963) |
 | `workspace init` | `initWorkspace` | |
 | `workspace close` | `closeOut` | |
 | `workspace abandon` | `closeOut` | with `abandon: <reason>` |

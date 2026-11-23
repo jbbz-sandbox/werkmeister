@@ -70,8 +70,10 @@ const HOSTNAME_RULE =
   "If `werkmeister feature up` warns that a routed hostname does not resolve to 127.0.0.1 (its last warning line points to `werkmeister machine setup`), stop before any browser check and ask the person to run `werkmeister machine setup` (it needs sudo for the hosts entries and certificate trust). Never click through or bypass a certificate warning. Use the container's published port instead only when the person says to skip setup, and record it in `exercise.md` as a deviation.";
 
 // SW-791: sw-772 hand-ran http.server to check a docs page; the Chrome tool refuses file://.
+// SW-963: a werkmeister command, since AUTONOMOUS_DENY denies `python3:*`; SERVE_GRANTS allows it.
 const STATIC_PAGE_RULE =
-  "A static HTML page with no service to load it from is served for the browser check, since the Chrome tool refuses `file://`: run `python3 -I -u -m http.server 0 -b 127.0.0.1 -d <dir>` as a background Bash job (never without `-b 127.0.0.1`: it binds every interface by default), open the port its first line prints, and stop the job by its task ID when the check ends. Record it in `exercise.md` as the method.";
+  "A static HTML page with no service to load it from is served for the browser check, since the Chrome tool refuses `file://`: run `werkmeister workspace serve <dir>` as a background Bash job, with `<dir>` a folder inside this workspace such as `stages`, never the workspace folder itself or a dot-folder (it refuses both, and serves on 127.0.0.1 only; never run `python3 -m http.server` yourself), open the port its first line prints, and stop the job by its task ID when the check ends. Record it in `exercise.md` as the method.";
+const SERVE_GRANTS = ["workspace serve:*"];
 
 // SW-792: Chrome won't size its window below 477 px, so sw-772's 375 px check ran at 477.
 const NARROW_VIEWPORT_RULE =
@@ -465,6 +467,7 @@ const feature: Stage[] = [
   },
   {
     name: "implement",
+    grants: SERVE_GRANTS,
     job: "build it and prove it",
     gate: "review.md",
     writes: "code diff, `output/exercise.md`, `output/review.md`",
@@ -605,6 +608,7 @@ const bugfix: Stage[] = [
   },
   {
     name: "exercise",
+    grants: SERVE_GRANTS,
     job: "prove it against the running service or the built CLI",
     gate: "review.md",
     writes: "`output/exercise.md`, `output/review.md`",
@@ -678,6 +682,7 @@ const refactor: Stage[] = [
   },
   {
     name: "implement",
+    grants: SERVE_GRANTS,
     job: "refactor in green steps",
     gate: "review.md",
     writes: "code diff, `output/exercise.md`, `output/review.md`",

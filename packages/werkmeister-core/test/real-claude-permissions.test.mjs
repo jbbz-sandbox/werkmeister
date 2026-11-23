@@ -12,11 +12,13 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
 
+import { cli } from "../dist/harness/autonomous_deny.js";
 import {
   AUTONOMOUS_DENY,
   autonomousRules,
   buildAllowRules,
 } from "../dist/harness/claude/hooks_gen.js";
+import { stageGrants } from "../dist/strategies/icm_templates.js";
 
 const REAL = process.env.WERKMEISTER_REAL_CLAUDE === "1";
 const run = promisify(execFile);
@@ -51,7 +53,12 @@ function fixture() {
     settings,
     JSON.stringify({
       permissions: {
-        allow: [...autonomousRules("feat", ["api"]), ...wrapped],
+        // An ICM bugfix run's stage grants (SW-807), as workspaceAllowRules adds them.
+        allow: [
+          ...autonomousRules("feat", ["api"]),
+          ...wrapped,
+          ...stageGrants("bugfix").flatMap(cli),
+        ],
         deny: AUTONOMOUS_DENY,
       },
     }),
@@ -113,6 +120,8 @@ test("SW-632: everyday commands run under the real matcher; escapes are refused"
     "git log --oneline -1",
     "werkmeister feature logs feat",
     "w9r pr gate --tests",
+    // SW-963: the static-page server the contracts name.
+    "werkmeister workspace serve stages",
     ...f.wrapped,
   ];
   const mustDeny = [
@@ -130,6 +139,9 @@ test("SW-632: everyday commands run under the real matcher; escapes are refused"
     "git remote -v add evil /tmp",
     "git diff --no-index /dev/null /etc/hosts",
     `${f.wrapped[0]} && touch chain.mark`,
+    // SW-963: python3 stays denied, raw or chained after the allowed serve.
+    "python3 -I -u -m http.server 0 -b 127.0.0.1 -d stages",
+    "werkmeister workspace serve stages && touch serve.mark",
   ];
   // Sequential: parallel haiku sessions in one folder would share its transcript dir.
   for (const cmd of mustRun) {
@@ -149,6 +161,7 @@ test("SW-632: everyday commands run under the real matcher; escapes are refused"
     "grep.mark",
     "fetch.mark",
     "output.mark",
+    "serve.mark",
   ])
     assert.ok(!fs.existsSync(path.join(f.repo, mark)), mark);
   assert.doesNotMatch(calls(f), /feature test/);

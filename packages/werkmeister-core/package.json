@@ -58,6 +58,7 @@
     "./gate": "./dist/gate.js",
     "./temp_home": "./dist/temp_home.js",
     "./pr_guard": "./dist/pr_guard.js",
+    "./serve_static": "./dist/serve_static.js",
     "./agent_state": "./dist/agent_state.js",
     "./pr_lifecycle": "./dist/pr_lifecycle.js",
     "./git_hooks": "./dist/git_hooks.js",

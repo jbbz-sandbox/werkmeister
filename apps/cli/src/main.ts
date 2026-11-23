@@ -62,6 +62,7 @@ import removeHelp from "./commands/remove.help.md";
 import removeWorkspaceHelp from "./commands/remove-workspace.help.md";
 import restartHelp from "./commands/restart.help.md";
 import resumeHelp from "./commands/resume.help.md";
+import serveHelp from "./commands/serve.help.md";
 import servicesHelp from "./commands/services.help.md";
 import setupHelp from "./commands/setup.help.md";
 import skillsHelp from "./commands/skills.help.md";
@@ -1005,6 +1006,20 @@ const SPECS: CommandSpec[] = [
         );
     },
     namespace: ([feature]) => ({ feature: feature ?? null }),
+  },
+  {
+    name: "workspace serve",
+    group: "Workspaces:",
+    help: serveHelp,
+    load: () => import("./commands/serve.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "Serve a folder inside this workspace on 127.0.0.1 at an ephemeral port, for a browser check of a static page",
+        )
+        .argument("<dir>", "A folder inside the workspace, e.g. stages");
+    },
+    namespace: ([dir]) => ({ dir }),
   },
   {
     name: "machine setup",

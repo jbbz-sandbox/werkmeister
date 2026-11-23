@@ -205,10 +205,10 @@ test("each template renders with no undefined and a route per stage", async () =
             /warns that a routed hostname does not resolve to 127\.0\.0\.1.*stop before any browser check and ask the person to run `werkmeister machine setup`.*Never click through or bypass a certificate warning/,
             `${wt}/${d}`,
           );
-          // SW-791: a static page is served on loopback for the browser check, and stopped by its task ID.
+          // SW-791, SW-963: a static page is served on loopback by the pre-approved command, stopped by its task ID.
           assert.match(
             c,
-            /`python3 -I -u -m http\.server 0 -b 127\.0\.0\.1 -d <dir>` as a background Bash job.*stop the job by its task ID/,
+            /`werkmeister workspace serve <dir>` as a background Bash job.*never run `python3 -m http\.server` yourself.*stop the job by its task ID/,
             `${wt}/${d}`,
           );
           // SW-792: below the window's 477 px floor, the width is checked in a same-origin iframe.

@@ -1,0 +1,17 @@
+.TH WERKMEISTER-WORKSPACE-SERVE 1 "" "werkmeister" "Werkmeister Manual"
+.SH NAME
+werkmeister\-workspace\-serve \- Serve a folder inside this workspace on 127.0.0.1 at an ephemeral port, for a browser check of a static page
+.SH SYNOPSIS
+\fBwerkmeister workspace serve\fR <dir>
+.SH DESCRIPTION
+.PP
+Runs \fBpython3 \-I \-u \-m http.server 0 \-b 127.0.0.1 \-d <dir>\fR in the foreground: loopback only, a port the OS picks (the first line prints it). Refuses a \fB<dir>\fR whose real path is outside the workspace, is the workspace folder itself, or is in a dot\-folder: those hold its daemon token and \fB.env\fR files. It resolves only \fB<dir>\fR itself, so a symlink inside it is still followed. The ICM stage contracts name it for a browser check of a static HTML page, since the Chrome tool refuses \fBfile://\fR; each ICM run pre\-approves it. Run it as a background job and stop it by its task ID.
+.SH EXAMPLES
+.PP
+.nf
+.RS 4
+werkmeister workspace serve stages
+.RE
+.fi
+.SH SEE ALSO
+\fBwerkmeister\fR(1)

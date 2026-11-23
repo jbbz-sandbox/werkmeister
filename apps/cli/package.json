@@ -45,6 +45,7 @@
     "./man/werkmeister-workspace-new.1",
     "./man/werkmeister-workspace-list.1",
     "./man/werkmeister-workspace-code.1",
+    "./man/werkmeister-workspace-serve.1",
     "./man/werkmeister-workspace-init.1",
     "./man/werkmeister-workspace-close.1",
     "./man/werkmeister-workspace-abandon.1",
