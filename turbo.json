@@ -23,6 +23,27 @@
       "dependsOn": ["build"],
       "passThroughEnv": ["WERKMEISTER_FEATURE", "SANDBOX_FEATURE", "TMPDIR"]
     },
+    // SW-405: a measurement, so never replayed: a cached run would re-report an old duration and ledger rows.
+    "test:coverage": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "passThroughEnv": ["WERKMEISTER_FEATURE", "SANDBOX_FEATURE", "TMPDIR"],
+      "cache": false
+    },
+    // The merged monorepo summary, after every package's report.
+    "//#test:coverage": {
+      "dependsOn": [
+        "werkmeister#test:coverage",
+        "werkmeister-core#test:coverage",
+        "werkmeister-mcp#test:coverage",
+        "werkmeister-ui#test:coverage",
+        "werkmeister-vscode#test:coverage",
+        "docs-site#test:coverage",
+        "werkmeister-dashboard#test:coverage"
+      ],
+      "outputs": ["coverage/**"],
+      "cache": false
+    },
     "dev": {
       "cache": false,
       "persistent": true

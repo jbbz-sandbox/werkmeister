@@ -14,7 +14,8 @@
   "scripts": {
     "build": "tsc && cp src/tokens.css dist/ && cp -R src/fonts dist/",
     "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.mjs"
+    "test": "node --test test/*.mjs",
+    "test:coverage": "node ../../scripts/coverage-run.mjs -- node --test test/*.mjs"
   },
   "dependencies": {
     "@rjsf/core": "^5.24.0",

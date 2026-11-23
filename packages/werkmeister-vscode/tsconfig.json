@@ -11,6 +11,8 @@
     "outDir": "out",
     "rootDir": "src",
     "noEmit": false,
+    // c8 maps coverage back to src/*.ts through these (SW-405).
+    "sourceMap": true,
     "types": ["node", "vscode"]
   },
   "include": ["src/**/*.ts"]

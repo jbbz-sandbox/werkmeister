@@ -12,6 +12,8 @@
     "outDir": "dist",
     "rootDir": "src",
     "noEmit": false,
+    // c8 maps coverage back to src/*.ts through these (SW-405).
+    "sourceMap": true,
     "incremental": true,
     // Inside dist/ so a hand-deleted dist/ takes it along; tsc would otherwise skip re-emitting files it thinks are current.
     "tsBuildInfoFile": "dist/tsconfig.tsbuildinfo",

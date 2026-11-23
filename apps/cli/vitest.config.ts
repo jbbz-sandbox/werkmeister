@@ -22,5 +22,17 @@ export default defineConfig({
       WERKMEISTER_HOST: "http://127.0.0.1:65535",
       WERKMEISTER_DAEMON_RETRY_MS: "500",
     },
+    // Read only with `--coverage` (`test:coverage`, SW-405); plain `vitest run` measures nothing.
+    coverage: {
+      provider: "v8",
+      reporter: ["json-summary", "lcov", "html"],
+      reportsDirectory: "coverage",
+      // Files a test loads only, as c8 reports the other packages; vitest 3 otherwise adds every file at 0 %.
+      all: false,
+      // A red run still reports, as c8 does, so the gate logs its row.
+      reportOnFailure: true,
+      include: ["src/**/*.ts"],
+      exclude: ["src/**/__tests__/**", "src/**/*.test.ts", "src/**/*.d.ts"],
+    },
   },
 });

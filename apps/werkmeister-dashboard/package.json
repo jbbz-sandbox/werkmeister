@@ -13,7 +13,8 @@
     "watch:ui": "cross-env NODE_ENV=development INPUT=mcp-app.html vite build --watch",
     "serve:http": "node dist/main.js",
     "dev": "cross-env NODE_ENV=development concurrently \"pnpm run watch:ui\" \"tsx --watch src/main.ts\"",
-    "test": "for f in test/*.smoke.mjs; do node \"$f\" || exit 1; done"
+    "test": "for f in test/*.smoke.mjs; do node \"$f\" || exit 1; done",
+    "test:coverage": "node ../../scripts/coverage-run.mjs -- sh -c 'for f in test/*.smoke.mjs; do node \"$f\" || exit 1; done'"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.0",
