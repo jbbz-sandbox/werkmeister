@@ -69,6 +69,8 @@ export interface ChatPanelProps {
   onActivity?: (s: { waiting: boolean; running: boolean }) => void;
   /** false while the host hides the panel (a collapsed PR card): no socket, slow polling. */
   visible?: boolean;
+  /** The session pinned on mount (the Flow tab's session row); the picker can still switch. */
+  initialSessionId?: string;
 }
 
 export interface ChatState {
@@ -195,7 +197,7 @@ function StreamedChat(p: ChatPanelProps) {
   const pageVisible = usePageVisible();
   const live = (p.visible ?? true) && pageVisible;
   const [st, setSt] = useState<ChatState>(EMPTY);
-  const [pinned, setPinned] = useState<string>();
+  const [pinned, setPinned] = useState(p.initialSessionId);
   // Bumped by Refresh: start the stream over from entry 0.
   const [epoch, setEpoch] = useState(0);
   const [inputBusy, setInputBusy] = useState(false);
@@ -311,7 +313,7 @@ function PolledChat(p: ChatPanelProps) {
     current.current = { ...current.current, ...patch };
     setSt(current.current);
   };
-  const [pinned, setPinned] = useState<string>();
+  const [pinned, setPinned] = useState(p.initialSessionId);
   const [epoch, setEpoch] = useState(0);
   // Each load (and unmount) bumps this; a poll loop from an older one sees it and stops.
   const gen = useRef(0);

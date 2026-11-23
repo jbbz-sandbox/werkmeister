@@ -133,7 +133,7 @@ UI-only tools render an interface in an MCP App client and return little to a sc
 | `clean` | Remove orphaned volumes and stale slots | `all?: boolean`, `dryRun?: boolean` |
 | `stats` | Container resource usage | `collect?: number`, `interval?: integer`, `save?: boolean` |
 | `optimize` | Usage against configured limits | `collect?: number`, `interval?: integer` |
-| `metrics` | Flow metrics | `range?: "7d" \| "30d" \| "90d" \| "all"` |
+| `metrics` | Flow metrics | `range?: "7d" \| "30d" \| "90d" \| "all"`, `workspace?: string` |
 | `cache` | Prune the shared build caches | `name?: string`, `reset?: boolean`, `force?: boolean`, `dryRun?: boolean` |
 | `registry` | Regenerate the service registry | `check?: boolean` |
 | `resources` | CPU and memory per workspace | none |

@@ -16,7 +16,7 @@ model's view is tier-independent.
 | Tier | Host | Surface |
 |------|------|---------|
 | 1 | Claude Desktop | Inline MCP App (`ui://`): `mcp-app.html` (create form), `mcp-list.html` (workspace dashboard), built and served by `apps/werkmeister-mcp` |
-| 2 | Claude Code CLI / VS Code | Localhost browser: `open-workspaces-ui` opens `dist/browser.html` (Workspaces / New workspace / Open PRs tabs); `create-workspace-form` falls back to `dist/form.html` (blocking create form, `src/form-cli.ts`) |
+| 2 | Claude Code CLI / VS Code | Localhost browser: `open-workspaces-ui` opens `dist/browser.html` (Workspaces / New workspace / Open PRs / Health / Flow / Links tabs); `create-workspace-form` falls back to `dist/form.html` (blocking create form, `src/form-cli.ts`) |
 | 3 | Anything else | Markdown/text from the same tools |
 
 All UI bundles are single-file (`viteSingleFile`) and fully
