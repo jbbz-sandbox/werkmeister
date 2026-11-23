@@ -4,6 +4,9 @@
   "tasks": {
     "test": {
       "dependsOn": ["build", "werkmeister#build"]
+    },
+    "test:coverage": {
+      "dependsOn": ["build", "werkmeister#build"]
     }
   }
 }

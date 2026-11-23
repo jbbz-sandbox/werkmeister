@@ -9,6 +9,9 @@
     "test": {
       // SW-679: host-daemon.test.mjs copies the CLI's dist/, which werkmeister#build rewrites; wait for it.
       "dependsOn": ["build", "werkmeister#build"]
+    },
+    "test:coverage": {
+      "dependsOn": ["build", "werkmeister#build"]
     }
   }
 }
