@@ -32,6 +32,7 @@ import {
   loadSandboxServiceConfigs,
 } from "../workspace_prompts.js";
 import { stageDecisions } from "./icm_decisions.js";
+import { findWorkflow } from "./icm_external.js";
 import {
   askLine,
   ICM_TEMPLATES,
@@ -422,7 +423,7 @@ function renderBrief(ctx: InitContext): string {
 
 /** The regenerable files — what `check` diffs and `sync` rewrites. */
 function render(ctx: InitContext): Record<string, string> {
-  const stages = templateFor(ctx.inputs["work_type"] ?? "");
+  const stages = templateFor(ctx.inputs["work_type"] ?? "", ctx.workspaceRoot);
   const dirs = stageDirs(stages);
   const r = resolveStandards(ctx);
   const base = vars(ctx, stages);
@@ -476,7 +477,7 @@ function writeRel(root: string, rel: string, body: string): void {
 
 function drifted(root: string): Array<[string, string]> {
   const ctx = contextFromDisk(root);
-  if (foreignStageDirs(root, templateFor(ctx.inputs["work_type"] ?? "")).length) return [];
+  if (foreignStageDirs(root, templateFor(ctx.inputs["work_type"] ?? "", root)).length) return [];
   return Object.entries(render(ctx)).filter(([rel, body]) => {
     try {
       return fs.readFileSync(path.join(root, rel), "utf8") !== body;
@@ -488,10 +489,15 @@ function drifted(root: string): Array<[string, string]> {
 
 function init(ctx: InitContext): void {
   const root = ctx.workspaceRoot;
-  const stages = templateFor(ctx.inputs["work_type"] ?? "");
+  const stages = templateFor(ctx.inputs["work_type"] ?? "", ctx.workspaceRoot);
   // templateFor falls back to feature silently; a typo (`bug`) would get the wrong stages unnoticed (SW-874).
   const wt = (ctx.inputs["work_type"] ?? "").trim().toLowerCase();
-  if (wt && !Object.hasOwn(ICM_TEMPLATES, wt))
+  const ext = findWorkflow(root, wt);
+  if (ext)
+    info(
+      `work_type "${wt}": workflow from ${ext}${Object.hasOwn(ICM_TEMPLATES, wt) ? ` (replaces the built-in ${wt})` : ""}.`,
+    );
+  else if (wt && !Object.hasOwn(ICM_TEMPLATES, wt))
     warn(
       `work_type "${ctx.inputs["work_type"]}" is not a template; using feature. Valid: ${Object.keys(ICM_TEMPLATES).join(", ")}.`,
     );

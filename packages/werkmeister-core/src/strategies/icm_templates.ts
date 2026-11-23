@@ -10,6 +10,7 @@
 import { COMPOSE_FILE } from "../compose_file.js";
 import { generatedFileCheck } from "../generated_file_check.js";
 import { APPROVAL_NOTE, CHAT_APPROVAL, HOST_SCRIPT_RULE } from "../pr_rules.js";
+import { findWorkflow, loadWorkflow } from "./icm_external.js";
 
 export interface IcmVars {
   /** Path from one stage dir to another stage's dir, by stage name: `../01_research`. */
@@ -790,9 +791,14 @@ export const ICM_TEMPLATES: Record<string, Stage[]> = {
   spike,
 };
 
-/** The stage list for *workType*; free text and unknown types get `feature`. */
-export function templateFor(workType: string): Stage[] {
+/**
+ * The stage list for *workType*: an external workflow found from *workspaceRoot* (SW-1071, icm_external.ts)
+ * replaces the built-in of that name; free text and unknown types get `feature`.
+ */
+export function templateFor(workType: string, workspaceRoot?: string): Stage[] {
   const wt = workType.trim().toLowerCase();
+  const ext = findWorkflow(workspaceRoot, wt);
+  if (ext) return loadWorkflow(ext);
   return Object.hasOwn(ICM_TEMPLATES, wt) ? ICM_TEMPLATES[wt] : ICM_TEMPLATES["feature"];
 }
 
@@ -812,6 +818,6 @@ export function prDir(stages: Stage[]): string {
 }
 
 /** Every stage's grants for *workType*, once each: granted for the whole run (SW-807). */
-export function stageGrants(workType: string): string[] {
-  return [...new Set(templateFor(workType).flatMap((s) => s.grants ?? []))];
+export function stageGrants(workType: string, workspaceRoot?: string): string[] {
+  return [...new Set(templateFor(workType, workspaceRoot).flatMap((s) => s.grants ?? []))];
 }

@@ -160,7 +160,7 @@ export function readAutonomous(workspaceRoot: string): boolean {
 export function readGrants(workspaceRoot: string): string[] {
   if (String(readWorkspaceField(workspaceRoot, "context_strategy") ?? "").trim() !== "icm")
     return [];
-  return stageGrants(String(readWorkspaceField(workspaceRoot, "work_type") ?? ""));
+  return stageGrants(String(readWorkspaceField(workspaceRoot, "work_type") ?? ""), workspaceRoot);
 }
 
 /** The workspace's `auto_stop` input (#231); unset follows `autonomous` (SW-39). */
