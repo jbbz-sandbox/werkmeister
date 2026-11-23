@@ -6,12 +6,14 @@
  * `~/.werkmeister/workflows/`; the first match replaces the built-in of that name whole.
  */
 
+import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 import * as YAML from "yaml";
 
 import { getReposRoot, loadReposConfig, sandboxHome } from "../config.js";
+import { DOT_DIR } from "../dot_dir.js";
 import { SandboxError } from "../errors.js";
 import { repoDirs } from "../standards.js";
 import type { Contract, IcmVars, Stage } from "./icm_templates.js";
@@ -211,4 +213,54 @@ export function loadWorkflow(dir: string): Stage[] {
   // After the loop: `{{at:x}}` may name a later stage.
   for (const [file, raw] of raws) checkVars(file, Object.values(raw).flat().join("\n"), names);
   return stages;
+}
+
+/** The `skills check` entry for a workflow folder edited (or replaced) since init; the folder follows `: ` (SW-1078). */
+export const TEMPLATE_CHANGED = "template changed since init";
+
+/** `.werkmeister/workflow.lock`: the external workflow a workspace was rendered from. */
+export interface WorkflowLock {
+  source: string;
+  version: number;
+  hash: string;
+}
+
+/** The lock for the workflow in *dir*, which must already load: its hash covers exactly the files loadWorkflow reads. */
+export function workflowLock(dir: string): WorkflowLock {
+  const manifest = YAML.parse(fs.readFileSync(path.join(dir, "workflow.yaml"), "utf8"));
+  const h = createHash("sha256");
+  const rels = [
+    "workflow.yaml",
+    ...manifest.stages.map((s: { name: string }) => `stages/${s.name}.md`),
+  ];
+  for (const rel of rels)
+    h.update(rel)
+      .update("\0")
+      .update(fs.readFileSync(path.join(dir, rel)))
+      .update("\0");
+  return { source: dir, version: manifest.version, hash: `sha256:${h.digest("hex")}` };
+}
+
+/** Workspace-relative path of the lock. */
+export const WORKFLOW_LOCK = path.join(DOT_DIR, "workflow.lock");
+const lockPath = (root: string) => path.join(root, WORKFLOW_LOCK);
+
+/** The workspace's lock, or null when it has none or it doesn't parse (treated as no lock). */
+export function readWorkflowLock(root: string): WorkflowLock | null {
+  try {
+    const lock = JSON.parse(fs.readFileSync(lockPath(root), "utf8"));
+    return typeof lock?.source === "string" && typeof lock?.hash === "string" ? lock : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Write *lock*, or remove the file when null (a built-in workflow has no lock). */
+export function writeWorkflowLock(root: string, lock: WorkflowLock | null): void {
+  if (!lock) {
+    fs.rmSync(lockPath(root), { force: true });
+    return;
+  }
+  fs.mkdirSync(path.dirname(lockPath(root)), { recursive: true });
+  fs.writeFileSync(lockPath(root), `${JSON.stringify(lock, null, 2)}\n`);
 }

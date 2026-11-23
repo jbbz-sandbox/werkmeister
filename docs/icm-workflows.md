@@ -187,7 +187,15 @@ To start from a built-in, copy the rendered `stages/*/CONTEXT.md` of any workspa
 
 1. Edit the folder. For the repo level, do it on a branch and merge it like code: a workspace reads the workflow from its own worktree, so it sees the version its branch has.
 2. New workspaces get the new version.
-3. To move an existing workspace onto it, run `werkmeister skills check` to list the contracts that differ, then `werkmeister skills sync`. If the stage list changed during a run, init and sync leave the stages alone. Move `stages/` aside to regenerate them.
+3. Existing workspaces keep the version they were built from until you sync them. Init records the folder, its `version` and a hash of `workflow.yaml` and the stage files in `.werkmeister/workflow.lock`. After an edit to the folder, `werkmeister skills check` names it by its absolute path, then lists the contracts that differ:
+
+   ```text
+   ✗ template changed since init: /home/me/.werkmeister/workflows/review
+   ✗ stages/01_triage/CONTEXT.md
+   Workflow template /home/me/.werkmeister/workflows/review changed since init — run `werkmeister skills sync` to re-render its stage contracts.
+   ```
+
+   `werkmeister skills sync` re-renders them and updates the lock. A sync with nothing to re-render leaves the lock as it is. A workspace built from a built-in has no lock. If the stage list changed during a run, init and sync leave the stages alone. Move `stages/` aside to regenerate them.
 
 A workflow that stops loading after init (an edit with a mistake) pre-approves nothing until it is fixed, and `skills check` and `sync` fail with its error.
 

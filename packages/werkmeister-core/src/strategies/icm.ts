@@ -32,7 +32,15 @@ import {
   loadSandboxServiceConfigs,
 } from "../workspace_prompts.js";
 import { stageDecisions } from "./icm_decisions.js";
-import { workflowCandidates } from "./icm_external.js";
+import {
+  findWorkflow,
+  readWorkflowLock,
+  TEMPLATE_CHANGED,
+  WORKFLOW_LOCK,
+  workflowCandidates,
+  workflowLock,
+  writeWorkflowLock,
+} from "./icm_external.js";
 import {
   askLine,
   ICM_TEMPLATES,
@@ -475,16 +483,37 @@ function writeRel(root: string, rel: string, body: string): void {
   fs.writeFileSync(p, body);
 }
 
-function drifted(root: string): Array<[string, string]> {
+/**
+ * What check reports and sync fixes: the drifted files, and the external workflow folder
+ * edited or replaced since the lock was written (SW-1078). No lock, as before SW-1078, is no change.
+ */
+function stale(root: string): {
+  drift: Array<[string, string]>;
+  changed: string | null;
+  ext: string | null;
+} {
   const ctx = contextFromDisk(root);
-  if (foreignStageDirs(root, templateFor(ctx.inputs["work_type"] ?? "", root)).length) return [];
-  return Object.entries(render(ctx)).filter(([rel, body]) => {
+  const wt = (ctx.inputs["work_type"] ?? "").trim().toLowerCase();
+  if (foreignStageDirs(root, templateFor(wt, root)).length)
+    return { drift: [], changed: null, ext: null };
+  const ext = findWorkflow(root, wt);
+  const lock = readWorkflowLock(root);
+  // A removed folder (now the built-in) is named by the lock: there is no current one to name.
+  const changed = !lock
+    ? null
+    : !ext
+      ? lock.source
+      : ext !== lock.source || workflowLock(ext).hash !== lock.hash
+        ? ext
+        : null;
+  const drift = Object.entries(render(ctx)).filter(([rel, body]) => {
     try {
       return fs.readFileSync(path.join(root, rel), "utf8") !== body;
     } catch {
       return true;
     }
   });
+  return { drift, changed, ext };
 }
 
 function init(ctx: InitContext): void {
@@ -540,6 +569,11 @@ function init(ctx: InitContext): void {
       fs.writeFileSync(path.join(out, ".gitkeep"), "");
     }
   }
+  // Pins the external workflow the contracts came from, so skills check can name an edit to it (SW-1078).
+  if (!foreign.length) {
+    writeWorkflowLock(root, ext ? workflowLock(ext) : null);
+    if (ext) success(`Wrote ${WORKFLOW_LOCK}`);
+  }
   // Switching from jit without --prune-context leaves its SessionStart/gate
   // hooks live until the next `up` — and SessionStart's `skills check ||
   // skills sync` would then hit icm's own sync and overwrite hand-edited
@@ -566,13 +600,24 @@ export const icm: ContextStrategy = {
     writePrGuardHook(root);
     writeWorkspaceSettings(root);
   },
-  check: (root) => drifted(root).map(([rel]) => rel),
+  check(root) {
+    const { drift, changed } = stale(root);
+    return [...(changed ? [`${TEMPLATE_CHANGED}: ${changed}`] : []), ...drift.map(([rel]) => rel)];
+  },
   sync(root) {
+    const { drift, changed, ext } = stale(root);
     const wrote: string[] = [];
-    for (const [rel, body] of drifted(root)) {
+    for (const [rel, body] of drift) {
       writeRel(root, rel, body);
       info(`wrote ${rel}`);
       wrote.push(rel);
+    }
+    // Only a sync that re-renders moves the lock; a template edit that renders the same text still counts.
+    const lock = ext ? workflowLock(ext) : null;
+    if ((wrote.length || changed) && (lock || changed)) {
+      writeWorkflowLock(root, lock);
+      info(`${lock ? "wrote" : "removed"} ${WORKFLOW_LOCK}`);
+      wrote.push(WORKFLOW_LOCK);
     }
     return { wrote };
   },
