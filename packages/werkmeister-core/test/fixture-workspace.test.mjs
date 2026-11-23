@@ -347,3 +347,69 @@ test("with-fixture-workspace runs /app's CLI when /app is its worktree, and says
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// SW-1108: a workflow folder seeded where init looks for it, never outside the fixture.
+const WORKFLOW = {
+  type: "review",
+  files: {
+    "workflow.yaml":
+      "version: 1\nstages:\n  - name: triage\n    job: sort it\n    writes: out.md\n    check: read it\n",
+    "stages/triage.md": "One job: sort it.\n",
+  },
+};
+
+test("workflow seeds the temp HOME's workflows/<type>/ and makes the workspace icm of that type", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const dir = path.join(fx.env.HOME, ".werkmeister", "workflows", "review");
+      assert.equal(fx.workflowDir, dir);
+      assert.ok(dir.startsWith(`${fx.root}/home/`), dir);
+      assert.equal(
+        fs.readFileSync(path.join(dir, "stages", "triage.md"), "utf8"),
+        "One job: sort it.\n",
+      );
+      const yml = fs.readFileSync(path.join(fx.workspace, ".werkmeister", "workspace.yml"), "utf8");
+      assert.match(yml, /context_strategy: icm/);
+      assert.match(yml, /work_type: review/);
+    },
+    { workflow: WORKFLOW },
+  );
+});
+
+test("workflow in: repo commits it to the code repo's main, so the branch adds no change", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      assert.equal(fx.workflowDir, path.join(fx.repo, ".werkmeister", "workflows", "review"));
+      assert.equal(fs.existsSync(path.join(fx.env.HOME, ".werkmeister", "workflows")), false);
+      assert.equal(
+        git(
+          fx.repo,
+          "ls-tree",
+          "-r",
+          "--name-only",
+          "origin/main",
+          ".werkmeister/workflows/review",
+        ),
+        ".werkmeister/workflows/review/stages/triage.md\n.werkmeister/workflows/review/workflow.yaml",
+      );
+      assert.equal(git(fx.repo, "status", "--porcelain"), "");
+    },
+    { workflow: { ...WORKFLOW, in: "repo" } },
+  );
+});
+
+test("workflow refuses a name init can't find, a stray file and another work_type", async () => {
+  const { fixturePreset } = await import("../dist/fixture_workspace.js");
+  assert.throws(
+    () => fixturePreset({ workflow: { ...WORKFLOW, type: "Review" } }),
+    /not a work type/,
+  );
+  assert.throws(
+    () => fixturePreset({ workflow: { ...WORKFLOW, files: { ...WORKFLOW.files, "run.sh": "" } } }),
+    /run\.sh: only workflow\.yaml/,
+  );
+  assert.throws(
+    () => fixturePreset({ workflow: WORKFLOW, workspace: { work_type: "feature" } }),
+    /would leave the review workflow unused/,
+  );
+});

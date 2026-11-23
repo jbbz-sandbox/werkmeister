@@ -199,6 +199,16 @@ Or let werkmeister do steps 2–4: `werkmeister workflow export <workspace> --to
 
 A workflow that stops loading after init (an edit with a mistake) pre-approves nothing until it is fixed, and `skills check` and `sync` fail with its error.
 
+### Try a workflow in a fixture
+
+In a werkmeister workspace, `.werkmeister/bin/with-fixture-workspace` builds a throwaway workspace from a workflow folder under your worktree, with a temporary HOME. `--workflow <dir>` seeds the folder at that HOME's `.werkmeister/workflows/<folder name>/` (`--workflow-in repo` puts it in the fixture's code repo instead), and `--then-append <path> <text>` edits a seeded file between steps:
+
+```sh
+with-fixture-workspace --workflow .werkmeister/fixture/workflows/review workspace init --no-build --then skills check
+with-fixture-workspace --workflow .werkmeister/fixture/workflows/review workspace init --no-build \
+  --then-append workflow:stages/triage.md "edited" --then skills check   # exits 1: template changed since init
+```
+
 ## The propose stage and the gate
 
 feature, bugfix/incident and refactor end at the same propose stage. It walks every acceptance criterion (PASS, FAIL, or MANUAL for one only a reviewer can check), commits in each code worktree, and writes `output/pr-<worktree>.md` per repo at `status: draft`.

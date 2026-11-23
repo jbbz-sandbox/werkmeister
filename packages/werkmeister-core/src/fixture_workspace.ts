@@ -88,6 +88,17 @@ export interface FixtureOptions {
   /** CLAUDE_BIN / CODEX_BIN for the fixture, a fake a test sets on purpose (SW-911). In-process only: the wrapper has no flag for them. Default: blank, the failing stub. */
   claudeBin?: string;
   codexBin?: string;
+  /** An ICM workflow folder seeded at the temp HOME's `.werkmeister/workflows/<type>/`, or the first repo's (SW-1108). */
+  workflow?: FixtureWorkflow;
+}
+
+export interface FixtureWorkflow {
+  /** The work type: the folder name, since init looks a workflow up only by it. */
+  type: string;
+  /** Relative path → text: `workflow.yaml` and `stages/<name>.md` only. */
+  files: Record<string, string>;
+  /** "repo": in the first code repo's base commit, on origin/main like a checked-in workflow. Default: the temp HOME. */
+  in?: "repo";
 }
 
 /** One running container as `docker inspect` reports it to the scheduler. */
@@ -147,6 +158,8 @@ export interface Fixture {
   dockerLog: string;
   /** With `staleCompose`: commit the branch's held-back fragment (SW-817). */
   applyFragmentChange?: () => void;
+  /** With `workflow`: where it was seeded, for `--then-append workflow:<path>`. */
+  workflowDir?: string;
   /** What a process needs to run against the fixture, HOME (`<root>/home`, empty) included. */
   env: Record<string, string>;
 }
@@ -254,6 +267,21 @@ export function fixturePreset({
     throw new Error(
       `--queue: bad entry ${JSON.stringify(badEntry)}: <feature>[:<waitedMin>[:<service>,...]], lowercase names and whole minutes`,
     );
+  const wf = opts.workflow;
+  if (wf) {
+    // Same shape as icm_external's NAME_RE: any other name is a folder init never finds.
+    if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(wf.type))
+      throw new Error(`--workflow: folder name ${JSON.stringify(wf.type)} is not a work type`);
+    const files = Object.keys(wf.files);
+    const odd = files.find((f) => f !== "workflow.yaml" && !/^stages\/[a-z0-9-]+\.md$/.test(f));
+    if (odd !== undefined || !files.includes("workflow.yaml"))
+      throw new Error(
+        `--workflow: ${odd ?? "no workflow.yaml"}: only workflow.yaml and stages/<name>.md`,
+      );
+    const wt = opts.workspace?.["work_type"];
+    if (wt !== undefined && wt !== wf.type)
+      throw new Error(`--workspace work_type ${wt} would leave the ${wf.type} workflow unused`);
+  }
   // A worktree shares its source's origin/main, so it can't stay behind until a fetch.
   if (opts.worktrees && opts.behind) throw new Error("--worktrees and --behind don't combine");
   const libChange = "packages/lib/index.js";
@@ -309,8 +337,19 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
       ? { task: "demo", work_type: "feature" }
       : { feature: FIXTURE_FEATURE, services: (opts.workspaceServices ?? ["lib"]).join(",") }),
     ...(opts.issue ? { issue_id: opts.issue, project: FIXTURE_PROJECT } : {}),
+    ...(opts.workflow && { context_strategy: "icm", work_type: opts.workflow.type }),
     ...opts.workspace,
   };
+  const wf = opts.workflow;
+  const seedWorkflow = (dir: string) => {
+    for (const [rel, body] of Object.entries(wf?.files ?? {})) write(path.join(dir, rel), body);
+    return dir;
+  };
+  // icm_external's lookup: sandboxHome()/workflows/<type>, or <repo>/.werkmeister/workflows/<type>.
+  let workflowDir =
+    wf && wf.in !== "repo"
+      ? seedWorkflow(path.join(dotDir(home), "workflows", wf.type))
+      : undefined;
   write(path.join(dotDir(workspace), "workspace.yml"), YAML.stringify(yml));
   // The gate reads the PR file and exercise.md where the strategy keeps them (SW-464): jit's notes,
   // or icm's propose output, with every earlier stage's output non-empty for the stages row.
@@ -355,7 +394,9 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
     else git(workspace, "clone", "-q", remote, name);
     const frag = name === repos[0]?.name ? opts.fragmentChange : undefined;
     const changed = [change, frag === undefined ? undefined : FRAGMENT_FILE].filter(Boolean);
-    if (changed.length) {
+    const wfHere = wf?.in === "repo" && name === repos[0]?.name;
+    if (wfHere) workflowDir = seedWorkflow(path.join(repo, ".werkmeister", "workflows", wf.type));
+    if (changed.length || wfHere) {
       if (change) write(path.join(repo, change), opts.changeBase ?? "base\n");
       if (frag !== undefined) write(path.join(repo, FRAGMENT_FILE), opts.fragment ?? BASE_FRAGMENT);
       git(repo, "add", ".");
@@ -478,6 +519,7 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
   return {
     root,
     applyFragmentChange,
+    workflowDir,
     configFile,
     workspace,
     repo: path.join(workspace, (repos[0] as FixtureRepo).name),

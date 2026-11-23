@@ -37,7 +37,7 @@ it("--exec-runs is a fixture option only first, where the ask rule's prefix sees
   expect(first.opts?.execRuns).toBe(true);
   const later = parse(["--gate", "--exec-runs", "pr", "gate"]);
   expect(later.opts?.execRuns).toBe(false);
-  expect(later.steps?.[0]?.[0]).toBe("--exec-runs");
+  expect(later.steps?.[0]).toEqual(["--exec-runs", "pr", "gate"]);
 });
 
 it("--slots-full is a fixture option, before the werkmeister args (SW-634)", () => {
@@ -273,4 +273,101 @@ it("refuses every file flag when the running build is not <wt>/apps/cli/dist/mai
   } finally {
     process.argv[1] = argv1;
   }
+});
+
+it("--workflow reads workflow.yaml and stages/*.md from a folder under the worktree (SW-1108)", () => {
+  const wf = path.join(tmp, "ws", "flows", "review");
+  fs.mkdirSync(path.join(wf, "stages"), { recursive: true });
+  fs.writeFileSync(path.join(wf, "workflow.yaml"), "version: 1\n");
+  fs.writeFileSync(path.join(wf, "stages", "triage.md"), "One job.\n");
+  fs.writeFileSync(path.join(wf, "notes.txt"), "not copied\n");
+  const r = parse(
+    ["--workflow", "flows/review", "--workflow-in", "repo", "status"],
+    path.join(tmp, "ws"),
+  );
+  expect(r.opts?.workflow).toEqual({
+    type: "review",
+    files: { "workflow.yaml": "version: 1\n", "stages/triage.md": "One job.\n" },
+    in: "repo",
+  });
+  // Outside the worktree, a folder with no workflow.yaml, and any --workflow-in but repo.
+  expect(parse(["--workflow", "../secret", "status"], path.join(tmp, "ws"))).toEqual({
+    bad: "--workflow",
+  });
+  expect(parse(["--workflow", "flows", "status"], path.join(tmp, "ws"))).toEqual({
+    bad: "--workflow",
+  });
+  expect(parse(["--workflow-in", "home", "status"])).toEqual({ bad: "--workflow-in" });
+});
+
+it("--then-append is a step that edits only seeded workflow files or fixture markdown (SW-1108)", () => {
+  expect(
+    parse([
+      "workspace",
+      "init",
+      "--then-append",
+      "workflow:stages/triage.md",
+      "x",
+      "--then",
+      "skills",
+      "check",
+    ]).steps,
+  ).toEqual([
+    ["workspace", "init"],
+    { append: "workflow:stages/triage.md", text: "x" },
+    ["skills", "check"],
+  ]);
+  expect(
+    parse(["status", "--then-append", "stages/01_research/CONTEXT.md", "x"]).steps?.[1],
+  ).toEqual({
+    append: "stages/01_research/CONTEXT.md",
+    text: "x",
+  });
+  // The wrapper is pre-approved: never .git (an appended config runs commands), a script, or out of the fixture.
+  for (const target of [
+    "app/.git/config",
+    "app/.GIT/x.md",
+    ".werkmeister/bin/with-temp-home",
+    "../x.md",
+    "/abs.md",
+    "workflow:../x.md",
+    "workflow:other.yaml",
+  ])
+    expect(parse(["status", "--then-append", target, "x"]), target).toEqual({
+      bad: "--then-append",
+    });
+  // Needs its text, and --then before the next werkmeister args.
+  expect(parse(["status", "--then-append", "a.md"])).toEqual({ bad: "--then-append" });
+  expect(parse(["status", "--then-append", "a.md", "x", "skills", "check"])).toEqual({
+    bad: "--then-append",
+  });
+});
+
+it("--then-append first, or workflow: and --workflow-in without --workflow, exit 2 before any fixture (SW-1108)", async () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    for (const argv of [
+      ["--then-append", "a.md", "x"],
+      ["status", "--then-append", "workflow:workflow.yaml", "x"],
+      ["--workflow-in", "repo", "status"],
+    ]) {
+      await run(argv, tmp);
+      expect(process.exitCode, argv.join(" ")).toBe(2);
+      process.exitCode = 0;
+    }
+  } finally {
+    error.mockRestore();
+    process.exitCode = 0;
+  }
+});
+
+it("--workflow refuses a stages/ symlinked out of the worktree before listing it (SW-1108)", () => {
+  const wf = path.join(tmp, "ws", "flows", "linked");
+  fs.mkdirSync(wf, { recursive: true });
+  fs.writeFileSync(path.join(wf, "workflow.yaml"), "version: 1\n");
+  fs.mkdirSync(path.join(tmp, "out-stages"), { recursive: true });
+  fs.symlinkSync(path.join(tmp, "out-stages"), path.join(wf, "stages"));
+  expect(parse(["--workflow", "flows/linked", "status"], path.join(tmp, "ws"))).toEqual({
+    bad: "--workflow",
+  });
 });
