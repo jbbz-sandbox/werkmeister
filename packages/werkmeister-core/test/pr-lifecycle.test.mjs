@@ -3911,11 +3911,18 @@ async function withTranscripts(ws, sessions, fn) {
       );
   };
   write(sessions);
+  // The context snapshot's /context probe (SW-318) must never reach a real `claude`.
+  const claude = path.join(home, "claude");
+  fs.writeFileSync(claude, "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  const prevClaude = process.env.CLAUDE_BIN;
   process.env.HOME = home;
+  process.env.CLAUDE_BIN = claude;
   try {
     return await fn(write);
   } finally {
     process.env.HOME = prev;
+    if (prevClaude === undefined) delete process.env.CLAUDE_BIN;
+    else process.env.CLAUDE_BIN = prevClaude;
     clean(home);
   }
 }
@@ -3952,14 +3959,24 @@ test("closeOut writes usage.md + usage.json before removal, and a summary line i
     let atRemoval = [];
     const d = deps([[/ls-remote/, { code: 2 }]], {
       remove: async () => {
-        atRemoval = ["usage.md", "usage.json"].filter((f) => fs.existsSync(path.join(ws, f)));
+        atRemoval = ["usage.md", "usage.json", "context.md", "context.json"].filter((f) =>
+          fs.existsSync(path.join(ws, f)),
+        );
         return { output: "removed" };
       },
     });
     await inWorkspacesRoot(ws, (name) =>
       withTranscripts(ws, TRANSCRIPTS, () => closeOut(name, {}, d)),
     );
-    assert.deepEqual(atRemoval, ["usage.md", "usage.json"]);
+    assert.deepEqual(atRemoval, ["usage.md", "usage.json", "context.md", "context.json"]);
+    const c = JSON.parse(fs.readFileSync(path.join(ws, "context.json"), "utf8"));
+    assert.equal(c.outcome, "shipped");
+    assert.equal(c.summary.sessions, 2);
+    assert.equal(c.summary.maxPeakTokens, 1_200_000);
+    assert.match(
+      fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+      /^Context: peak 1\.2M, 0 compactions across 2 sessions; see context\.md$/m,
+    );
     const u = readUsage(ws);
     assert.equal(u.schema, 1);
     assert.equal(u.outcome, "shipped");
@@ -4043,6 +4060,17 @@ test("closeOut --abandon with no transcripts: the snapshot says so and close-out
       fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
       /^Usage: no transcripts found; see usage\.md$/m,
     );
+    const c = JSON.parse(fs.readFileSync(path.join(ws, "context.json"), "utf8"));
+    assert.equal(c.outcome, "abandoned");
+    assert.deepEqual(c.sessions, []);
+    assert.match(
+      fs.readFileSync(path.join(ws, "context.md"), "utf8"),
+      /^Note: no Claude Code transcripts/m,
+    );
+    assert.match(
+      fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
+      /^Context: no transcripts found; see context\.md$/m,
+    );
   } finally {
     clean(ws);
   }
@@ -4064,9 +4092,11 @@ test("closeOut retry after a failed removal keeps the first usage snapshot", asy
         await assert.rejects(closeOut(name, {}, failing), /Handoff failed/);
         const first = fs.readFileSync(path.join(ws, "usage.json"), "utf8");
         const firstMd = fs.readFileSync(path.join(ws, "usage.md"), "utf8");
+        const firstContext = fs.readFileSync(path.join(ws, "context.json"), "utf8");
         write({ s3: [turn("2026-10-30T12:00:00.000Z", "claude-sonnet-5", { output_tokens: 1 })] });
         await closeOut(name, {}, deps([[/ls-remote/, { code: 2 }]]));
         assert.equal(fs.readFileSync(path.join(ws, "usage.json"), "utf8"), first);
+        assert.equal(fs.readFileSync(path.join(ws, "context.json"), "utf8"), firstContext);
         assert.equal(fs.readFileSync(path.join(ws, "usage.md"), "utf8"), firstMd);
         assert.match(
           fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),

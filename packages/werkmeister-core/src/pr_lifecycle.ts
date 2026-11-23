@@ -41,6 +41,8 @@ import {
   sandboxHome,
   servicesYamlPath,
 } from "./config.js";
+// biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
+import { writeContextSnapshot } from "./context_snapshot.js";
 import { GATE_COMPOSE_FILE, renderGateCompose } from "./generate.js";
 import { updateNoteStatus } from "./graduate.js";
 import { eachIssue, type IssueStatuses, issueStatuses, moveIssue } from "./issue_status.js";
@@ -4519,7 +4521,9 @@ async function closeOutLocked(
   const files = readPrFiles(ws);
   try {
     // Before removal: the transcripts it reads are keyed by this folder's path (SW-206).
-    const usage = await writeUsageSnapshot(ws, name, cfg, abandoned ? "abandoned" : "shipped");
+    const outcome = abandoned ? "abandoned" : "shipped";
+    const usage = await writeUsageSnapshot(ws, name, cfg, outcome);
+    const context = await writeContextSnapshot(ws, name, cfg, outcome);
     fs.writeFileSync(
       path.join(ws, "closeout.md"),
       renderCloseout(
@@ -4532,6 +4536,7 @@ async function closeOutLocked(
             ? `Post-mortem skipped: ${skip}`
             : fs.existsSync(postmortem) && "Post-mortem: postmortem.md",
           usage,
+          context,
         ]
           .filter(Boolean)
           .join("\n") || undefined,
