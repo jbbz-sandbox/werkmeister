@@ -102,3 +102,67 @@ describe("JIT commands in an icm workspace", () => {
     expect(log).not.toHaveBeenCalled();
   });
 });
+
+// SW-1078: a workflow template edited after init is named, not blamed on the werkmeister repo.
+describe("skills check in an icm workspace from a user workflow", () => {
+  let tpl: string;
+  let ws: string;
+  beforeEach(() => {
+    tpl = path.join(home, "workflows", "review");
+    fs.mkdirSync(path.join(tpl, "stages"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tpl, "workflow.yaml"),
+      "version: 1\nstages:\n  - name: triage\n    job: sort it\n    writes: out.md\n    check: read it\n",
+    );
+    fs.writeFileSync(
+      path.join(tpl, "stages", "triage.md"),
+      "One job: sort it.\n\n## Inputs\n- `../../BRIEF.md`\n\n## Do NOT load\nsource.\n\n" +
+        "## Process\n1. Sort.\n\n## Outputs\n- `output/out.md`\n\n## Human check\nRead it.\n",
+    );
+    ws = path.join(wsRoot, "review-ws");
+    fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(
+      path.join(ws, ".werkmeister", "workspace.yml"),
+      "context_strategy: icm\nwork_type: review\n",
+    );
+    strategyFor(ws).init({
+      workspaceRoot: ws,
+      workspaceName: path.basename(ws),
+      repos: [],
+      task: "demo",
+      meta: { FEATURE: "", SERVICES: "" },
+      inputs: { context_strategy: "icm", work_type: "review" },
+      configOverride: null,
+    });
+    vi.spyOn(process, "cwd").mockReturnValue(ws);
+  });
+
+  async function check(): Promise<{ text: string; code: number | undefined }> {
+    let code: number | undefined;
+    vi.spyOn(process, "exit").mockImplementation(((c?: number) => {
+      code = c;
+      throw new Error(`exit ${c}`);
+    }) as never);
+    const lines: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((m: unknown) => void lines.push(String(m)));
+    await skills({ action: "check" }).catch(() => {});
+    return { text: lines.join("\n"), code };
+  }
+
+  it("names the template folder after a stage file edit, not the werkmeister repo", async () => {
+    fs.appendFileSync(path.join(tpl, "stages", "triage.md"), "One more line.\n");
+    const { text, code } = await check();
+    expect(code).toBe(1);
+    expect(text).toContain(`template changed since init: ${tpl}`);
+    expect(text).toContain(`Workflow template ${tpl} changed since init`);
+    expect(text).not.toContain("lags the werkmeister repo");
+  });
+
+  it("still blames the werkmeister repo for ordinary drift", async () => {
+    fs.writeFileSync(path.join(ws, "_shared", "standards.md"), "hand edit\n");
+    const { text, code } = await check();
+    expect(code).toBe(1);
+    expect(text).toContain("lags the werkmeister repo");
+    expect(text).not.toContain("changed since init");
+  });
+});

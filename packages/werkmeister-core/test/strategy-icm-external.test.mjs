@@ -475,3 +475,72 @@ test("the wizard's work_type pattern takes any lowercase-hyphen type", () => {
   assert.ok(re.test("team-review"));
   assert.ok(!re.test("Team Review"));
 });
+
+// SW-1078: .werkmeister/workflow.lock pins the template; skills check names an edit to it.
+/** A workspace inited from a user-folder workflow; fn(root, dir, home), every path under the temp home. */
+function withLockedWs(fn) {
+  return withWs(async (root, ctx, home) => {
+    const dir = path.join(home, "workflows", "review");
+    writeWorkflow(dir, REVIEW);
+    withReporter(collectingReporter(), () => icm.init(ctx));
+    return fn(root, dir, home);
+  }, "review");
+}
+const lockFile = (root) => path.join(root, ".werkmeister", "workflow.lock");
+const editTemplate = (dir) =>
+  fs.appendFileSync(path.join(dir, "stages", "triage.md"), "One more line.\n");
+
+test("init writes workflow.lock with the folder under the temp home, its version and a hash", async () => {
+  await withLockedWs(async (root, dir, home) => {
+    const lock = JSON.parse(fs.readFileSync(lockFile(root), "utf8"));
+    assert.equal(lock.source, dir);
+    assert.ok(lock.source.startsWith(home + path.sep), `${lock.source} is under the temp home`);
+    assert.equal(lock.version, 1);
+    assert.match(lock.hash, /^sha256:[0-9a-f]{64}$/);
+    assert.deepEqual(icm.check(root), []);
+  });
+});
+
+test("a template edit after init is reported as a template change naming the folder", async () => {
+  await withLockedWs(async (root, dir) => {
+    editTemplate(dir);
+    assert.deepEqual(icm.check(root), [
+      `template changed since init: ${dir}`,
+      "stages/01_triage/CONTEXT.md",
+    ]);
+  });
+});
+
+test("ordinary drift with an unchanged template is reported as before", async () => {
+  await withLockedWs(async (root) => {
+    fs.writeFileSync(path.join(root, "_shared", "standards.md"), "hand edit\n");
+    assert.deepEqual(icm.check(root), ["_shared/standards.md"]);
+  });
+});
+
+test("sync leaves the lock alone when nothing re-renders and updates it when it does", async () => {
+  await withLockedWs(async (root, dir) => {
+    const before = fs.readFileSync(lockFile(root), "utf8");
+    assert.deepEqual(withReporter(collectingReporter(), () => icm.sync(root)).wrote, []);
+    assert.equal(fs.readFileSync(lockFile(root), "utf8"), before, "no-op sync keeps the lock");
+
+    editTemplate(dir);
+    const { wrote } = withReporter(collectingReporter(), () => icm.sync(root));
+    assert.deepEqual(wrote, ["stages/01_triage/CONTEXT.md", ".werkmeister/workflow.lock"]);
+    const after = JSON.parse(fs.readFileSync(lockFile(root), "utf8"));
+    assert.notEqual(after.hash, JSON.parse(before).hash);
+    assert.deepEqual(icm.check(root), []);
+  });
+});
+
+test("a built-in workflow gets no lock; a workspace without one reports drift as before", async () => {
+  await withWs(async (root, ctx) => {
+    withReporter(collectingReporter(), () => icm.init(ctx));
+    assert.ok(!fs.existsSync(lockFile(root)), "built-in: no workflow.lock");
+  }, "feature");
+  await withLockedWs(async (root, dir) => {
+    fs.rmSync(lockFile(root));
+    editTemplate(dir);
+    assert.deepEqual(icm.check(root), ["stages/01_triage/CONTEXT.md"]);
+  });
+});

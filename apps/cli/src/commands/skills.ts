@@ -17,7 +17,7 @@
 
 import { findWorkspaceRoot } from "werkmeister-core/gate";
 import { candidateWorkspaceRoots } from "werkmeister-core/global_config";
-import { strategyFor } from "werkmeister-core/strategies";
+import { strategyFor, TEMPLATE_CHANGED } from "werkmeister-core/strategies";
 
 import { Colors, error, success } from "../lib/config.js";
 
@@ -43,11 +43,22 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     printDrift(entry);
   }
   if (drift.length) {
-    console.log(
-      `${Colors.YELLOW}Context layer lags the werkmeister repo — run ` +
-        "`werkmeister skills sync` (or `werkmeister workspace init`) to refresh." +
-        `${Colors.RESET}`,
-    );
+    const template = drift.find((e) => e.startsWith(`${TEMPLATE_CHANGED}: `));
+    if (template) {
+      console.log(
+        `${Colors.YELLOW}Workflow template ${template.slice(TEMPLATE_CHANGED.length + 2)} ` +
+          "changed since init — run `werkmeister skills sync` to re-render its stage contracts." +
+          `${Colors.RESET}`,
+      );
+    }
+    // _shared/ is never rendered from a template, so its drift is werkmeister's even beside a template change.
+    if (!template || drift.some((e) => e.startsWith("_shared/"))) {
+      console.log(
+        `${Colors.YELLOW}Context layer lags the werkmeister repo — run ` +
+          "`werkmeister skills sync` (or `werkmeister workspace init`) to refresh." +
+          `${Colors.RESET}`,
+      );
+    }
     process.exit(1);
   }
   success(`Context layer fresh (${strategy.id}).`);
