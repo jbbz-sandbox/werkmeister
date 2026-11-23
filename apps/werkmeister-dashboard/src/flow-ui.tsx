@@ -116,24 +116,28 @@ function Timeline({ events }: { events: TimelineEvent[] }) {
 function Detail({
   bridge,
   workspace,
-  range,
+  active,
 }: {
   bridge: HostBridge;
   workspace: string;
-  range: MetricsRange;
+  active: boolean;
 }) {
   const [events, setEvents] = useState<TimelineEvent[] | null>(null);
   const [usage, setUsage] = useState<{ sessions: Session[] } | null>(null);
   const [err, setErr] = useState("");
   const [session, setSession] = useState<string>();
+  // The timeline is the whole run, so a range click doesn't refetch it; showing the tab again
+  // does, so its open bars reach now (SW-1094).
   useEffect(() => {
+    if (!active) return;
     let stale = false;
     Promise.all([
-      bridge.callTool("metrics", { range, workspace }) as Promise<MetricsReport>,
+      bridge.callTool("metrics", { workspace }) as Promise<MetricsReport>,
       bridge.callTool("workspace-usage", { workspace }) as Promise<{ sessions: Session[] }>,
     ]).then(
       ([m, u]) => {
         if (stale) return;
+        setErr("");
         setEvents(m.timeline ?? []);
         setUsage(u);
       },
@@ -142,7 +146,7 @@ function Detail({
     return () => {
       stale = true;
     };
-  }, [bridge, workspace, range]);
+  }, [bridge, workspace, active]);
   return (
     <section className="detail" aria-label={`${workspace} timeline`}>
       <h3>{workspace}</h3>
@@ -189,7 +193,8 @@ function Detail({
   );
 }
 
-export function FlowTab({ bridge }: { bridge: HostBridge }) {
+/** `active`: the Flow tab is the one on screen. */
+export function FlowTab({ bridge, active }: { bridge: HostBridge; active: boolean }) {
   const [range, setRange] = useState<MetricsRange>("7d");
   const [report, setReport] = useState<MetricsReport | null>(null);
   const [status, setStatus] = useState({ text: "Loading…", err: false });
@@ -256,7 +261,7 @@ export function FlowTab({ bridge }: { bridge: HostBridge }) {
           ))}
         </div>
       )}
-      {selected && <Detail key={selected} bridge={bridge} workspace={selected} range={range} />}
+      {selected && <Detail key={selected} bridge={bridge} workspace={selected} active={active} />}
     </div>
   );
 }
