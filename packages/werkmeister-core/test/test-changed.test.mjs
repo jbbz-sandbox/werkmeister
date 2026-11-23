@@ -155,7 +155,9 @@ test("run-tests.sh given .mjs files runs only those", () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "run-tests-"));
   const dir = path.join(root, "packages", "core");
   // A nested node --test sees NODE_TEST_CONTEXT and skips running its files.
-  const { NODE_TEST_CONTEXT: _, ...env } = process.env;
+  const { NODE_TEST_CONTEXT: _, ...rest } = process.env;
+  // Its own empty HOME: the guard reads $HOME/.werkmeister, which a parallel test can create in CI's HOME.
+  const env = { ...rest, HOME: path.join(root, "home") };
   try {
     fs.mkdirSync(path.join(dir, "test"), { recursive: true });
     fs.mkdirSync(path.join(root, "scripts"));
