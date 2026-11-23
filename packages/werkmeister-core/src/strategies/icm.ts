@@ -10,6 +10,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { stringify as stringifyYaml } from "yaml";
 import { COMPOSE_FILE } from "../compose_file.js";
 import { dotDir, IDLE_SERVICE_TYPES, sandboxHome } from "../config.js";
 import { logsDir } from "../dot_dir.js";
@@ -31,13 +32,18 @@ import {
   isTrue,
   loadConfigFile,
   loadSandboxServiceConfigs,
+  readWorkspaceField,
 } from "../workspace_prompts.js";
 import { stageDecisions } from "./icm_decisions.js";
 import {
+  ALLOWED_GRANTS,
   findWorkflow,
+  loadWorkflow,
   readWorkflowLock,
   TEMPLATE_CHANGED,
+  USER_GRANTS,
   WORKFLOW_LOCK,
+  WorkflowError,
   workflowCandidates,
   workflowLock,
   writeWorkflowLock,
@@ -580,6 +586,170 @@ function init(ctx: InitContext): void {
   // skills sync` would then hit icm's own sync and overwrite hand-edited
   // stage contracts. refresh() is idempotent and silent on a clean workspace.
   icm.refresh(root);
+}
+
+const STANDARDS_REF = "- Reference (every run): `../../_shared/standards.md` — rows ";
+const GATE_ROW =
+  /^`stages\/[^/]+\/output\/(.+)` reads `status: decided` — the flip \*is\* the approval, do not ask again$/;
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * SW-1079: write the workspace's rendered stages back out as an external workflow folder
+ * (`workflow.yaml` + `stages/<name>.md`) that `loadWorkflow` renders into the same contracts.
+ * Strips what renderContract adds and turns `vars()` values back into `{{at:…}}`, `{{repos}}`, `{{restart}}`.
+ */
+export function exportWorkflow(
+  root: string,
+  outDir: string,
+): { stages: string[]; warnings: string[] } {
+  const stagesRoot = path.join(root, "stages");
+  const dirs = fs.existsSync(stagesRoot)
+    ? fs
+        .readdirSync(stagesRoot)
+        .filter(
+          (d) =>
+            /^\d\d_[a-z0-9-]+$/.test(d) && fs.existsSync(path.join(stagesRoot, d, "CONTEXT.md")),
+        )
+        .sort()
+    : [];
+  if (String(readWorkspaceField(root, "context_strategy") ?? "").trim() !== "icm" || !dirs.length)
+    throw new WorkflowError(`${root} is not an icm workspace (no stages/NN_*/CONTEXT.md)`);
+  // Refuse rather than overwrite: the target may be a workflow folder someone maintains.
+  if (fs.existsSync(outDir) && fs.readdirSync(outDir).length)
+    throw new WorkflowError(`${outDir} exists and is not empty`);
+
+  const v = vars(contextFromDisk(root), []);
+  const names = dirs.map((d) => d.slice(3));
+  const ask = askLine(v.questionTool);
+  const pipeline = fs.readFileSync(path.join(root, "CONTEXT.md"), "utf8").split("\n");
+  const routes = fs
+    .readFileSync(path.join(root, harnessLayoutFor(root).instructionsFile), "utf8")
+    .split("\n");
+  const reverse = (text: string) => {
+    let t = text;
+    for (const [value, key] of [
+      [v.restart, "{{restart}}"],
+      [v.repos, "{{repos}}"],
+    ])
+      if (value) t = t.split(value).join(key);
+    dirs.forEach((d, i) => {
+      t = t.replace(
+        new RegExp(`(?<![\\w./])\\.\\./${escRe(d)}(?![\\w-])`, "g"),
+        `{{at:${names[i]}}}`,
+      );
+    });
+    return t;
+  };
+
+  const workType = String(readWorkspaceField(root, "work_type") ?? "");
+  // Fail closed, as stageGrants does: a template that no longer loads grants nothing.
+  let template: Stage[] = [];
+  try {
+    template = templateFor(workType, root);
+  } catch (e) {
+    if (!(e instanceof WorkflowError)) throw e;
+  }
+  const dropped = new Set<string>();
+  const stages: Record<string, unknown>[] = [];
+  const files: Record<string, string> = {};
+  dirs.forEach((dir, i) => {
+    const realGrants = new Set(template.find((s) => s.name === names[i])?.grants ?? []);
+    const lines = fs.readFileSync(path.join(stagesRoot, dir, "CONTEXT.md"), "utf8").split("\n");
+    const job = lines[0].slice(`# ${dir} — `.length);
+    let standards: Stage["standards"] = "none";
+    const grants: string[] = [];
+    const out: string[] = [`# ${names[i]} — ${job}`];
+    let section = "";
+    let selfCheck: string[] | null = null;
+    let fenced = false;
+    for (const line of lines.slice(1)) {
+      // A `##` inside a code fence is text, as the loader reads it.
+      if (/^\s*(```|~~~)/.test(line)) fenced = !fenced;
+      const h = fenced ? null : /^## (.+)$/.exec(line);
+      if (h) section = h[1];
+      if (section === "Pre-approved") {
+        const g = /^- `werkmeister (.+?)( …)?`$/.exec(line);
+        const grant = g && (g[2] ? `${g[1]}:*` : g[1]);
+        // Grants come from the workspace's template; a line edited into the contract is dropped.
+        if (grant && realGrants.has(grant)) grants.push(grant);
+        else if (grant) dropped.add(grant);
+      } else if (section === "Self-check") {
+        if (!h) (selfCheck ??= []).push(line);
+      } else if (line.startsWith(STANDARDS_REF)) {
+        const rows = [...line.matchAll(/`([^`]+)`/g)].map((m) => m[1]).slice(1);
+        // "all" renders the active rows plus ponytail, which no list can (standardsRef).
+        standards = rows.includes("ponytail") ? "all" : rows;
+      } else if (line.startsWith("Do NOT load: ")) {
+        out.push("## Do not load", line.slice("Do NOT load: ".length));
+      } else if (
+        !(section === "Process" && line.startsWith("0. ")) &&
+        !(section === "Human check" && line === ask)
+      ) {
+        out.push(line);
+      }
+    }
+    if (selfCheck) {
+      const text = selfCheck.join("\n").trim();
+      // An autonomous workspace never rendered its human checks; the loader needs one.
+      out.push("## Human check", text, "");
+      if (text !== SELF_CHECK) out.push("## Self-check", text, "");
+    }
+    const row = pipeline.find((l) => l.startsWith(`| \`${dir}\` | ${job} | `)) ?? "";
+    const cells = row.slice(`| \`${dir}\` | ${job} | `.length, -" |".length);
+    const cut = cells.indexOf(" | ");
+    const route = routes.find((l) => l.includes(` | \`stages/${dir}/CONTEXT.md\` | `)) ?? "";
+    const enter = route.slice(2, route.indexOf(` | \`stages/${dir}/CONTEXT.md\``));
+    const stage: Record<string, unknown> = {
+      name: names[i],
+      job,
+      writes: cells.slice(0, cut),
+      check: cells.slice(cut + 3),
+    };
+    const gate = GATE_ROW.exec(enter);
+    if (i > 0 && gate) stages[i - 1].gate = gate[1];
+    else if (
+      i > 0 &&
+      enter !== `\`${dirs[i - 1]}\` output ${v.autonomous ? "self-checked" : "approved"}`
+    )
+      stage.enter = enter;
+    stage.standards = standards;
+    if (grants.length) stage.grants = grants;
+    stages.push(stage);
+    files[`stages/${names[i]}.md`] = reverse(out.join("\n").trimEnd()) + "\n";
+  });
+
+  files["workflow.yaml"] = stringifyYaml({ version: 1, stages }, { lineWidth: 0 });
+  for (const [rel, body] of Object.entries(files)) writeRel(outDir, rel, body);
+  try {
+    loadWorkflow(outDir, USER_GRANTS);
+  } catch (e) {
+    for (const rel of ["workflow.yaml", "stages"])
+      fs.rmSync(path.join(outDir, rel), { recursive: true, force: true });
+    throw e;
+  }
+  const userOnly = [
+    ...new Set(stages.flatMap((s) => (s.grants as string[] | undefined) ?? [])),
+  ].filter((g) => !ALLOWED_GRANTS.includes(g));
+  return {
+    stages: names,
+    warnings: [
+      ...(v.autonomous
+        ? [
+            "autonomous workspace: its human checks were never rendered; each stages/<name>.md uses its self-check as the human check",
+          ]
+        : []),
+      ...(dropped.size
+        ? [
+            `dropped grants ${[...dropped].join(", ")}: listed under Pre-approved but not granted by those stages in this workspace's ${workType} template`,
+          ]
+        : []),
+      ...(userOnly.length
+        ? [
+            `grants ${userOnly.join(", ")} load only from ~/.werkmeister/workflows/<type>/; for a repo's .werkmeister/workflows/, remove them from workflow.yaml`,
+          ]
+        : []),
+    ],
+  };
 }
 
 export const icm: ContextStrategy = {

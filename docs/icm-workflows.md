@@ -143,7 +143,7 @@ stages:
 
 Optional per stage: `enter`, `gate`, `standards` and `grants`. Init renders the stages as `stages/01_triage/`, `stages/02_report/` and so on, in this order.
 
-`grants` pre-approves commands for the whole run, so a workflow may only ask for the ones the built-ins use: `issue start`, `issue view` and `pr push:*`. A workflow in a cloned repo can't pre-approve anything else, such as `feature up` or `pr open`.
+`grants` pre-approves commands for the whole run, so a workflow in a repo may only ask for `issue start`, `issue view` and `pr push:*`. One in your own `~/.werkmeister/workflows/` may also ask for the built-ins' other two, `pr autosquash:*` and `workspace serve:*`: a repo can't, because `workspace serve` follows symlinks out of the workspace and `pr autosquash` rewrites the shared repo's refs. A workflow in a cloned repo can't pre-approve anything else, such as `feature up` or `pr open`.
 
 ### Stage files
 
@@ -181,7 +181,7 @@ It also fails on a `version` other than 1, an empty `stages:`, a stage without `
 5. Run `werkmeister workspace new <ws> --work-type <type>` and check the `workflow from` line.
 6. For the repo level, commit the folder, so everyone who checks the repo out gets it.
 
-To start from a built-in, copy the rendered `stages/*/CONTEXT.md` of any workspace of that type.
+Or let werkmeister do steps 2–4: `werkmeister workflow export <workspace> --to <dir>` writes `workflow.yaml` and `stages/<name>.md` from an icm workspace, strips what werkmeister adds and puts the variables back. It refuses a `--to` that exists and is not empty, and checks that the folder loads before it finishes. An export of a feature, bugfix or refactor workspace carries `workspace serve:*` and `pr autosquash:*`, so it loads only from `~/.werkmeister/workflows/<type>/`: for a repo, delete those grants from `workflow.yaml`, and the command warns which. An autonomous workspace never rendered its human checks, so its export uses each self-check as the human check: edit those. To start from a built-in, export any workspace of that type.
 
 ### Update a workflow
 

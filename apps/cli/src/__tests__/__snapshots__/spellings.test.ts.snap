@@ -515,6 +515,13 @@ exports[`command spellings > ["up","infra"] 1`] = `
 
 exports[`command spellings > ["wait-load"] 1`] = `{}`;
 
+exports[`command spellings > ["workflow","export","ws","--to","/d"] 1`] = `
+{
+  "to": "/d",
+  "workspace": "ws",
+}
+`;
+
 exports[`command spellings > ["workspace","new","f","--issue-id","SW-1","-s","api,web","--autonomous"] 1`] = `
 {
   "auto_stop": null,
