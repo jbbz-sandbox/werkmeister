@@ -149,6 +149,9 @@ Validate the configured standards tree (structural regression gate)
 .TP
 \fBnotes\fR <action> [note_num]
 Workspace notes (.werkmeister/notes/). \fBcontext\fR prints the latest handoff + open decisions for session\-start injection (hook target); \fBgraduate\fR scaffolds an open decision note into the standards tree.
+.TP
+\fBworkflow export\fR <workspace>
+Write an ICM workspace's stages as a workflow folder (workflow.yaml + stages/)
 .SS Machine
 .TP
 \fBmachine detect\fR [repo]
@@ -251,6 +254,7 @@ Restart the daemon, through launchd when launchd owns it
 \fBwerkmeister\-skills\fR(1),
 \fBwerkmeister\-standards\fR(1),
 \fBwerkmeister\-notes\fR(1),
+\fBwerkmeister\-workflow\-export\fR(1),
 \fBwerkmeister\-machine\-detect\fR(1),
 \fBwerkmeister\-machine\-clean\fR(1),
 \fBwerkmeister\-machine\-tokens\fR(1),

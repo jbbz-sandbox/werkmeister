@@ -26,8 +26,21 @@ export class WorkflowError extends SandboxError {
   }
 }
 
-/** Grants pre-approve commands for the whole run, so a template from a cloned repo may only ask for the built-ins' own. */
+/** Grants pre-approve commands for the whole run, so a template from a cloned repo may only ask for these. */
 export const ALLOWED_GRANTS = ["issue start", "issue view", "pr push:*"];
+
+/**
+ * SW-1079: a workflow in the person's own `~/.werkmeister/workflows/` may also carry the built-ins' other grants,
+ * so an exported built-in loads back. Not a repo's: `workspace serve` follows symlinks onto host loopback and
+ * `pr autosquash` rewrites the shared repo's refs. Widening either list needs that reach review again.
+ */
+export const USER_GRANTS = [...ALLOWED_GRANTS, "pr autosquash:*", "workspace serve:*"];
+
+/** The grants a workflow in *dir* may ask for: USER_GRANTS under `~/.werkmeister/workflows/`, else ALLOWED_GRANTS. */
+export function grantsFor(dir: string): string[] {
+  const rel = path.relative(path.join(sandboxHome(), "workflows"), path.resolve(dir));
+  return rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? USER_GRANTS : ALLOWED_GRANTS;
+}
 
 const NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const FENCE = /^\s*(```|~~~)/;
@@ -148,7 +161,7 @@ function parseContract(file: string, body: string): Record<string, string[] | st
 }
 
 /** Load and validate the workflow in *dir*; throws with the path and the reason. */
-export function loadWorkflow(dir: string): Stage[] {
+export function loadWorkflow(dir: string, allowed = grantsFor(dir)): Stage[] {
   let manifest: any;
   try {
     manifest = YAML.parse(fs.readFileSync(path.join(dir, "workflow.yaml"), "utf8"));
@@ -170,12 +183,9 @@ export function loadWorkflow(dir: string): Stage[] {
     names.add(s.name);
     const grants: string[] = s.grants ?? [];
     if (!Array.isArray(grants)) fail(dir, `${where}: \`grants\` must be a list`);
-    const bad = grants.filter((g) => !ALLOWED_GRANTS.includes(g));
+    const bad = grants.filter((g) => !allowed.includes(g));
     if (bad.length)
-      fail(
-        dir,
-        `${where}: grants ${bad.join(", ")} not allowed (allowed: ${ALLOWED_GRANTS.join(", ")})`,
-      );
+      fail(dir, `${where}: grants ${bad.join(", ")} not allowed (allowed: ${allowed.join(", ")})`);
     const file = path.join(dir, "stages", `${s.name}.md`);
     if (!fs.existsSync(file)) fail(dir, `${where}: no stages/${s.name}.md`);
     const raw = parseContract(file, fs.readFileSync(file, "utf8"));

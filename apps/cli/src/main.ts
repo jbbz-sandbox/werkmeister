@@ -76,6 +76,7 @@ import testHelp from "./commands/test.help.md";
 import tokensHelp from "./commands/tokens.help.md";
 import upHelp from "./commands/up.help.md";
 import waitLoadHelp from "./commands/wait-load.help.md";
+import workflowExportHelp from "./commands/workflow-export.help.md";
 import workspaceHelp from "./commands/workspace.help.md";
 import { BUILD_STAMP, staleBuildWarning } from "./lib/build_freshness.js";
 import { installDefaultInterrupt } from "./lib/interrupt.js";
@@ -134,6 +135,7 @@ const NOUNS: Record<string, { description: string; help?: string; alias?: string
       "Read, update or file an issue in this machine's issue tracker (see `werkmeister machine setup`)",
     help: issueHelp,
   },
+  workflow: { description: "ICM workflow templates: export a workspace's stages as one" },
   infra: { description: "Shared infrastructure: Caddy, k8s port-forwards and Telepresence" },
   machine: { description: "Machine-wide setup, config, migration and housekeeping" },
   budget: {
@@ -1006,6 +1008,21 @@ const SPECS: CommandSpec[] = [
         );
     },
     namespace: ([feature]) => ({ feature: feature ?? null }),
+  },
+  {
+    name: "workflow export",
+    group: "Agent context:",
+    help: workflowExportHelp,
+    load: () => import("./commands/workflow_export.js"),
+    configure: (cmd) => {
+      cmd
+        .description(
+          "Write an ICM workspace's stages as a workflow folder (workflow.yaml + stages/)",
+        )
+        .argument("<workspace>", "Workspace name, or its path (`.` or anything with a /)")
+        .requiredOption("--to <dir>", "A missing or empty folder to write the workflow into");
+    },
+    namespace: ([workspace], o) => ({ workspace, to: o.to }),
   },
   {
     name: "workspace serve",

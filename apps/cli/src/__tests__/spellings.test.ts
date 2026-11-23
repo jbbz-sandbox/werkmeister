@@ -137,6 +137,10 @@ const CASES: [string[], string[]][] = [
   ],
   [["list-workspaces"], ["workspace", "list"]],
   [
+    ["workflow", "export", "ws", "--to", "/d"],
+    ["workflow", "export", "ws", "--to", "/d"],
+  ],
+  [
     ["close-out", "n", "-y"],
     ["workspace", "close", "n", "-y"],
   ],
