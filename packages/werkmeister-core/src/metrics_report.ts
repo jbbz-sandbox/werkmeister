@@ -699,7 +699,9 @@ function recordBranchUsages(): UsageRow[] {
     return [];
   }
   const branches = refs.stdout.split("\n").filter(Boolean);
-  return [...branchFiles(repo, branches, "usage.json").values()].flatMap((t) => usageRow(t) ?? []);
+  return [...(branchFiles(repo, branches, "usage.json")?.values() ?? [])].flatMap(
+    (t) => usageRow(t) ?? [],
+  );
 }
 
 /** Every branch's `usage.json` with its author, as `metrics rebuild` last cached it (SW-1104). */

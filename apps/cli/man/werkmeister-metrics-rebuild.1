@@ -31,6 +31,6 @@ Before the \fBmetrics\fR report, for the team view: it brings in every teammate'
 .IP \(bu 3
 Before transcripts age out (Claude Code prunes them after about 30 days), to keep their ask/answer times
 .PP
-The command only appends to the event log; \fBusage\-branches.jsonl\fR is a cache it rewrites. Copy \fB~/.werkmeister/metrics\fR first if you want to undo a run.
+The command only appends to the event log; \fBusage\-branches.jsonl\fR is a cache it rewrites, or keeps as is with a warning when reading the branches' \fBusage.json\fR fails. Copy \fB~/.werkmeister/metrics\fR first if you want to undo a run.
 .SH SEE ALSO
 \fBwerkmeister\fR(1)
