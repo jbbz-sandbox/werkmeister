@@ -281,7 +281,7 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
     };
     for (const branch of branches) {
       // The slice first (SW-1104): its live times beat the ones rebuilt below, which keyOf then skips.
-      for (const line of (slices.get(branch) ?? "").split("\n")) {
+      for (const line of (slices?.get(branch) ?? "").split("\n")) {
         if (!line || lines.has(line)) continue; // close-out copies lines verbatim, so the owner's are here
         lines.add(line);
         const t = sliceEvent(line);
@@ -295,14 +295,16 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
         if (slug) repos.add(slug);
         log(t);
       }
-      const usage = parseUsage(usageFiles.get(branch));
+      const usage = parseUsage(usageFiles?.get(branch));
       if (usage) {
         const by = git(repo, "log", "-1", "--format=%ae", branch)?.trim() || undefined;
         usages.push(JSON.stringify({ ...usage, by }));
       }
     }
-    fs.mkdirSync(path.dirname(usageCachePath()), { recursive: true });
-    fs.writeFileSync(usageCachePath(), usages.map((u) => `${u}\n`).join(""));
+    if (usageFiles) {
+      fs.mkdirSync(path.dirname(usageCachePath()), { recursive: true });
+      fs.writeFileSync(usageCachePath(), usages.map((u) => `${u}\n`).join(""));
+    } else warn(`metrics rebuild: keeping the old ${usageCachePath()}`);
     for (const t of await ciCoverage(repos, runs)) log(t);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });

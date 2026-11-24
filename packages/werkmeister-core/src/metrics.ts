@@ -71,8 +71,15 @@ export function appendLogLine(line: string, at: string, event: string): boolean 
   }
 }
 
-/** *file* at the tip of each of *branches* in *repo*, by branch; a branch without it is left out. One git call; warns and returns what it has on failure. */
-export function branchFiles(repo: string, branches: string[], file: string): Map<string, string> {
+/**
+ * *file* at the tip of each of *branches* in *repo*, by branch; a branch without it is left out. One git call.
+ * Null when the read failed (warned), so a caller can tell it from "no branch has it" (SW-1127).
+ */
+export function branchFiles(
+  repo: string,
+  branches: string[],
+  file: string,
+): Map<string, string> | null {
   const out = new Map<string, string>();
   if (!branches.length) return out;
   const batch = spawnSync("git", ["-C", repo, "cat-file", "--batch"], {
@@ -80,8 +87,10 @@ export function branchFiles(repo: string, branches: string[], file: string): Map
     maxBuffer: 1 << 28,
   });
   if (batch.status !== 0) {
-    warn(`metrics: could not read ${file} from record branches: ${batch.stderr}`);
-    return out;
+    warn(
+      `metrics: could not read ${file} from record branches: ${batch.stderr?.toString().trim() || batch.error?.message}`,
+    );
+    return null;
   }
   // Raw bytes: each reply's size is in bytes. A reply is "<sha> blob <size>\n<body>\n", or "<rev> missing\n", in input order.
   const buf = batch.stdout;

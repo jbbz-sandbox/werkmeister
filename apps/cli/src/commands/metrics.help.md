@@ -18,4 +18,4 @@ For a run closed out before its slice was pushed, it cannot rebuild `queue.*`, `
 - Before the `metrics` report, for the team view: it brings in every teammate's closed-out runs
 - Before transcripts age out (Claude Code prunes them after about 30 days), to keep their ask/answer times
 
-The command only appends to the event log; `usage-branches.jsonl` is a cache it rewrites. Copy `~/.werkmeister/metrics` first if you want to undo a run.
+The command only appends to the event log; `usage-branches.jsonl` is a cache it rewrites, or keeps as is with a warning when reading the branches' `usage.json` fails. Copy `~/.werkmeister/metrics` first if you want to undo a run.
