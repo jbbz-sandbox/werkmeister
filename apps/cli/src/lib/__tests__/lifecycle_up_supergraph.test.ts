@@ -59,6 +59,8 @@ let supergraph: string;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-supergraph-"));
+  // up() takes a start lock and writes the scheduler queue under ~/.werkmeister; CI runs with the real HOME (SW-1131).
+  vi.stubEnv("HOME", path.join(root, "home"));
   fs.writeFileSync(path.join(root, COMPOSE_FILE), "services: {}\n");
   // Slot 3 matches allocateSlot, so `up` takes the unchanged-slot path.
   fs.writeFileSync(path.join(root, ".env"), "WERKMEISTER_SLOT=3\nSERVICES=\n");
@@ -68,6 +70,7 @@ beforeEach(() => {
   fs.writeFileSync(supergraph, "# stale\n");
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   fs.rmSync(root, { recursive: true, force: true });
 });
 
