@@ -579,6 +579,8 @@ async function failedSetupLines(feature: string): Promise<string> {
 
 const SERVICE_POLL_MS = 15_000;
 const SERVICE_WAIT_MS = 10 * 60_000;
+/** Half the shortest wait (SERVICE_WAIT_MS): a hold as long as the wait would release only on its last poll (SW-1115). */
+const EXEC_HOLD_MS = 5 * 60_000;
 /** One deadline for all of a `pr gate` / `pr open` run's service starts (SW-869): giving up drops the queue place, so wait longer in place rather than ask for a rerun. */
 export const GATE_CAPACITY_WAIT_MS = 30 * 60_000;
 
@@ -640,8 +642,10 @@ export async function admitServiceStart(
         !released.length &&
         readAutonomous(workspace) &&
         // SW-1080: not under a running `docker exec` (another gate's row, an agent's tests): it would
-        // get SIGTERM. Held for now; the next poll looks again.
-        !(await runningExecCommands(ownRunning.map((c) => c.name))).length
+        // get SIGTERM. Held for now; the next poll looks again. SW-1115: for EXEC_HOLD_MS at most, or an exec
+        // that never ends (watch mode, a shell) holds the set for the whole wait.
+        (waited >= EXEC_HOLD_MS ||
+          !(await runningExecCommands(ownRunning.map((c) => c.name))).length)
       ) {
         // Release instead of hold (SW-675): two gates each holding core while waiting for one more
         // service deadlock a full budget. Stopped, not removed: one request then brings back the set.
