@@ -8,8 +8,8 @@ if (!INPUT) {
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
-// Bundles the UI (HTML + TS + CSS) into a single self-contained dist/mcp-app.html
-// that the MCP server serves as a `ui://` resource.
+// Bundles one page (INPUT: browser.html or form.html) into a single self-contained
+// dist/<page>.html. emptyOutDir stays off so the two builds share dist/.
 export default defineConfig({
   plugins: [viteSingleFile()],
   // Guard, not a fix for a live problem: npm workspaces hoist @rjsf/* to the
