@@ -147,6 +147,17 @@ export interface MetricsReport {
     /** Seconds waited in it, by the week the wait ended. */
     seconds: WaitSeconds;
   }[];
+  /**
+   * Active agent minutes per UTC day from the range's start (snapped to midnight; for `all`, the
+   * first counted day) to today, oldest first, no gaps. A session counts wholly on its first
+   * turn's day; a closed run whose `usage.json` has no session list counts wholly on its close day.
+   */
+  agentByDay: {
+    /** The day, `YYYY-MM-DD`. */
+    day: string;
+    /** Active minutes of the sessions whose first turn fell on it. */
+    activeMinutes: number;
+  }[];
   /** Seconds waited over the whole range. */
   waits: WaitSeconds;
   /** Tickets whose last PR merged in the range, oldest merge first. */
@@ -234,6 +245,8 @@ export interface OpenWorkspace {
   /** The oldest open ask of a live session. */
   askAt: string | null;
   waitingSince: string | null;
+  /** Its sessions' first turns and active minutes, for `agentByDay`. */
+  sessions?: { firstTurn: string | null; activeMinutes: number | null }[];
 }
 export type UsageRow = Pick<
   UsageSnapshot,
@@ -247,7 +260,7 @@ export type UsageRow = Pick<
   | "wallClockMinutes"
   | "turns"
 > &
-  Partial<Pick<UsageSnapshot, "outcome" | "stages" | "byModel" | "werkmeister">> & {
+  Partial<Pick<UsageSnapshot, "outcome" | "stages" | "byModel" | "werkmeister" | "sessions">> & {
     /** The record branch's git author email, from the `metrics rebuild` cache (SW-1104). */
     by?: string;
   };
@@ -618,12 +631,49 @@ export function flowMetrics(
   );
   const passed = finished.filter((f) => f.exit === 0).length;
 
+  // shortcut: a session crossing midnight counts on its start day; split activeSpans per day
+  // if a day's bar needs to be exact.
+  const dayOf = (t: number) => new Date(t).toISOString().slice(0, 10);
+  type Worked = { firstTurn: string | null; activeMinutes: number | null };
+  const sessions = [
+    // A reused name's folder still holds the earlier run's transcripts, already in its usage.json.
+    ...input.open.flatMap((o) => {
+      const start = runStart.get(o.workspace);
+      return (o.sessions ?? []).filter(
+        (s) => !start || (s.firstTurn !== null && ms(s.firstTurn) >= ms(start)),
+      );
+    }),
+    // shortcut: a snapshot with no session list counts wholly on its close day; fine once
+    // pre-sessions snapshots age out of the ranges people look at.
+    ...input.usages.flatMap<Worked>(
+      (u) => u.sessions ?? [{ firstTurn: u.closedAt, activeMinutes: u.activeMinutes }],
+    ),
+  ];
+  const worked = sessions.flatMap((s) =>
+    s.firstTurn && s.activeMinutes && ms(s.firstTurn) <= to
+      ? [{ t: ms(s.firstTurn), m: s.activeMinutes }]
+      : [],
+  );
+  const firstDay =
+    from !== null
+      ? ms(dayOf(from))
+      : worked.length
+        ? ms(dayOf(Math.min(...worked.map((w) => w.t))))
+        : null;
+  const agentDays = new Map<string, number>();
+  if (firstDay !== null) for (let d = firstDay; d <= to; d += DAY_MS) agentDays.set(dayOf(d), 0);
+  for (const w of worked) {
+    const day = dayOf(w.t);
+    if (agentDays.has(day)) agentDays.set(day, (agentDays.get(day) ?? 0) + w.m);
+  }
+
   return {
     range,
     from: from === null ? null : new Date(from).toISOString(),
     to: nowIso,
     board,
     waitsByWeek: [...byWeek].map(([week, seconds]) => ({ week, seconds })),
+    agentByDay: [...agentDays].map(([day, activeMinutes]) => ({ day, activeMinutes })),
     waits,
     tickets,
     cycle: percentiles(tickets.map((t) => t.cycleMinutes)),
@@ -803,6 +853,7 @@ async function flowInput(now: Date): Promise<FlowInput> {
             prFileAt: prTimes.length ? new Date(Math.max(...prTimes)).toISOString() : null,
             askAt: oldestAsk(w.path, now.getTime()),
             waitingSince: liveWaiting(w.path)?.since ?? null,
+            sessions,
           },
         };
       },

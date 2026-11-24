@@ -1,5 +1,5 @@
 /**
- * The Metrics tab's chart primitives (SW-1098): data → marks in a `W`-wide viewBox, no DOM, so the
+ * The Metrics and Flow tabs' chart primitives (SW-1098, SW-783): data → marks in a `W`-wide viewBox, no DOM, so the
  * smoke test asserts them. Inline SVG; the repo has no chart dependency. Labels are HTML, outside.
  */
 
@@ -100,6 +100,39 @@ export function stackedBarView(bars: StackBar[], keys: string[], h: number): Sta
       }
       return { label: b.label, x: r1(i * slot + slot * 0.15), width: r1(slot * 0.7), segments };
     }),
+  };
+}
+
+export interface ScatterView {
+  yMax: number;
+  p50Y: number | null;
+  p90Y: number | null;
+  dots: { x: number; y: number; label: string; value: number; over: boolean }[];
+}
+
+/** Dots at (t, value) across `W × h`, x from *x0* to *x1* (ms); `over` when the value is past p90. */
+export function scatterView(
+  points: { t: number; value: number; label: string }[],
+  p50: number | null,
+  p90: number | null,
+  x0: number,
+  x1: number,
+  h: number,
+): ScatterView {
+  const yMax = Math.max(1, p90 ?? 0, ...points.map((p) => p.value));
+  const y = (v: number) => r1(h - (v / yMax) * h);
+  const x = (t: number) => (x1 > x0 ? r1(((t - x0) / (x1 - x0)) * W) : W / 2);
+  return {
+    yMax,
+    p50Y: p50 === null ? null : y(p50),
+    p90Y: p90 === null ? null : y(p90),
+    dots: points.map((p) => ({
+      x: x(p.t),
+      y: y(p.value),
+      label: p.label,
+      value: p.value,
+      over: p90 !== null && p.value > p90,
+    })),
   };
 }
 

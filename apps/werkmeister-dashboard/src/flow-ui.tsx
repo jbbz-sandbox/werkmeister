@@ -11,7 +11,21 @@ import { renderMarkdown } from "werkmeister-ui/lib/markdown";
 import { Css } from "werkmeister-ui/theme";
 import type { SessionUsage } from "werkmeister-ui/usage-widget";
 import type { HostBridge } from "werkmeister-ui/workspace-ui";
-import { COLUMN_LABEL, cardView, formatMinutes, RANGES, timelineView } from "./lib/flow-board.js";
+import { type StackBar, scatterView, stackedBarView, W } from "./lib/charts.js";
+import {
+  agentBars,
+  COLUMN_LABEL,
+  type CycleMode,
+  cardView,
+  cyclePoints,
+  flowTiles,
+  formatMinutes,
+  RANGES,
+  timelineView,
+  WAIT_KEYS,
+  WAIT_LABEL,
+  waitBars,
+} from "./lib/flow-board.js";
 
 /** A `workspace-usage` session row; the tool also returns these, the shared widget type omits them. */
 type Session = SessionUsage & { firstTurn: string | null; lastTurn: string | null; turns: number };
@@ -52,7 +66,222 @@ const CSS = `
   .flow .sess { text-align: left; font-weight: 400; display: flex; flex-wrap: wrap; gap: 4px 12px; }
   .flow .sess[aria-pressed="true"] { border-color: var(--sd-accent); }
   .flow .sess b { font-weight: 600; }
+  .flow .grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+  .flow .chart, .flow .tile { background: var(--sd-card); border: 1px solid var(--sd-line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+  .flow .chart h3 { font-size: 14px; margin: 0 0 6px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; }
+  .flow .chart .ranges { margin: 0; }
+  .flow .chart .ranges button { padding: 3px 10px; font-size: 12px; }
+  .flow .chart svg { display: block; width: 100%; overflow: visible; }
+  .flow .cap { color: var(--sd-muted); font-size: 12px; }
+  .flow .xlabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--sd-muted); margin-top: 2px; }
+  .flow .legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--sd-muted); margin-top: 6px; }
+  .flow .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .flow .usage { margin-top: 12px; }
+  .flow .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 6px 0 10px; }
+  .flow .tile .v { font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+  .flow .tile .k, .flow .tile .s { color: var(--sd-muted); font-size: 12px; }
+  @media (max-width: 720px) {
+    .flow .grid2 { grid-template-columns: 1fr; }
+    .flow .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
 `;
+
+const H = 140;
+const WAIT_FILL: Record<string, string> = {
+  person: "var(--sd-warn)",
+  capacity: "var(--sd-info)",
+  pr: "var(--sd-pr)",
+  gateRetry: "var(--sd-err)",
+  release: "var(--sd-ok)",
+  active: "var(--sd-accent)",
+};
+
+function XLabels({ cols }: { cols: string[] }) {
+  if (!cols.length) return null;
+  return (
+    <div className="xlabels">
+      <span>{cols[0]}</span>
+      {cols.length > 1 && <span>{cols[cols.length - 1]}</span>}
+    </div>
+  );
+}
+
+function Bars({
+  bars,
+  keys,
+  label,
+  empty,
+  minutesPer,
+  tip,
+}: {
+  bars: StackBar[];
+  keys: string[];
+  label: string;
+  empty: string;
+  /** Minutes in one unit of the bar values: 60 for hours, 1 for minutes. */
+  minutesPer: number;
+  /** Tooltip text for one segment; `minutes` is the segment's value in minutes. */
+  tip: (bar: string, key: string, minutes: number) => string;
+}) {
+  const v = stackedBarView(bars, keys, H);
+  if (!v.bars.some((b) => b.segments.length)) return <div className="empty">{empty}</div>;
+  return (
+    <>
+      <div className="xlabels">
+        <span>{formatMinutes(v.yMax * minutesPer)}</span>
+      </div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        height={H}
+        role="img"
+        aria-label={label}
+      >
+        {v.bars.flatMap((b) =>
+          b.segments.map((s) => (
+            <rect
+              key={`${b.label}${s.key}`}
+              x={b.x}
+              y={s.y}
+              width={b.width}
+              height={s.height}
+              fill={WAIT_FILL[s.key]}
+            >
+              <title>{tip(b.label, s.key, s.value * minutesPer)}</title>
+            </rect>
+          )),
+        )}
+      </svg>
+      <XLabels cols={bars.map((b) => b.label)} />
+    </>
+  );
+}
+
+function CycleScatter({ report }: { report: MetricsReport }) {
+  const [mode, setMode] = useState<CycleMode>("cycle");
+  const c = cyclePoints(report, mode);
+  const v = scatterView(c.points, c.p50, c.p90, c.x0, c.x1, H);
+  const rule = (y: number | null, stroke: string) =>
+    y !== null && (
+      <line
+        x1={0}
+        x2={W}
+        y1={y}
+        y2={y}
+        stroke={stroke}
+        strokeDasharray="6 4"
+        vectorEffect="non-scaling-stroke"
+      />
+    );
+  return (
+    <section className="chart">
+      <h3>
+        {mode === "cycle" ? "Cycle time per ticket" : "Lead time per ticket"}
+        <fieldset className="ranges" aria-label="Time measured">
+          {(["cycle", "lead"] as const).map((m) => (
+            <button key={m} type="button" aria-pressed={m === mode} onClick={() => setMode(m)}>
+              {m === "cycle" ? "Cycle" : "Lead"}
+            </button>
+          ))}
+        </fieldset>
+      </h3>
+      <div className="cap">
+        {mode === "cycle" ? "In Progress → merged" : "First turn → release"} · p50{" "}
+        {formatMinutes(c.p50)} · p90 {formatMinutes(c.p90)}
+      </div>
+      {v.dots.length === 0 ? (
+        <div className="empty">No merges in this range.</div>
+      ) : (
+        <>
+          <div className="xlabels">
+            <span>{formatMinutes(v.yMax)}</span>
+          </div>
+          <svg
+            viewBox={`0 0 ${W} ${H}`}
+            preserveAspectRatio="none"
+            height={H}
+            role="img"
+            aria-label={`${mode === "cycle" ? "Cycle" : "Lead"} time per ticket by merge date, with p50 and p90 lines`}
+          >
+            {rule(v.p50Y, "var(--sd-accent)")}
+            {rule(v.p90Y, "var(--sd-err)")}
+            {v.dots.map((d) => (
+              // A zero-length round-capped stroke stays a circle under preserveAspectRatio="none".
+              <path
+                key={d.label}
+                d={`M${d.x} ${d.y} h0`}
+                stroke={d.over ? "var(--sd-err)" : "var(--sd-accent)"}
+                strokeWidth={8}
+                strokeLinecap="round"
+                vectorEffect="non-scaling-stroke"
+              >
+                <title>{`${d.label}: ${formatMinutes(d.value)}${d.over ? ", past p90" : ""}`}</title>
+              </path>
+            ))}
+          </svg>
+          <div className="xlabels">
+            <span>{new Date(c.x0).toISOString().slice(0, 10)}</span>
+            <span>merged →</span>
+            <span>{new Date(c.x1).toISOString().slice(0, 10)}</span>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+function Charts({ report }: { report: MetricsReport }) {
+  return (
+    <>
+      <div className="grid2">
+        <section className="chart">
+          <h3>Wait time by cause, per week</h3>
+          <Bars
+            bars={waitBars(report)}
+            keys={WAIT_KEYS}
+            minutesPer={60}
+            label="Stacked weekly bars of wait time by cause"
+            empty="No waits in this range."
+            tip={(week, k, m) =>
+              `${week}: ${formatMinutes(m)} ${WAIT_LABEL[k as keyof typeof WAIT_LABEL]}`
+            }
+          />
+          <div className="legend">
+            {WAIT_KEYS.map((k) => (
+              <span key={k}>
+                <i style={{ background: WAIT_FILL[k] }} />
+                {WAIT_LABEL[k]}
+              </span>
+            ))}
+          </div>
+        </section>
+        <CycleScatter report={report} />
+      </div>
+      <section className="chart usage">
+        <h3>Cost and agent time</h3>
+        <div className="cap">Closed runs in range.</div>
+        <div className="tiles">
+          {flowTiles(report.usage).map((t) => (
+            <div key={t.label} className="tile">
+              <div className="v">{t.value}</div>
+              <div className="k">{t.label}</div>
+              {t.sub && <div className="s">{t.sub}</div>}
+            </div>
+          ))}
+        </div>
+        <div className="cap">Agent time per day</div>
+        <Bars
+          bars={agentBars(report)}
+          keys={["active"]}
+          minutesPer={1}
+          label="Active agent time per day"
+          empty="No agent activity in this range."
+          tip={(day, _k, m) => `${day}: ${formatMinutes(m)} active`}
+        />
+      </section>
+    </>
+  );
+}
 
 const ROWS = ["stage", "wait", "gate", "pr"] as const;
 const FILL: Record<(typeof ROWS)[number], string> = {
@@ -254,6 +483,7 @@ export function FlowTab({ bridge, active }: { bridge: HostBridge; active: boolea
           ))}
         </div>
       )}
+      {report && <Charts report={report} />}
       {selected && <Detail key={selected} bridge={bridge} workspace={selected} active={active} />}
     </div>
   );
