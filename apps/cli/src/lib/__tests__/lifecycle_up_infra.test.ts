@@ -119,8 +119,11 @@ beforeEach(() => {
   fs.writeFileSync(path.join(root, ".werkmeister", "workspace.yml"), "context_strategy: icm\n");
   spawned.length = 0;
   vi.clearAllMocks();
+  // with-temp-home's marker equals HOME in a one-file run and skips the shared Caddy (SW-1054); turbo drops it (SW-1138).
+  vi.stubEnv("WERKMEISTER_TEMP_HOME", "");
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -158,6 +161,15 @@ describe("lifecycle.up starts shared infra only when needed", () => {
     expect(ensurePortForwardsHealthy).toHaveBeenCalledTimes(1);
     expect(waitForForwards).toHaveBeenCalledTimes(1);
     expect(result.caddy).toBe("started");
+  });
+
+  it("under a with-temp-home HOME, a routed workspace leaves the shared Caddy alone (SW-1138)", async () => {
+    vi.stubEnv("WERKMEISTER_TEMP_HOME", process.env.HOME ?? "");
+    const result = await withReporter(quiet, () =>
+      up("demo", workspace(["werkmeister-dashboard"])),
+    );
+    expect(startCaddy).not.toHaveBeenCalled();
+    expect(result.caddy).toBe("skipped");
   });
 
   it("with nothing local, names the on-demand services and how to start one (SW-342)", async () => {
