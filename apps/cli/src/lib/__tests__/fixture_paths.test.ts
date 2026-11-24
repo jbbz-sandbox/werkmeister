@@ -9,7 +9,9 @@ import * as path from "node:path";
 
 import { afterAll, beforeAll, expect, it, vi } from "vitest";
 
-import { inside, parse, run } from "../../commands/fixture.js";
+import type { Fixture } from "werkmeister-core/fixture_workspace";
+
+import { append, inside, parse, run } from "../../commands/fixture.js";
 
 let tmp: string;
 beforeAll(() => {
@@ -394,5 +396,57 @@ it("a file flag outside the worktree names the path and the base it must be unde
   } finally {
     error.mockRestore();
     process.exitCode = 0;
+  }
+});
+
+it("--workflow refuses a stage file symlinked out of the worktree, and a dangling one (SW-1119)", async () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  const ws = path.join(tmp, "ws");
+  fs.writeFileSync(path.join(tmp, "out-stage.md"), "outside\n");
+  for (const [name, target] of [
+    ["linkfile", path.join(tmp, "out-stage.md")],
+    ["dangling", path.join(tmp, "no-such-stage.md")],
+  ] as const) {
+    const wf = path.join(ws, "flows", name);
+    fs.mkdirSync(path.join(wf, "stages"), { recursive: true });
+    fs.writeFileSync(path.join(wf, "workflow.yaml"), "version: 1\n");
+    fs.symlinkSync(target, path.join(wf, "stages", "x.md"));
+  }
+  try {
+    for (const name of ["linkfile", "dangling"]) {
+      const argv = ["--workflow", `flows/${name}`, "status"];
+      expect(parse(argv, ws), name).toEqual({ bad: "--workflow" });
+      error.mockClear();
+      await run(argv, ws);
+      expect(process.exitCode, name).toBe(2);
+      expect(error.mock.calls[0]?.[0]).toMatch(/--workflow: a folder under the worktree/);
+    }
+  } finally {
+    error.mockRestore();
+    process.exitCode = 0;
+  }
+});
+
+it("--then-append refuses a fixture .md or workflow stage symlinked out of the fixture (SW-1119)", () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  const fx = path.join(tmp, "append-fx");
+  const workspace = path.join(fx, "ws");
+  const workflowDir = path.join(fx, "wf");
+  fs.mkdirSync(workspace, { recursive: true });
+  fs.mkdirSync(path.join(workflowDir, "stages"), { recursive: true });
+  const outside = path.join(tmp, "append-target.md");
+  fs.writeFileSync(outside, "kept\n");
+  fs.symlinkSync(outside, path.join(workspace, "notes.md"));
+  fs.symlinkSync(outside, path.join(workflowDir, "stages", "x.md"));
+  try {
+    for (const target of ["notes.md", "workflow:stages/x.md"]) {
+      expect(
+        append({ append: target, text: "appended" }, { workspace, workflowDir } as Fixture),
+        target,
+      ).toBe(2);
+    }
+    expect(fs.readFileSync(outside, "utf8")).toBe("kept\n");
+  } finally {
+    error.mockRestore();
   }
 });

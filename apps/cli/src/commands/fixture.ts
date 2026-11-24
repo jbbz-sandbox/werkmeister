@@ -209,7 +209,8 @@ export function parse(argv: string[], base = cliWorktree()) {
       for (const n of names) {
         // Each file again: a symlinked stage file could point out of the worktree.
         const f = inside(base, path.join(dir, "stages", n));
-        if (!f) return { bad: a };
+        // A dangling link is not realpath'd by inside(), so it passes and the read would throw (SW-1119).
+        if (!f || !fs.existsSync(f)) return { bad: a };
         files[`stages/${n}`] = fs.readFileSync(f, "utf8");
       }
       opts.workflow = { type: path.basename(dir), files };
@@ -269,7 +270,7 @@ const runStep = (args: string[], cwd: string, env: NodeJS.ProcessEnv) =>
   });
 
 /** A `--then-append` step: exit 2 when the target is missing or resolves out of the fixture. */
-function append(step: { append: string; text: string }, fx: Fixture): number {
+export function append(step: { append: string; text: string }, fx: Fixture): number {
   const inWorkflow = step.append.startsWith("workflow:");
   const rel = inWorkflow ? step.append.slice("workflow:".length) : step.append;
   const file = inside(inWorkflow ? (fx.workflowDir ?? null) : fx.workspace, rel);
