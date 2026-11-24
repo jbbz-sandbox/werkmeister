@@ -140,7 +140,7 @@ UI-only tools render an interface in an MCP App client and return little to a sc
 | `resources` | CPU and memory per workspace | none |
 | `budget` | Scheduler budget, running and waiting | none |
 | `intercepts` | Telepresence intercept state | none |
-| `scheduler` | Slot leases and the waiting queue | `op: "allocate" \| "lease" \| "release" \| "admit" \| "grant" \| "grant-later" \| "queue"`, `feature?: string`, `workspace?: string \| null`, `preferredSlot?: integer \| null`, `byPerson?: boolean`, `starting?: object` |
+| `scheduler` | Slot leases and the waiting queue | `op: "allocate" \| "lease" \| "release" \| "admit" \| "grant" \| "grant-later" \| "queue"`, `feature?: string`, `workspace?: string \| null`, `preferredSlot?: integer \| null`, `byPerson?: boolean`, `starting?: object`, `fromQueue?: boolean` |
 
 <!-- /generated -->
 

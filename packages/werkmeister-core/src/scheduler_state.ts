@@ -657,6 +657,8 @@ export function requestAdmission(
   running: Lease[],
   budget: Budget,
   starting?: Starting,
+  /** The grant pass: throw `NOT_QUEUED` rather than admit a feature that left the queue (SW-1110). */
+  fromQueue?: boolean,
 ): Promise<Decision> {
   const cost = featureCost(workspace, starting?.services);
   // Starts nothing (a plain `up` of an all-on-demand workspace): no room to wait for, and its
@@ -667,6 +669,14 @@ export function requestAdmission(
     async () => {
       const stored = readQueue();
       const queue = withoutDeadWaiters(stored);
+      if (fromQueue && !queue.includes(feature)) {
+        // The prune is written below on every other path; a dead waiter here would be re-granted each pass.
+        if (queue.length !== stored.length) writeQueue(queue);
+        throw new SandboxError(
+          `'${feature}' left the waiting queue before its grant`,
+          "NOT_QUEUED",
+        );
+      }
       const held = [...running, ...reservedLeases(running, feature)];
       const own = starting ? undefined : running.find((l) => l.feature === feature);
       // What runs may be an on-demand service `up` doesn't start: price the `up` services not running (SW-907).

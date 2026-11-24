@@ -102,6 +102,7 @@ import { reconcileGraduating } from "./graduate.js";
 import { writeAgentStateHooks } from "./harness/claude/hooks_gen.js";
 import { hooksAvailable } from "./harness/layout.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
+import { sandboxLock } from "./locks.js";
 import { recordEvent } from "./metrics.js";
 import { latestHandoff, type Note } from "./notes.js";
 import { type RunResult, run } from "./proc.js";
@@ -208,8 +209,9 @@ export interface UpResult {
  * absent, `SLOT_ALLOC` when no slot can be allocated, `FORWARDS_NEVER_READY`
  * when the forwards are restarted and their tunnels never reconnect, `HOST_LOAD`
  * when host load stays over budget before a setup service starts (SW-630), and
- * `COMPOSE_UP_FAILED` when `docker compose up` reports failure, and
- * `INSIDE_OWN_CONTAINER` before any of it when run inside *feature*'s own container.
+ * `COMPOSE_UP_FAILED` when `docker compose up` reports failure, `NOT_QUEUED` when *fromQueue* is set
+ * and *feature* has left the waiting queue, and `INSIDE_OWN_CONTAINER` before any of it when run
+ * inside *feature*'s own container.
  *
  * With no room in the budget it queues the feature instead and returns with
  * `waiting` set; *byPerson* (default: the workspace is not autonomous and no agent session runs it) may stop
@@ -219,7 +221,16 @@ export interface UpResult {
 export async function up(
   feature: string,
   workspace: string,
-  { signal, byPerson }: { signal?: AbortSignal; byPerson?: boolean } = {},
+  {
+    signal,
+    byPerson,
+    fromQueue,
+  }: {
+    signal?: AbortSignal;
+    byPerson?: boolean;
+    /** The grant pass: start only while still queued, else throw `NOT_QUEUED` (SW-1110). */
+    fromQueue?: boolean;
+  } = {},
 ): Promise<UpResult> {
   refuseInsideOwnContainer(feature, "up");
   refusePaused(feature, workspace);
@@ -256,7 +267,13 @@ export async function up(
   if (localServices.length) {
     // Before admission: a HOST_LOAD throw must not follow a preemption or a dequeue.
     await waitForSetupLoad(workspace, undefined);
-    const waiting = await admitOrQueue(feature, workspace, byPerson ?? startsAsPerson(workspace));
+    const waiting = await admitOrQueue(
+      feature,
+      workspace,
+      byPerson ?? startsAsPerson(workspace),
+      undefined,
+      fromQueue,
+    );
     if (waiting !== null) {
       // Unqueued: a re-up of a running feature, which keeps running and is rerun, not granted (SW-909).
       const queued = readWaiting(workspace) !== null;
@@ -331,7 +348,9 @@ export async function up(
     requireSharedNetwork();
     info("Starting containers...");
     if (
-      !(await withStartRecord(workspace, "up", () => composeUpAsync(feature, signal))) &&
+      !(await withStartRecord(workspace, "up", () =>
+        oneStartAt(feature, () => composeUpAsync(feature, signal)),
+      )) &&
       (signal?.aborted || !(await startLeftCreated(feature, workspace)))
     ) {
       throw new SandboxError(
@@ -510,7 +529,9 @@ export async function startService(
   try {
     requireSharedNetwork();
     started = await withStartRecord(workspace, "gate", () =>
-      composeUpServiceAsync(feature, service, path.join(workspace, composeName), noDeps),
+      oneStartAt(feature, () =>
+        composeUpServiceAsync(feature, service, path.join(workspace, composeName), noDeps),
+      ),
     );
   } finally {
     // Its admit reservation ends with the start, as `up`'s dequeue ends its (SW-907 review).
@@ -527,6 +548,11 @@ export async function startService(
       "COMPOSE_UP_FAILED",
     );
   }
+}
+
+/** One `docker compose up` of *feature* at a time: two on one project SIGTERM each other's containers (SW-1110). */
+function oneStartAt<T>(feature: string, start: () => Promise<T>): Promise<T> {
+  return sandboxLock(`start-${feature}`, start);
 }
 
 /**
@@ -1322,11 +1348,12 @@ export function admitOrQueue(
   workspace: string,
   byPerson: boolean,
   starting?: Starting,
+  fromQueue?: boolean,
 ): Promise<number | null> {
   return schedulerOp(
     "admit",
-    { feature, workspace, byPerson, starting },
-    () => admitOrQueueHere(feature, workspace, byPerson, starting),
+    { feature, workspace, byPerson, starting, fromQueue },
+    () => admitOrQueueHere(feature, workspace, byPerson, starting, fromQueue),
     // Preemption stops the victims' containers first.
     15 * 60_000,
   );
@@ -1337,12 +1364,21 @@ async function admitOrQueueHere(
   workspace: string,
   byPerson: boolean,
   starting?: Starting,
+  fromQueue?: boolean,
 ): Promise<number | null> {
   const running = runningLeases();
   // Docker unreadable: let compose up report it rather than queue on a guess.
   if (running === null) return null;
   const budget = await loadBudget();
-  const decision = await requestAdmission(feature, workspace, byPerson, running, budget, starting);
+  const decision = await requestAdmission(
+    feature,
+    workspace,
+    byPerson,
+    running,
+    budget,
+    starting,
+    fromQueue,
+  );
   if (decision.kind === "never-fits") {
     const { cost } = decision;
     const gib = (b: number) => `${(b / 2 ** 30).toFixed(1)} GiB`;
@@ -1446,8 +1482,10 @@ async function grantWaitersNow(): Promise<string[]> {
       if (waiting?.services) continue;
       let r: UpResult;
       try {
-        r = await up(feature, workspace, { byPerson: false });
+        r = await up(feature, workspace, { byPerson: false, fromQueue: true });
       } catch (e) {
+        // A direct start (a gate's, a person's `up`) took its place after this pass read the queue (SW-1110).
+        if (e instanceof SandboxError && e.code === "NOT_QUEUED") continue;
         // One waiter's failed re-up (HOST_LOAD, NO_COMPOSE, ...) must not end the pass for the rest (SW-737).
         const message = `Could not start '${feature}' from the waiting queue: ${(e as Error).message}`;
         warn(message);
