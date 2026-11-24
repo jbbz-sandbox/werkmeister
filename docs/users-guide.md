@@ -15,7 +15,7 @@ This guide covers the day-to-day workflows. New here? Start with the [Quick Star
 | [CLI reference](cli-reference.md) | every command and option |
 | [Configuration](configuration.md) | the registry, ports, config and generated files, environment variables, paths |
 | [Setting up a repo](repo-setup.md) | adding a repo, step by step |
-| [Registry fragments](registry-fragments.md) | a fragment's fields, `test:` and `validate:` |
+| [Registry fragments](registry-fragments.md) | a fragment's fields, `test:`, `validate:` and `stages:` |
 | [Troubleshooting](troubleshooting-advanced.md) | when something is broken |
 | [Architecture](werkmeister-architecture.md) | how the pieces fit, with diagrams |
 | [The foreman's workspace](foreman.md) | the agent that runs the folder of workspaces, and the courier pattern behind `/check-in` |
@@ -91,6 +91,25 @@ werkmeister feature up my-feature
 # Verify
 werkmeister feature services my-feature
 ```
+
+### Giving agents app-specific stage steps
+
+The ICM stages are the same for every app. For the steps your app needs that they can't know, add `stages:` to the service in its repo's `.werkmeister/services.yaml`. Every ICM workspace that covers the service then shows that text in the matching stage contract. For a GraphQL subgraph behind a router:
+
+```yaml
+services:
+  products:
+    path: services/products
+    type: api
+    validate: "Query the changed field through the local router and check the response."
+    stages:
+      research: "List the entities and @key fields this subgraph owns or extends; note which other subgraphs resolve them."
+      spec: "State the schema diff and whether it is additive."
+      implement: "Run supergraph composition (rover supergraph compose) and fix composition errors before the tests."
+      exercise: "Query the changed field through the local router, not the subgraph directly."
+```
+
+A shipped archetype can carry the same `stages:` as a default for its services, and a service's own text wins, per role. Roles, the 600-character limit and how the text is shown: [Registry fragments § Stage text](registry-fragments.md#stage-text). The next `werkmeister workspace init` after `werkmeister registry sync` picks up a change.
 
 ### Running Multiple Features Simultaneously
 

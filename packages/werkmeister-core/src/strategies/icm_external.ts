@@ -12,7 +12,8 @@ import * as path from "node:path";
 
 import * as YAML from "yaml";
 
-import { getReposRoot, loadReposConfig, sandboxHome } from "../config.js";
+import { STAGE_ROLES } from "../archetypes.js";
+import { getReposRoot, loadReposConfig, type StageRole, sandboxHome } from "../config.js";
 import { DOT_DIR } from "../dot_dir.js";
 import { SandboxError } from "../errors.js";
 import { repoDirs } from "../standards.js";
@@ -193,6 +194,12 @@ export function loadWorkflow(dir: string, allowed = grantsFor(dir)): Stage[] {
     for (const k of ["enter", "gate"])
       if (s[k] !== undefined && typeof s[k] !== "string")
         fail(dir, `${where}: \`${k}\` must be text`);
+    const roles: unknown[] = s.role === undefined ? [] : Array.isArray(s.role) ? s.role : [s.role];
+    if (
+      !roles.every((r) => STAGE_ROLES.includes(r as StageRole)) ||
+      (Array.isArray(s.role) && !roles.length)
+    )
+      fail(dir, `${where}: role must be one of ${STAGE_ROLES.join(", ")} (or a list of them)`);
     const tier = s.standards ?? "none";
     if (
       !(
@@ -209,6 +216,7 @@ export function loadWorkflow(dir: string, allowed = grantsFor(dir)): Stage[] {
       check: s.check,
       ...(s.enter ? { enter: s.enter } : {}),
       ...(s.gate ? { gate: s.gate } : {}),
+      ...(roles.length ? { roles: roles as StageRole[] } : {}),
       standards: tier,
       ...(grants.length ? { grants } : {}),
       contract: (v) => {
