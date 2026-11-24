@@ -35,7 +35,7 @@ docker logs --tail 30 <container-name> 2>&1
 docker inspect -f 'exit={{.State.ExitCode}} oom={{.State.OOMKilled}} finished={{.State.FinishedAt}}' <container-name>
 ```
 
-Don't use `werkmeister feature logs` here: it follows the log and never exits.
+`werkmeister feature logs <feature> [service]` works here too: without a terminal it prints the last 100 lines and returns.
 A feature with `containers_total: 0` has no containers to read: its workspace has no
 `compose.yml` yet (`werkmeister workspace init`, then `werkmeister feature up`, in that workspace).
 
