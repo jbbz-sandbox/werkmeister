@@ -2,7 +2,7 @@
  * werkmeister feature logs <feature> [service]
  *
  * Tail a feature's container logs, optionally filtered to a
- * specific service. Streams output until interrupted with Ctrl+C.
+ * specific service. Onto a terminal it streams until Ctrl+C; otherwise it prints the recent lines and returns.
  *
  * The tail — and the "is it even running" guard, so every consumer gets told
  * why a tail produced nothing — is `werkmeister-core/compose`. What is left here is
@@ -27,5 +27,9 @@ export async function run(args: Record<string, unknown>): Promise<void> {
         ` ===${Colors.RESET}\n`,
     );
   }
-  await composeLogs(feature, service, { signal: interruptSignal() });
+  // Start failures tell agents to run this; with no TTY a follow never returns (SW-1111).
+  await composeLogs(feature, service, {
+    follow: process.stdout.isTTY === true,
+    signal: interruptSignal(),
+  });
 }

@@ -5,7 +5,7 @@ werkmeister\-feature\-logs \- Tail a feature's container logs
 \fBwerkmeister feature logs\fR <feature> [service]
 .SH DESCRIPTION
 .PP
-Streams logs in real\-time (equivalent to \fBdocker compose logs \-f \-\-tail 100\fR). Press \fBCtrl+C\fR to stop.
+On a terminal, streams logs in real time (equivalent to \fBdocker compose logs \-f \-\-tail 100\fR); press \fBCtrl+C\fR to stop. Without one (a pipe, a script, an agent's tool call), it prints the last 100 lines of each container and returns.
 .PP
 .nf
 .RS 4
