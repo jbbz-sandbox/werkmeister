@@ -3,12 +3,13 @@
  * surface for MCP hosts that don't render `ui://` resources (Claude Code CLI,
  * the VS Code extension).
  *
- * The dashboard is a six-tab shell:
+ * The dashboard is a seven-tab shell:
  *   • Workspaces          — the shared list UI (werkmeister-ui/workspace-ui)
  *   • New workspace       — the create form (werkmeister-ui/create-form)
  *   • Open Pull Requests  — the PR review tab (prs-ui.tsx)
  *   • Health              — infra/k8s/kube status (health-ui.tsx)
  *   • Flow                — the flow board and workspace timelines (flow-ui.tsx)
+ *   • Metrics             — trends over time: range and version filter, charts (metrics-ui.tsx)
  *   • Links               — werkmeister feature-selector links (werkmeister-links-ui.tsx)
  * All drive their tool calls through the same bridge (same-origin `POST
  * /api/tool`, dispatched into the real MCP tools by lib/browser-ui.ts).
@@ -24,7 +25,8 @@ import { appRoot, Css } from "werkmeister-ui/theme";
 import { type HostBridge, WorkspaceList } from "werkmeister-ui/workspace-ui";
 import { FlowTab } from "./flow-ui.js";
 import { HealthTab } from "./health-ui.js";
-import { isTab, TABS, type Tab } from "./lib/flow-board.js";
+import { isTab, TABS, type Tab } from "./lib/tabs.js";
+import { MetricsTab } from "./metrics-ui.js";
 import { PrsTab } from "./prs-ui.js";
 import { LinksTab } from "./werkmeister-links-ui.js";
 
@@ -91,6 +93,7 @@ const TAB_TITLES: Record<Tab, string> = {
   prs: "Open Pull Requests · Werkmeister Workspaces",
   health: "Health · Werkmeister Workspaces",
   flow: "Flow · Werkmeister Workspaces",
+  metrics: "Metrics · Werkmeister Workspaces",
   links: "Links · Werkmeister Workspaces",
 };
 
@@ -172,6 +175,7 @@ function Dashboard() {
       {pane("prs", <PrsTab bridge={bridge} />)}
       {pane("health", <HealthTab bridge={bridge} active={tab === "health"} />)}
       {pane("flow", <FlowTab bridge={bridge} active={tab === "flow"} />)}
+      {pane("metrics", <MetricsTab bridge={bridge} />)}
       {pane("links", <LinksTab />)}
     </>
   );
