@@ -12,7 +12,20 @@ import * as YAML from "yaml";
 
 import { sandboxHome } from "./config.js";
 import { dotDir } from "./dot_dir.js";
+import { currentLogger, machineLogPath, scrub, slowCallKind, workspaceLogPath } from "./logger.js";
 import { warn } from "./reporter.js";
+
+export type TimedEvent =
+  | "workspace.create"
+  | "workspace.init"
+  | "workspace.up"
+  | "workspace.down"
+  | "workspace.pause"
+  | "workspace.resume"
+  | "workspace.close"
+  | "workspace.abandon";
+export type SlowCall = "docker build" | "install" | "git fetch" | "tracker";
+type Result = "ok" | "error";
 
 /** *run_id*: the writing run's id from its workspace.yml ({@link runTag}), so same-named runs' lines stay apart (SW-1140). */
 export type MetricsEvent = EventBody & { run_id?: string };
@@ -32,6 +45,17 @@ type EventBody =
   | { event: "issue.start"; workspace: string; ticket: string }
   | { event: "ask"; workspace: string; session: string; kind: "question" | "plan" | "wrap-up" }
   | { event: "answer"; workspace: string; session: string; waited_s: number }
+  /** SW-404: how long a workspace verb, a gate row or a slow external call took. */
+  | { event: TimedEvent; workspace: string; duration_ms: number; result: Result }
+  | {
+      event: "gate.row";
+      workspace: string;
+      run: string;
+      row: string;
+      duration_ms: number;
+      result: Result;
+    }
+  | { event: "call.slow"; workspace: string; cmd: SlowCall; duration_ms: number; result: Result }
   /** One package's unit-test coverage for one run (SW-405); a CI row has no workspace. *version* is `<package version>+<short sha>`. */
   | {
       event: "coverage";
@@ -69,9 +93,175 @@ export function runTag(ws: string): { run_id?: string } {
   return typeof id === "string" && id ? { run_id: id } : {};
 }
 
+/** The log bindings that name the workspace at *ws* (SW-404): folder name, run id, ticket and current ICM stage. Never throws. */
+export function workspaceBindings(ws: string): {
+  workspace: string;
+  run_id?: string;
+  ticket?: string;
+  stage?: string;
+} {
+  let yml: Record<string, unknown> = {};
+  try {
+    yml = YAML.parse(fs.readFileSync(path.join(dotDir(ws), "workspace.yml"), "utf8")) ?? {};
+  } catch {}
+  // issue_tracker's issueIdOf, inlined: importing it cycles back here through the Jira tracker.
+  const ticket = [yml["issue_id"], yml["jira_id"], yml["github_issue"]].find(
+    (v) => typeof v === "string" && v,
+  ) as string | undefined;
+  // sandbox.ts icmStage's rule, sync: the first stage whose output/ holds no visible file.
+  let stage: string | undefined;
+  try {
+    for (const s of fs
+      .readdirSync(path.join(ws, "stages"))
+      .filter((n) => /^\d+_/.test(n))
+      .sort()) {
+      let files: string[] = [];
+      try {
+        files = fs.readdirSync(path.join(ws, "stages", s, "output"));
+      } catch {}
+      if (!files.some((f) => !f.startsWith("."))) {
+        stage = s;
+        break;
+      }
+    }
+  } catch {}
+  return { workspace: path.basename(ws), ...runTag(ws), ticket, stage };
+}
+
 /** Appends *e* to this month's log; false when it could not. A failure warns and never throws: a lost metric must not fail its caller. */
 export function recordEvent(e: MetricsEvent, at = new Date().toISOString()): boolean {
   return appendLogLine(JSON.stringify({ v: 1, at, ...e }), at, e.event);
+}
+
+/** Records *event* for the workspace at *ws*, timed from *startMs* (SW-404). */
+export function recordTimed(
+  event: TimedEvent,
+  ws: string,
+  startMs: number,
+  result: Result,
+  tag = runTag(ws),
+): void {
+  recordEvent({
+    event,
+    workspace: path.basename(ws),
+    duration_ms: Date.now() - startMs,
+    result,
+    ...tag,
+  });
+}
+
+/** Runs *fn* and records *event* with its wall time and whether it threw. */
+export async function timed<T>(event: TimedEvent, ws: string, fn: () => Promise<T>): Promise<T> {
+  // Read first: close-out removes the folder, and its workspace.yml with the run id.
+  const tag = runTag(ws);
+  const start = Date.now();
+  let result: Result = "error";
+  try {
+    const out = await fn();
+    result = "ok";
+    return out;
+  } finally {
+    recordTimed(event, ws, start, result, tag);
+  }
+}
+
+export const SLOW_CALL_MS = 5000;
+
+/** A tracked call of *kind* that took *duration_ms*: an info line, and `call.slow` when a workspace is bound (the schema requires one). */
+export function noteSlow(kind: SlowCall, duration_ms: number, result: Result): void {
+  if (duration_ms < SLOW_CALL_MS) return;
+  const log = currentLogger();
+  log.info({ cmd: kind, duration_ms, result }, "slow call");
+  const { workspace, run_id } = log.bindings();
+  if (typeof workspace === "string")
+    recordEvent({
+      event: "call.slow",
+      workspace,
+      cmd: kind,
+      duration_ms,
+      result,
+      ...(run_id ? { run_id } : {}),
+    });
+}
+
+/**
+ * After an external call ends: a non-zero exit is a `warn` with its exit code and stderr tail (not `error`: many
+ * callers probe and expect failures, and the default level must not fill with them), and a slow tracked call is noted.
+ */
+export function noteCall(
+  bin: string,
+  args: readonly string[],
+  cwd: string | undefined,
+  status: number | null,
+  stderr: string,
+  startMs: number,
+): void {
+  if (status !== 0)
+    currentLogger().warn(
+      {
+        bin: path.basename(bin),
+        args: args.slice(0, 3),
+        cwd,
+        code: status,
+        stderrTail: stderr.slice(-2048),
+      },
+      "external call failed",
+    );
+  const kind = slowCallKind(bin, args);
+  if (kind) noteSlow(kind, Date.now() - startMs, status === 0 ? "ok" : "error");
+}
+
+/** Lines of the machine log (the capped `.1` file first) that belong to the run at *ws*: its `run_id`, or its name on untagged lines. */
+export function workspaceLogSlice(ws: string): string[] {
+  const workspace = path.basename(ws);
+  const { run_id } = runTag(ws);
+  const current = machineLogPath();
+  const out: string[] = [];
+  for (const file of [current.replace(/\.jsonl$/, ".1.jsonl"), current]) {
+    let text = "";
+    try {
+      text = fs.readFileSync(file, "utf8");
+    } catch {
+      continue;
+    }
+    for (const line of text.split("\n")) {
+      let e: Record<string, unknown> | null = null;
+      try {
+        e = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (e?.["run_id"] !== undefined ? e["run_id"] === run_id : e?.["workspace"] === workspace)
+        out.push(line);
+    }
+  }
+  return out;
+}
+
+/**
+ * Close-out (SW-404): `<ws>/logs/werkmeister.jsonl`, the workspace's own log plus this run's machine-log lines,
+ * by time, scrubbed again since the record branch is pushed. False when there was nothing to write.
+ */
+export function writeLogRecord(ws: string): boolean {
+  let own: string[] = [];
+  try {
+    own = fs.readFileSync(workspaceLogPath(ws), "utf8").split("\n");
+  } catch {}
+  const timeOf = (l: string) => {
+    try {
+      return String(JSON.parse(l).time ?? "");
+    } catch {
+      return "";
+    }
+  };
+  const lines = [...own.filter(Boolean), ...workspaceLogSlice(ws)].sort((a, b) =>
+    timeOf(a).localeCompare(timeOf(b)),
+  );
+  if (!lines.length) return false;
+  const file = path.join(ws, "logs", "werkmeister.jsonl");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${lines.map(scrub).join("\n")}\n`);
+  return true;
 }
 
 /** Appends one already-serialised *line* of *event* to the log of *at*'s month; as {@link recordEvent}, warns and returns false on failure. */

@@ -7032,7 +7032,8 @@ test("openPrs: no createdAt from gh writes no pr.open, and the PR still opens", 
       const events = fs
         .readdirSync(dir)
         .flatMap((f) => fs.readFileSync(path.join(dir, f), "utf8").trimEnd().split("\n"))
-        .map((l) => JSON.parse(l).event);
+        .map((l) => JSON.parse(l).event)
+        .filter((e) => e !== "gate.row"); // SW-404: one per row, not what this tests
       assert.deepEqual(events, ["gate.start", "gate.end"]);
     });
   } finally {

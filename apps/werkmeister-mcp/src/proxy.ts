@@ -38,6 +38,7 @@ import {
   LAUNCHER_HEADER,
 } from "werkmeister-core/daemon_client";
 import { claudeLauncher } from "werkmeister-core/launcher";
+import { createLogger } from "werkmeister-core/logger";
 
 /** apps/werkmeister-mcp/src/lib/feature.ts FEATURE_HEADER; not imported, it pulls in all of compose. */
 const FEATURE_HEADER = "x-werkmeister-feature";
@@ -47,6 +48,8 @@ const RETRY_MS = Number(process.env.WERKMEISTER_PROXY_RETRY_MS) || 30_000;
 const POLL_MS = Number(process.env.WERKMEISTER_PROXY_POLL_MS) || 15_000;
 const CALL_TIMEOUT_MS = 15 * 60_000; // as the daemon's /api/tool: `up` and close-out run long
 
+// SW-404: the proxy's crash goes to the machine log too; its notices stay on stderr, which Claude Code keeps.
+const proxyLog = createLogger({ app: "mcp", pid: process.pid });
 const log = (msg: string) => console.error(`[werkmeister-mcp-proxy] ${msg}`);
 
 /** The dir name of the workspace holding *dir*, which the daemon resolves first. */
@@ -210,6 +213,7 @@ const isEntry =
   fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
 if (isEntry) {
   runProxy().catch((e) => {
+    proxyLog.error({ err: e }, "proxy crashed");
     console.error(e);
     process.exit(1);
   });

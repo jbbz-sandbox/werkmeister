@@ -145,6 +145,7 @@ import {
   stop,
   up,
 } from "./lifecycle.js";
+import { recordTimed } from "./metrics.js";
 import { listNotes } from "./notes.js";
 import {
   abandonWorkspace,
@@ -1466,6 +1467,7 @@ export async function createWorkspace(
   };
 
   const reporter = collectingReporter(opts.onData);
+  const start = Date.now();
   let workspacePath: string | null;
   try {
     workspacePath = opts.live ? await run() : await withReporter(reporter, run);
@@ -1477,6 +1479,8 @@ export async function createWorkspace(
     const detail = stripAnsi(reporter.text().trim()) || (e as Error).message;
     throw new WorkspaceError(`${command} failed:\n${detail}`);
   }
+  // SW-404: a failed create has no folder to name the event after, so only a success is timed.
+  if (workspacePath) recordTimed("workspace.create", workspacePath, start, "ok");
   const output = stripAnsi(reporter.text().trim());
 
   let opened = false;
@@ -3238,6 +3242,7 @@ export async function removeWorkspace(
     "context.md",
     "context.json",
     "metrics.jsonl",
+    "logs/werkmeister.jsonl",
     "coverage.json",
   ])
     if (existsSync(path.join(target, record)))

@@ -6,13 +6,14 @@
  * reintroduced once per migration step, so it is guarded here rather than
  * rediscovered.
  *
- * The five exceptions are deliberate, not yet-to-be-converted. `reporter.ts`
+ * The six exceptions are deliberate, not yet-to-be-converted. `reporter.ts`
  * is the sink itself. `gate.ts`, `pr_guard.ts` and `agent_state.ts` (its pause
  * gate, SW-70) write their hook's JSON, which is the hook contract rather than
  * a log line, and only from `main()`, which no server calls. `cache.ts` writes to stderr from
  * a module the CLI never reaches — converting it would route its diagnostics
  * to a reporter no consumer of `sandbox.ts` installs, silencing them
- * (.sandbox/notes/033).
+ * (.sandbox/notes/033). `logger.ts` (SW-404) prints one stderr line, once, when it cannot write a log
+ * file: the log is the thing that failed, and a reporter line would be teed back into it.
  */
 
 import * as fs from "node:fs";
@@ -24,7 +25,14 @@ const CORE = path.resolve(
   fileURLToPath(import.meta.url),
   "../../../../../../packages/werkmeister-core/src",
 );
-const ALLOWED = new Set(["reporter.ts", "cache.ts", "gate.ts", "pr_guard.ts", "agent_state.ts"]);
+const ALLOWED = new Set([
+  "reporter.ts",
+  "cache.ts",
+  "gate.ts",
+  "pr_guard.ts",
+  "agent_state.ts",
+  "logger.ts",
+]);
 
 describe("werkmeister-core console writes", () => {
   it("routes every log through the reporter, outside the documented exceptions", () => {

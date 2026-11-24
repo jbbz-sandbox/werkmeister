@@ -48,12 +48,25 @@ export function success(msg: string): void {
   emit({ level: "ok", msg });
 }
 
+type LogTee = (level: "warn" | "error", msg: string) => void;
+let tee: LogTee | undefined;
+
+/**
+ * SW-404: logger.ts installs itself here when it loads, so the log keeps what the person saw after the terminal
+ * or tool result is gone. Not an import of logger.ts: config.ts imports this module, and logger.ts imports config.ts.
+ */
+export function setLogTee(fn: LogTee): void {
+  tee = fn;
+}
+
 export function warn(msg: string): void {
   emit({ level: "warn", msg });
+  tee?.("warn", msg);
 }
 
 export function error(msg: string): void {
   emit({ level: "error", msg });
+  tee?.("error", msg);
 }
 
 /**

@@ -12,6 +12,7 @@
  */
 
 import { spawn, spawnSync } from "node:child_process";
+import { noteCall } from "./metrics.js";
 import { gitEnv, toolBin } from "./tool_bins.js";
 
 export { gitEnv };
@@ -90,6 +91,18 @@ export class ProcError extends Error {
 }
 
 export function run(cmd: string[], opts: RunOptions = {}): RunResult {
+  const start = Date.now();
+  try {
+    const res = runSync(cmd, opts);
+    noteCall(cmd[0], cmd.slice(1), opts.cwd, res.status, res.stderr, start);
+    return res;
+  } catch (e) {
+    if (e instanceof ProcError) noteCall(cmd[0], cmd.slice(1), opts.cwd, e.status, e.stderr, start);
+    throw e;
+  }
+}
+
+function runSync(cmd: string[], opts: RunOptions): RunResult {
   const stdio: ("pipe" | "inherit")[] = opts.capture
     ? ["pipe", "pipe", "pipe"]
     : ["inherit", "inherit", "inherit"];
@@ -176,6 +189,7 @@ export interface AsyncRunOptions extends RunOptions {
  */
 export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<RunResult> {
   return new Promise((resolve, reject) => {
+    const start = Date.now();
     const stdio: ("pipe" | "inherit")[] = opts.capture
       ? ["pipe", "pipe", "pipe"]
       : ["inherit", "inherit", "inherit"];
@@ -207,11 +221,13 @@ export function runAsync(cmd: string[], opts: AsyncRunOptions = {}): Promise<Run
     const fail = (message: string, status: number, code?: string): void => {
       if (settled) return;
       settled = true;
+      noteCall(cmd[0], cmd.slice(1), opts.cwd, status, stderr, start);
       reject(new ProcError(message, cmd, status, stdout, stderr, code));
     };
     const done = (status: number): void => {
       if (settled) return;
       settled = true;
+      noteCall(cmd[0], cmd.slice(1), opts.cwd, status, stderr, start);
       resolve({ status, stdout, stderr });
     };
     const aborted = (): boolean => opts.signal?.aborted === true;

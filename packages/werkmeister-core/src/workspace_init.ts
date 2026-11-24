@@ -78,6 +78,7 @@ import {
   validateArchetypeMcpServers,
   writeWorkspaceMcp,
 } from "./mcp_gen.js";
+import { timed } from "./metrics.js";
 import { modelTiers } from "./model_tiers.js";
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
@@ -754,10 +755,16 @@ export async function initWorkspace(
   /** False when the workspace names a feature but no slot was free, so compose.yml was not generated. */
   containers: boolean;
 }> {
-  // 1. Find workspace root. A WorkspaceRootError propagates: printing its
-  //    (already rendered) message and choosing an exit status is the CLI's job.
-  const workspaceRoot = workspaceRootOverride ?? findWorkspaceRoot();
+  // A WorkspaceRootError propagates: printing its (already rendered) message and choosing an exit status is the CLI's job.
+  const root = workspaceRootOverride ?? findWorkspaceRoot();
+  return timed("workspace.init", root, () => initWorkspaceUntimed(args, root, opts));
+}
 
+async function initWorkspaceUntimed(
+  args: Record<string, unknown>,
+  workspaceRoot: string,
+  opts: InitWorkspaceOptions = {},
+): Promise<{ containers: boolean }> {
   const workspaceName = path.basename(workspaceRoot);
   info(`Workspace root: ${workspaceRoot}`);
   refreshRegistry();

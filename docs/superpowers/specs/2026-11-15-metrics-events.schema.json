@@ -26,8 +26,27 @@
         "pr.open",
         "pr.merged",
         "release",
-        "coverage"
+        "coverage",
+        "workspace.create",
+        "workspace.init",
+        "workspace.up",
+        "workspace.down",
+        "workspace.pause",
+        "workspace.resume",
+        "workspace.close",
+        "workspace.abandon",
+        "gate.row",
+        "call.slow"
       ]
+    },
+    "result": {
+      "enum": ["ok", "error"],
+      "description": "workspace.*, gate.row, call.slow: whether the timed step succeeded (SW-404)"
+    },
+    "row": { "type": "string", "description": "gate.row: the gate row's name (SW-404)" },
+    "cmd": {
+      "enum": ["docker build", "install", "git fetch", "tracker"],
+      "description": "call.slow: which external call took 5 s or more (SW-404)"
     },
     "workspace": {
       "type": "string",
@@ -122,7 +141,7 @@
     "duration_ms": {
       "type": "integer",
       "minimum": 0,
-      "description": "coverage: wall time of the test command"
+      "description": "coverage: wall time of the test command; workspace.*, gate.row, call.slow: wall time of the step (SW-404)"
     }
   },
   "additionalProperties": false,
@@ -172,6 +191,33 @@
     {
       "if": { "properties": { "event": { "const": "gate.end" } } },
       "then": { "required": ["run", "exit"] }
+    },
+    {
+      "if": {
+        "properties": {
+          "event": {
+            "enum": [
+              "workspace.create",
+              "workspace.init",
+              "workspace.up",
+              "workspace.down",
+              "workspace.pause",
+              "workspace.resume",
+              "workspace.close",
+              "workspace.abandon"
+            ]
+          }
+        }
+      },
+      "then": { "required": ["duration_ms", "result"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "gate.row" } } },
+      "then": { "required": ["run", "row", "duration_ms", "result"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "call.slow" } } },
+      "then": { "required": ["cmd", "duration_ms", "result"] }
     },
     {
       "if": { "properties": { "event": { "enum": ["pr.open", "pr.merged"] } } },
@@ -249,6 +295,33 @@
       "workspace": "sw-753-incremental-tsc",
       "run": "g1",
       "exit": 0
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T07:25:10Z",
+      "event": "gate.row",
+      "workspace": "sw-753-incremental-tsc",
+      "run": "g1",
+      "row": "werkmeister-core",
+      "duration_ms": 312000,
+      "result": "ok"
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T07:05:00Z",
+      "event": "workspace.up",
+      "workspace": "sw-753-incremental-tsc",
+      "duration_ms": 48200,
+      "result": "ok"
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T07:04:12Z",
+      "event": "call.slow",
+      "workspace": "sw-753-incremental-tsc",
+      "cmd": "install",
+      "duration_ms": 21400,
+      "result": "ok"
     },
     {
       "v": 1,

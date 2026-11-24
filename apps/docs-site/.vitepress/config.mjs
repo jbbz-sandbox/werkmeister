@@ -22,6 +22,7 @@ const GROUPS = [
       ["Registry fragments", "docs/registry-fragments.md"],
       ["The UIs", "docs/uis.md"],
       ["Workspace lifecycle", "docs/workspace-lifecycle.md"],
+      ["Logging", "docs/logging.md"],
       ["ICM workflows and stages", "docs/icm-workflows.md"],
       ["Werkmeister for teams", "docs/teams.md"],
     ],

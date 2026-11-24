@@ -9,7 +9,8 @@ import { test } from "node:test";
 
 import { FIXTURE_BRANCH, fixturePreset } from "../dist/fixture_workspace.js";
 import { startIssue } from "../dist/issue_status.js";
-import { metricsPath, recordEvent } from "../dist/metrics.js";
+import { createLogger, machineLogPath } from "../dist/logger.js";
+import { metricsPath, recordEvent, runTag } from "../dist/metrics.js";
 import {
   autosquash,
   closeOut,
@@ -278,14 +279,63 @@ test("close-out pushes this workspace's metrics slice on the record branch to it
       await closeOut("demo", { abandon: "fixture probe" });
       const origin = path.join(fx.root, "remotes", "o", "ws.git");
       const pushed = git(origin, "show", `${FIXTURE_BRANCH}:metrics.jsonl`).split("\n");
+      // The slice also holds init's own timing (SW-404); the point here is which workspace's events.
       assert.deepEqual(
         pushed.map((l) => [JSON.parse(l).workspace, JSON.parse(l).event]),
-        [["demo", "issue.start"]],
+        [
+          ["demo", "workspace.init"],
+          ["demo", "issue.start"],
+        ],
       );
       assert.ok(
         metricsPath("2026-11-20T00:00:00.000Z").startsWith(fx.root),
         "the log is under the fixture",
       );
+    },
+    { postmortem: true, jira: true, workspace: { issue_id: "SW-2" } },
+  );
+});
+
+// SW-404: close-out writes the run's log, own and machine-wide, as logs/werkmeister.jsonl on the record branch.
+test("close-out pushes this run's log as logs/werkmeister.jsonl, scrubbed, on the record branch", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const { run_id } = runTag(fx.workspace);
+      assert.ok(run_id, "init gave the run an id");
+      createLogger(
+        { app: "cli", workspace: "demo", pid: 1 },
+        { workspaceDir: fx.workspace, stderr: false },
+      ).error({ detail: "key AKIAABCDEFGHIJKLMNOP" }, "workspace error");
+      const machine = machineLogPath();
+      assert.ok(machine.startsWith(fx.root), "the machine log is under the fixture");
+      fs.mkdirSync(path.dirname(machine), { recursive: true });
+      const line = (msg, extra) =>
+        JSON.stringify({ time: "2026-11-24T00:00:00.000Z", level: "error", msg, ...extra });
+      fs.writeFileSync(
+        machine,
+        `${[
+          line("daemon error", { workspace: "demo", run_id }),
+          line("raw AKIAZZZZZZZZZZZZZZZZ", { workspace: "demo" }),
+          line("other workspace", { workspace: "other" }),
+          line("earlier run", { workspace: "demo", run_id: "not-this-run" }),
+        ].join("\n")}\n`,
+      );
+      await closeOut("demo", { abandon: "fixture probe" });
+      const origin = path.join(fx.root, "remotes", "o", "ws.git");
+      const pushed = git(origin, "show", `${FIXTURE_BRANCH}:logs/werkmeister.jsonl`);
+      const msgs = pushed
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => JSON.parse(l).msg);
+      assert.ok(msgs.includes("workspace error"), "the workspace's own log");
+      assert.ok(msgs.includes("daemon error"), "this run's machine-log line");
+      assert.ok(msgs.includes("raw [redacted]"), "an untagged line of the name, scrubbed again");
+      assert.equal(msgs.includes("other workspace"), false);
+      assert.equal(msgs.includes("earlier run"), false);
+      assert.equal(/AKIA[0-9A-Z]{16}/.test(pushed), false, "no key in the pushed record");
     },
     { postmortem: true, jira: true, workspace: { issue_id: "SW-2" } },
   );
