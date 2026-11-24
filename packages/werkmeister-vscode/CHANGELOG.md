@@ -1,5 +1,13 @@
 # vscode-plugin
 
+## 0.111.0
+
+### Patch Changes
+
+- 6a3ebc0: SW-1133: Hide Waiting on Release now hides a merged card whose only need is a registry-sync notice ("Registry sync needed"). That is a machine-wide step shown elsewhere, not something waiting in that workspace. A card with a question, a gate, a held PR update for its session or any other need still shows.
+  - werkmeister-core@0.111.0
+  - werkmeister-ui@0.7.98
+
 ## 0.110.1
 
 ### Patch Changes

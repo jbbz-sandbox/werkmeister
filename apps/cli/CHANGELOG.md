@@ -1,5 +1,17 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.111.0
+
+### Minor Changes
+
+- f93fcab: SW-404: werkmeister logs its errors and diagnostics as JSON lines, with Pino. Inside a workspace they go to `.werkmeister/logs/werkmeister.jsonl`; the daemon, the MCP proxy and commands run outside a workspace write `~/.werkmeister/logs/werkmeister.jsonl`, rolled to `werkmeister.1.jsonl` past 10 MB. Each line names its app, command, workspace, run, ticket and ICM stage. The default level is `error`; `WERKMEISTER_LOG_LEVEL` or the new global `--log-level` lowers it as far as `trace` and copies lines to stderr. Secrets are redacted. Close-out writes the run's log to `logs/werkmeister.jsonl` on the record branch. Workspace verbs (create, init, up, down, pause, resume, close, abandon), gate rows and slow docker builds, installs, git fetches and Jira calls are timed into the metrics event log. See docs/logging.md.
+- 45cd172: The dashboard's Flow tab draws its charts (SW-783), below the board and following its range buttons: wait time by cause as weekly stacked bars (on you, capacity, PR/CI, gate retry, release), cycle time per ticket as a scatter by merge date with p50 and p90 lines and a Lead toggle, tiles for estimated cost, tokens with cache-read share, active versus wall time and turns over the range's closed runs, and agent time per day. All inline SVG, no chart dependency. The `metrics` report gains `agentByDay`: active minutes per UTC day, each session counted on its first turn's day (a closed run whose `usage.json` has no session list, on its close day).
+
+### Patch Changes
+
+- d8eefd3: SW-1136: the dashboard's `dev` script rebuilds its real pages, `browser.html` and `form.html`, instead of watching the missing `mcp-app.html`. In a workspace container, an edit under `src/` reruns the full UI build by itself, with no manual `pnpm run build`. Vite's own `--watch` fails every rebuild after the first, so `node --watch-path` reruns `build:ui` instead.
+- d4bc1ab: SW-1145: an autonomous workspace whose session stops mid-build with no question now reads Needs you, with the reply's last paragraph shown as a guess, instead of Idle. An autonomous agent stops on its own only when it is blocked, so this catches an ask with no `?`, such as a `!` command for the person in the middle of a reply. Merged, released or abandoned workspaces, and non-autonomous ones, read as before. Every ICM stage contract also says a step only the person can take goes through the question tool.
+
 ## 0.110.1
 
 ### Patch Changes
