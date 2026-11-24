@@ -1,5 +1,21 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.110.0
+
+### Minor Changes
+
+- 7847fec: SW-1092: `werkmeister workspace serve --dashboard` serves the workspace's werkmeister worktree's built dashboard (`apps/cli/dist/dashboard.js`, no host install) for a stage 03 browser check. It runs on 127.0.0.1 under a fresh temp HOME seeded with a workspace in each lifecycle state, transcripts and a metrics event log, with an env built from nothing: docker, the Terminal/VS Code launcher, `claude`, `code`, `kubectl`, `gh` and `werkmeister` are stubs that log to `side-effects.log`, and `DOCKER_HOST` and the daemon address are dead. The werkmeister-dashboard Validation text names it; run `werkmeister registry sync` to pick that up. New core export `werkmeister-core/dashboard_seed`.
+- b933f82: The dashboard has a Metrics tab (SW-1098), after Flow: 7d / 30d / 90d / All range buttons (30d by default) that call `metrics-trends` once per change, a version filter over each row's `byVersion` (no extra call), stat tiles (shipped, abandoned, est. cost, gate first pass) and preview charts drawn with new dependency-free inline-SVG primitives (a line with a p50–p90 band, a stacked bar, a heatmap, a stat tile). A range with no activity shows an empty state. The stage, token and test charts that replace the previews follow in SW-1099–1101.
+- 1174dd5: SW-190: a service in a repo's `.werkmeister/services.yaml`, or its archetype, can carry `stages:` text keyed by role (`research`, `spec`, `implement`, `exercise`). ICM init adds it to the matching stage contract of each workspace that covers the service, under `## For this workspace's services`. A workflow's `workflow.yaml` stage can take it with `role:`, and `werkmeister workflow export` writes the built-in roles. A value over 600 characters, an unknown role or non-text fails init before it writes `.env` or any stage contract. Workspaces with no stage text render as before.
+- 7801edb: SW-405: coverage goes into the metrics ledger. A new `coverage` event records one package's lines, branches, functions and statements % with its test count and duration. The PR gate logs one per package report its test rows write (`source: "gate"`), and `werkmeister metrics rebuild` imports CI's `coverage-summary` artifacts (`ci-pr`, `ci-main`). Close-out writes `coverage.json` to the record branch with the coverage of each PR's changed files. werkmeister's own gate rows now run `test:coverage`.
+
+### Patch Changes
+
+- 4bac916: SW-1111: `werkmeister feature logs` follows the logs only onto a terminal. Without one (a pipe, a script, an agent's Bash call) it prints the last 100 lines of each container and returns, so the command a failed start's message names no longer hangs an agent's tool call.
+- ad23a04: SW-1116: `werkmeister metrics rebuild` copies a teammate's `metrics.jsonl` line as is, so a line from another version is not appended again on every rebuild. A run's slice pushed at close-out leaves out lines older than its record branch's first commit, so an earlier run of a reused workspace name no longer lands in it.
+- 732d855: SW-1127: when `werkmeister metrics rebuild` can't read the record branches' `usage.json`, it keeps the old `usage-branches.jsonl` and warns, instead of writing it empty and losing the per-person and per-project usage from the `metrics` report until the next good rebuild.
+- bd934b2: SW-1128: `werkmeister metrics rebuild` reads every record branch's author in the one `git for-each-ref` that lists the branches, instead of one `git log` per branch. The `metrics trends` cost and token sums now come from the same code as the `metrics` report's.
+
 ## 0.109.0
 
 ### Minor Changes
