@@ -5,9 +5,13 @@
  * status is the approval, reloads use `docker restart` (`docker exec` for idle
  * services), and the test command is quoted from werkmeister-context.md rather than
  * restated.
+ *
+ * The templates are app-agnostic: app-specific text goes in a service's `test:`, `validate:` or
+ * `stages:`, or its archetype's (SW-143, SW-190), never here.
  */
 
 import { COMPOSE_FILE } from "../compose_file.js";
+import type { StageRole } from "../config.js";
 import { generatedFileCheck } from "../generated_file_check.js";
 import { APPROVAL_NOTE, CHAT_APPROVAL, HOST_SCRIPT_RULE } from "../pr_rules.js";
 import { warn } from "../reporter.js";
@@ -53,6 +57,8 @@ export interface Stage {
   enter?: string;
   /** The `output/` file whose `status: proposed` line the human check flips, when the stage has no other gate. */
   gate?: string;
+  /** Roles whose service `stages:` text this stage adds, in this order (SW-190); none: no service text. */
+  roles?: StageRole[];
   /** Which _shared/standards.md rows the contract names; a list names rows, kept only when active. */
   standards: "none" | "all" | string[];
   /** SW-807: `werkmeister` subcommands this stage runs, pre-approved for the whole run; init reads them from here, never from the rendered CONTEXT.md, which the agent can edit. */
@@ -390,6 +396,7 @@ const noCommitPlan = (group: string[]) =>
 const feature: Stage[] = [
   {
     name: "research",
+    roles: ["research"],
     grants: START_GRANTS,
     job: "inventory the code, surface decisions",
     writes: "`output/inventory.md`, `output/decisions.md`",
@@ -435,6 +442,7 @@ const feature: Stage[] = [
   },
   {
     name: "spec",
+    roles: ["spec"],
     job: "write the spec for the change",
     gate: "spec.md",
     writes: "`output/spec.md`, any checkable artifact in the repo",
@@ -471,6 +479,7 @@ const feature: Stage[] = [
   },
   {
     name: "implement",
+    roles: ["implement", "exercise"],
     grants: SERVE_GRANTS,
     job: "build it and prove it",
     gate: "review.md",
@@ -524,6 +533,7 @@ const feature: Stage[] = [
 const bugfix: Stage[] = [
   {
     name: "reproduce",
+    roles: ["research"],
     grants: START_GRANTS,
     job: "reproduce and locate the root cause",
     writes: "`output/repro.md`",
@@ -567,6 +577,7 @@ const bugfix: Stage[] = [
   },
   {
     name: "fix",
+    roles: ["implement"],
     job: "fix it at the root cause",
     gate: "fix.md",
     writes: "code diff, `output/fix.md`",
@@ -612,6 +623,7 @@ const bugfix: Stage[] = [
   },
   {
     name: "exercise",
+    roles: ["exercise"],
     grants: SERVE_GRANTS,
     job: "prove it against the running service or the built CLI",
     gate: "review.md",
@@ -659,6 +671,7 @@ const bugfix: Stage[] = [
 const refactor: Stage[] = [
   {
     name: "scope",
+    roles: ["research"],
     grants: START_GRANTS,
     job: "fix the boundary and the invariants",
     writes: "`output/scope.md`",
@@ -686,6 +699,7 @@ const refactor: Stage[] = [
   },
   {
     name: "implement",
+    roles: ["implement", "exercise"],
     grants: SERVE_GRANTS,
     job: "refactor in green steps",
     gate: "review.md",

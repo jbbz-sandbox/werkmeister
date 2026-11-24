@@ -141,7 +141,9 @@ stages:
     check: approve the report
 ```
 
-Optional per stage: `enter`, `gate`, `standards` and `grants`. Init renders the stages as `stages/01_triage/`, `stages/02_report/` and so on, in this order.
+Optional per stage: `enter`, `gate`, `standards`, `grants` and `role`. Init renders the stages as `stages/01_triage/`, `stages/02_report/` and so on, in this order.
+
+`role` (`research`, `spec`, `implement` or `exercise`, or a list of them) makes the stage take the workspace services' `stages:` text for that role, as the built-in stages do ([Stage text](registry-fragments.md#stage-text)). A stage without it takes none. `werkmeister workflow export` writes each built-in stage's roles.
 
 `grants` pre-approves commands for the whole run, so a workflow in a repo may only ask for `issue start`, `issue view` and `pr push:*`. One in your own `~/.werkmeister/workflows/` may also ask for the built-ins' other two, `pr autosquash:*` and `workspace serve:*`: a repo can't, because `workspace serve` follows symlinks out of the workspace and `pr autosquash` rewrites the shared repo's refs. A workflow in a cloned repo can't pre-approve anything else, such as `feature up` or `pr open`.
 

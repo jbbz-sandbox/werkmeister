@@ -30,10 +30,13 @@ import {
   type ReposConfig,
   type ServiceEntry,
   type ServicesConfig,
+  type StageRole,
+  type StageText,
   sandboxHome,
   sandboxRoot,
   workspacesRoot,
 } from "./config.js";
+import { SandboxError } from "./errors.js";
 
 const realPath = (p: string) => {
   try {
@@ -244,6 +247,99 @@ export function candidateServiceNames(
 ): string[] {
   if (localServices?.length) return [...localServices];
   return repoNames.flatMap((repo) => reposConfig[repo]?.["services"] ?? []);
+}
+
+/** The roles a `stages:` map may key, in the order a stage renders them. */
+export const STAGE_ROLES: readonly StageRole[] = ["research", "spec", "implement", "exercise"];
+
+/** Longest one role's text may be: longer guidance lives in a repo doc the text links to. */
+export const STAGE_TEXT_MAX = 600;
+
+// SandboxError, not icm_external's WorkflowError: importing that module here is a cycle (via standards.ts).
+function checkedStageText(owner: string, stages: unknown): StageText {
+  const fail = (why: string) => {
+    throw new SandboxError(`services.yaml: ${owner} ${why}`, "ICM_STAGE_TEXT");
+  };
+  if (stages === undefined || stages === null) return {};
+  if (!isDict(stages)) fail(`stages: must be a map of ${STAGE_ROLES.join(", ")} to text`);
+  for (const [role, text] of Object.entries(stages as Record<string, unknown>)) {
+    if (!STAGE_ROLES.includes(role as StageRole))
+      fail(`stages.${role}: unknown role (use ${STAGE_ROLES.join(", ")})`);
+    if (typeof text !== "string" || !text.trim()) fail(`stages.${role} must be non-empty text`);
+    // A `#`/`##` line would open a contract section of its own, and workflow export would keep it.
+    if (/^#{1,2} /m.test(text as string))
+      fail(`stages.${role}: headings are not allowed; use plain text`);
+    const n = (text as string).trim().length;
+    if (n > STAGE_TEXT_MAX)
+      fail(
+        `stages.${role} is ${n} characters (max ${STAGE_TEXT_MAX}): move longer guidance into a doc in its repo and link to it from here`,
+      );
+  }
+  return stages as StageText;
+}
+
+/**
+ * One service's ICM stage text per role, and the archetype it came from (`null`: the service's own).
+ * Same precedence as `serviceValidation`, per role. Throws a `SandboxError` on a malformed or over-long entry.
+ */
+export function serviceStageText(
+  svc: string,
+  svcDef: ServiceEntry | null | undefined,
+  archetypes?: ArchetypeRegistry | null,
+): Partial<Record<StageRole, { text: string; from: string | null }>> {
+  if (!isDict(svcDef)) return {};
+  const own = checkedStageText(`service '${svc}'`, svcDef["stages"]);
+  const archName = typeof svcDef["archetype"] === "string" ? svcDef["archetype"] : null;
+  const arch = archName
+    ? checkedStageText(
+        `archetype '${archName}'`,
+        resolveServiceArchetype(svcDef, archetypes)?.["stages"],
+      )
+    : {};
+  const out: Partial<Record<StageRole, { text: string; from: string | null }>> = {};
+  for (const role of STAGE_ROLES) {
+    if (own[role]) out[role] = { text: own[role].trim(), from: null };
+    else if (arch[role]) out[role] = { text: arch[role].trim(), from: archName };
+  }
+  return out;
+}
+
+/**
+ * The `### <service>` blocks each role adds to a stage contract, `""` for none. Services with the
+ * same text from the same source share one block, so an archetype on five services renders once.
+ */
+export function stageTextBlocks(
+  services: string[],
+  servicesConfig: ServicesConfig,
+  archetypes?: ArchetypeRegistry | null,
+): Record<StageRole, string> {
+  const groups = Object.fromEntries(
+    STAGE_ROLES.map((r) => [
+      r,
+      new Map<string, { names: string[]; text: string; from: string | null }>(),
+    ]),
+  ) as Record<StageRole, Map<string, { names: string[]; text: string; from: string | null }>>;
+  for (const svc of [...new Set(services)].sort()) {
+    for (const [role, { text, from }] of Object.entries(
+      serviceStageText(svc, servicesConfig[svc], archetypes),
+    ) as Array<[StageRole, { text: string; from: string | null }]>) {
+      const key = `${from ?? ""}\0${text}`;
+      const g = groups[role].get(key) ?? { names: [], text, from };
+      g.names.push(svc);
+      groups[role].set(key, g);
+    }
+  }
+  return Object.fromEntries(
+    STAGE_ROLES.map((r) => [
+      r,
+      [...groups[r].values()]
+        .map(
+          (g) =>
+            `### ${g.names.map((n) => `\`${n}\``).join(", ")}${g.from ? ` (archetype \`${g.from}\`)` : ""}\n${g.text}`,
+        )
+        .join("\n\n"),
+    ]),
+  ) as Record<StageRole, string>;
 }
 
 export interface ValidationRow {

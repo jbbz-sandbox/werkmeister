@@ -51,7 +51,7 @@ import {
   writeWorkspaceDevcontainer,
 } from "./devcontainer_gen.js";
 import { logsDir } from "./dot_dir.js";
-import { WorkspaceError } from "./errors.js";
+import { SandboxError, WorkspaceError } from "./errors.js";
 import { workspaceUnder } from "./gate.js";
 import { generateWorkspaceCompose, seedWorkspaceMetadataEnv } from "./generate.js";
 import { candidateWorkspaceRoots, loadPaths, loadWorkspaceRepo } from "./global_config.js";
@@ -83,7 +83,7 @@ import { run as procRun } from "./proc.js";
 import { syncRegistry } from "./registry_sync.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { repoDirs } from "./standards.js";
-import { WorkflowError } from "./strategies/icm_external.js";
+import { workspaceStageText } from "./strategies/icm.js";
 import { templateFor } from "./strategies/icm_templates.js";
 import {
   parseStrategyId,
@@ -827,8 +827,17 @@ export async function initWorkspace(
   if (strategy.id === "icm") {
     try {
       templateFor(inputs["work_type"] ?? "", workspaceRoot);
+      // SW-190: so a bad service `stages:` entry fails here too, not after .env is written.
+      workspaceStageText(
+        repoDirs(workspaceRoot).map((d) => path.basename(d)),
+        (inputs["services"] ?? "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      );
     } catch (e) {
-      if (e instanceof WorkflowError) fail(e.message);
+      // WorkflowError is a SandboxError too.
+      if (e instanceof SandboxError) fail(e.message);
       throw e;
     }
   }

@@ -517,6 +517,12 @@ export function needsCluster(localServices: string[], services: ServicesConfig):
 export const DEFAULT_CPUS = "1.0";
 export const DEFAULT_SETUP_CPUS = "2.0";
 
+/** The roles ICM stages take service text for, across work types (SW-190). */
+export type StageRole = "research" | "spec" | "implement" | "exercise";
+
+/** A service's or archetype's `stages:` map. */
+export type StageText = Partial<Record<StageRole, string>>;
+
 /**
  * One entry under services.yaml `services:` or `setup_services:`. Only the keys
  * the code reads are typed; the rest pass through to compose untouched. Nothing
@@ -538,6 +544,8 @@ export interface ServiceEntry {
   /** Another service whose gate row runs this one's tests too; read by `coveredRows` (SW-574). */
   test_covered_by?: string;
   validate?: string;
+  /** ICM stage text by role; wins over the archetype's per role (archetypes.ts `serviceStageText`, SW-190). */
+  stages?: StageText;
   internal_port?: number;
   port_offset?: number;
   k8s_forward_port?: number;
@@ -573,6 +581,8 @@ export interface Archetype {
   mcp_servers?: string[];
   test?: string;
   validate?: string;
+  /** Default ICM stage text for its services (SW-190). */
+  stages?: StageText;
   caches?: string[];
   [key: string]: unknown;
 }

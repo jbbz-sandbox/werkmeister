@@ -23,6 +23,8 @@ services:
     archetype: node-service       # optional; node-web | node-service | node-tool | mcp-client
     test: "npm test"
     validate: "..."               # optional; how a person or agent checks a change by hand (overrides the archetype's). See "Test commands and validation guidance"
+    stages:                       # optional; text the matching ICM stage contracts add (overrides the archetype's, per role). See "Stage text"
+      research: "..."
     internal_port: 3000           # port the process listens on in-container
     port_offset: 9                # slot-relative host port; unique across ALL repos
     health_endpoint: /health      # or redis | postgres | "" (TCP-only); unset means /health everywhere
@@ -112,3 +114,29 @@ The shipped archetypes give `node-tool` (libraries) and `mcp-client` (editor ext
 - Name any manual list a person has to walk, e.g. `MANUAL-CHECKLIST.md` for the VS Code extension.
 - Keep it to a sentence or two. It shows in a table cell and in tester-agent prompts.
 
+## Stage text
+
+`validate:` tells the exercise how to check a service. `stages:` goes further: it adds a short instruction to the ICM stage contracts of every workspace that covers the service, at the stage that does that kind of work. It suits steps an app needs that the generic stages can't know, such as running schema composition before the tests.
+
+```yaml
+services:
+  products:
+    stages:
+      research: "List the entities and @key fields this subgraph owns or extends."
+      implement: "Run supergraph composition (rover supergraph compose) and fix its errors before the tests."
+```
+
+Keys are roles, the same in every work type:
+
+| Role | Stage it goes into |
+|---|---|
+| `research` | feature `research`, bugfix `reproduce`, refactor `scope` |
+| `spec` | feature `spec` |
+| `implement` | feature and refactor `implement`, bugfix `fix` |
+| `exercise` | bugfix `exercise`; feature and refactor `implement`, after the implement text |
+
+A role the work type has no stage for (`spec` in a bugfix) is left out, and spike stages take none. A stage in your own workflow takes text when its `workflow.yaml` entry sets `role:` ([ICM workflows](icm-workflows.md#workflowyaml)).
+
+**How it is resolved.** Per role, a service's own text wins over its archetype's. Only the workspace's services count: the ones it selects, else every service of its repos. Init renders the text in a `## For this workspace's services` section of the stage contract, under a `### <service>` heading (with the archetype's name when the text came from it). Services with the same text from the same source share one heading. A workspace with no stage text gets no section. JIT workspaces ignore `stages:`.
+
+**Limits.** Each value is plain text of at most 600 characters. Init fails with an `[err]` line, before it writes `.env` or any stage contract, on a longer value, an unknown role, a value that isn't text, or a line that starts with `# ` or `## ` (it would open a contract section of its own). Put longer guidance in a doc in the repo and link to it from the text.

@@ -11,8 +11,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { stringify as stringifyYaml } from "yaml";
+import { candidateServiceNames, stageTextBlocks } from "../archetypes.js";
 import { COMPOSE_FILE } from "../compose_file.js";
-import { dotDir, IDLE_SERVICE_TYPES, sandboxHome } from "../config.js";
+import { dotDir, IDLE_SERVICE_TYPES, loadArchetypes, sandboxHome } from "../config.js";
 import { logsDir } from "../dot_dir.js";
 import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import {
@@ -235,7 +236,29 @@ function firstStep(hasIssue: boolean): string {
   return hasIssue ? `${START_ISSUE} Then: ${brief}` : brief;
 }
 
-function renderContract(dir: string, stage: Stage, v: IcmVars, step0 = ""): string {
+/** The heading of a contract's service stage text; workflow export drops the section (SW-190). */
+const SERVICES_SECTION = "## For this workspace's services";
+
+/**
+ * The workspace's service stage text per role (archetypes.ts `stageTextBlocks`). Also run by init before
+ * it writes a file, so a malformed or over-long entry fails there as `[err]`.
+ */
+export function workspaceStageText(repoNames: string[], localServices: string[]) {
+  const [servicesConfig, reposConfig] = loadSandboxServiceConfigs();
+  return stageTextBlocks(
+    candidateServiceNames(repoNames, reposConfig, localServices),
+    servicesConfig,
+    loadArchetypes(),
+  );
+}
+
+function renderContract(
+  dir: string,
+  stage: Stage,
+  v: IcmVars,
+  step0 = "",
+  serviceText = "",
+): string {
   const c = stage.contract(v);
   return [
     `# ${dir} — ${stage.job}`,
@@ -253,6 +276,7 @@ function renderContract(dir: string, stage: Stage, v: IcmVars, step0 = ""): stri
     ...(step0 ? [`0. ${step0}`] : []),
     ...c.process.map((p, i) => `${i + 1}. ${p}`),
     "",
+    ...(serviceText ? [SERVICES_SECTION, "", serviceText, ""] : []),
     "## Outputs",
     ...c.outputs.map((o) => `- ${o}`),
     "",
@@ -452,12 +476,20 @@ function render(ctx: InitContext): Record<string, string> {
     ),
   };
   files["_shared/pr-rules.md"] = buildPrRulesMd(`stages/${prDir(stages)}/output/`, base.autonomous);
+  const blocks = workspaceStageText(
+    ctx.repos.map(([name]) => name),
+    list(ctx.meta["SERVICES"]),
+  );
   stages.forEach((stage, i) => {
     files[`stages/${dirs[i]}/CONTEXT.md`] = renderContract(
       dirs[i],
       stage,
       { ...base, standards: standardsRef(stage.standards, r) },
       i === 0 ? firstStep(Boolean(issueIdOfMeta(ctx.meta))) : "",
+      (stage.roles ?? [])
+        .map((role) => blocks[role])
+        .filter(Boolean)
+        .join("\n\n"),
     );
   });
   return files;
@@ -673,6 +705,8 @@ export function exportWorkflow(
         // Grants come from the workspace's template; a line edited into the contract is dropped.
         if (grant && realGrants.has(grant)) grants.push(grant);
         else if (grant) dropped.add(grant);
+      } else if (section === SERVICES_SECTION.slice(3)) {
+        // Rendered from the registry at init, so the workflow never carries it.
       } else if (section === "Self-check") {
         if (!h) (selfCheck ??= []).push(line);
       } else if (line.startsWith(STANDARDS_REF)) {
@@ -705,6 +739,8 @@ export function exportWorkflow(
       writes: cells.slice(0, cut),
       check: cells.slice(cut + 3),
     };
+    const roles = template.find((s) => s.name === names[i])?.roles;
+    if (roles?.length) stage.role = roles.length === 1 ? roles[0] : roles;
     const gate = GATE_ROW.exec(enter);
     if (i > 0 && gate) stages[i - 1].gate = gate[1];
     else if (
