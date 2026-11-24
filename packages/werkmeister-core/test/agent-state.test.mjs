@@ -149,6 +149,10 @@ test("hooks: each event writes the session's state, `at` only when its status ch
   say("Shipped: PR #12 is open.");
   fire("Stop", { transcript_path: transcript });
   assert.equal(badge(dir).agent, "done");
+  // SW-1145: kept for workspaceState, which reads an autonomous stop as a guessed ask.
+  assert.equal(rec(dir).reply, "Shipped: PR #12 is open.");
+  fire("UserPromptSubmit");
+  assert.equal(rec(dir).reply, undefined, "a new turn clears it");
   fire("Stop", { last_assistant_message: "Which one do **you** want?**" });
   assert.equal(badge(dir).agent, "needs-you", "last_assistant_message wins when sent");
 

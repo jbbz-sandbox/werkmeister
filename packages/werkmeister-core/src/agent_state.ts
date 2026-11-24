@@ -55,6 +55,8 @@ export interface SessionRecord {
   ask?: SessionAsk;
   /** The last turn reached Stop, so the session is done rather than never started. */
   stopped?: true;
+  /** The stopped turn's last paragraph when it asked nothing: an autonomous workspace's guessed ask (SW-1145). */
+  reply?: string;
 }
 
 /** Past this with no hook event, a busy session has crashed or been killed (SW-487 Q7). */
@@ -93,6 +95,7 @@ function sessionOf(s: any): SessionRecord | null {
     };
   if (typeof s.ask?.what === "string" && typeof s.ask.at === "string") r.ask = s.ask;
   if (s.stopped === true) r.stopped = true;
+  if (typeof s.reply === "string") r.reply = s.reply;
   return r;
 }
 
@@ -346,16 +349,18 @@ export function nextSession(
       status("idle");
       // A new or resumed session has no subagents yet; a missed SubagentStop must not stick.
       if (!turnOnly)
-        for (const k of ["tool", "ask", "stopped", "subagents", "shell"] as const) delete s[k];
+        for (const k of ["tool", "ask", "stopped", "reply", "subagents", "shell"] as const)
+          delete s[k];
       return s;
     case "UserPromptSubmit":
       status("busy");
-      if (!turnOnly) for (const k of ["tool", "ask", "stopped"] as const) delete s[k];
+      if (!turnOnly) for (const k of ["tool", "ask", "stopped", "reply"] as const) delete s[k];
       return s;
     case "PreToolUse": {
       status("busy");
       if (turnOnly) return s;
       delete s.stopped;
+      delete s.reply;
       const command = input["tool_input"]?.["command"];
       s.tool = {
         name: tool,
@@ -452,9 +457,13 @@ export function nextSession(
       else if (typeof input["transcript_path"] === "string")
         text = lastAssistantText(input["transcript_path"]);
       // An open wrap_up ask is the real question; the reply text only restates it (SW-1005).
+      delete s.reply;
       if (s.ask?.via !== "wrap_up" && text && asksQuestion(text))
         s.ask = { kind: "question", what: questionOf(text), at, source: "text" };
-      else if (s.ask?.via !== "wrap_up") delete s.ask;
+      else if (s.ask?.via !== "wrap_up") {
+        delete s.ask;
+        if (text?.trim()) s.reply = questionOf(text);
+      }
       return s;
     }
     case "SessionEnd":

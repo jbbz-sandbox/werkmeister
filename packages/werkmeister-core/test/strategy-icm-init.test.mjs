@@ -844,3 +844,20 @@ test("SW-807: each bugfix contract lists its own pre-approved commands and steer
     { inputs: { work_type: "bugfix" } },
   );
 });
+
+// SW-1145: a `!` command left mid-reply read as Idle; a hand-off asked through the tool reads Needs you.
+for (const autonomous of ["true", "false"])
+  test(`SW-1145: every stage contract routes a hand-off to the person through the question tool (autonomous: ${autonomous})`, async () => {
+    await withIcmWorkspace(
+      async (root, ctx) => {
+        icm.init(ctx);
+        for (const d of ["01_reproduce", "02_fix", "03_exercise", "04_propose"])
+          assert.match(
+            fs.readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8"),
+            /^- A step only the person can take \(a manual step, a `!` command for them to run, a browser or host check you can't run\) is a hand-off: ask it through `AskUserQuestion`\. A sentence in a reply is not a hand-off\.$/m,
+            d,
+          );
+      },
+      { inputs: { work_type: "bugfix", autonomous } },
+    );
+  });
