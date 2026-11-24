@@ -412,4 +412,12 @@ test("workflow refuses a name init can't find, a stray file and another work_typ
     () => fixturePreset({ workflow: WORKFLOW, workspace: { work_type: "feature" } }),
     /would leave the review workflow unused/,
   );
+  // SW-1120: a jit workspace file would init without reading the workflow, and exit 0.
+  assert.throws(
+    () => fixturePreset({ workflow: WORKFLOW, workspace: { context_strategy: "jit" } }),
+    /context_strategy jit would leave the review workflow unused/,
+  );
+  assert.doesNotThrow(() =>
+    fixturePreset({ workflow: WORKFLOW, workspace: { context_strategy: "icm" } }),
+  );
 });

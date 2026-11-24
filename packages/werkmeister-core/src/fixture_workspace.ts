@@ -281,6 +281,12 @@ export function fixturePreset({
     const wt = opts.workspace?.["work_type"];
     if (wt !== undefined && wt !== wf.type)
       throw new Error(`--workspace work_type ${wt} would leave the ${wf.type} workflow unused`);
+    // Only icm reads the workflow: a jit file would init green without it (SW-1120).
+    const cs = opts.workspace?.["context_strategy"];
+    if (cs !== undefined && cs !== "icm")
+      throw new Error(
+        `--workspace context_strategy ${cs} would leave the ${wf.type} workflow unused`,
+      );
   }
   // A worktree shares its source's origin/main, so it can't stay behind until a fetch.
   if (opts.worktrees && opts.behind) throw new Error("--worktrees and --behind don't combine");
