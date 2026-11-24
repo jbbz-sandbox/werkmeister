@@ -43,7 +43,13 @@ The `coverage` job in [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) 
 - **Job summary**: the merged table, with each metric's change in points against the last successful merge-queue run. A package that run didn't have shows "(new)". The first run, with nothing to compare, says there is no baseline.
 - **Artifacts**: `coverage-html` (every package's `coverage/` folder) and `coverage-summary` (`coverage/summary.json`, which later runs read as their baseline).
 
-There is no threshold: the job fails only when a test command can't run its tests, never on the numbers, and it isn't a required check.
+- **Drop check** (last step, pull requests only): compares each package's lines % with that same baseline. A package that fell by more than 1 point gets a `Coverage drop` warning on the PR, for example `werkmeister-core lines 84.9 % (was 86.21 %, -1.31 points, limit 1)`. A drop of exactly 1 point passes. A "(new)" package and a run with no baseline never warn. With nothing over the limit, the step's log says so.
+
+The drop check only warns for now: the job fails only when a test command can't run its tests, never on the numbers, and it isn't a required check. It doesn't run in the merge queue, whose run is main's baseline and has no pull request to label.
+
+To accept an expected drop (tests moved to another package, dead code with its tests removed), add the `coverage-drop-ok` label to the pull request and re-run the `coverage` job. The step reads the labels live, so a re-run sees a label added after the first run.
+
+Why 1 point: over the first 8 merge-queue runs (2026-11-23 to 24), no package moved more than 0.06 points between unrelated commits. The one bigger move was a real change, dashboard +2.58 from new tests. Once about two weeks of `ci-main` rows confirm the limit, the step gets `--fail` and a drop turns the job red. Locally, `node scripts/coverage-summary.mjs --base <summary.json> --max-drop 1 [--fail]` runs the same check after `test:coverage`.
 
 ## In the metrics ledger
 

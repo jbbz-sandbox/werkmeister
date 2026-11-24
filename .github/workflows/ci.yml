@@ -137,9 +137,10 @@ jobs:
           node-version: 22
       - run: pnpm turbo run test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core
 
-  # SW-405: coverage for every package, as a job summary and artifacts. Report only: no threshold fails it,
-  # and it is not a required check. Main pushes skip it like `test`; the merge-queue run of that commit is
-  # main's baseline, the one a PR's summary compares against.
+  # SW-405: coverage for every package, as a job summary and artifacts. On a PR, SW-1129's drop check warns
+  # when a package's lines % falls more than 1 point; nothing fails on the numbers, and it is not a required
+  # check. Main pushes skip it like `test`; the merge-queue run of that commit is main's baseline, the one a
+  # PR's summary compares against.
   coverage:
     needs: queued
     if: ${{ !cancelled() && github.event_name != 'push' && github.head_ref != 'changeset-release/main' }}
@@ -147,6 +148,7 @@ jobs:
     permissions:
       contents: read
       actions: read # gh run download of the baseline artifact
+      pull-requests: read # gh pr view of the coverage-drop-ok label
     steps:
       - uses: actions/checkout@v7
       - name: Configure a git identity for the smoke tests
@@ -180,6 +182,20 @@ jobs:
           path: |
             apps/*/coverage/
             packages/*/coverage/
+      # SW-1129: PRs only, since a merge-queue run is main's baseline and has no PR to label. Last, so its
+      # rewrite of coverage/summary.json can't reach the uploaded artifact.
+      - name: Coverage drop check
+        if: ${{ !cancelled() && github.event_name == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # Read live: a re-run replays the old event payload, labels included.
+          if gh pr view "$PR" --json labels --jq '.labels[].name' | grep -qx coverage-drop-ok; then
+            echo "coverage-drop-ok label set: drop check skipped"; exit 0
+          fi
+          # Warns first (SW-1129 D2): add --fail once two weeks of ci-main rows confirm the limit.
+          node scripts/coverage-summary.mjs --base base/summary.json --max-drop 1
 
   # Gated on a green queue run of this commit or on this push's test jobs,
   # rather than repeating their checks: a publish cannot be taken back, and this
