@@ -9,7 +9,7 @@
  */
 
 import * as fs from "node:fs";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type AsyncRunner,
   interceptBlocker,
@@ -104,6 +104,9 @@ describe("interceptBlocker", () => {
 });
 
 describe("listIntercepts", () => {
+  // Fake runners; under with-temp-home the SW-1074 guard would skip them before they run.
+  beforeEach(() => vi.stubEnv("WERKMEISTER_TEMP_HOME", ""));
+  afterEach(() => vi.unstubAllEnvs());
   // Status decides first: `list` only runs against a connected daemon (SW-12).
   const CONNECTED = JSON.stringify({ daemon: { status: "Connected", namespace: "default" } });
   const connected =

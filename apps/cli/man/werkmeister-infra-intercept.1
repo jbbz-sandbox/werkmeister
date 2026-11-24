@@ -77,5 +77,7 @@ werkmeister infra intercept my\-feature \-\-leave \-s backend
 A service can only be intercepted if it declares \fBk8s_deployment\fR, \fBk8s_namespace\fR and \fBk8s_port\fR in the registry; \fBwerkmeister feature status \-\-intercepts\fR reports what is interceptable and what is currently intercepted.
 .PP
 \fBoverrides.telepresence: false\fR in \fB~/.werkmeister/config.yaml\fR turns intercepts off: this command then fails with \fBTELEPRESENCE_DISABLED\fR, and werkmeister starts no telepresence process on its own. \fB\-\-leave\fR still runs, so an intercept left from before can be removed.
+.PP
+Under \fBwith\-temp\-home\fR (\fBWERKMEISTER_TEMP_HOME\fR equal to \fBHOME\fR) or a fixture run, this command, \fB\-\-leave\fR and \fB\-\-status\fR refuse (\fBHOST_SESSION\fR) before any telepresence call, and \fBfeature down\fR leaves no intercept: the telepresence daemon runs once per user, so a temp HOME would still reach it.
 .SH SEE ALSO
 \fBwerkmeister\fR(1)

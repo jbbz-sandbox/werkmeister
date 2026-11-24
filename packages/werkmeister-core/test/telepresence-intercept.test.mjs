@@ -3,7 +3,7 @@
 // Every rejection is now a coded SandboxError.
 
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { after, before, test } from "node:test";
 
 import { SandboxError } from "../dist/errors.js";
 import {
@@ -15,6 +15,16 @@ import {
   startIntercept,
 } from "../dist/telepresence.js";
 import { withSandboxHome } from "./fixtures.mjs";
+
+// These runners are fakes; under with-temp-home the SW-1074 guard would skip them before they run.
+let tempHome;
+before(() => {
+  tempHome = process.env.WERKMEISTER_TEMP_HOME;
+  delete process.env.WERKMEISTER_TEMP_HOME;
+});
+after(() => {
+  if (tempHome !== undefined) process.env.WERKMEISTER_TEMP_HOME = tempHome;
+});
 
 const base = { feature: "demo", localServices: ["backend"] };
 
