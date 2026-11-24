@@ -73,7 +73,9 @@ test("jit init writes the same files, byte for byte", async () => {
             .replaceAll(os.homedir(), "<USERHOME>")
             .replaceAll(home, "<HOME>")
             .replace(REPO_PATH, "<REPO>")
-            .replace(/jit-snap-ws-[a-zA-Z0-9]+/g, "<WORKSPACE>");
+            .replace(/jit-snap-ws-[a-zA-Z0-9]+/g, "<WORKSPACE>")
+            // The run id is random by design (SW-1140).
+            .replace(/^run_id: .*$/m, "run_id: <RUN>");
         }
         return out;
       },

@@ -69,7 +69,7 @@ import {
   prWatchScheduleState,
   type Step,
 } from "./machine_setup.js";
-import { recordEvent, workspaceSlice } from "./metrics.js";
+import { recordEvent, runTag, workspaceSlice } from "./metrics.js";
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import {
@@ -927,7 +927,8 @@ export async function runGate(
   const workspace = path.basename(ws);
   const run = randomUUID();
   const startedMs = Date.now();
-  recordEvent({ event: "gate.start", workspace, run, retry: nextGateRun(ws, file.stem) });
+  const tag = runTag(ws);
+  recordEvent({ event: "gate.start", workspace, run, retry: nextGateRun(ws, file.stem), ...tag });
   try {
     result = await gateChecks(ws, file, deps, started, recreated, testsOnly, rebase);
   } finally {
@@ -960,10 +961,10 @@ export async function runGate(
       });
     }
     // SW-405: the test rows' `test:coverage` reports, pass or fail; one written before this run measured other code.
-    recordGateCoverage(path.join(ws, file.dir), workspace, run, startedMs);
+    recordGateCoverage(path.join(ws, file.dir), workspace, run, startedMs, tag.run_id);
     // The CLI's exit codes (pr.ts exitOf): 75 retry later; no result means gateChecks threw.
     const exit = result?.ok ? 0 : result?.retry ? 75 : 1;
-    recordEvent({ event: "gate.end", workspace, run, exit });
+    recordEvent({ event: "gate.end", workspace, run, exit, ...tag });
   }
   return result;
 }
@@ -2690,7 +2691,7 @@ function recordPrEvent(
     return;
   }
   const ticket = issueRefsOf(loadConfigFile(ws, null))[0];
-  const base = { workspace: path.basename(ws), ...(ticket && { ticket }), pr };
+  const base = { workspace: path.basename(ws), ...(ticket && { ticket }), pr, ...runTag(ws) };
   recordEvent(
     event === "release" ? { event, ...base, tag: tag ?? "" } : { event, ...base },
     new Date(at).toISOString(),

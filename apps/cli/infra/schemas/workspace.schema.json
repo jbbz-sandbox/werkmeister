@@ -50,6 +50,10 @@
       "type": "string",
       "description": "Issue ID in this machine's issue tracker (overrides.issue_tracker, set by `werkmeister machine setup`)."
     },
+    "run_id": {
+      "type": "string",
+      "description": "This run's id, made by `workspace init` and kept by every rerun; don't edit it. Written on each metrics event this workspace logs, so its slice of the event log (close-out's metrics.jsonl) leaves out a same-named run's lines (SW-1140). Absent in a workspace that predates it until its next `workspace init`; its untagged lines slice by name and record-branch start as before."
+    },
     "project": {
       "type": "string",
       "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",

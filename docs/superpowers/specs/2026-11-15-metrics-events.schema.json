@@ -33,6 +33,10 @@
       "type": "string",
       "description": "Workspace folder name, e.g. sw-753-incremental-tsc"
     },
+    "run_id": {
+      "type": "string",
+      "description": "The writing workspace run's id, `run_id` in its workspace.yml (SW-1140); absent on lines written before it. Same-named runs' lines are told apart by it"
+    },
     "ticket": { "type": "string", "description": "Tracker key, e.g. SW-753" },
     "session": { "type": "string", "description": "Claude session id (ask, answer)" },
     "version": {

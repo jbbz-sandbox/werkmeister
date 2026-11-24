@@ -94,7 +94,13 @@ export function findCoverageReports(repoDir: string): CoverageReport[] {
 /** One `coverage` event per package. `version` is the package's `version+<short sha>`, as on other events. */
 export function coverageRows(
   pkgs: PackageCoverage[],
-  ctx: { source: "ci-main" | "ci-pr" | "gate"; commit: string; workspace?: string; run?: string },
+  ctx: {
+    source: "ci-main" | "ci-pr" | "gate";
+    commit: string;
+    workspace?: string;
+    run?: string;
+    run_id?: string;
+  },
 ): MetricsEvent[] {
   // A CI artifact is a fork PR's own output: a row whose values don't fit the schema is dropped, never logged.
   const pctOk = (v: unknown) => typeof v === "number" && v >= 0 && v <= 100;
@@ -116,6 +122,7 @@ export function coverageRows(
       statements: p.statements,
       ...(count(p.tests) && { tests: p.tests as number }),
       ...(count(p.duration_ms) && { duration_ms: p.duration_ms as number }),
+      ...(ctx.run_id && { run_id: ctx.run_id }),
     }));
 }
 
@@ -156,12 +163,13 @@ function git(dir: string, ...args: string[]): string | null {
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
-/** Logs a `coverage` row (source gate) per package report written since *sinceMs*; the count logged. Never throws. */
+/** Logs a `coverage` row (source gate) per package report written since *sinceMs*, tagged *runId* (SW-1140); the count logged. Never throws. */
 export function recordGateCoverage(
   worktree: string,
   workspace: string,
   run: string,
   sinceMs: number,
+  runId?: string,
 ): number {
   try {
     const commit = git(worktree, "rev-parse", "HEAD");
@@ -169,7 +177,7 @@ export function recordGateCoverage(
     const fresh = findCoverageReports(worktree).filter((r) => r.mtimeMs >= floorSecond(sinceMs));
     const rows = coverageRows(
       fresh.map((r) => r.pkg),
-      { source: "gate", commit, workspace, run },
+      { source: "gate", commit, workspace, run, run_id: runId },
     );
     return rows.filter((e) => recordEvent(e)).length;
   } catch (e) {

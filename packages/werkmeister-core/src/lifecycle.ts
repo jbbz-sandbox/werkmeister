@@ -103,7 +103,7 @@ import { writeAgentStateHooks } from "./harness/claude/hooks_gen.js";
 import { hooksAvailable } from "./harness/layout.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { sandboxLock } from "./locks.js";
-import { recordEvent } from "./metrics.js";
+import { recordEvent, runTag } from "./metrics.js";
 import { latestHandoff, type Note } from "./notes.js";
 import { type RunResult, run } from "./proc.js";
 import { workspaceServices } from "./registry_sync.js";
@@ -1425,6 +1425,7 @@ async function admitOrQueueHere(
         feature: victim,
         rank: why ?? "idle",
         for: feature,
+        ...runTag(victimWs ?? ""),
       });
       info(
         `Stopped '${victim}' to make room: its session is ` +

@@ -104,7 +104,9 @@ test("jit: the same create twice gives byte-identical files", async () => {
                 .replace(/create-copy-ws-[A-Za-z0-9]+/g, "<WS>")
                 // HOME is a fresh folder per run (SW-433).
                 .replaceAll(os.homedir(), "<USERHOME>")
-                .replaceAll(os.tmpdir(), "<TMP>"),
+                .replaceAll(os.tmpdir(), "<TMP>")
+                // The run id is random by design (SW-1140).
+                .replace(/^run_id: .*$/m, "run_id: <RUN>"),
             ]),
         );
       },
