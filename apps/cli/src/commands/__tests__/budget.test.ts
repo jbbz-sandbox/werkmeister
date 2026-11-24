@@ -8,7 +8,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, expect, it } from "vitest";
 import { execAsync } from "../../lib/__tests__/helpers/exec_async.js";
 import { hostLoadText } from "../budget.js";
 
@@ -37,15 +37,6 @@ beforeAll(() => {
     "services:\n  cli:\n    deploy:\n      resources:\n        limits: { cpus: '1' }\n        reservations: { memory: 1G }\n",
   );
   fs.writeFileSync(
-    path.join(eps, ".werkmeister", "waiting.json"),
-    JSON.stringify({
-      position: 3,
-      reason: "waiting for capacity",
-      services: ["cli"],
-      since: new Date(Date.now() - 12 * 60_000).toISOString(),
-    }),
-  );
-  fs.writeFileSync(
     path.join(dot, "scheduler", "leases.json"),
     JSON.stringify({
       beta: { slot: 2, workspace: "/ws/beta" },
@@ -56,6 +47,19 @@ beforeAll(() => {
   fs.writeFileSync(
     path.join(dot, "scheduler", "queue.json"),
     JSON.stringify(["gamma", "delta", "eps"]),
+  );
+});
+// Per test (SW-1124): the text rounds the wait to minutes, so a `since` from beforeAll read "13 min"
+// once the file had run 30 s, as on a loaded host. 11.5 min reads "12 min" for a whole minute of CLI start.
+beforeEach(() => {
+  fs.writeFileSync(
+    path.join(home, "eps", ".werkmeister", "waiting.json"),
+    JSON.stringify({
+      position: 3,
+      reason: "waiting for capacity",
+      services: ["cli"],
+      since: new Date(Date.now() - 11.5 * 60_000).toISOString(),
+    }),
   );
 });
 afterAll(() => fs.rmSync(home, { recursive: true, force: true }));
@@ -130,7 +134,7 @@ it("prints the budget, leases and Waiting queue as JSON", async () => {
     memory: 2 ** 30,
     gate: false,
   });
-  expect(out.waiters[2].waited_ms).toBeGreaterThanOrEqual(12 * 60_000);
+  expect(out.waiters[2].waited_ms).toBeGreaterThanOrEqual(11.5 * 60_000);
   expect(out.waiters[0]).toMatchObject({ services: null, cpus: null, waited_ms: 0 });
 });
 
