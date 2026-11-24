@@ -11,17 +11,10 @@ import { renderMarkdown } from "werkmeister-ui/lib/markdown";
 import { Css } from "werkmeister-ui/theme";
 import type { SessionUsage } from "werkmeister-ui/usage-widget";
 import type { HostBridge } from "werkmeister-ui/workspace-ui";
-import { COLUMN_LABEL, cardView, formatMinutes, timelineView } from "./lib/flow-board.js";
+import { COLUMN_LABEL, cardView, formatMinutes, RANGES, timelineView } from "./lib/flow-board.js";
 
 /** A `workspace-usage` session row; the tool also returns these, the shared widget type omits them. */
 type Session = SessionUsage & { firstTurn: string | null; lastTurn: string | null; turns: number };
-
-const RANGES: [MetricsRange, string][] = [
-  ["7d", "7d"],
-  ["30d", "30d"],
-  ["90d", "90d"],
-  ["all", "All"],
-];
 
 const CSS = `
   .flow, .flow * { box-sizing: border-box; }

@@ -5,21 +5,18 @@
 import type {
   FlowCard,
   FlowColumn,
+  MetricsRange,
   TimelineEvent,
   WaitCause,
 } from "werkmeister-core/metrics_report";
 
-/** The dashboard's tabs, in order, with their labels; the URL hash names one. */
-export const TABS = [
-  ["list", "Workspaces"],
-  ["new", "New workspace"],
-  ["prs", "Open Pull Requests"],
-  ["health", "Health"],
-  ["flow", "Flow"],
-  ["links", "Links"],
-] as const;
-export type Tab = (typeof TABS)[number][0];
-export const isTab = (h: string): h is Tab => TABS.some(([t]) => t === h);
+/** The Flow and Metrics tabs' range buttons. */
+export const RANGES: [MetricsRange, string][] = [
+  ["7d", "7d"],
+  ["30d", "30d"],
+  ["90d", "90d"],
+  ["all", "All"],
+];
 
 export const COLUMN_LABEL: Record<FlowColumn, string> = {
   working: "Working",

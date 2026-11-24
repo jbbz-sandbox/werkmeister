@@ -1,14 +1,15 @@
 // SW-782: the Flow tab. The `metrics` report from synthetic events → the board's four columns, card
-// text, the red card past its column's p90, the timeline's bars and the #flow tab. No network, no DOM.
+// text, the red card past its column's p90, the timeline's bars and the #flow and #metrics tabs. No network, no DOM.
 //   npm run build && node test/flow-board.smoke.mjs
 import assert from "node:assert";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const { TABS, isTab, cardView, formatMinutes, timelineView, COLUMN_LABEL } = await import(
+const { cardView, formatMinutes, timelineView, COLUMN_LABEL } = await import(
   path.join(pkgRoot, "dist/lib/flow-board.js")
 );
+const { TABS, isTab } = await import(path.join(pkgRoot, "dist/lib/tabs.js"));
 const { flowMetrics } = await import("werkmeister-core/metrics_report");
 
 const NOW = new Date("2026-11-20T12:00:00.000Z");
@@ -155,10 +156,10 @@ assert.deepEqual(
 );
 console.log("✓ timelineView");
 
-// 5. #flow is a tab, after Health.
-assert.ok(isTab("flow") && !isTab("nope"));
+// 5. #flow is a tab after Health, and #metrics after Flow.
+assert.ok(isTab("flow") && isTab("metrics") && !isTab("nope"));
 assert.deepEqual(
   TABS.map(([t]) => t),
-  ["list", "new", "prs", "health", "flow", "links"],
+  ["list", "new", "prs", "health", "flow", "metrics", "links"],
 );
 console.log("flow-board smoke: OK");
