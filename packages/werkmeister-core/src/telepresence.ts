@@ -13,7 +13,7 @@ import * as net from "node:net";
 import * as path from "node:path";
 
 import { workspaceForFeature } from "./compose.js";
-import { getK8sContext, isFixture, loadServices } from "./config.js";
+import { getK8sContext, hostSessionSkipReason, loadServices } from "./config.js";
 import { SandboxError } from "./errors.js";
 import { loadFeatureRouters } from "./feature_routing.js";
 import { load as loadGlobalConfig } from "./global_config.js";
@@ -408,7 +408,7 @@ export async function listIntercepts(
   runner: AsyncRunner = (cmd) => runAsyncRunner(cmd),
 ): Promise<InterceptState> {
   const none = new Map<string, string | null>();
-  if (isFixture() || !telepresenceEnabled()) {
+  if (hostSessionSkipReason() || !telepresenceEnabled()) {
     return { installed: false, available: false, namespace: null, intercepts: none };
   }
   const [rc, out] = await runner(STATUS_ARGS);
@@ -477,6 +477,15 @@ function parseConnectedNamespace(rc: number, out: string): string | null {
 }
 
 /**
+ * The daemon runs once per user, not per HOME: a with-temp-home or fixture run must not
+ * intercept or leave through it, or it ends or rebinds other workspaces' intercepts (SW-1074).
+ */
+function refuseHostSession(): void {
+  const skip = hostSessionSkipReason();
+  if (skip) throw new SandboxError(`Intercepts are off under ${skip}.`, "HOST_SESSION");
+}
+
+/**
  * Connect the telepresence daemon to *namespace*, reusing a live session.
  *
  * A session bound to a different namespace is quit first — telepresence
@@ -488,7 +497,7 @@ export async function ensureConnected(
   docker = false,
   runner: AsyncRunner = (cmd) => runAsyncRunner(cmd),
 ): Promise<void> {
-  if (isFixture()) return;
+  if (hostSessionSkipReason()) return;
   const use = docker ? ["--use", dockerDaemonName(context, namespace)] : [];
   const current = parseConnectedNamespace(...(await runner([...STATUS_ARGS, ...use])));
   if (current === namespace) {
@@ -535,7 +544,7 @@ function servicesFromEnv(envPath: string): string[] {
  * the deployments actually left.
  */
 export function leaveFeatureIntercepts(feature: string, runner: Runner = _run): string[] {
-  if (!telepresenceEnabled() || which("telepresence") === null) {
+  if (hostSessionSkipReason() || !telepresenceEnabled() || which("telepresence") === null) {
     return [];
   }
   const workspace = workspaceForFeature(feature);
@@ -762,9 +771,7 @@ export interface InterceptResult {
  * ```
  */
 export async function startIntercept(a: InterceptArgs): Promise<InterceptResult> {
-  if (isFixture()) {
-    throw new SandboxError("Intercepts are off under WERKMEISTER_FIXTURE.", "FIXTURE");
-  }
+  refuseHostSession();
   if (!telepresenceEnabled()) {
     throw new SandboxError(
       "Intercepts are off: remove `telepresence: false` under `overrides:` in ~/.werkmeister/config.yaml to use them.",
@@ -899,6 +906,7 @@ export interface LeaveInterceptArgs {
  * ```
  */
 export async function leaveIntercept(a: LeaveInterceptArgs): Promise<string[]> {
+  refuseHostSession();
   // Every call, the post-leave cleanup included, goes to the daemon the intercept used.
   const runnerIn =
     (namespace: string): AsyncRunner =>

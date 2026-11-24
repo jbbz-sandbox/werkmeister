@@ -15,6 +15,7 @@
  * read, TTY rendering, and the exit code.
  */
 
+import { hostSessionSkipReason } from "werkmeister-core/config";
 import * as tp from "werkmeister-core/telepresence";
 import { Colors, error, info, resolveWorkspace, success } from "../lib/config.js";
 import { loadDotenv } from "../lib/dotenv.js";
@@ -36,6 +37,9 @@ function localServicesOf(workspace: string): string[] {
 /** Execute ``werkmeister infra intercept``. */
 export async function run(args: Record<string, unknown>): Promise<void> {
   if (args.status) {
+    // An unqualified `list` connects a daemon: the user's one, whatever HOME is (SW-1074).
+    const skip = hostSessionSkipReason();
+    if (skip) fail(`Intercepts are off under ${skip}.`);
     for (const cmd of [
       ["telepresence", "status"],
       ["telepresence", "list"],

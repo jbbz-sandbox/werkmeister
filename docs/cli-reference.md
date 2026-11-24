@@ -785,6 +785,10 @@ what is currently intercepted.
 command then fails with `TELEPRESENCE_DISABLED`, and werkmeister starts no telepresence process
 on its own. `--leave` still runs, so an intercept left from before can be removed.
 
+Under `with-temp-home` (`WERKMEISTER_TEMP_HOME` equal to `HOME`) or a fixture run, this
+command, `--leave` and `--status` refuse (`HOST_SESSION`) before any telepresence call, and `feature down` leaves no intercept: the
+telepresence daemon runs once per user, so a temp HOME would still reach it.
+
 #### werkmeister infra connect
 
 Start all shared infrastructure (local + k8s port-forwards)
