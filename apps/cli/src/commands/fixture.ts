@@ -57,6 +57,16 @@ const cliWorktree = (): string | null => {
     : null;
 };
 
+/**
+ * A file flag's refusal. Outside the worktree it names where the path resolved and the base:
+ * a host absolute path given in the container resolves against /app (SW-1083).
+ */
+function outside(base: string | null, p: string): { file?: string; base?: string } {
+  if (base === null || inside(base, p)) return {};
+  const b = fs.realpathSync(base);
+  return { file: path.resolve(b, p), base: b };
+}
+
 export function parse(argv: string[], base = cliWorktree()) {
   const opts = {
     gate: false,
@@ -108,8 +118,9 @@ export function parse(argv: string[], base = cliWorktree()) {
       opts.queue = [...(opts.queue ?? []), ...(v.includes(":") ? [v] : v.split(","))];
     } else if (a === "--running" && argv[i + 1] !== undefined) {
       // fixturePreset checks each value; here only the shape: five tab-separated columns a line, or six with the running execs (SW-856).
-      const file = inside(base, argv[++i] as string);
-      if (!file || !fs.existsSync(file)) return { bad: a };
+      const p = argv[++i] as string;
+      const file = inside(base, p);
+      if (!file || !fs.existsSync(file)) return { bad: a, ...outside(base, p) };
       const rows = fs
         .readFileSync(file, "utf8")
         .split("\n")
@@ -149,8 +160,9 @@ export function parse(argv: string[], base = cliWorktree()) {
         a === "--change-branch") &&
       argv[i + 1] !== undefined
     ) {
-      const file = inside(base, argv[++i] as string);
-      if (!file || !fs.existsSync(file)) return { bad: a };
+      const p = argv[++i] as string;
+      const file = inside(base, p);
+      if (!file || !fs.existsSync(file)) return { bad: a, ...outside(base, p) };
       const keys = {
         "--services": "services",
         "--fragment": "fragment",
@@ -173,7 +185,9 @@ export function parse(argv: string[], base = cliWorktree()) {
         return { bad: a };
       opts.change = p;
     } else if ((a === "--workspace" || a === "--config") && argv[i + 1] !== undefined) {
-      const file = inside(base, argv[++i] as string);
+      const p = argv[++i] as string;
+      const file = inside(base, p);
+      if (!file) return { bad: a, ...outside(base, p) };
       let yml: unknown = null;
       try {
         if (file && fs.existsSync(file)) yml = YAML.parse(fs.readFileSync(file, "utf8"));
@@ -277,23 +291,25 @@ export async function run(argv: string[], base = cliWorktree()): Promise<void> {
   if ("bad" in parsed || parsed.steps.some((s) => Array.isArray(s) && s.length === 0)) {
     if ("bad" in parsed)
       console.error(
-        parsed.bad === "--then-append"
-          ? "--then-append <path> <text>: after a werkmeister step, followed by --then or the end; <path> an existing .md in the fixture workspace (no .git), or workflow:workflow.yaml / workflow:stages/<name>.md"
-          : parsed.bad === "--workflow"
-            ? "--workflow: a folder under the worktree holding workflow.yaml (and stages/*.md)"
-            : parsed.bad === "--workflow-in"
-              ? "--workflow-in: only repo (the default is the temp HOME)"
-              : parsed.bad === "--pr-field"
-                ? "--pr-field: skip_release, skip_exercise, skip_review, release or status (one line) =<value>, with --gate"
-                : parsed.bad === "--pr-line"
-                  ? '--pr-line: one raw line "<key>: <value>", key skip_release, skip_exercise, skip_review or release (status: --pr-field), with --gate'
-                  : parsed.bad === "--issue"
-                    ? "--issue: a GitHub issue as owner/repo#number, e.g. o/app#1"
-                    : parsed.bad === "--change"
-                      ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
-                      : parsed.bad === "--running"
-                        ? "--running: a file under the worktree, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus[<TAB>execs] line per container"
-                        : `${parsed.bad}: a file under the worktree${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
+        "file" in parsed && parsed.file
+          ? `${parsed.bad}: a file under the worktree; ${parsed.file} is not under ${parsed.base} (the worktree, as this process sees it): pass it relative to the worktree`
+          : parsed.bad === "--then-append"
+            ? "--then-append <path> <text>: after a werkmeister step, followed by --then or the end; <path> an existing .md in the fixture workspace (no .git), or workflow:workflow.yaml / workflow:stages/<name>.md"
+            : parsed.bad === "--workflow"
+              ? "--workflow: a folder under the worktree holding workflow.yaml (and stages/*.md)"
+              : parsed.bad === "--workflow-in"
+                ? "--workflow-in: only repo (the default is the temp HOME)"
+                : parsed.bad === "--pr-field"
+                  ? "--pr-field: skip_release, skip_exercise, skip_review, release or status (one line) =<value>, with --gate"
+                  : parsed.bad === "--pr-line"
+                    ? '--pr-line: one raw line "<key>: <value>", key skip_release, skip_exercise, skip_review or release (status: --pr-field), with --gate'
+                    : parsed.bad === "--issue"
+                      ? "--issue: a GitHub issue as owner/repo#number, e.g. o/app#1"
+                      : parsed.bad === "--change"
+                        ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
+                        : parsed.bad === "--running"
+                          ? "--running: a file under the worktree, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus[<TAB>execs] line per container"
+                          : `${parsed.bad}: a file under the worktree${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
       );
     console.error(USAGE);
     process.exitCode = 2;
