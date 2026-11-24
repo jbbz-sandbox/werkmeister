@@ -175,7 +175,7 @@ function Dashboard() {
       {pane("prs", <PrsTab bridge={bridge} />)}
       {pane("health", <HealthTab bridge={bridge} active={tab === "health"} />)}
       {pane("flow", <FlowTab bridge={bridge} active={tab === "flow"} />)}
-      {pane("metrics", <MetricsTab bridge={bridge} />)}
+      {pane("metrics", <MetricsTab bridge={bridge} active={tab === "metrics"} />)}
       {pane("links", <LinksTab />)}
     </>
   );

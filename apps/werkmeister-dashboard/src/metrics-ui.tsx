@@ -211,13 +211,15 @@ function Heatmap({
   );
 }
 
-export function MetricsTab({ bridge }: { bridge: HostBridge }) {
+export function MetricsTab({ bridge, active }: { bridge: HostBridge; active: boolean }) {
   const [range, setRange] = useState<MetricsRange>("30d");
   const [version, setVersion] = useState("all");
   const [trends, setTrends] = useState<MetricsTrends | null>(null);
   const [status, setStatus] = useState({ text: "Loading…", err: false });
-  // Only range re-queries: version filters the rows' byVersion locally (SW-1098 Q1).
+  // Range and showing the tab re-query: version filters the rows' byVersion locally (SW-1098 Q1);
+  // a hidden tab makes no call, so a run that closed meanwhile shows when it is opened (SW-1142).
   useEffect(() => {
+    if (!active) return;
     let stale = false;
     setStatus({ text: "Loading…", err: false });
     (
@@ -237,7 +239,7 @@ export function MetricsTab({ bridge }: { bridge: HostBridge }) {
     return () => {
       stale = true;
     };
-  }, [bridge, range]);
+  }, [bridge, range, active]);
 
   const versions = trends ? versionsOf(trends) : [];
   if (version !== "all" && !versions.includes(version)) versions.push(version);
