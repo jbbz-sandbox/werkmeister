@@ -26,7 +26,7 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import { monorepoRoot, sandboxHome, sandboxRoot, sharedProxySkipReason } from "./config.js";
+import { envVar, monorepoRoot, sandboxHome, sandboxRoot, sharedProxySkipReason } from "./config.js";
 import { daemonPort } from "./daemon_client.js";
 import { ProcError, run } from "./proc.js";
 import { error, info, success, warn } from "./reporter.js";
@@ -65,7 +65,12 @@ export interface WebApp {
 export const DASHBOARD: WebApp = {
   label: "Workspaces dashboard",
   dir: "werkmeister-dashboard",
-  port: 3001,
+  // WERKMEISTER_DASHBOARD_PORT: the seeded dashboard (SW-1092) points this at itself, so no tool
+  // health-checks or opens the host's real dashboard on 3001.
+  get port() {
+    const port = Number(envVar("DASHBOARD_PORT"));
+    return Number.isInteger(port) && port > 0 ? port : 3001;
+  },
   stem: "mcp-server",
   entry: "dist/main.js",
   buildRef: "dist/main.js",

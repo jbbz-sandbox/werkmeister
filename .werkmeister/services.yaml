@@ -254,7 +254,7 @@ services:
     type: web
     archetype: node-web
     test: "pnpm turbo run test:coverage --continue --filter=werkmeister-dashboard --filter=werkmeister-ui"
-    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-dashboard` before the first test. Then check the URL health (see Quick Health Checks)."
+    validate: "Fresh worktree (no node_modules, no dist/): run `pnpm install --frozen-lockfile` from the worktree root (cd there; `pnpm -C` makes corepack ignore the pinned pnpm and fail ERR_PNPM_BAD_PM_VERSION), then `pnpm turbo run build --filter=werkmeister-dashboard` before the first test. Then check the URL health (see Quick Health Checks). For a browser check, build the CLI bundle in the container (`pnpm turbo run build --filter=werkmeister`), then run `werkmeister workspace serve --dashboard` from the workspace as a background Bash job, open the URL its first line prints and stop the job by its task ID. It serves this worktree's built dashboard (`apps/cli/dist/dashboard.js`, no host install) from a seeded temp HOME: a workspace in each lifecycle state, transcripts and a metrics event log. It listens on 127.0.0.1, with docker, the Terminal/VS Code launcher, `claude`, `code`, `kubectl`, `gh` and `werkmeister` stubbed; blocked calls go to `side-effects.log` in that HOME. Never check against the feature container's dashboard, which mounts the real `~/.werkmeister` and the docker socket (SW-1092)."
     internal_port: 3001
     port_offset: 5
     health_endpoint: /

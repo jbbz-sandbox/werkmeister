@@ -122,6 +122,8 @@ test("SW-632: everyday commands run under the real matcher; escapes are refused"
     "w9r pr gate --tests",
     // SW-963: the static-page server the contracts name.
     "werkmeister workspace serve stages",
+    // SW-1092: the seeded dashboard the werkmeister-dashboard Validation text names.
+    "werkmeister workspace serve --dashboard",
     // SW-1059: the fixup fold the grouped contracts name.
     "werkmeister pr autosquash",
     ...f.wrapped,

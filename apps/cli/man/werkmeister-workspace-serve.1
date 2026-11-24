@@ -1,16 +1,23 @@
 .TH WERKMEISTER-WORKSPACE-SERVE 1 "" "werkmeister" "Werkmeister Manual"
 .SH NAME
-werkmeister\-workspace\-serve \- Serve a folder inside this workspace on 127.0.0.1 at an ephemeral port, for a browser check of a static page
+werkmeister\-workspace\-serve \- Serve a folder inside this workspace, or with \-\-dashboard a seeded dashboard, on 127.0.0.1 for a browser check
 .SH SYNOPSIS
-\fBwerkmeister workspace serve\fR <dir>
+\fBwerkmeister workspace serve\fR [dir]
+.SH OPTIONS
+.TP
+\fB\-\-dashboard\fR
+Serve this workspace's werkmeister worktree's built dashboard from a seeded temp HOME, host side effects stubbed
 .SH DESCRIPTION
 .PP
 Runs \fBpython3 \-I \-u \-m http.server 0 \-b 127.0.0.1 \-d <dir>\fR in the foreground: loopback only, a port the OS picks (the first line prints it). Refuses a \fB<dir>\fR whose real path is outside the workspace, is the workspace folder itself, or is in a dot\-folder: those hold its daemon token and \fB.env\fR files. It resolves only \fB<dir>\fR itself, so a symlink inside it is still followed. The ICM stage contracts name it for a browser check of a static HTML page, since the Chrome tool refuses \fBfile://\fR; each ICM run pre\-approves it. Run it as a background job and stop it by its task ID.
+.PP
+With \fB\-\-dashboard\fR (and no \fB<dir>\fR) it serves the workspace's werkmeister worktree's built dashboard, \fBapps/cli/dist/dashboard.js\fR, which needs no \fBnode_modules\fR, for a dashboard browser check. It runs on 127.0.0.1 at a free port (the first line prints the URL) under a fresh temp HOME seeded with a workspace in each lifecycle state, two transcripts per workspace and a metrics event log; the HOME is deleted on exit. The dashboard gets no env from the caller. \fBdocker\fR, \fBclaude\fR, \fBcodex\fR, \fBopencode\fR, \fBcode\fR, \fBkubectl\fR, \fBgh\fR, \fBwerkmeister\fR, \fBosascript\fR, \fBopen\fR and \fBtelepresence\fR are stubs that fail and log each call to \fBside\-effects.log\fR in that HOME, \fBDOCKER_HOST\fR and the daemon address are dead, and \fBWERKMEISTER_FIXTURE=1\fR keeps it off Caddy, k8s forwards and the hosts file. \fBgit\fR stays real, kept inside that HOME by \fBGIT_CEILING_DIRECTORIES\fR. The stubs steer honest code; they are not an isolation boundary: the served bundle is the worktree's own code, run on the host with the same trust as the pre\-approved test commands. Build the worktree first (\fBpnpm turbo run build \-\-filter=werkmeister\fR in its container).
 .SH EXAMPLES
 .PP
 .nf
 .RS 4
 werkmeister workspace serve stages
+werkmeister workspace serve \-\-dashboard
 .RE
 .fi
 .SH SEE ALSO
