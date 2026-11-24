@@ -16,6 +16,7 @@ import { COMPOSE_FILE } from "./compose_file.js";
 import { containerOf } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { writeFakes } from "./fixture_fakes.js";
+import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
 import { gitEnv } from "./proc.js";
 import { prDir, stageDirs, templateFor } from "./strategies/icm_templates.js";
 
@@ -81,6 +82,8 @@ export interface FixtureOptions {
   queue?: string[];
   /** A `postmortem.md` at the workspace root, on the record branch, so close-out runs without `--skip-postmortem` (SW-896). */
   postmortem?: boolean;
+  /** `<repos_root>/sandbox-workspace`, a clone of the record origin as `machine setup` clones it, so `metrics rebuild` reads the record branch (SW-1126). Opt-in: `workspace new` would refuse it, its origin not being the configured repo. */
+  workspaceRepo?: boolean;
   /** Each repo a worktree of its source clone, as init makes them, on `<os user>/demo`, so `pr push` takes it (SW-896). */
   worktrees?: boolean;
   /** JIRA_BASE_URL for the fixture (a fake Jira's URL, `startFakeJira`). Default: blank Jira credentials. */
@@ -462,6 +465,8 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
   git(workspace, "commit", "-q", "-m", "record");
   git(workspace, "remote", "add", "origin", record);
   git(workspace, "push", "-q", "-u", "origin", FIXTURE_BRANCH);
+  if (opts.workspaceRepo)
+    git(root, "clone", "-q", record, path.join(root, "repos", WORKSPACE_ROOT_REPO));
 
   const leases: Record<string, { slot: number; workspace: string }> = {};
   if (opts.slotsFull) {

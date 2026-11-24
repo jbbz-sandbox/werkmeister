@@ -450,3 +450,15 @@ it("--then-append refuses a fixture .md or workflow stage symlinked out of the f
     error.mockRestore();
   }
 });
+
+it("--pr-field url takes only a PR link on the fixture's own o/ repos (SW-1126)", () => {
+  const ok = parse(["--gate", "--pr-field", "url=https://github.com/o/app/pull/7", "pr", "status"]);
+  expect(ok.opts?.prFields).toEqual({ url: "https://github.com/o/app/pull/7" });
+  for (const v of [
+    "url=--repo=x",
+    "url=https://github.com/other/app/pull/7",
+    "url=https://github.com/o/app/pull/7\nbranch: x",
+    "url=http://github.com/o/app/pull/7",
+  ])
+    expect(parse(["--gate", "--pr-field", v, "pr", "status"]), v).toEqual({ bad: "--pr-field" });
+});

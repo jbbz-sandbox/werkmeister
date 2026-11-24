@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--workflow <dir> [--workflow-in repo]] [--print <file>]... <args> [--then <args> | --then-append <path> <text>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--workspace-repo] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--workflow <dir> [--workflow-in repo]] [--print <file>]... <args> [--then <args> | --then-append <path> <text>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -23,10 +23,12 @@ import {
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--workflow <dir> [--workflow-in repo]] [--print <file>]... <werkmeister args> [--then <werkmeister args> | --then-append <path> <text>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--workspace-repo] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--workflow <dir> [--workflow-in repo]] [--print <file>]... <werkmeister args> [--then <werkmeister args> | --then-append <path> <text>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /** PR-file keys the pre-approved wrapper may set: none reaches a git or Claude call (SW-514). */
-const PR_KEYS = "skip_release|skip_exercise|skip_review|release|status";
+const PR_KEYS = "skip_release|skip_exercise|skip_review|release|status|url";
+// url reaches only the fixture's fake gh and the metrics log: a PR on the fixture's own o/ repos (SW-1126).
+const PR_URL = /^https:\/\/github\.com\/o\/[A-Za-z0-9][\w.-]*\/pull\/\d+$/;
 // Not status: the PR file always has its own status line, and --pr-field status= already writes it verbatim.
 const PR_LINE_KEYS = "skip_release|skip_exercise|skip_review|release";
 const LINE_BREAK = /[\r\n\u2028\u2029\u0085]/;
@@ -77,6 +79,7 @@ export function parse(argv: string[], base = cliWorktree()) {
     behind: false,
     slotsFull: false,
     postmortem: false,
+    workspaceRepo: false,
     worktrees: false,
     jira: false,
     issue: undefined as string | undefined,
@@ -109,6 +112,7 @@ export function parse(argv: string[], base = cliWorktree()) {
     else if (a === "--behind") opts.behind = true;
     else if (a === "--slots-full") opts.slotsFull = true;
     else if (a === "--postmortem") opts.postmortem = true;
+    else if (a === "--workspace-repo") opts.workspaceRepo = true;
     else if (a === "--worktrees") opts.worktrees = true;
     else if (a === "--jira") opts.jira = true;
     else if (a === "--stale-compose") opts.staleCompose = true;
@@ -144,7 +148,12 @@ export function parse(argv: string[], base = cliWorktree()) {
       // Only fields that reach no git or Claude call: branch, base, session… do from the allowed wrapper.
       // status is one line, written verbatim, so a newline can't add one of those (SW-549).
       const m = new RegExp(`^(${PR_KEYS})=(.*)$`, "s").exec(argv[++i] ?? "");
-      if (!m || (m[1] === "status" && LINE_BREAK.test(m[2] ?? ""))) return { bad: a };
+      if (
+        !m ||
+        (m[1] === "status" && LINE_BREAK.test(m[2] ?? "")) ||
+        (m[1] === "url" && !PR_URL.test(m[2] ?? ""))
+      )
+        return { bad: a };
       opts.prFields = { ...opts.prFields, [m[1] as string]: m[2] as string };
     } else if (a === "--pr-line") {
       // Written unquoted, so a test can seed what YAML.stringify would quote (SW-851); --pr-field's keys but status, one line.
@@ -301,7 +310,7 @@ export async function run(argv: string[], base = cliWorktree()): Promise<void> {
               : parsed.bad === "--workflow-in"
                 ? "--workflow-in: only repo (the default is the temp HOME)"
                 : parsed.bad === "--pr-field"
-                  ? "--pr-field: skip_release, skip_exercise, skip_review, release or status (one line) =<value>, with --gate"
+                  ? "--pr-field: skip_release, skip_exercise, skip_review, release, status (one line) or url (https://github.com/o/<repo>/pull/<n>) =<value>, with --gate"
                   : parsed.bad === "--pr-line"
                     ? '--pr-line: one raw line "<key>: <value>", key skip_release, skip_exercise, skip_review or release (status: --pr-field), with --gate'
                     : parsed.bad === "--issue"
@@ -361,7 +370,9 @@ export async function run(argv: string[], base = cliWorktree()): Promise<void> {
       if (code === 0) fx.applyFragmentChange();
     }
     for (const step of code === 0 ? steps : []) {
-      code = Array.isArray(step) ? await runStep(step, fx.workspace, env) : append(step, fx);
+      // Close-out deletes the workspace folder; a later step runs from the fixture root (SW-1126).
+      const cwd = fs.existsSync(fx.workspace) ? fx.workspace : fx.root;
+      code = Array.isArray(step) ? await runStep(step, cwd, env) : append(step, fx);
       if (code !== 0) break;
     }
     for (const p of print) {
