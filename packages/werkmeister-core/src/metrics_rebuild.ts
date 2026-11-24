@@ -266,9 +266,15 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
     if (clone.status !== 0)
       throw new Error(`could not clone ${url}: ${clone.stderr.trim() || clone.error?.message}`);
     const head = git(repo, "symbolic-ref", "--short", "HEAD")?.trim();
-    const branches = (git(repo, "for-each-ref", "refs/heads", "--format=%(refname:short)") ?? "")
-      .split("\n")
-      .filter((b) => b && b !== head);
+    // Each tip's author in the same call (SW-1128): one git process, not one `git log` per branch.
+    const authors = new Map<string, string>();
+    for (const row of (
+      git(repo, "for-each-ref", "refs/heads", "--format=%(refname:short) %(authoremail)") ?? ""
+    ).split("\n")) {
+      const [b = "", email = ""] = row.split(" ");
+      if (b && b !== head) authors.set(b, email.replace(/^<|>$/g, ""));
+    }
+    const branches = [...authors.keys()];
     const slices = branchFiles(repo, branches, "metrics.jsonl");
     const usageFiles = branchFiles(repo, branches, "usage.json");
     /** *line*: a slice line, appended as is (SW-1116); re-serialised, a later `v` or key order would miss `lines` next run. */
@@ -297,7 +303,7 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
       }
       const usage = parseUsage(usageFiles?.get(branch));
       if (usage) {
-        const by = git(repo, "log", "-1", "--format=%ae", branch)?.trim() || undefined;
+        const by = authors.get(branch) || undefined;
         usages.push(JSON.stringify({ ...usage, by }));
       }
     }

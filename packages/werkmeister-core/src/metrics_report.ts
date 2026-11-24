@@ -282,7 +282,12 @@ const percentiles = (values: number[]): Percentiles => ({
 
 function groupBy<T>(rows: T[], key: (r: T) => string): Map<string, T[]> {
   const out = new Map<string, T[]>();
-  for (const r of rows) out.set(key(r), [...(out.get(key(r)) ?? []), r]);
+  for (const r of rows) {
+    const k = key(r);
+    const group = out.get(k);
+    if (group) group.push(r);
+    else out.set(k, [r]);
+  }
   return out;
 }
 
@@ -932,11 +937,9 @@ function trendSlice(items: TrendItem[]): TrendSlice {
   for (const i of items)
     if (i.kind === "stage")
       stageMinutes.set(i.stage, [...(stageMinutes.get(i.stage) ?? []), i.minutes]);
-  const tokens = zeroTokens();
-  for (const u of closed) addTokens(tokens, u.totals);
-  const byModel = modelRollup(closed);
-  const priced = closed.filter((u) => u.estUsd != null);
-  const inputSide = tokens.input + tokens.cacheCreation + tokens.cacheRead;
+  // The same cost math as the report's usage (SW-1128), so the two can't drift apart.
+  const { tokens, estUsd, costUnknown, cacheReadShare, activeMinutes, wallClockMinutes } =
+    usageRollup(closed);
   const firstGates = items.flatMap((i) => (i.kind === "firstGate" ? [i.passed] : []));
   const passed = firstGates.filter(Boolean).length;
   const gateMinutes = minutesOf("gate");
@@ -947,12 +950,12 @@ function trendSlice(items: TrendItem[]): TrendSlice {
     leadToMerge: counted(minutesOf("leadToMerge")),
     leadToRelease: counted(minutesOf("leadToRelease")),
     tokens,
-    estUsd: priced.length ? priced.reduce((a, u) => a + (u.estUsd ?? 0), 0) : null,
-    costUnknown: closed.length - priced.length,
-    byModel,
-    cacheReadShare: inputSide ? tokens.cacheRead / inputSide : null,
-    activeMinutes: closed.reduce((a, u) => a + (u.activeMinutes ?? 0), 0),
-    wallClockMinutes: closed.reduce((a, u) => a + (u.wallClockMinutes ?? 0), 0),
+    estUsd,
+    costUnknown,
+    byModel: modelRollup(closed),
+    cacheReadShare,
+    activeMinutes,
+    wallClockMinutes,
     gate: {
       runs: gateMinutes.length,
       wallMinutes: Math.round(gateMinutes.reduce((a, m) => a + m, 0)),
