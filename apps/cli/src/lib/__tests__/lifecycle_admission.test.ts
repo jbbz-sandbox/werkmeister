@@ -665,6 +665,49 @@ describe("admitServiceStart", () => {
     expect(composeStop).toHaveBeenCalledWith("mine");
   });
 
+  // SW-1115: an exec that never ends (watch mode, a shell) held the set for the whole 30 min wait.
+  it("releases its set under a docker exec that never ends once the hold has lasted 5 min", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ other: { slot: 1, workspace: other }, mine: { slot: 2, workspace: mine } });
+    let mineCpus = 3;
+    both(other, mine, 3, () => mineCpus);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      { name: "mine-core", status: "running", service: "core" } as never,
+    ]);
+    vi.mocked(composeStop).mockClear();
+    let releasedAfter = -1;
+    let polls = 0;
+    vi.mocked(composeStop).mockImplementation(async (f: string) => {
+      if (f === "mine") {
+        mineCpus = 0;
+        releasedAfter = polls;
+      }
+      return true;
+    });
+    execsIn.add("mine-core");
+    try {
+      await expect(
+        admitServiceStart("mine", mine, "api", {
+          sleep: async () => {
+            polls++;
+          },
+          waitMs: GATE_CAPACITY_WAIT_MS,
+        }),
+      ).rejects.toMatchObject({ code: "NO_CAPACITY" });
+    } finally {
+      execsIn.clear();
+    }
+    // 5 min of 15 s polls held, then released, writing why as any release does.
+    expect(releasedAfter).toBe(20);
+    expect(readLastStop(mine)).toMatchObject({
+      why: "the capacity wait to start api released it",
+    });
+  });
+
   // SW-737: it released core with stop(grant: false); giving up left that room to nobody.
   it("a released start that times out runs a grant for those still waiting", async () => {
     fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
