@@ -73,7 +73,12 @@ it("--running reads five tab-separated columns a line, --queue a comma list (SW-
   expect(parse(["--running", "secret-missing", "budget", "status"], tmp)).toEqual({
     bad: "--running",
   });
-  expect(parse(["--running", "../secret", "budget", "status"], tmp)).toEqual({ bad: "--running" });
+  // Out of the worktree: the refusal names where it resolved (SW-1083).
+  expect(parse(["--running", "../secret", "budget", "status"], tmp)).toEqual({
+    bad: "--running",
+    file: path.join(path.dirname(tmp), "secret"),
+    base: tmp,
+  });
 });
 
 it("--pr-field sets only fields that reach no git or Claude call, keeping any = in the value (SW-514)", () => {
@@ -233,7 +238,7 @@ it("--workspace takes only a YAML mapping under the worktree (SW-464)", async ()
       await run([...args, "--version"], tmp);
       expect(process.exitCode).toBe(2);
       expect(error.mock.calls[0]?.[0]).toMatch(
-        /--workspace: a file under the worktree, holding a YAML mapping/,
+        /--workspace: a file under the worktree(, holding a YAML mapping$|; \/etc\/hosts is not under )/,
       );
     }
   } finally {
@@ -370,4 +375,24 @@ it("--workflow refuses a stages/ symlinked out of the worktree before listing it
   expect(parse(["--workflow", "flows/linked", "status"], path.join(tmp, "ws"))).toEqual({
     bad: "--workflow",
   });
+});
+
+it("a file flag outside the worktree names the path and the base it must be under (SW-1083)", async () => {
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  // A host absolute path seen from the container: the file exists, just not under the base.
+  fs.writeFileSync(path.join(tmp, "host.yml"), "a: 1\n");
+  const ws = path.join(tmp, "ws");
+  try {
+    for (const flag of ["--workspace", "--config", "--services"]) {
+      error.mockClear();
+      await run([flag, path.join(tmp, "host.yml"), "--version"], ws);
+      expect(process.exitCode, flag).toBe(2);
+      expect(error.mock.calls[0]?.[0]).toBe(
+        `${flag}: a file under the worktree; ${path.join(tmp, "host.yml")} is not under ${ws} (the worktree, as this process sees it): pass it relative to the worktree`,
+      );
+    }
+  } finally {
+    error.mockRestore();
+    process.exitCode = 0;
+  }
 });

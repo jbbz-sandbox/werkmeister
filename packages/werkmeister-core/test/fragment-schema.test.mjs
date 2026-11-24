@@ -277,3 +277,11 @@ test("docs/ maps to docs-site and is not a no-service path (SW-644)", () => {
   assert.equal(fragment.repo.path_mappings.docs, "docs-site");
   assert.ok(!fragment.repo.no_service_paths.includes("docs"));
 });
+
+// SW-1083: in the container a host absolute path is not under /app, so the text says to pass it relative.
+test("core validate says the fixture's file flags take a path relative to the worktree (SW-1083)", () => {
+  assert.match(
+    fragment.services["werkmeister-core"].validate,
+    /Give every file flag a path relative to the worktree/,
+  );
+});
