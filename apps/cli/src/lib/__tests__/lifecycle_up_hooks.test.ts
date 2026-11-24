@@ -62,6 +62,8 @@ let root: string;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-hooks-"));
+  // up() takes a start lock and writes the scheduler queue under ~/.werkmeister; CI runs with the real HOME (SW-1131).
+  vi.stubEnv("HOME", path.join(root, "home"));
   fs.writeFileSync(path.join(root, COMPOSE_FILE), "services: {}\n");
   fs.writeFileSync(path.join(root, ".env"), "WERKMEISTER_SLOT=3\nSERVICES=\n");
   fs.mkdirSync(path.join(root, ".claude"));
@@ -73,6 +75,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   fs.rmSync(root, { recursive: true, force: true });
 });
 

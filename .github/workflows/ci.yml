@@ -67,6 +67,8 @@ jobs:
       # dependency: its licence is outside the allowlist. Bump with the plugin's types.
       - run: npm i -g @anthropic-ai/claude-code@2.1.316
       - run: pnpm turbo run typecheck build test --continue --filter='!werkmeister-core'
+      - run: sh scripts/require-clean-home.sh
+        if: ${{ !cancelled() }}
       # After the build: commands and flags come from the built CLI's `__complete`.
       # Its unit test runs with `licenses` above (scripts/*.test.mjs).
       - run: pnpm run docs:check
@@ -119,6 +121,8 @@ jobs:
         if: matrix.shard == 2 && github.head_ref != 'changeset-release/main'
         working-directory: packages/werkmeister-core
         timeout-minutes: 5
+      - run: sh scripts/require-clean-home.sh
+        if: ${{ !cancelled() && github.head_ref != 'changeset-release/main' }}
 
   # SW-77: engines promises Node >=22, so the suites the gate names run on 22
   # itself. Everything else stays on 24, whose bundled npm the release needs.
@@ -136,6 +140,8 @@ jobs:
         with:
           node-version: 22
       - run: pnpm turbo run test --continue --filter=werkmeister --filter=werkmeister-mcp --filter=werkmeister-core
+      - run: sh scripts/require-clean-home.sh
+        if: ${{ !cancelled() }}
 
   # SW-405: coverage for every package, as a job summary and artifacts. Report only: no threshold fails it,
   # and it is not a required check. Main pushes skip it like `test`; the merge-queue run of that commit is
@@ -155,6 +161,8 @@ jobs:
           git config --global user.email "ci@users.noreply.github.com"
       - uses: ./.github/actions/install
       - run: pnpm turbo run build test:coverage --continue
+      - run: sh scripts/require-clean-home.sh
+        if: ${{ !cancelled() }}
       - name: Baseline from the last merge-queue run
         if: ${{ !cancelled() }}
         env:

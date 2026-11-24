@@ -114,6 +114,8 @@ function workspace(services: string[]): string {
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-infra-"));
+  // up() takes a start lock and writes the scheduler queue under ~/.werkmeister; CI runs with the real HOME (SW-1131).
+  vi.stubEnv("HOME", path.join(root, "home"));
   fs.writeFileSync(path.join(root, "compose.yml"), "services: {}\n");
   fs.mkdirSync(path.join(root, ".werkmeister"));
   fs.writeFileSync(path.join(root, ".werkmeister", "workspace.yml"), "context_strategy: icm\n");
