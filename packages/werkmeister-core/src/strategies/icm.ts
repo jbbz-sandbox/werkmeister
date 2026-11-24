@@ -51,6 +51,7 @@ import {
 } from "./icm_external.js";
 import {
   askLine,
+  handoffLine,
   ICM_TEMPLATES,
   type IcmVars,
   prDir,
@@ -285,6 +286,7 @@ function renderContract(
       g.endsWith(":*") ? `- \`werkmeister ${g.slice(0, -2)} …\`` : `- \`werkmeister ${g}\``,
     ),
     "- Every other command asks. Read and edit files with Read, Edit and Write, never a `python3` heredoc or `python3 -c`, which no run pre-approves (SW-807).",
+    `- ${handoffLine(v.questionTool)}`,
     "",
     ...(v.autonomous
       ? ["## Self-check", c.selfCheck ?? SELF_CHECK]

@@ -295,6 +295,30 @@ export function workspaceState(f: StateFacts): WorkspaceState {
       source: "gate",
       file: g.file,
     });
+  // SW-1145: an autonomous agent stops on its own only when blocked, so a mid-build stop with no ask is one.
+  const [newestId, newest] =
+    Object.entries(f.sessions).sort(
+      ([, a], [, b]) => Date.parse(b.last ?? b.at) - Date.parse(a.last ?? a.at),
+    )[0] ?? [];
+  if (
+    f.autonomous &&
+    !f.paused &&
+    phase.id === "building" &&
+    activity.id === "idle" &&
+    newest?.stopped &&
+    newest.reply &&
+    !newest.ask &&
+    !needs.some((n) => n.kind in ASK_ACTION || n.kind === "gate")
+  )
+    need({
+      id: `question:${newestId}`,
+      kind: "question",
+      what: newest.reply,
+      since: newest.at,
+      action: ASK_ACTION.question,
+      source: "text",
+      session: newestId,
+    });
   if (activity.id === "gone" && BEFORE_RELEASE.has(phase.id))
     need({
       id: `session-died:${activity.session}`,

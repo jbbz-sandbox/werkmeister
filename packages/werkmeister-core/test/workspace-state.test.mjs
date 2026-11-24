@@ -158,6 +158,53 @@ test("needs-you: one item per session ask, with what, since, action and source",
   assert.equal(s.needs[2].action, "Approve the plan");
 });
 
+// SW-1145: an autonomous agent stops on its own only when it is blocked, so its reply is the question.
+test("needs-you: an autonomous session that stops mid-build with no ask reads needs-you, guessed from its reply", () => {
+  const stopped = (over = {}) => ({
+    s: { status: "idle", at: ago(MIN), last: ago(MIN), stopped: true, reply: "Run it.", ...over },
+  });
+  const state = (over) =>
+    workspaceState(
+      facts({
+        autonomous: true,
+        sessions: stopped(),
+        signal: { agent: "done", at: ago(MIN) },
+        ...over,
+      }),
+    );
+  const s = state();
+  assert.deepEqual(s.needs, [
+    {
+      id: "question:s",
+      kind: "question",
+      what: "Run it.",
+      since: ago(MIN),
+      action: "Answer it",
+      source: "text",
+      session: "s",
+    },
+  ]);
+  assert.equal(s.agent.id, "needs-you");
+  // Past building it is finished work, not a block; a person's workspace keeps today's reading.
+  for (const lifecycle of ["pr-open", "merged", "shipped", "abandoned"])
+    assert.ok(!kinds(state({ lifecycle })).includes("question"), lifecycle);
+  assert.equal(state({ lifecycle: "merged" }).agent.id, "done");
+  assert.deepEqual(kinds(state({ autonomous: false })), []);
+  assert.equal(state({ autonomous: false }).agent.id, "done");
+  // Still working, paused, or already asking: nothing to add.
+  assert.deepEqual(kinds(state({ sessions: stopped({ status: "busy", stopped: undefined }) })), []);
+  assert.deepEqual(kinds(state({ paused: { at: ago(MIN) } })), []);
+  const ask = { kind: "question", what: "Which?", at: ago(MIN), source: "session" };
+  assert.deepEqual(
+    state({ sessions: stopped({ ask }) }).needs.map((n) => n.what),
+    ["Which?"],
+  );
+  assert.deepEqual(
+    kinds(state({ gates: [{ file: "stages/04_propose/output/pr-x.md", at: ago(MIN) }] })),
+    ["gate"],
+  );
+});
+
 test("needs-you: the transcript guess only when no session has a record; paused hides session asks", () => {
   const transcriptAsk = { what: "Which fix?", at: ago(MIN) };
   assert.deepEqual(kinds(workspaceState(facts({ transcriptAsk }))), ["question"]);

@@ -304,6 +304,10 @@ export const askLine = (tool?: string) =>
     ? `Ask this check through \`${tool}\`: at most 4 questions per call (more than 4: batches of 4, one call after another), each standing on its own (what was checked, 2–3 concrete options with the exact wording or behaviour, the recommended one first; "Other" takes edits). Write each answer into the output file as its status, noted \`${APPROVAL_NOTE.chat}\` (a PR file: \`${APPROVAL_NOTE.chatPr}\`). A check left as a sentence at the end of a reply is not asked.`
     : `Ask this check as one numbered block at the end of your reply: each question stands on its own, options lettered with the recommended one first, then "reply with the letters, or your edits". Write each answer into the output file as its status, noted \`${APPROVAL_NOTE.chat}\` (a PR file: \`${APPROVAL_NOTE.chatPr}\`).`;
 
+// SW-1145: a `!` command asked mid-reply read as Idle for two hours; the question tool makes it a Needs you prompt.
+export const handoffLine = (tool?: string) =>
+  `A step only the person can take (a manual step, a \`!\` command for them to run, a browser or host check you can't run) is a hand-off: ask it ${tool ? `through \`${tool}\`` : "as one numbered block at the end of your reply"}. A sentence in a reply is not a hand-off.`;
+
 export const SELF_CHECK =
   "Review `output/` once against `../../BRIEF.md` and the live issue (`werkmeister issue view`). " +
   "Flip every `status: proposed` to `status: decided` yourself, and record each decision — and anything you " +
