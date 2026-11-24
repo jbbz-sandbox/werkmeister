@@ -40,8 +40,11 @@ const saved = {
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), "up-own-container-"));
   fs.writeFileSync(path.join(root, COMPOSE_FILE), "services: {}\n");
+  // SW-404: up is timed, so even a refused one records workspace.up; keep it off the real ~/.werkmeister.
+  vi.stubEnv("WERKMEISTER_CONFIG_FILE", path.join(root, "home", "config.yaml"));
 });
 afterEach(() => {
+  vi.unstubAllEnvs();
   fs.rmSync(root, { recursive: true, force: true });
   for (const [k, v] of Object.entries(saved)) {
     if (v === undefined) delete process.env[k];
