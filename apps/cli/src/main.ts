@@ -1032,11 +1032,15 @@ const SPECS: CommandSpec[] = [
     configure: (cmd) => {
       cmd
         .description(
-          "Serve a folder inside this workspace on 127.0.0.1 at an ephemeral port, for a browser check of a static page",
+          "Serve a folder inside this workspace, or with --dashboard a seeded dashboard, on 127.0.0.1 for a browser check",
         )
-        .argument("<dir>", "A folder inside the workspace, e.g. stages");
+        .argument("[dir]", "A folder inside the workspace, e.g. stages")
+        .option(
+          "--dashboard",
+          "Serve this workspace's werkmeister worktree's built dashboard from a seeded temp HOME, host side effects stubbed",
+        );
     },
-    namespace: ([dir]) => ({ dir }),
+    namespace: ([dir], o) => ({ dir, dashboard: o.dashboard }),
   },
   {
     name: "machine setup",

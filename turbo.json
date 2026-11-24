@@ -30,6 +30,17 @@
       "passThroughEnv": ["WERKMEISTER_FEATURE", "SANDBOX_FEATURE", "TMPDIR"],
       "cache": false
     },
+    // SW-1092: seeded-serve.smoke.mjs audits the CLI's bundled dashboard, so the CLI builds first.
+    "werkmeister-dashboard#test": {
+      "dependsOn": ["build", "werkmeister#build"],
+      "passThroughEnv": ["WERKMEISTER_FEATURE", "SANDBOX_FEATURE", "TMPDIR"]
+    },
+    "werkmeister-dashboard#test:coverage": {
+      "dependsOn": ["build", "werkmeister#build"],
+      "outputs": ["coverage/**"],
+      "passThroughEnv": ["WERKMEISTER_FEATURE", "SANDBOX_FEATURE", "TMPDIR"],
+      "cache": false
+    },
     // The merged monorepo summary, after every package's report.
     "//#test:coverage": {
       "dependsOn": [
