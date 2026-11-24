@@ -235,4 +235,27 @@ describe("--workflow and --then-append", () => {
       /template changed since init: \S+\/home\/\.werkmeister\/workflows\/review/,
     );
   }, 120_000);
+
+  // SW-1126: the fixture seeds the shared workspace repo, so a record-repo read runs.
+  it("metrics rebuild after an abandon reads the fixture's record origin", async () => {
+    const r = await harness([
+      "--postmortem",
+      "--workspace-repo",
+      "workspace",
+      "init",
+      "--no-build",
+      "--then",
+      "workspace",
+      "abandon",
+      "fixture probe",
+      "demo",
+      "--yes",
+      "--then",
+      "metrics",
+      "rebuild",
+    ]);
+    expect(r.code, r.out).toBe(0);
+    expect(r.out).not.toMatch(/no workspace repo/);
+    expect(r.out).toMatch(/metrics rebuild: \d+ added/);
+  }, 120_000);
 });
