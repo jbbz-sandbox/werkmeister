@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { buildSummary, mergeTotals, renderMarkdown } from "./coverage-summary.mjs";
+import { buildSummary, drops, mergeTotals, renderMarkdown } from "./coverage-summary.mjs";
 
 const istanbul = (covered, total) => {
   const m = { covered, total, pct: Math.round((covered / total) * 10000) / 100 };
@@ -86,4 +86,23 @@ test("renderMarkdown: no comparison asked shows no change; an unreadable base sa
   assert.doesNotMatch(renderMarkdown(summary, undefined), /\(|baseline/);
   assert.match(renderMarkdown(summary, null), /No baseline \(first run after SW-405\)/);
   assert.doesNotMatch(renderMarkdown(summary, null), /\(new\)/);
+});
+
+test("drops reports a lines % fall of more than the limit, and nothing at or under it", () => {
+  const base = { packages: { core: row(60), mcp: row(60), ui: row(60) } };
+  const now = { packages: { core: row(58.9), mcp: row(59), ui: row(61) } };
+  assert.deepEqual(drops(now, base, 1), [{ name: "core", now: 58.9, was: 60, drop: 1.1 }]);
+  assert.deepEqual(drops({ packages: { core: row(59.5) } }, base, 1), []);
+  // 2.14 - 1.14 is 1.0000000000000002 in floating point: it rounds to the limit, so it passes.
+  assert.deepEqual(
+    drops({ packages: { core: row(1.14) } }, { packages: { core: row(2.14) } }, 1),
+    [],
+  );
+});
+
+test("drops never reports a package the base lacks, or anything without a base", () => {
+  const now = { packages: { fresh: row(0) } };
+  assert.deepEqual(drops(now, { packages: { core: row(60) } }, 1), []);
+  assert.deepEqual(drops(now, null, 1), []);
+  assert.deepEqual(drops(now, undefined, 1), []);
 });

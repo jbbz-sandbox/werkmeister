@@ -3,10 +3,12 @@
  * Merges every package's coverage (SW-405) into coverage/summary.json and coverage/summary.md:
  * one row per package with a coverage/coverage-summary.json under apps/ or packages/, plus a total.
  *
- *   node scripts/coverage-summary.mjs [--base <summary.json>] [--markdown]
+ *   node scripts/coverage-summary.mjs [--base <summary.json>] [--markdown] [--max-drop <points> [--fail]]
  *
  * --base adds the change per metric against an earlier summary (CI: the last merge-queue run);
- * --markdown also prints summary.md, for $GITHUB_STEP_SUMMARY. Report only: never fails on the numbers.
+ * --markdown also prints summary.md, for $GITHUB_STEP_SUMMARY. --max-drop (SW-1129) prints a GitHub
+ * warning per package whose lines % fell more than that many points against --base; --fail makes
+ * it an error and exits 1.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -91,6 +93,18 @@ const delta = (now, then) => {
   return d === 0 ? " (±0)" : ` (${d > 0 ? "+" : ""}${d})`;
 };
 
+/** Packages whose lines % fell by more than maxDrop points; a package the base lacks is never one. */
+export function drops(summary, base, maxDrop) {
+  return Object.entries(summary.packages)
+    .filter(([name]) => base?.packages?.[name])
+    .map(([name, p]) => {
+      const was = base.packages[name].lines;
+      return { name, now: p.lines, was, drop: Math.round((was - p.lines) * 100) / 100 };
+    })
+    .filter((d) => d.drop > maxDrop)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** The job-summary table. `base`: undefined = no comparison asked, null = asked but unreadable, else an earlier summary. */
 export function renderMarkdown(summary, base) {
   const cells = (row, was) => METRICS.map((m) => `${row[m]}${base ? delta(row[m], was?.[m]) : ""}`);
@@ -134,4 +148,28 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   writeFileSync(join(ROOT, "coverage", "summary.json"), `${JSON.stringify(summary, null, 2)}\n`);
   writeFileSync(join(ROOT, "coverage", "summary.md"), md);
   if (args.includes("--markdown")) process.stdout.write(md);
+
+  const limitAt = args.indexOf("--max-drop");
+  if (limitAt >= 0) {
+    const limit = Number(args[limitAt + 1]);
+    if (at < 0 || !Number.isFinite(limit) || limit < 0) {
+      console.error("--max-drop needs --base <summary.json> and a number of points >= 0");
+      process.exit(2);
+    }
+    const level = args.includes("--fail") ? "error" : "warning";
+    const found = drops(summary, base, limit);
+    for (const d of found) {
+      console.log(
+        `::${level} title=Coverage drop::${d.name} lines ${d.now} % (was ${d.was} %, -${d.drop} points, limit ${limit}). If it is expected, add the coverage-drop-ok label and re-run the coverage job.`,
+      );
+    }
+    if (!found.length) {
+      console.log(
+        base
+          ? `No package's lines % dropped more than ${limit} points against ${base.commit?.slice(0, 8)}.`
+          : NO_BASELINE,
+      );
+    }
+    if (found.length && level === "error") process.exit(1);
+  }
 }
