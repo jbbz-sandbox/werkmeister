@@ -1,5 +1,16 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.110.1
+
+### Patch Changes
+
+- 5a1f9a9: Under `with-temp-home` (`WERKMEISTER_TEMP_HOME` equal to `HOME`) or a fixture run, werkmeister no longer reaches the user's telepresence daemon. `infra intercept`, `--leave` and `--status` refuse with the reason (`HOST_SESSION`) before any telepresence call, `feature down` leaves no intercept, and status reads no intercepts. The daemon runs once per user, not per HOME, so a temp HOME could switch the namespace it is connected to, detach or uninstall another workspace's intercept, or quit it (SW-1074).
+- 15ddc70: `with-fixture-workspace`'s file options (`--workspace`, `--config`, `--services`, `--running`, `--fragment` and the rest) name the path they resolved and the worktree it must be under when it is outside. A host absolute path given in the container used to get only "a file under the worktree", with no hint that paths resolve against /app (SW-1083).
+- 0d6dd29: `with-fixture-workspace --workflow` exits 2 on a `stages/<name>.md` that is a dangling symlink, instead of crashing with ENOENT. New tests cover a stage file and a `--then-append` target symlinked out of the worktree or fixture (SW-1119).
+- c67c32f: `with-fixture-workspace --workspace-repo` seeds `<repos_root>/sandbox-workspace` as a clone of the fixture's record origin, as `machine setup` would, so `--then metrics rebuild` reads the record branch instead of failing "no workspace repo". `--pr-field url=https://github.com/o/<repo>/pull/<n>` sets the PR file's link. A `--then` step after a close-out that deleted the workspace folder runs from the fixture root; it used to exit 1 with no message (SW-1126).
+- c2b4e27: SW-1140: `workspace init` gives each workspace run an id, `run_id` in `.werkmeister/workspace.yml`, made once and kept by every rerun. Every metrics event the workspace logs carries it, and a run's slice (stage times, the `metrics.jsonl` close-out pushes) keeps only lines with its own id. A teammate's run of the same name, or a late `pr.merged` or `release` from an earlier run of a reused name, no longer lands in it. Lines written before this still slice by name and the record branch's first commit.
+- d697d46: SW-1142: the dashboard Metrics tab calls `metrics-trends` each time it is opened, like Flow and Health, so a workspace that closed while the dashboard was open shows without a range click. It makes no call while hidden.
+
 ## 0.110.0
 
 ### Minor Changes
