@@ -1,5 +1,14 @@
 # sandbox-core
 
+## 0.110.1
+
+### Patch Changes
+
+- 5a1f9a9: Under `with-temp-home` (`WERKMEISTER_TEMP_HOME` equal to `HOME`) or a fixture run, werkmeister no longer reaches the user's telepresence daemon. `infra intercept`, `--leave` and `--status` refuse with the reason (`HOST_SESSION`) before any telepresence call, `feature down` leaves no intercept, and status reads no intercepts. The daemon runs once per user, not per HOME, so a temp HOME could switch the namespace it is connected to, detach or uninstall another workspace's intercept, or quit it (SW-1074).
+- 089ce00: `with-temp-home` exports `TURBO_TELEMETRY_DISABLED=1`. Its fresh HOME made every `turbo` run a first run, so each test row and gate run could send Turborepo's telemetry (SW-1117). Existing workspaces pick the new wrapper up on `workspace init` or `machine migrate`.
+- ae0a91c: `with-fixture-workspace --workflow` exits 2 when the `--workspace` file sets a `context_strategy` other than `icm`. The file used to win, so the fixture initialised as jit, never read the seeded workflow, and exited 0 (SW-1120).
+- c67c32f: `with-fixture-workspace --workspace-repo` seeds `<repos_root>/sandbox-workspace` as a clone of the fixture's record origin, as `machine setup` would, so `--then metrics rebuild` reads the record branch instead of failing "no workspace repo". `--pr-field url=https://github.com/o/<repo>/pull/<n>` sets the PR file's link. A `--then` step after a close-out that deleted the workspace folder runs from the fixture root; it used to exit 1 with no message (SW-1126).
+
 ## 0.110.0
 
 ### Minor Changes
