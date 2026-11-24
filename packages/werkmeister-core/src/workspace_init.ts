@@ -24,6 +24,7 @@
  * in-process caller survives (note 070 §3).
  */
 
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -295,6 +296,7 @@ const _WORKSPACE_CONFIG_HEADER =
 export function writeWorkspaceConfig(
   workspaceRoot: string,
   resolved: Record<string, string>,
+  { runId = false }: { runId?: boolean } = {},
 ): void {
   if (Object.keys(resolved).length === 0) {
     return;
@@ -336,6 +338,9 @@ export function writeWorkspaceConfig(
       merged[field] = value;
     }
   }
+  // The run's id on its metrics events (SW-1140): made once by init, kept by every rerun. Not
+  // from migrate, which writes other workspaces' files: theirs come from their own next init.
+  if (runId) merged["run_id"] ??= randomUUID();
   const body = YAML.stringify(merged, { sortMapEntries: true, blockQuote: "literal" });
   const serialized = _WORKSPACE_CONFIG_HEADER + body;
   if (fs.existsSync(target) && fs.readFileSync(target, "utf8") === serialized) {
@@ -788,7 +793,7 @@ export async function initWorkspace(
   }
   // 2a. Persist resolved inputs to .werkmeister/workspace.yml BEFORE writing any
   // other file — the durable source of truth. A no-op when unchanged.
-  writeWorkspaceConfig(workspaceRoot, inputs);
+  writeWorkspaceConfig(workspaceRoot, inputs, { runId: true });
 
   // 2b. The issue copy (.werkmeister/issue.md): handed over at creation, refreshed on request, else read back.
   const project = inputs["project"] ?? "";

@@ -14,7 +14,7 @@ import * as path from "node:path";
 import { sandboxHome } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { WRAP_UP } from "./harness/claude/desktop.js";
-import { type MetricsEvent, recordEvent, recordStageDone } from "./metrics.js";
+import { type MetricsEvent, recordEvent, recordStageDone, runTag } from "./metrics.js";
 import { findRecordRoot } from "./pr_guard.js";
 import { childEnv, dockerBin } from "./tool_bins.js";
 
@@ -1170,7 +1170,7 @@ export function record(input: Record<string, any>, now = new Date()): string | n
   const next = nextSession(input, current, now, { headless, foreign });
   if (!foreign)
     for (const e of askEvents(input, current, next, now, path.basename(root)))
-      recordEvent(e, now.toISOString());
+      recordEvent({ ...e, ...runTag(root) }, now.toISOString());
   if (next === undefined) return null;
   if (next === null) {
     if (!current) return null;

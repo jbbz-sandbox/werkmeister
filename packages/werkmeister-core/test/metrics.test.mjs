@@ -7,12 +7,15 @@ import { createRequire } from "node:module";
 import * as path from "node:path";
 import { test } from "node:test";
 
+import YAML from "yaml";
+
 import { record } from "../dist/agent_state.js";
 import { sandboxHome } from "../dist/config.js";
 import {
   metricsPath,
   recordEvent,
   recordStageDone,
+  runTag,
   stageDoneTimes,
   workspaceSlice,
 } from "../dist/metrics.js";
@@ -20,7 +23,7 @@ import { defaultDeps, gatePrs, openPrs, refreshPrStatus } from "../dist/pr_lifec
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { requestAdmission } from "../dist/scheduler_state.js";
 import { stageDirs, templateFor } from "../dist/strategies/icm_templates.js";
-import { initWorkspace } from "../dist/workspace_init.js";
+import { initWorkspace, writeWorkspaceConfig } from "../dist/workspace_init.js";
 import { pinWerkmeisterRoot, withFixtureWorkspace } from "./fixtures.mjs";
 
 pinWerkmeisterRoot();
@@ -764,6 +767,90 @@ test("workspaceSlice drops a reused name's lines from before the record branch's
       workspaceSlice(ws).map((l) => JSON.parse(l).ticket ?? JSON.parse(l).stage),
       ["SW-2", "01_r"],
     );
+  });
+});
+
+// SW-1140: two runs of one name (a teammate's, or a reused name's late pr.merged) both log lines
+// newer than either run's first commit; the run id in workspace.yml keeps each slice to its own.
+test("workspaceSlice keeps two same-named runs' overlapping lines apart by run id (SW-1140)", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const run = (cwd, date, ...a) =>
+      execFileSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], {
+        cwd,
+        encoding: "utf8",
+        env: { ...process.env, ...(date && { GIT_COMMITTER_DATE: date, GIT_AUTHOR_DATE: date }) },
+      }).trim();
+    const main = path.join(fx.root, "main");
+    fs.mkdirSync(main);
+    run(main, null, "init", "-q", "-b", "main");
+    run(main, "2026-10-01T00:00:00Z", "commit", "-q", "--allow-empty", "-m", "scaffold");
+    const clone = (who, id, date) => {
+      const ws = path.join(fx.root, who, "ws-t");
+      fs.mkdirSync(path.dirname(ws));
+      run(fx.root, null, "clone", "-q", main, ws);
+      run(ws, null, "checkout", "-q", "-b", `${who}/ws-t`);
+      fs.mkdirSync(path.join(ws, ".werkmeister"));
+      fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), `run_id: ${id}\n`);
+      run(ws, date, "commit", "-q", "--allow-empty", "-m", "init");
+      return ws;
+    };
+    const a = clone("amy", "run-a", "2026-11-05T00:00:00Z");
+    const b = clone("bo", "run-b", "2026-11-06T00:00:00Z");
+    const log = (ticket, run_id, at) =>
+      recordEvent({ event: "issue.start", workspace: "ws-t", ticket, run_id }, at);
+    log("SW-A", "run-a", "2026-11-07T00:00:00.000Z");
+    log("SW-B", "run-b", "2026-11-08T00:00:00.000Z");
+    recordEvent(
+      { event: "pr.merged", workspace: "ws-t", pr: "a", run_id: "run-a" },
+      "2026-11-09T00:00:00.000Z",
+    );
+    const tags = (ws) => workspaceSlice(ws).map((l) => JSON.parse(l).run_id);
+    assert.deepEqual(tags(a), ["run-a", "run-a"]);
+    assert.deepEqual(tags(b), ["run-b"]);
+  });
+});
+
+// SW-1140: workspace.yml gets a run id once, a rerun keeps it, events carry it; a workspace with none
+// (made before SW-1140) never wrote a tagged line, so a tagged line of its name is another run's.
+test("init makes a run id once, migrate none; stage.done carries it (SW-1140)", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const ws = path.join(fx.root, "ws-i");
+    const g = (...a) =>
+      execFileSync("git", ["-C", ws, "-c", "user.email=t@t", "-c", "user.name=t", ...a], {
+        encoding: "utf8",
+      }).trim();
+    fs.mkdirSync(path.join(ws, "stages", "01_r", "output"), { recursive: true });
+    const write = (inputs, opts) =>
+      withReporter(collectingReporter(), async () => writeWorkspaceConfig(ws, inputs, opts));
+    // migrate's call (another workspace's file) makes none; only init's does.
+    await write({ model: "opus" });
+    assert.deepEqual(runTag(ws), {}, "a write without runId adds no id");
+    await write({ feature: "f" }, { runId: true });
+    const id = YAML.parse(
+      fs.readFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "utf8"),
+    ).run_id;
+    assert.match(id, /^[0-9a-f-]{36}$/);
+    await write({ feature: "g" }, { runId: true });
+    assert.deepEqual(runTag(ws), { run_id: id }, "a rerun keeps the id");
+    await write({ model: "sonnet" });
+    assert.deepEqual(runTag(ws), { run_id: id }, "a later migrate-style write keeps it too");
+
+    g("init", "-q");
+    fs.writeFileSync(path.join(ws, "stages", "01_r", "output", "a.md"), "x");
+    g("add", ".");
+    g("commit", "-q", "-m", "x");
+    recordStageDone(ws);
+    const done = lines().filter((l) => l.event === "stage.done");
+    assert.deepEqual(
+      done.map((l) => l.run_id),
+      [id],
+    );
+    assert.equal(workspaceSlice(ws).length, 1);
+
+    fs.rmSync(path.join(ws, ".werkmeister", "workspace.yml"));
+    assert.deepEqual(runTag(ws), {});
+    assert.deepEqual(workspaceSlice(ws), [], "no id of its own: the tagged line is another run's");
+    assert.deepEqual(runTag(""), {}, "no path reads no cwd workspace.yml");
   });
 });
 

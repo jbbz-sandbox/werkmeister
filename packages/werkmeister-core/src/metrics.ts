@@ -8,11 +8,16 @@ import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import * as YAML from "yaml";
+
 import { sandboxHome } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { warn } from "./reporter.js";
 
-export type MetricsEvent =
+/** *run_id*: the writing run's id from its workspace.yml ({@link runTag}), so same-named runs' lines stay apart (SW-1140). */
+export type MetricsEvent = EventBody & { run_id?: string };
+
+type EventBody =
   /** *reason*: which writer queued it, "preempted", "requeued" or "waiting for capacity" (SW-991). */
   | { event: "queue.wait"; workspace: string; feature: string; position: number; reason?: string }
   | { event: "queue.admit"; workspace: string; feature: string; waited_s: number }
@@ -51,6 +56,18 @@ export function metricsPath(at: string): string {
 
 /** `<sandboxHome()>/metrics/usage-branches.jsonl`: every record branch's `usage.json` plus its author `by`, rewritten by `metrics rebuild` (SW-1104). */
 export const usageCachePath = () => path.join(sandboxHome(), "metrics", "usage-branches.jsonl");
+
+/** `{ run_id }` of the workspace at *ws*, to spread into an event; `{}` with no path or no id (a workspace from before SW-1140). Never throws. */
+export function runTag(ws: string): { run_id?: string } {
+  // No path: dotDir("") would read the cwd's workspace.yml, another run's.
+  if (!ws) return {};
+  let id: unknown;
+  try {
+    // workspace.yml alone: writeWorkspaceConfig writes run_id only there. Not workspace_prompts: an import cycle.
+    id = YAML.parse(fs.readFileSync(path.join(dotDir(ws), "workspace.yml"), "utf8"))?.run_id;
+  } catch {}
+  return typeof id === "string" && id ? { run_id: id } : {};
+}
 
 /** Appends *e* to this month's log; false when it could not. A failure warns and never throws: a lost metric must not fail its caller. */
 export function recordEvent(e: MetricsEvent, at = new Date().toISOString()): boolean {
@@ -175,7 +192,13 @@ export function recordStageDone(ws: string): void {
       // shortcut: keyed on stage, not commit, as stageDoneTimes is; a refilled stage is not re-logged.
       if (done.has(stage)) continue;
       recordEvent(
-        { event: "stage.done", workspace: path.basename(ws), stage, commit: fill.commit },
+        {
+          event: "stage.done",
+          workspace: path.basename(ws),
+          stage,
+          commit: fill.commit,
+          ...runTag(ws),
+        },
         fill.at,
       );
     }
@@ -200,13 +223,16 @@ function runStart(ws: string): number | null {
 }
 
 /**
- * The log lines of *ws*'s current run, oldest month first. The log keys events by workspace name,
- * so a reused name's earlier run is not this one: a line older than the record branch's first
- * commit is left out (SW-1116), and a `stage.done` counts only when its commit is in *ws*'s history.
- * With no first commit to go by (no origin, or no commit of its own), every line of the name counts.
+ * The log lines of *ws*'s current run, oldest month first. A line with a `run_id` is this run's
+ * only when it is *ws*'s run id (SW-1140): a teammate's run or a reused name's earlier one has its own.
+ * A line without one (written before SW-1140) is matched by workspace name: one older than the
+ * record branch's first commit is left out (SW-1116), and a `stage.done` counts only when its commit
+ * is in *ws*'s history. With no first commit to go by (no origin, or no commit of its own), every
+ * untagged line of the name counts.
  */
 function* runLines(ws: string): Generator<{ line: string; e: Record<string, unknown> }> {
   const workspace = path.basename(ws);
+  const { run_id } = runTag(ws);
   const start = runStart(ws);
   const dir = path.join(sandboxHome(), "metrics");
   let files: string[] = [];
@@ -233,6 +259,10 @@ function* runLines(ws: string): Generator<{ line: string; e: Record<string, unkn
         continue;
       }
       if (e?.["workspace"] !== workspace) continue;
+      if (e["run_id"] !== undefined) {
+        if (e["run_id"] === run_id) yield { line, e };
+        continue;
+      }
       if (start !== null && !(Date.parse(String(e["at"])) >= start)) continue;
       if (e["event"] === "stage.done") {
         const commit = String(e["commit"]);

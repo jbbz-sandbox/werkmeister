@@ -35,7 +35,7 @@ import { docker } from "./docker.js";
 import { SandboxError } from "./errors.js";
 import { load as loadGlobalConfig } from "./global_config.js";
 import { sandboxLock } from "./locks.js";
-import { recordEvent } from "./metrics.js";
+import { recordEvent, runTag } from "./metrics.js";
 import { info } from "./reporter.js";
 import {
   admit,
@@ -166,6 +166,7 @@ export function enqueue(feature: string, workspace: string): Promise<void> {
         feature,
         position: 1,
         reason: "preempted",
+        ...runTag(workspace),
       });
     },
     { timeout: LOCK_TIMEOUT },
@@ -194,6 +195,7 @@ export function requeueFirst(
         feature,
         position: 1,
         reason: "requeued",
+        ...runTag(workspace),
       });
       return 1;
     },
@@ -718,6 +720,7 @@ export function requestAdmission(
             feature,
             position: d.position,
             reason: "waiting for capacity",
+            ...runTag(workspace),
           });
         if (!queue.includes(feature)) next = [...queue, feature];
       } else {
@@ -726,7 +729,13 @@ export function requestAdmission(
         if (prev && admitted) {
           const waited = Math.round((Date.now() - Date.parse(prev.since ?? "")) / 1000);
           const waited_s = Number.isNaN(waited) ? 0 : Math.max(0, waited);
-          recordEvent({ event: "queue.admit", workspace: name, feature, waited_s });
+          recordEvent({
+            event: "queue.admit",
+            workspace: name,
+            feature,
+            waited_s,
+            ...runTag(workspace),
+          });
         }
       }
       if (next.join("\n") !== stored.join("\n")) writeQueue(next);
