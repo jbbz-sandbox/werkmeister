@@ -280,6 +280,21 @@ test("WERKMEISTER_HOST defaults to an unreachable host; a caller's value is kept
   }
 });
 
+// SW-1117: a fresh HOME is a first turbo run, which turns telemetry on and calls out.
+test("turbo telemetry is off under the wrapper (SW-1117)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const { TURBO_TELEMETRY_DISABLED: _, ...env } = process.env;
+    const r = spawnSync(bin, ["sh", "-c", 'printf %s "$TURBO_TELEMETRY_DISABLED"'], {
+      encoding: "utf8",
+      env,
+    });
+    assert.equal(r.stdout, "1");
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("a daemon call under the wrapper raises DaemonUnavailable, never reaching :3002 (SW-264)", () => {
   const { root, bin } = wrapper();
   const client = new URL("../dist/daemon_client.js", import.meta.url).href;
