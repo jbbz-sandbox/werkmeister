@@ -310,6 +310,36 @@ test("hide waiting on release: two merged and one working leave one card, the co
   const asks = nodes(merged, { m2: ag("needs-you", null, "Ship it?") });
   const shown = renderCards(asks, { hideMerged: true });
   assert.deepEqual(cards(shown), ["m2", "w"]);
+  // SW-1133: a machine-wide notice (registry sync) is not waiting in this workspace.
+  const notice = ag("needs-you");
+  notice.workspaceState.needs = [
+    {
+      id: "notice:registry-werkmeister",
+      kind: "notice",
+      what: "Registry sync needed: the werkmeister fragment changed",
+      since: null,
+      action: "Run werkmeister registry sync",
+      source: "notice",
+    },
+  ];
+  assert.deepEqual(cards(renderCards(nodes(merged, { m2: notice }), { hideMerged: true })), ["w"]);
+  // A held PR wake is a notice for this workspace's own session: still shown.
+  const wake = ag("needs-you");
+  wake.workspaceState.needs = [
+    {
+      id: "notice:wake-s1",
+      kind: "notice",
+      what: "A PR update is waiting for your open session",
+      since: null,
+      action: "Send that session a message, or let it finish its turn",
+      source: "notice",
+      session: "s1",
+    },
+  ];
+  assert.deepEqual(cards(renderCards(nodes(merged, { m2: wake }), { hideMerged: true })), [
+    "m2",
+    "w",
+  ]);
   // The strip still counts the hidden ones: a merged workspace whose other repo has a red PR.
   const extra = {
     lifecycles: new Map([["m1", "merged"]]),

@@ -188,9 +188,11 @@ export interface RenderOptions {
   hideMerged?: boolean;
 }
 
-/** Merged and waiting on a release with nothing asked; a release or a need brings it back on the next poll. */
+/** Merged and waiting on a release with nothing asked but notices; a release or a need brings it back on the next poll. */
 const hiddenByToggle = (n: WsNode) =>
-  n.kind === "workspace" && n.card?.waitingRelease === true && !n.card.needsYou;
+  n.kind === "workspace" &&
+  n.card?.waitingRelease === true &&
+  (!n.card.needsYou || n.card.noticesOnly);
 
 /** `3 hidden · waiting on release`, a click shows them again, so hidden work is never out of sight. */
 function hiddenLine(count: number): string {

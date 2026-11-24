@@ -91,6 +91,8 @@ export interface WsCard {
   action: "start" | "pause" | "resume" | null;
   /** Lifecycle `merged`: the PR merged and no release has it yet (SW-1003). */
   waitingRelease: boolean;
+  /** Every need is a registry-sync notice, a machine-wide step shown elsewhere: the release toggle may hide it (SW-1133). */
+  noticesOnly: boolean;
 }
 
 export interface InterceptRowLike {
@@ -576,6 +578,10 @@ function workspaceNode(
       needsYou: status?.workspaceState?.agent?.id === "needs-you",
       action: status ? sessionAction(status) : null,
       waitingRelease: extra.lifecycles?.get(ws.name) === "merged",
+      noticesOnly:
+        !!status?.workspaceState?.needs.length &&
+        // Only the registry sync is machine-wide; a held PR wake (`notice:wake-*`) is for this workspace's session.
+        status.workspaceState.needs.every((n) => n.id.startsWith("notice:registry-")),
     },
     // The `:current` suffix is how the menus hide "switch to workspace" on the
     // window's own workspace; every workspace `when` regex tolerates it.
