@@ -1,5 +1,18 @@
 # sandbox-core
 
+## 0.110.0
+
+### Minor Changes
+
+- 7847fec: SW-1092: `werkmeister workspace serve --dashboard` serves the workspace's werkmeister worktree's built dashboard (`apps/cli/dist/dashboard.js`, no host install) for a stage 03 browser check. It runs on 127.0.0.1 under a fresh temp HOME seeded with a workspace in each lifecycle state, transcripts and a metrics event log, with an env built from nothing: docker, the Terminal/VS Code launcher, `claude`, `code`, `kubectl`, `gh` and `werkmeister` are stubs that log to `side-effects.log`, and `DOCKER_HOST` and the daemon address are dead. The werkmeister-dashboard Validation text names it; run `werkmeister registry sync` to pick that up. New core export `werkmeister-core/dashboard_seed`.
+- 7801edb: SW-405: coverage goes into the metrics ledger. A new `coverage` event records one package's lines, branches, functions and statements % with its test count and duration. The PR gate logs one per package report its test rows write (`source: "gate"`), and `werkmeister metrics rebuild` imports CI's `coverage-summary` artifacts (`ci-pr`, `ci-main`). Close-out writes `coverage.json` to the record branch with the coverage of each PR's changed files. werkmeister's own gate rows now run `test:coverage`.
+
+### Patch Changes
+
+- 35eb6f4: SW-1110: a gate's start of a queued feature no longer races the waiting queue's start of the same feature. Two `docker compose up`s of one feature now run one after the other, so neither SIGTERMs the other's containers. A grant skips a feature that a direct start (a gate's, a person's `feature up`) took out of the queue after the grant read it, so it starts once and its session gets no false "Could not start" message.
+- b58e641: SW-1115: a capacity wait that holds off releasing its running containers because a `docker exec` runs in them now holds for 5 minutes at most, then releases them anyway and records why, as any release does. An exec that never ends (a watch-mode test run, an attached shell) no longer holds the set for the whole 30-minute gate wait, and two gates doing that no longer deadlock.
+- 083ae11: SW-405: every package measures V8 unit-test coverage with `pnpm turbo run test:coverage`, which writes per-package HTML, lcov and summary reports and a merged `coverage/summary.json`. CI reports it on each pull request, with the change against main. Report only: no threshold. The builds now write source maps; the published `werkmeister-core` leaves them out. Core's `COVERAGE=1` switch (SW-756) is gone: use `test:coverage`. See docs/coverage.md.
+
 ## 0.109.0
 
 ### Minor Changes

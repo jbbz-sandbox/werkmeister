@@ -1,5 +1,19 @@
 # sandbox-mcp
 
+## 0.10.1
+
+### Patch Changes
+
+- 35eb6f4: SW-1110: a gate's start of a queued feature no longer races the waiting queue's start of the same feature. Two `docker compose up`s of one feature now run one after the other, so neither SIGTERMs the other's containers. A grant skips a feature that a direct start (a gate's, a person's `feature up`) took out of the queue after the grant read it, so it starts once and its session gets no false "Could not start" message.
+- 083ae11: SW-405: every package measures V8 unit-test coverage with `pnpm turbo run test:coverage`, which writes per-package HTML, lcov and summary reports and a merged `coverage/summary.json`. CI reports it on each pull request, with the change against main. Report only: no threshold. The builds now write source maps; the published `werkmeister-core` leaves them out. Core's `COVERAGE=1` switch (SW-756) is gone: use `test:coverage`. See docs/coverage.md.
+- Updated dependencies [7847fec]
+- Updated dependencies [35eb6f4]
+- Updated dependencies [b58e641]
+- Updated dependencies [083ae11]
+- Updated dependencies [7801edb]
+  - werkmeister-core@0.110.0
+  - werkmeister-ui@0.7.96
+
 ## 0.10.0
 
 ### Minor Changes
