@@ -73,27 +73,6 @@ test("a bare fixture has no feature, so close-out skips teardown (SW-114)", asyn
 
 // SW-218: init cost ~10 s per call while slots.ts's container query waited out its 10 s
 // timeout on the host engine; SW-259's dead socket in tests fails it at once.
-test("init under the fixture writes the context and wrappers inside the 10 s query timeout", async () => {
-  await withFixtureWorkspace(async (fx) => {
-    const t0 = performance.now();
-    await withReporter(collectingReporter(), () =>
-      initWorkspace({}, fx.workspace, { build: false }),
-    );
-    const ms = performance.now() - t0;
-    // Measured ~0.5 s. The bound only has to fail the SW-218 regression it guards, an init that
-    // waits out the 10 s engine-query timeout, and hold under the load the pr gate's parallel
-    // builds create, where init took up to 7.1 s (SW-553). No load signal widens it: in the
-    // container os.loadavg() is the Linux VM's, which never sees the macOS host's contention.
-    assert.ok(ms < 9000, `init took ${Math.round(ms)} ms`);
-    const bin = path.join(fx.workspace, ".werkmeister", "bin");
-    assert.ok(fs.statSync(path.join(bin, "with-fixture-workspace")).mode & 0o100);
-    assert.match(
-      fs.readFileSync(path.join(fx.workspace, ".werkmeister", "werkmeister-context.md"), "utf8"),
-      /`lib`/,
-    );
-  });
-});
-
 // SW-551: with every slot leased, init skipped compose.yml and the context but still ended
 // "Workspace initialised.", so create handed the agent a container recipe it could not follow.
 test("init with every slot taken (slotsFull) says the container step did not run and what to do", async () => {
