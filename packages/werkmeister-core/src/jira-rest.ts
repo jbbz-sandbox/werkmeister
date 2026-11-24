@@ -24,6 +24,8 @@
  * - `POST /rest/api/2/issueLink`: "relates to" links
  */
 import { loadConfig } from "./config.js";
+import { currentLogger } from "./logger.js";
+import { noteSlow } from "./metrics.js";
 
 export interface JiraCreds {
   baseUrl: string;
@@ -83,22 +85,34 @@ export async function jiraCreds(): Promise<JiraCreds | null> {
 
 /** A Jira REST call (path already query-encoded). Throws on HTTP/network failure. */
 async function jiraFetch(creds: JiraCreds, restPath: string, body?: unknown): Promise<Response> {
-  const res = await fetch(`${creds.baseUrl}${restPath}`, {
-    method: body === undefined ? "GET" : "POST",
-    headers: {
-      Authorization: "Basic " + Buffer.from(`${creds.email}:${creds.token}`).toString("base64"),
-      Accept: "application/json",
-      ...(body === undefined ? {} : { "Content-Type": "application/json" }),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!res.ok) {
-    // Jira's errorMessages/errors say what it refused (an unknown issue type, a missing field).
-    const why = (await res.text().catch(() => "")).trim().slice(0, 500);
-    throw new Error(`Jira REST ${restPath} → HTTP ${res.status}${why ? `: ${why}` : ""}`);
+  const method = body === undefined ? "GET" : "POST";
+  const start = Date.now();
+  let status: number | undefined;
+  try {
+    const res = await fetch(`${creds.baseUrl}${restPath}`, {
+      method,
+      headers: {
+        Authorization: "Basic " + Buffer.from(`${creds.email}:${creds.token}`).toString("base64"),
+        Accept: "application/json",
+        ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    status = res.status;
+    if (!res.ok) {
+      // Jira's errorMessages/errors say what it refused (an unknown issue type, a missing field).
+      const why = (await res.text().catch(() => "")).trim().slice(0, 500);
+      throw new Error(`Jira REST ${restPath} → HTTP ${res.status}${why ? `: ${why}` : ""}`);
+    }
+    return res;
+  } catch (err) {
+    // SW-404: never the request headers (they hold the token); err carries Jira's reason, scrubbed like every line.
+    currentLogger().error({ err, method, path: restPath, status }, "tracker request failed");
+    throw err;
+  } finally {
+    noteSlow("tracker", Date.now() - start, status !== undefined && status < 400 ? "ok" : "error");
   }
-  return res;
 }
 
 /** Who the configured token signs in as; null without usable creds. Throws on HTTP failure. */

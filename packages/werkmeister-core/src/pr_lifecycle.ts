@@ -63,13 +63,14 @@ import {
   stop as stopFeature,
   stopIdle,
 } from "./lifecycle.js";
+import { currentLogger } from "./logger.js";
 import {
   originSlug,
   type PrWatchScheduleState,
   prWatchScheduleState,
   type Step,
 } from "./machine_setup.js";
-import { recordEvent, runTag, workspaceSlice } from "./metrics.js";
+import { recordEvent, runTag, timed, workspaceSlice, writeLogRecord } from "./metrics.js";
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import {
@@ -930,7 +931,7 @@ export async function runGate(
   const tag = runTag(ws);
   recordEvent({ event: "gate.start", workspace, run, retry: nextGateRun(ws, file.stem), ...tag });
   try {
-    result = await gateChecks(ws, file, deps, started, recreated, testsOnly, rebase);
+    result = await gateChecks(ws, file, deps, started, recreated, testsOnly, rebase, run);
   } finally {
     clearInterval(beat);
     fs.rmSync(path.join(ws, GATE_COMPOSE_FILE), { force: true });
@@ -1161,16 +1162,37 @@ async function gateChecks(
   // SW-316: the lint and test rows only, on the uncommitted tree, so implement sees container-only failures.
   testsOnly = false,
   rebase = false,
+  run: string,
 ): Promise<GateResult> {
+  const tag = runTag(ws);
+  let rowStart = Date.now();
   const followUps = testsOnly ? null : followUpsCheck(ws);
   const checks: GateCheck[] = testsOnly ? [] : [stagesCheck(ws), ...(followUps ? [followUps] : [])];
   let capacityShort = false;
   // After a NO_CAPACITY start, the rows that then find no container are its consequence, not a verdict.
   const NO_CONTAINER = /no running container|container not running|not run — fix the rows above/;
+  /** Every row that took time goes through here, so each one is timed and a failed one is logged (SW-404). */
+  const push = (check: GateCheck) => {
+    // shortcut: rows run in sequence, so the time since the last row is this row's; time each row itself if rows ever run in parallel.
+    const now = Date.now();
+    recordEvent({
+      event: "gate.row",
+      workspace: path.basename(ws),
+      run,
+      row: check.name,
+      duration_ms: now - rowStart,
+      result: check.ok ? "ok" : "error",
+      ...tag,
+    });
+    rowStart = now;
+    if (!check.ok)
+      currentLogger().error({ row: check.name, detail: check.detail }, "gate row failed");
+    checks.push(check);
+  };
   const add = (name: string, ok: boolean, detail: string) => {
     const waits = !ok && capacityShort && NO_CONTAINER.test(detail);
     // The wait is the start row's; this one only never ran (SW-981).
-    checks.push(
+    push(
       waits
         ? { name, ok, detail: "not run: waiting on capacity (see the start row)", retry: true }
         : { name, ok, detail },
@@ -1187,7 +1209,7 @@ async function gateChecks(
     const detail = prefix + (e instanceof Error ? e.message : String(e));
     // A second attempt that waited again is the same wait: one row (SW-981).
     if (capacity && checks.some((c) => c.name === name && c.detail === detail)) return;
-    checks.push({
+    push({
       name,
       ok: false,
       detail,
@@ -1266,7 +1288,7 @@ async function gateChecks(
       // rows it leaves unrun are its consequence, as after a NO_CAPACITY start.
       capacityShort = true;
       lines.push(gone);
-      checks.push({ name, ok: false, detail: lines.join("\n"), retry: true });
+      push({ name, ok: false, detail: lines.join("\n"), retry: true });
     } else add(name, res.code === 0, lines.join("\n"));
     return res;
   };
@@ -1780,7 +1802,7 @@ async function gateChecks(
   // gate when the Mac runs low, before any row runs, so exit 75 before starting anything (SW-620).
   const memory = lowMemory(deps.hostMemory);
   if (memory) {
-    checks.push({
+    push({
       name: "memory",
       ok: false,
       detail: `low memory: ${memory}; no container started and no row run. Retry later.`,
@@ -1910,7 +1932,7 @@ async function gateChecks(
     const lost = alreadyUp.filter((c) => !running.has(c));
     const up = alreadyUp.filter((c) => running.has(c));
     if (lost.length)
-      checks.push({
+      push({
         name: "containers",
         ok: false,
         detail: `${lost.join(", ")} stopped while a start above waited, so no row runs in it (see the start row)`,
@@ -4382,6 +4404,18 @@ export async function closeOut(
   name: string,
   opts: { abandon?: string; skipPostmortem?: string; noPr?: string; keepOpen?: boolean } = {},
   deps: Deps = defaultDeps(),
+): ReturnType<typeof closeOutUntimed> {
+  const ws = await resolveWorkspaceDir(name).catch(() => null);
+  const run = () => closeOutUntimed(name, opts, deps);
+  return ws
+    ? timed(opts.abandon?.trim() ? "workspace.abandon" : "workspace.close", ws, run)
+    : run();
+}
+
+async function closeOutUntimed(
+  name: string,
+  opts: { abandon?: string; skipPostmortem?: string; noPr?: string; keepOpen?: boolean },
+  deps: Deps,
 ): Promise<{
   /** The equivalent CLI command, e.g. `werkmeister workspace close <name>`. */
   command: string;
@@ -4570,6 +4604,7 @@ async function closeOutLocked(
     // The team view (SW-1104): the record-branch push at removal shares this run's events.
     const slice = workspaceSlice(ws);
     if (slice.length) fs.writeFileSync(path.join(ws, "metrics.jsonl"), `${slice.join("\n")}\n`);
+    writeLogRecord(ws);
     const coverage = writeCoverageSnapshot(
       ws,
       files.map((f) => ({ dir: f.dir, base: String(f.fm["base"] ?? "main") })),

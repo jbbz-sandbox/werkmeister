@@ -32,6 +32,7 @@ import {
 } from "werkmeister-core/daemon_client";
 import { SandboxError } from "werkmeister-core/errors";
 import { githubIngestConfig } from "werkmeister-core/github_ingest";
+import { createLogger } from "werkmeister-core/logger";
 import { watchPrs } from "werkmeister-core/pr_lifecycle";
 import { ownScheduler } from "werkmeister-core/scheduler_client";
 import { readQueue } from "werkmeister-core/scheduler_state";
@@ -44,6 +45,16 @@ import { connectInMemoryClient, createServer } from "./server.js";
 
 export { connectInMemoryClient, createServer };
 
+/** SW-404: the daemon's diagnostics, in the machine log; launchd's mcp-server.log keeps its lifecycle notices and crash traces. */
+const daemonLog = createLogger({ app: "daemon", pid: process.pid, version: pkgVersion() });
+
+function pkgVersion(): string | undefined {
+  try {
+    return JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8")).version;
+  } catch {
+    return undefined;
+  }
+}
 const scopeOfReq = (res: Response): Scope => res.locals["scope"] as Scope;
 // Test knob; the default stays well under undici's 300 s bodyTimeout.
 const HEARTBEAT_MS = Number(process.env.WERKMEISTER_DAEMON_HEARTBEAT_MS) || 60_000;
@@ -112,6 +123,7 @@ async function startHttp(): Promise<void> {
   });
   setInterval(() => guard.check(), 5000).unref();
 
+  // Lifecycle notices stay on stderr, launchd's mcp-server.log: the daemon logs at error, which would drop them.
   const log = (msg: string) => console.error(`[werkmeister-mcp] ${msg}`);
   const ingest = githubIngestConfig();
   if (ingest) {
@@ -281,7 +293,7 @@ async function startHttp(): Promise<void> {
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
     } catch (error) {
-      console.error("MCP error:", error);
+      daemonLog.error({ err: error }, "MCP request failed");
       if (!res.headersSent) {
         res.status(500).json({
           jsonrpc: "2.0",
@@ -303,6 +315,7 @@ async function startHttp(): Promise<void> {
     );
   });
   httpServer.on("error", (err: Error) => {
+    daemonLog.error({ err }, "failed to start server");
     console.error("Failed to start server:", err);
     process.exit(1);
   });
@@ -330,6 +343,7 @@ const isEntry =
   fs.realpathSync(process.argv[1]) === fs.realpathSync(fileURLToPath(import.meta.url));
 if (isEntry) {
   main().catch((e) => {
+    daemonLog.error({ err: e }, "daemon crashed");
     console.error(e);
     process.exit(1);
   });

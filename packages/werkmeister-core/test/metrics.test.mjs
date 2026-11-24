@@ -11,12 +11,16 @@ import YAML from "yaml";
 
 import { record } from "../dist/agent_state.js";
 import { sandboxHome } from "../dist/config.js";
+import { createLogger, machineLogPath, withLogger } from "../dist/logger.js";
 import {
   metricsPath,
+  noteSlow,
   recordEvent,
   recordStageDone,
   runTag,
   stageDoneTimes,
+  timed,
+  workspaceLogSlice,
   workspaceSlice,
 } from "../dist/metrics.js";
 import { defaultDeps, gatePrs, openPrs, refreshPrStatus } from "../dist/pr_lifecycle.js";
@@ -317,7 +321,7 @@ async function gateRuns(fx, ...depsList) {
   await withReporter(collectingReporter(), () => initWorkspace({}, fx.workspace, { build: false }));
   const results = [];
   for (const deps of depsList) results.push(await gatePrs(fx.workspace, undefined, deps));
-  const gates = lines().filter((l) => l.event.startsWith("gate."));
+  const gates = lines().filter((l) => l.event === "gate.start" || l.event === "gate.end");
   for (const g of gates) assert.equal(g.workspace, path.basename(fx.workspace));
   return { gates, results };
 }
@@ -335,6 +339,13 @@ test("a gate run writes one gate.start (retry 0) and one gate.end (exit 0) shari
       );
       assert.equal(start.run, end.run);
       assert.ok(end.at >= start.at);
+      // SW-404: every row the gate checked is a gate.row of this run.
+      const rows = lines().filter((l) => l.event === "gate.row");
+      assert.ok(rows.length > 0, "gate rows recorded");
+      for (const r of rows) {
+        assert.equal(r.run, start.run);
+        assert.ok(r.row && r.result === "ok" && r.duration_ms >= 0, JSON.stringify(r));
+      }
     },
     { gate: true },
   );
@@ -358,6 +369,12 @@ test("an exit-75 gate writes exit 75, and the next run in the workspace has retr
         ],
       );
       assert.notEqual(gates[0].run, gates[2].run);
+      // SW-404: a row the gate adds without running a check (low memory here) is still a timed gate.row.
+      const memory = lines().filter((l) => l.event === "gate.row" && l.row === "memory");
+      assert.deepEqual(
+        memory.map((l) => [l.run, l.result]),
+        [[gates[0].run, "error"]],
+      );
     },
     { gate: true },
   );
@@ -909,4 +926,92 @@ test("a gate logs a coverage row per report its test rows wrote, with the gate's
     },
     { gate: true },
   );
+});
+
+// SW-404: workspace verbs, gate rows and slow calls are timed into this log; the machine log is sliced for close-out.
+test("timed records workspace.* with duration_ms, result and the run id, and rethrows", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const ws = workspace(fx, "ws-timed");
+    fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "run_id: run-t\n");
+    assert.equal(await timed("workspace.up", ws, async () => 7), 7);
+    await assert.rejects(
+      timed("workspace.down", ws, async () => {
+        throw new Error("no");
+      }),
+      /no/,
+    );
+    const mine = lines().filter((e) => e.workspace === "ws-timed");
+    assert.deepEqual(
+      mine.map((e) => [e.event, e.result, e.run_id, typeof e.duration_ms]),
+      [
+        ["workspace.up", "ok", "run-t", "number"],
+        ["workspace.down", "error", "run-t", "number"],
+      ],
+    );
+  });
+});
+
+test("gate.row and call.slow lines pass the schema; call.slow needs a bound workspace", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    recordEvent({
+      event: "gate.row",
+      workspace: "ws-g",
+      run: "g1",
+      row: "werkmeister-core",
+      duration_ms: 1200,
+      result: "error",
+    });
+    noteSlow("install", 6000, "ok");
+    const bound = createLogger(
+      { app: "cli", workspace: "ws-g", run_id: "run-g", pid: 1 },
+      { workspaceDir: workspace(fx, "ws-g"), stderr: false },
+    );
+    await withLogger(bound, async () => {
+      noteSlow("git fetch", 4999, "ok");
+      noteSlow("docker build", 5000, "error");
+    });
+    assert.deepEqual(
+      lines()
+        .filter((e) => e.workspace === "ws-g")
+        .map((e) => [e.event, e.row ?? e.cmd, e.result, e.run_id]),
+      [
+        ["gate.row", "werkmeister-core", "error", undefined],
+        ["call.slow", "docker build", "error", "run-g"],
+      ],
+    );
+    assert.equal(
+      lines().filter((e) => e.event === "call.slow").length,
+      1,
+      "the unbound call wrote no event",
+    );
+  });
+});
+
+test("workspaceLogSlice keeps this run's machine-log lines: its run id, or its name when untagged, .1 first", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const ws = workspace(fx, "ws-s");
+    fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "run_id: run-s\n");
+    const file = machineLogPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const line = (msg, extra) =>
+      JSON.stringify({ time: "2026-11-24T00:00:00.000Z", msg, ...extra });
+    fs.writeFileSync(
+      file.replace(/\.jsonl$/, ".1.jsonl"),
+      `${line("old", { workspace: "ws-s" })}\n`,
+    );
+    fs.writeFileSync(
+      file,
+      [
+        line("mine", { workspace: "ws-s", run_id: "run-s" }),
+        line("earlier run", { workspace: "ws-s", run_id: "run-x" }),
+        line("other", { workspace: "ws-o" }),
+        line("untagged", { workspace: "ws-s" }),
+        "not json",
+      ].join("\n"),
+    );
+    assert.deepEqual(
+      workspaceLogSlice(ws).map((l) => JSON.parse(l).msg),
+      ["old", "mine", "untagged"],
+    );
+  });
 });

@@ -22,11 +22,22 @@ import { COMPOSE_FILE } from "werkmeister-core/compose_file";
 import { envVar } from "werkmeister-core/config";
 import { buildOf, expectDaemonBuild } from "werkmeister-core/daemon_client";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "werkmeister-core/errors";
+import { findWorkspaceRoot } from "werkmeister-core/gate";
+import { candidateWorkspaceRoots } from "werkmeister-core/global_config";
 // `./strategies/types` isn't its own package export, and `./strategies`
 // pulls in the registry (fs/proc/reporter/jit/icm) — accepted here since
 // werkmeister-core is already this CLI's core dependency and every command
 // module loads far more of it on demand.
 import { HARNESS_IDS } from "werkmeister-core/harness";
+import {
+  createLogger,
+  currentLogger,
+  type Logger,
+  logWorkspaceDir,
+  resolveLevel,
+  withLogger,
+} from "werkmeister-core/logger";
+import { workspaceBindings } from "werkmeister-core/metrics";
 import { error, ttyReporter, withReporter } from "werkmeister-core/reporter";
 import { STRATEGY_IDS } from "werkmeister-core/strategies";
 import { appEntryPath, MCP } from "werkmeister-core/web_servers";
@@ -1725,6 +1736,31 @@ const SPECS: CommandSpec[] = [
   ),
 ];
 
+const cliVersion = (): string =>
+  JSON.parse(fs.readFileSync(path.join(_REPO_ROOT, "package.json"), "utf8")).version;
+
+/** SW-404: the command's logger, bound to it and, unless it names another, to the workspace the cwd is in. */
+function commandLogger(command: string, args: Namespace, flag: string | undefined): Logger {
+  const level = resolveLevel(flag);
+  // Before any reporter is installed, so straight to stderr.
+  if (level.invalid) console.error(`[warn] unknown log level "${level.invalid}", using error`);
+  const workspaceDir = logWorkspaceDir(
+    findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots()) ?? undefined,
+    args,
+  );
+  return createLogger(
+    {
+      app: "cli",
+      command,
+      pid: process.pid,
+      version: cliVersion(),
+      commit: BUILD_STAMP?.sha,
+      ...(workspaceDir ? workspaceBindings(workspaceDir) : {}),
+    },
+    { workspaceDir, level: level.level, stderr: level.explicit },
+  );
+}
+
 async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
   // SW-106 dropped the ~/.sandbox fallback: say so instead of running on an empty config. // name-check: ignore
   const home = os.homedir();
@@ -1766,6 +1802,7 @@ async function dispatch(spec: CommandSpec, args: Namespace): Promise<void> {
     // on the second branch.
     //
     // NO_CAPACITY exits 75 (EX_TEMPFAIL), the only code with its own status: no room yet, rerun (SW-675).
+    currentLogger().error({ err: e }, "command failed");
     if (e instanceof SandboxError && e.code !== WORKSPACE_ERROR_CODE) {
       error(e.message);
     } else {
@@ -1886,7 +1923,11 @@ async function cli(): Promise<void> {
   program
     .name("werkmeister")
     .description(BANNER)
-    .version(JSON.parse(fs.readFileSync(path.join(_REPO_ROOT, "package.json"), "utf8")).version)
+    .version(cliVersion())
+    .option(
+      "--log-level <level>",
+      "Log at this level or above (error, warn, info, debug, trace), and copy log lines to stderr. Default: error, file only. Same as WERKMEISTER_LOG_LEVEL",
+    )
     .helpOption("-h, --help", "show this help message and exit");
 
   // `__parse <argv…>`: print the command and args namespace instead of running it, so a
@@ -1936,7 +1977,8 @@ async function cli(): Promise<void> {
       }
       // One wrap per command: everything it and the library call print through
       // this reporter, and nothing outside a command has a sink at all.
-      await withReporter(ttyReporter, () => dispatch(spec, args));
+      const log = commandLogger(spec.name, args, cmdObj.optsWithGlobals()["logLevel"]);
+      await withReporter(ttyReporter, () => withLogger(log, () => dispatch(spec, args)));
     });
   };
 

@@ -80,7 +80,9 @@
     "./k8s_forwards": "./dist/k8s_forwards.js",
     "./lifecycle": "./dist/lifecycle.js",
     "./locks": "./dist/locks.js",
+    "./logger": "./dist/logger.js",
     "./machine_setup": "./dist/machine_setup.js",
+    "./metrics": "./dist/metrics.js",
     "./metrics_rebuild": "./dist/metrics_rebuild.js",
     "./metrics_report": "./dist/metrics_report.js",
     "./migrate": "./dist/migrate.js",
@@ -130,6 +132,7 @@
     "dockerode": "^5.0.1",
     "jsonc-parser": "^3.3.1",
     "nunjucks": "^3.2.4",
+    "pino": "^10.4.0",
     "tar-fs": "^2.1.5",
     "yaml": "^2.9.0"
   },

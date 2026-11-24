@@ -45,6 +45,7 @@ import {
   stop,
   up,
 } from "werkmeister-core/lifecycle";
+import { currentLogger } from "werkmeister-core/logger";
 import { listNotes, parseNote } from "werkmeister-core/notes";
 import { collectingReporter, raw, withReporter } from "werkmeister-core/reporter";
 import { featureServices } from "werkmeister-core/slots";
@@ -87,6 +88,8 @@ export async function adapt(fn: () => Promise<Record<string, unknown>>): Promise
     const structuredContent = await withReporter(reporter, fn);
     return { content: [{ type: "text", text: reporter.text() }], structuredContent };
   } catch (e) {
+    // SW-404: the tool name and workspace are bound by createServer's registerTool wrapper.
+    currentLogger().error({ err: e, code: (e as { code?: unknown }).code }, "tool failed");
     if (e instanceof SandboxError) {
       // The codes (NOT_RUNNING, WORKSPACE, …) are the remote analogue of the
       // CLI's exit codes: something for the caller to branch on.

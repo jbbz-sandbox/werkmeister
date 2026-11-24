@@ -367,6 +367,19 @@ describe("command spellings", () => {
     expect((await parse(["workspace", "init"])).args.build).toBe(true);
   });
 
+  // SW-404: the global --log-level parses before or after the command, and -v keeps its per-command meaning.
+  it("--log-level is a global option; feature status -v still means verbose", async () => {
+    const [before, afterCmd] = await parseBatch([
+      ["--log-level", "info", "feature", "status", "-v"],
+      ["feature", "status", "-v", "--log-level", "debug"],
+    ]);
+    for (const p of [before, afterCmd]) {
+      expect(p.exitCode).toBeUndefined();
+      expect(p.command).toBe("feature status");
+      expect(p.args.verbose).toBe(true);
+    }
+  });
+
   it("workspace new and init --group reach run() (SW-459)", async () => {
     const [created, inited] = await Promise.all([
       parse(["workspace", "new", "f", "--group", "SW-2,SW-3"]),

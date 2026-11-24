@@ -11,6 +11,7 @@ import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
 import { envVar, isFixture } from "./config.js";
 import { SandboxError, WORKSPACE_ERROR_CODE } from "./errors.js";
+import { noteCall } from "./metrics.js";
 
 export function stripAnsi(s: string): string {
   return stripVTControlCharacters(s);
@@ -121,6 +122,7 @@ export function runCapture(
   args: string[],
   cwd: string = os.homedir(),
 ): Promise<{ stdout: string; stderr: string; code: number | null }> {
+  const start = Date.now();
   return new Promise((resolve, reject) => {
     const child = spawn(toolBin(bin), args, {
       cwd,
@@ -137,10 +139,12 @@ export function runCapture(
     child.stderr.on("data", (d) => (stderr += d.toString()));
     child.on("error", (e) => {
       clearTimeout(timer);
+      noteCall(bin, args, cwd, null, stderr, start);
       reject(e);
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      noteCall(bin, args, cwd, code, stderr, start);
       resolve({ stdout, stderr, code });
     });
   });

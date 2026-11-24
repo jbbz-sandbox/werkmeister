@@ -103,7 +103,7 @@ import { writeAgentStateHooks } from "./harness/claude/hooks_gen.js";
 import { hooksAvailable } from "./harness/layout.js";
 import { ensurePortForwardsHealthy, waitForForwards } from "./k8s.js";
 import { sandboxLock } from "./locks.js";
-import { recordEvent, runTag } from "./metrics.js";
+import { recordEvent, runTag, timed } from "./metrics.js";
 import { latestHandoff, type Note } from "./notes.js";
 import { type RunResult, run } from "./proc.js";
 import { workspaceServices } from "./registry_sync.js";
@@ -219,6 +219,14 @@ export interface UpResult {
  * may stop features whose session is idle or waiting on a person (SW-546).
  */
 export async function up(
+  feature: string,
+  workspace: string,
+  opts: Parameters<typeof upUntimed>[2] = {},
+): Promise<UpResult> {
+  return timed("workspace.up", workspace, () => upUntimed(feature, workspace, opts));
+}
+
+async function upUntimed(
   feature: string,
   workspace: string,
   {
@@ -1702,6 +1710,11 @@ export interface PauseResult {
  * Throws `NOT_RUNNING`, `NO_WORKSPACE`, `ALREADY_PAUSED` or `COMPOSE_PAUSE_FAILED`.
  */
 export async function pause(feature: string): Promise<PauseResult> {
+  const ws = workspaceForFeature(feature);
+  return ws ? timed("workspace.pause", ws, () => pauseUntimed(feature)) : pauseUntimed(feature);
+}
+
+async function pauseUntimed(feature: string): Promise<PauseResult> {
   refuseInsideOwnContainer(feature, "pause");
   const slot = await requireSlot(feature);
   const workspace = workspaceOrThrow(feature);
@@ -1783,6 +1796,11 @@ export interface ResumeResult {
  * Throws `NO_WORKSPACE`, `NOT_PAUSED` or `COMPOSE_RESUME_FAILED`.
  */
 export async function resume(feature: string): Promise<ResumeResult> {
+  const ws = workspaceForFeature(feature);
+  return ws ? timed("workspace.resume", ws, () => resumeUntimed(feature)) : resumeUntimed(feature);
+}
+
+async function resumeUntimed(feature: string): Promise<ResumeResult> {
   refuseInsideOwnContainer(feature, "resume");
   const workspace = workspaceOrThrow(feature);
   const rec = readPaused(workspace);
@@ -1839,6 +1857,17 @@ export interface DownResult {
  * loop, which §11 of the migration design keeps out of the library.
  */
 export async function down(
+  feature: string,
+  opts: { removeVolumes?: boolean; signal?: AbortSignal } = {},
+): Promise<DownResult> {
+  // An orphan project has no folder left to name the event after.
+  const ws = workspaceForFeature(feature);
+  return ws
+    ? timed("workspace.down", ws, () => downUntimed(feature, opts))
+    : downUntimed(feature, opts);
+}
+
+async function downUntimed(
   feature: string,
   { removeVolumes = false, signal }: { removeVolumes?: boolean; signal?: AbortSignal } = {},
 ): Promise<DownResult> {
