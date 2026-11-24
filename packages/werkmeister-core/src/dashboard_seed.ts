@@ -142,6 +142,7 @@ export function seedDashboardHome(home: string, now = Date.now()): string[] {
       ask: { kind: "question", what: "Approve?", at: ago(42), source: "session" },
     }),
   );
+  ev(330, "queue.admit", "seed-working", { feature: "seed-working", waited_s: 900 });
   ev(300, "stage.done", "seed-working", { stage: "01_research", commit: "a1" });
   ev(250, "answer", "seed-working", { session: "s", waited_s: 1800 });
   ev(120, "stage.done", "seed-working", { stage: "02_spec", commit: "a2" });

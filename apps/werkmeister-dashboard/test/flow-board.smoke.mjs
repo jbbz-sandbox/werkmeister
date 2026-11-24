@@ -6,9 +6,19 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const { cardView, formatMinutes, timelineView, COLUMN_LABEL } = await import(
-  path.join(pkgRoot, "dist/lib/flow-board.js")
-);
+const {
+  cardView,
+  formatMinutes,
+  timelineView,
+  COLUMN_LABEL,
+  WAIT_KEYS,
+  waitBars,
+  cyclePoints,
+  flowTiles,
+  formatCount,
+  agentBars,
+} = await import(path.join(pkgRoot, "dist/lib/flow-board.js"));
+const { stackedBarView } = await import(path.join(pkgRoot, "dist/lib/charts.js"));
 const { TABS, isTab } = await import(path.join(pkgRoot, "dist/lib/tabs.js"));
 const { flowMetrics } = await import("werkmeister-core/metrics_report");
 
@@ -162,4 +172,122 @@ assert.deepEqual(
   TABS.map(([t]) => t),
   ["list", "new", "prs", "health", "flow", "metrics", "links"],
 );
+
+// SW-783: the Flow charts' inputs from a report with every wait cause in one week.
+{
+  const totals = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };
+  const r = flowMetrics(
+    {
+      events: [
+        ev("2026-11-17T10:00:00Z", "answer", "ws-x", { session: "s", waited_s: 3600 }),
+        ev("2026-11-17T11:00:00Z", "queue.admit", "ws-x", { waited_s: 1800 }),
+        ev("2026-11-18T09:00:00Z", "gate.start", "ws-x", { run: "g1", retry: 0 }),
+        ev("2026-11-18T09:30:00Z", "gate.end", "ws-x", { run: "g1", exit: 75 }),
+        ev("2026-11-18T10:00:00Z", "pr.open", "ws-x", { ticket: "SW-9", pr: PR(9) }),
+        ev("2026-11-18T12:00:00Z", "pr.merged", "ws-x", { ticket: "SW-9", pr: PR(9) }),
+        ev("2026-11-18T15:00:00Z", "release", "ws-x", { ticket: "SW-9", pr: PR(9), tag: "v9" }),
+      ],
+      open: [
+        open({
+          workspace: "ws-o",
+          lifecycle: "working",
+          sessions: [{ firstTurn: "2026-11-20T08:00:00Z", activeMinutes: 45 }],
+        }),
+      ],
+      usages: [
+        {
+          workspace: "ws-x",
+          ticket: "SW-9",
+          closedAt: "2026-11-19T00:00:00Z",
+          firstTurn: "2026-11-17T08:00:00Z",
+          estUsd: null,
+          totals,
+          activeMinutes: 30,
+          wallClockMinutes: 60,
+          turns: 4,
+        },
+      ],
+    },
+    "7d",
+    NOW,
+  );
+
+  const bars = waitBars(r);
+  assert.deepEqual(
+    bars.map((b) => b.label),
+    ["2026-11-09", "2026-11-16"],
+  );
+  assert.deepEqual(bars[1].values, { person: 1, capacity: 0.5, pr: 2, gateRetry: 0.5, release: 3 });
+  // All five causes stack bottom-up in legend order.
+  assert.deepEqual(
+    stackedBarView(bars, WAIT_KEYS, 100).bars[1].segments.map((s) => s.key),
+    ["person", "capacity", "pr", "gateRetry", "release"],
+  );
+
+  const cycle = cyclePoints(r, "cycle");
+  const lead = cyclePoints(r, "lead");
+  assert.deepEqual(cycle.points, [
+    { t: Date.parse("2026-11-18T12:00:00Z"), value: 28 * 60, label: "SW-9" },
+  ]);
+  assert.equal(lead.points[0].value, 31 * 60);
+  assert.equal(cycle.p50, r.cycle.p50Minutes);
+  assert.equal(lead.p90, r.lead.p90Minutes);
+  assert.deepEqual([cycle.x0, cycle.x1], [Date.parse(r.from), NOW.getTime()]);
+
+  const days = agentBars(r);
+  assert.equal(days.length, 8);
+  assert.deepEqual(days.at(-1), { label: "2026-11-20", values: { active: 45 } });
+  // A closed row with no sessions counts on its close day.
+  assert.deepEqual(days.at(-2), { label: "2026-11-19", values: { active: 30 } });
+}
+
+// SW-783: the cost and agent-time tiles.
+{
+  const u = (o) => ({
+    workspaces: 2,
+    estUsd: null,
+    costUnknown: 2,
+    tokens: { input: 100_000, output: 50_000, cacheCreation: 250_000, cacheRead: 56_000_000 },
+    cacheReadShare: 0.97,
+    activeMinutes: 185,
+    wallClockMinutes: 280,
+    turns: 340,
+    ...o,
+  });
+  assert.deepEqual(flowTiles(u({})), [
+    { label: "Est. cost", value: "—", sub: "2 workspaces closed · 2 unpriced" },
+    { label: "Tokens", value: "56.4M", sub: "97% cache-read" },
+    { label: "Active / wall", value: "3h 5m / 4h 40m", sub: "66% active" },
+    { label: "Turns", value: "340", sub: "2 workspaces closed" },
+  ]);
+  assert.equal(flowTiles(u({ estUsd: 4.2, costUnknown: 0, workspaces: 1 }))[0].value, "$4.20");
+  assert.equal(flowTiles(u({ workspaces: 1 }))[3].sub, "1 workspace closed");
+  const none = flowTiles(
+    u({
+      workspaces: 0,
+      costUnknown: 0,
+      tokens: { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 },
+      cacheReadShare: null,
+      activeMinutes: 0,
+      wallClockMinutes: 0,
+      turns: 0,
+    }),
+  );
+  assert.deepEqual(
+    none.map((t) => [t.value, t.sub]),
+    [
+      ["—", "0 workspaces closed"],
+      ["—", undefined],
+      ["—", undefined],
+      ["—", "0 workspaces closed"],
+    ],
+  );
+  assert.deepEqual([940, 812_000, 999_499, 999_500, 56_400_000].map(formatCount), [
+    "940",
+    "812k",
+    "999k",
+    "1.0M",
+    "56.4M",
+  ]);
+}
 console.log("flow-board smoke: OK");

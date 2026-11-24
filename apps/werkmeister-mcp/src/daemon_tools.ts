@@ -106,6 +106,7 @@ const METRICS_OUTPUT = {
     }),
   ),
   waitsByWeek: z.array(z.object({ week: z.string(), seconds: WAITS })),
+  agentByDay: z.array(z.object({ day: z.string(), activeMinutes: z.number() })),
   waits: WAITS,
   tickets: z.array(
     z.object({

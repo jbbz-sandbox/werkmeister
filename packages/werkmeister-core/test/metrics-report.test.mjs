@@ -510,3 +510,80 @@ test("a workspace's timeline keeps its own run's events, oldest first, and only 
   assert.equal(tl[9].pr, PR(1));
   assert.deepEqual(flowMetrics(input, "7d", NOW, "nope").timeline, []);
 });
+
+test("agentByDay buckets session active minutes by their first turn's UTC day (SW-783)", () => {
+  const closed = (workspace, closedAt, activeMinutes, sessions) => ({
+    ...usage(
+      workspace,
+      closedAt,
+      null,
+      null,
+      { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 },
+      activeMinutes,
+      0,
+      0,
+    ),
+    ...(sessions ? { sessions } : {}),
+  });
+  const input = {
+    events: [],
+    open: [
+      card({
+        workspace: "ws-o",
+        lifecycle: "working",
+        sessions: [
+          { firstTurn: "2026-11-19T23:50:00Z", activeMinutes: 40 }, // crosses midnight: all on 11-19
+          { firstTurn: "2026-11-20T08:00:00Z", activeMinutes: 15 },
+          { firstTurn: null, activeMinutes: 99 },
+          { firstTurn: "2026-11-20T09:00:00Z", activeMinutes: null },
+        ],
+      }),
+    ],
+    usages: [
+      closed("ws-s", "2026-11-18T12:00:00Z", 999, [
+        { firstTurn: "2026-11-15T10:00:00Z", activeMinutes: 20 },
+        { firstTurn: "2026-11-17T10:00:00Z", activeMinutes: 25 },
+        { firstTurn: "2026-11-01T10:00:00Z", activeMinutes: 70 }, // before 7d
+      ]),
+      closed("ws-n", "2026-11-17T18:00:00Z", 5), // no sessions: counts on its closedAt day
+    ],
+  };
+  const r = flowMetrics(input, "7d", NOW);
+  // 7d back from Fri 12:00 is 11-13 12:00, snapped to 11-13: eight days through today.
+  assert.deepEqual(r.agentByDay, [
+    { day: "2026-11-13", activeMinutes: 0 },
+    { day: "2026-11-14", activeMinutes: 0 },
+    { day: "2026-11-15", activeMinutes: 20 },
+    { day: "2026-11-16", activeMinutes: 0 },
+    { day: "2026-11-17", activeMinutes: 30 },
+    { day: "2026-11-18", activeMinutes: 0 },
+    { day: "2026-11-19", activeMinutes: 40 },
+    { day: "2026-11-20", activeMinutes: 15 },
+  ]);
+  const all = flowMetrics(input, "all", NOW).agentByDay;
+  assert.deepEqual(all[0], { day: "2026-11-01", activeMinutes: 70 });
+  assert.equal(all.length, 20);
+  assert.deepEqual(flowMetrics({ events: [], open: [], usages: [] }, "all", NOW).agentByDay, []);
+
+  // ws-s reopened under the same name: its folder's live transcripts still hold the closed run's
+  // 11-17 session, which its usage.json already counted.
+  const reused = flowMetrics(
+    {
+      ...input,
+      open: [
+        card({
+          workspace: "ws-s",
+          lifecycle: "working",
+          sessions: [
+            { firstTurn: "2026-11-17T10:00:00Z", activeMinutes: 25 },
+            { firstTurn: "2026-11-19T13:00:00Z", activeMinutes: 10 },
+          ],
+        }),
+      ],
+    },
+    "7d",
+    NOW,
+  ).agentByDay;
+  assert.deepEqual(reused[4], { day: "2026-11-17", activeMinutes: 30 });
+  assert.deepEqual(reused[6], { day: "2026-11-19", activeMinutes: 10 });
+});

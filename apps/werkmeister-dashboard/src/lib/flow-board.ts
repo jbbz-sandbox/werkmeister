@@ -1,14 +1,17 @@
 /**
- * The Flow tab's view model (SW-782, design SW-772 § Q1, § Q5): card text, the red card, and the
- * workspace timeline's bars, from the `metrics` tool's report. Pure, so the smoke test needs no DOM.
+ * The Flow tab's view model (SW-782, SW-783, design SW-772 § Q1, § Q5): card text, the red card,
+ * the workspace timeline's bars, and the chart and tile inputs, from the `metrics` tool's report.
+ * Pure, so the smoke test needs no DOM.
  */
 import type {
   FlowCard,
   FlowColumn,
   MetricsRange,
+  MetricsReport,
   TimelineEvent,
   WaitCause,
 } from "werkmeister-core/metrics_report";
+import { formatUsd, type StackBar, type StatTile, statTile } from "./charts.js";
 
 /** The Flow and Metrics tabs' range buttons. */
 export const RANGES: [MetricsRange, string][] = [
@@ -133,4 +136,73 @@ export function timelineView(
     bars.push({ kind: "wait", from: queueFrom, to: n, label: WAIT_LABEL.capacity });
   const start = Math.min(stageFrom, ...bars.map((b) => b.from));
   return { start, end: Math.max(now.getTime(), ...bars.map((b) => b.to)), bars };
+}
+
+/** Bottom-up stack order of the wait-by-cause bars and their legend. */
+export const WAIT_KEYS: WaitCause[] = ["person", "capacity", "pr", "gateRetry", "release"];
+
+/** One bar per ISO week, each cause in hours. */
+export function waitBars(r: MetricsReport): StackBar[] {
+  return r.waitsByWeek.map((w) => ({
+    label: w.week,
+    values: Object.fromEntries(WAIT_KEYS.map((k) => [k, w.seconds[k] / 3600])),
+  }));
+}
+
+export type CycleMode = "cycle" | "lead";
+
+/** The scatter's dots (x = merge time) and lines for cycle or lead time, x spanning the range. */
+export function cyclePoints(r: MetricsReport, mode: CycleMode) {
+  const points = r.tickets.map((t) => ({
+    t: Date.parse(t.mergedAt),
+    value: mode === "cycle" ? t.cycleMinutes : t.leadMinutes,
+    label: t.ticket,
+  }));
+  const p = mode === "cycle" ? r.cycle : r.lead;
+  const x1 = Date.parse(r.to);
+  const x0 = r.from ? Date.parse(r.from) : Math.min(x1, ...points.map((d) => d.t));
+  return { points, p50: p.p50Minutes, p90: p.p90Minutes, x0, x1 };
+}
+
+/** `940`, `812k`, `56.4M`. */
+export function formatCount(n: number): string {
+  if (n < 1000) return String(Math.round(n));
+  if (n < 999_500) return `${Math.round(n / 1000)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
+}
+
+const pct = (n: number) => `${Math.round(n * 100)}%`;
+
+/** Cost, tokens with cache-read share, active vs wall, and turns, over the range's closed runs. */
+export function flowTiles(u: MetricsReport["usage"]): StatTile[] {
+  const none = u.workspaces === 0;
+  const closed = `${u.workspaces} workspace${u.workspaces === 1 ? "" : "s"} closed`;
+  const tokens = u.tokens.input + u.tokens.output + u.tokens.cacheCreation + u.tokens.cacheRead;
+  return [
+    statTile(
+      "Est. cost",
+      u.estUsd,
+      formatUsd,
+      u.costUnknown ? `${closed} · ${u.costUnknown} unpriced` : closed,
+    ),
+    statTile(
+      "Tokens",
+      none ? null : tokens,
+      formatCount,
+      u.cacheReadShare === null ? undefined : `${pct(u.cacheReadShare)} cache-read`,
+    ),
+    {
+      label: "Active / wall",
+      value: none
+        ? "—"
+        : `${formatMinutes(u.activeMinutes)} / ${formatMinutes(u.wallClockMinutes)}`,
+      ...(u.wallClockMinutes ? { sub: `${pct(u.activeMinutes / u.wallClockMinutes)} active` } : {}),
+    },
+    statTile("Turns", none ? null : u.turns, String, closed),
+  ];
+}
+
+/** One bar per day of active agent minutes. */
+export function agentBars(r: MetricsReport): StackBar[] {
+  return r.agentByDay.map((d) => ({ label: d.day, values: { active: d.activeMinutes } }));
 }

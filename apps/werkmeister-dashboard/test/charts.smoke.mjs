@@ -6,9 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const { W, lineBandView, stackedBarView, heatmapView, statTile, formatUsd } = await import(
-  path.join(pkgRoot, "dist/lib/charts.js")
-);
+const { W, lineBandView, stackedBarView, heatmapView, scatterView, statTile, formatUsd } =
+  await import(path.join(pkgRoot, "dist/lib/charts.js"));
 const { RANGE_BUCKET, versionsOf, sliceRows, isEmpty, emptyText, metricsTiles, previewCharts } =
   await import(path.join(pkgRoot, "dist/lib/metrics-view.js"));
 
@@ -234,4 +233,36 @@ console.log("✓ metricsTiles, previewCharts");
 
 // 7. Daily points only for 7d.
 assert.deepEqual(RANGE_BUCKET, { "7d": "day", "30d": "week", "90d": "week", all: "week" });
+// 8. scatterView (SW-783): dots across x0..x1, p50/p90 rows, `over` only past p90.
+{
+  const v = scatterView(
+    [
+      { t: 0, value: 10, label: "a" },
+      { t: 50, value: 30, label: "b" },
+      { t: 100, value: 60, label: "c" },
+    ],
+    30,
+    50,
+    0,
+    100,
+    100,
+  );
+  assert.equal(v.yMax, 60);
+  assert.deepEqual(
+    v.dots.map((d) => [d.x, d.y, d.over]),
+    [
+      [0, 83.3, false],
+      [500, 50, false],
+      [1000, 0, true],
+    ],
+  );
+  assert.equal(v.p50Y, 50);
+  assert.equal(v.p90Y, 16.7);
+  // One instant: every dot centred. p90 above every value sets the y-max.
+  const one = scatterView([{ t: 5, value: 10, label: "x" }], null, 40, 5, 5, 100);
+  assert.equal(one.dots[0].x, W / 2);
+  assert.equal(one.yMax, 40);
+  assert.equal(one.p50Y, null);
+  assert.equal(scatterView([], null, null, 0, 1, 100).yMax, 1);
+}
 console.log("charts smoke: OK");
