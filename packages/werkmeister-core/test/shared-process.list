@@ -48,6 +48,7 @@ test/strategy-notes-absent.test.mjs
 test/strategy-registry.test.mjs
 test/telepresence-cleanup.test.mjs
 test/telepresence-docker-args.test.mjs
+test/telepresence-runners.test.mjs
 test/tsconfig-include.test.mjs
 test/unresolved-hosts.test.mjs
 test/workspace-init-seed.test.mjs

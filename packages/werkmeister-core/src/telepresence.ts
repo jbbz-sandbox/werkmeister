@@ -78,7 +78,15 @@ function testSafeCmd(cmd: string[]): string[] | [number, string] {
   return [127, "telepresence: refused under a test runner (SW-1153)"];
 }
 
-/** Run *cmd*, returning [returncode, combined output]. Never throws. */
+/** The runners' shared mapping: a missing binary is 127, a timeout 124; undefined means rethrow. */
+function procErrorResult(e: unknown, cmd: string[], timeout: number): [number, string] | undefined {
+  if (!(e instanceof ProcError)) return undefined;
+  if (e.code === "ENOENT") return [127, `${cmd[0]}: command not found`];
+  if (e.code === "ETIMEDOUT") return [124, `${cmd.join(" ")}: timed out after ${timeout}s`];
+  return undefined;
+}
+
+/** Run *cmd*, returning [returncode, combined output]. Throws only what `procErrorResult` does not map. */
 export function _run(cmd: string[], timeout = 120): [number, string] {
   const safe = testSafeCmd(cmd);
   if (typeof safe[0] === "number") return safe as [number, string];
@@ -87,12 +95,8 @@ export function _run(cmd: string[], timeout = 120): [number, string] {
   try {
     res = run(argv, { capture: true, timeout });
   } catch (e) {
-    if (e instanceof ProcError && e.code === "ENOENT") {
-      return [127, `${cmd[0]}: command not found`];
-    }
-    if (e instanceof ProcError && e.code === "ETIMEDOUT") {
-      return [124, `${cmd.join(" ")}: timed out after ${timeout}s`];
-    }
+    const mapped = procErrorResult(e, cmd, timeout);
+    if (mapped) return mapped;
     throw e;
   }
   return [res.status, ((res.stdout || "") + (res.stderr || "")).trim()];
@@ -125,12 +129,9 @@ export async function runAsyncRunner(
   try {
     res = await runAsync(argv, { capture: true, timeout, signal });
   } catch (e) {
-    if (e instanceof ProcError && e.code === "ENOENT") {
-      return [127, `${cmd[0]}: command not found`];
-    }
-    if (e instanceof ProcError && e.code === "ETIMEDOUT") {
-      return [124, `${cmd.join(" ")}: timed out after ${timeout}s`];
-    }
+    // An abort (ABORT_ERR) maps to undefined, so it propagates.
+    const mapped = procErrorResult(e, cmd, timeout);
+    if (mapped) return mapped;
     throw e;
   }
   return [res.status, ((res.stdout || "") + (res.stderr || "")).trim()];
