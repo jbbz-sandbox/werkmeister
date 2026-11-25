@@ -603,7 +603,11 @@ test("pause gate: PreToolUse ends the turn and denies, UserPromptSubmit blocks, 
   writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: true });
   const pre = pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir);
   assert.equal(pre.continue, false);
-  assert.equal(pre.stopReason, PAUSED_REASON);
+  assert.ok(pre.stopReason.startsWith(PAUSED_REASON), pre.stopReason);
+  // SW-1169: a session resumed from before Resume read this refusal as current and stopped
+  // without trying; the reason names the file it read and says to retry before saying paused.
+  assert.ok(pre.stopReason.includes(path.join(dir, ".werkmeister", "paused.json")), pre.stopReason);
+  assert.match(pre.stopReason, /retry/i);
   assert.equal(pre.hookSpecificOutput.permissionDecision, "deny");
   assert.equal(pauseGate({ hook_event_name: "UserPromptSubmit" }, dir).decision, "block");
   for (const e of ["PostToolUse", "Notification", "Stop", "SessionEnd"])
@@ -657,7 +661,7 @@ test("waiting gate: denies a container command with the queue position", () => {
     "deny",
   );
   writePaused(dir, { at: "2026-10-22T10:00:00.000Z", containers: [], was_working: false });
-  assert.equal(pauseGate({ hook_event_name: "PreToolUse" }, dir).stopReason, PAUSED_REASON);
+  assert.ok(pauseGate({ hook_event_name: "PreToolUse" }, dir).stopReason.startsWith(PAUSED_REASON));
 });
 
 // SW-768: queued, the hook held Edit on the PR file and git on the record, so a person's approval
@@ -1193,7 +1197,7 @@ test("pause gate on Codex: PreToolUse denies without continue or stopReason", ()
     const pre = pauseGate({ hook_event_name: "PreToolUse", tool_name: "Bash" }, dir);
     assert.deepEqual(Object.keys(pre), ["hookSpecificOutput"]);
     assert.equal(pre.hookSpecificOutput.permissionDecision, "deny");
-    assert.equal(pre.hookSpecificOutput.permissionDecisionReason, PAUSED_REASON);
+    assert.ok(pre.hookSpecificOutput.permissionDecisionReason.startsWith(PAUSED_REASON));
     assert.equal(pauseGate({ hook_event_name: "UserPromptSubmit" }, dir).decision, "block");
   } finally {
     delete process.env.WERKMEISTER_HOOK_HARNESS;
