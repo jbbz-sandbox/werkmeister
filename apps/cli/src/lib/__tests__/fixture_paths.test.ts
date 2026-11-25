@@ -327,6 +327,26 @@ it("--workflow reads workflow.yaml and stages/*.md from a folder under the workt
   expect(parse(["--workflow-in", "home", "status"])).toEqual({ bad: "--workflow-in" });
 });
 
+it("a missing --workflow folder is refused with where it resolved, not a stack trace (SW-1167)", async () => {
+  const ws = path.join(tmp, "ws");
+  expect(parse(["--workflow", "nope/flow", "status"], ws)).toEqual({
+    bad: "--workflow",
+    file: path.join(ws, "nope", "flow"),
+    base: ws,
+  });
+  const error = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    await run(["--workflow", "nope/flow", "status"], ws);
+    expect(process.exitCode).toBe(2);
+    expect(error.mock.calls[0]?.[0]).toBe(
+      `--workflow: ${path.join(ws, "nope", "flow")} is not a folder (resolved against ${ws}, the worktree of the running CLI): pass a folder under it holding workflow.yaml`,
+    );
+  } finally {
+    error.mockRestore();
+    process.exitCode = 0;
+  }
+});
+
 it("--then-append is a step that edits only seeded workflow files or fixture markdown (SW-1108)", () => {
   expect(
     parse([
