@@ -11,6 +11,7 @@ import { test } from "node:test";
 
 import { sandboxHome, workspacesRoot } from "../dist/config.js";
 import { writeFakes } from "../dist/fixture_fakes.js";
+import { workspaceSlice } from "../dist/metrics.js";
 import { rebuildMetrics } from "../dist/metrics_rebuild.js";
 import { metricsReport } from "../dist/metrics_report.js";
 import { withSandboxHome } from "./fixtures.mjs";
@@ -41,8 +42,8 @@ const T2 = "2026-11-10T10:01:30.000Z";
 const SID = "11111111-1111-1111-1111-111111111111";
 const SID_LIVE = "22222222-2222-2222-2222-222222222222";
 
-/** Two record branches in a bare origin, the shared checkout cloned from it, transcripts, fake gh. */
-function seed() {
+/** Two record branches in a bare origin, the shared checkout cloned from it, transcripts, fake gh. *runId*: ws-a's workspace.yml run_id. */
+function seed({ runId } = {}) {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "records-")));
   const work = path.join(root, "work");
   fs.mkdirSync(work);
@@ -58,6 +59,7 @@ function seed() {
   };
   commit("README.md", "scaffold\n");
   git(work, "checkout", "-q", "-b", "me/ws-a");
+  if (runId) commit(".werkmeister/workspace.yml", `run_id: ${runId}\n`);
   commit("stages/01_research/output/.gitkeep", "");
   const a1 = commit("stages/01_research/output/inventory.md", "a\n");
   commit("stages/01_research/output/decisions.md", "later file, same stage\n");
@@ -255,6 +257,71 @@ test("rebuild adds no stage.done for a stage the live writer already logged at t
           (e) => e.event === "stage.done" && e.workspace === "ws-a" && e.stage === "01_research",
         );
         assert.equal(done.length, 1);
+      } finally {
+        if (prevGh === undefined) delete process.env.WERKMEISTER_GH_BIN;
+        else process.env.WERKMEISTER_GH_BIN = prevGh;
+        fs.rmSync(fx.root, { recursive: true, force: true });
+      }
+    },
+    { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
+  );
+});
+
+// SW-1158: rebuilt lines carry their branch's run_id, so a same-named run's late pr.merged stays out of my slice.
+test("rebuilt events carry the record branch's run_id; a same-named run's pr.merged stays out of my slice", async () => {
+  await withSandboxHome(
+    async () => {
+      const fx = seed({ runId: "run-a" });
+      const prevGh = process.env.WERKMEISTER_GH_BIN;
+      process.env.WERKMEISTER_GH_BIN = fx.gh;
+      try {
+        await rebuildMetrics();
+        const tags = (ws) =>
+          logLines()
+            .filter((e) => e.workspace === ws && e.event !== "ask" && e.event !== "answer")
+            .map((e) => [e.event, e.run_id])
+            .sort();
+        assert.deepEqual(tags("ws-a"), [
+          ["pr.merged", "run-a"],
+          ["pr.open", "run-a"],
+          ["stage.done", "run-a"],
+          ["stage.done", "run-a"],
+        ]);
+        assert.deepEqual(
+          tags("ws-b"),
+          [
+            ["stage.done", undefined],
+            ["stage.done", undefined],
+          ],
+          "a branch with no run_id rebuilds untagged",
+        );
+
+        // My own ws-a run, started (2026-01-01) before the other run's pr.merged (2026-01-02).
+        const mine = path.join(fx.root, "mine", "ws-a");
+        git(fx.root, "clone", "-q", fx.origin, mine);
+        git(mine, "checkout", "-q", "-b", "mine/ws-a");
+        fs.mkdirSync(path.join(mine, ".werkmeister"));
+        fs.writeFileSync(path.join(mine, ".werkmeister", "workspace.yml"), "run_id: run-mine\n");
+        execFileSync(
+          "git",
+          ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false"].concat([
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+          ]),
+          {
+            cwd: mine,
+            env: {
+              ...process.env,
+              GIT_AUTHOR_DATE: "2026-01-01T00:00:00Z",
+              GIT_COMMITTER_DATE: "2026-01-01T00:00:00Z",
+            },
+          },
+        );
+        const events = workspaceSlice(mine).map((l) => JSON.parse(l).event);
+        assert.ok(!events.includes("pr.merged"), `slice: ${events}`);
       } finally {
         if (prevGh === undefined) delete process.env.WERKMEISTER_GH_BIN;
         else process.env.WERKMEISTER_GH_BIN = prevGh;

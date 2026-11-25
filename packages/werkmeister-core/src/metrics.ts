@@ -85,10 +85,19 @@ export const usageCachePath = () => path.join(sandboxHome(), "metrics", "usage-b
 export function runTag(ws: string): { run_id?: string } {
   // No path: dotDir("") would read the cwd's workspace.yml, another run's.
   if (!ws) return {};
-  let id: unknown;
   try {
     // workspace.yml alone: writeWorkspaceConfig writes run_id only there. Not workspace_prompts: an import cycle.
-    id = YAML.parse(fs.readFileSync(path.join(dotDir(ws), "workspace.yml"), "utf8"))?.run_id;
+    return runTagOf(fs.readFileSync(path.join(dotDir(ws), "workspace.yml"), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+/** {@link runTag} from a workspace.yml's text, e.g. one read off a record branch (SW-1158). Never throws. */
+export function runTagOf(yml: string | undefined): { run_id?: string } {
+  let id: unknown;
+  try {
+    id = YAML.parse(yml ?? "")?.run_id;
   } catch {}
   return typeof id === "string" && id ? { run_id: id } : {};
 }
