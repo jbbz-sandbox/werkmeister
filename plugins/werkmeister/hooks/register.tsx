@@ -21,6 +21,7 @@ import {
   type Tone,
   type WorkspaceDisplay,
 } from "./display-model";
+import { stopGuard } from "./stop-guard";
 
 export const PLUGIN = "werkmeister";
 export const PANE = "workspaces";
@@ -1889,6 +1890,11 @@ export const register: Register = (on) => {
     if (e.agentId === undefined) await $.state.set(TURN_RUNNING, false);
     return next(e);
   });
+  // A guard that fails lets the stop through: it must never trap a session.
+  on("classic.Stop", async ($, e, next) => {
+    const block = await stopGuard($, e, await workspaceRoot($, e.cwd));
+    return block ? { block } : next(e);
+  }).catch(() => ({}));
   on("tool.call", { tool: WRAP_UP_TOOL }, async ($, e, next) => {
     const ask = (e as unknown as { ask?: unknown }).ask;
     if (typeof ask === "string" && ask.trim()) await $.state.set(WRAP_UP_OPEN, true);

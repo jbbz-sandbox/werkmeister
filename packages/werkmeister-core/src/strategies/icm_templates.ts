@@ -304,11 +304,15 @@ const FIRST_LINE = ", its first line `status: proposed`";
 const CRITERION_REACH =
   "Before writing a recommended answer or proposed fix, name for each acceptance criterion in `BRIEF.md` how its stated verification runs on that design (which command, which platform or container). A criterion whose verification cannot reach the design is an open question, not a decided one.";
 
+// SW-1157: sw-404's and sw-783's question calls were interrupted as the session ended; the gate went unasked.
+const ASK_EVERY_HIT =
+  ' Before ending the turn, `grep -l "status: proposed" stages/*/output/*.md` and ask every hit. If the question call errors or is interrupted, ask it again.';
 // SW-517: a check left as a sentence at the end of a long reply is easy to miss; the question tool makes it a prompt.
 export const askLine = (tool?: string) =>
-  tool
+  (tool
     ? `Ask this check through \`${tool}\`: at most 4 questions per call (more than 4: batches of 4, one call after another), each standing on its own (what was checked, 2–3 concrete options with the exact wording or behaviour, the recommended one first; "Other" takes edits). Write each answer into the output file as its status, noted \`${APPROVAL_NOTE.chat}\` (a PR file: \`${APPROVAL_NOTE.chatPr}\`). A check left as a sentence at the end of a reply is not asked.`
-    : `Ask this check as one numbered block at the end of your reply: each question stands on its own, options lettered with the recommended one first, then "reply with the letters, or your edits". Write each answer into the output file as its status, noted \`${APPROVAL_NOTE.chat}\` (a PR file: \`${APPROVAL_NOTE.chatPr}\`).`;
+    : `Ask this check as one numbered block at the end of your reply: each question stands on its own, options lettered with the recommended one first, then "reply with the letters, or your edits". Write each answer into the output file as its status, noted \`${APPROVAL_NOTE.chat}\` (a PR file: \`${APPROVAL_NOTE.chatPr}\`).`) +
+  ASK_EVERY_HIT;
 
 // SW-1145: a `!` command asked mid-reply read as Idle for two hours; the question tool makes it a Needs you prompt.
 export const handoffLine = (tool?: string) =>
