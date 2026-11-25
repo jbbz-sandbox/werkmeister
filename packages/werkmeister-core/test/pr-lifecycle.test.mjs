@@ -113,7 +113,7 @@ function stubRun(table) {
 // SW-329 wraps each gate exec in the inline temp-HOME script; matchers read the bare `sh -c <cmd>`.
 function bare(args) {
   const i = args.indexOf(TEMP_HOME_SCRIPT);
-  return i < 0 ? args : [...args.slice(0, i - 2), ...args.slice(i + 3)];
+  return i < 0 ? args : [...args.slice(0, i - 2), ...args.slice(i + 4)];
 }
 
 const REGISTRY = {
@@ -2122,14 +2122,14 @@ test("gate: a broken branch fragment fails the gate with its error, not a crash"
   }
 });
 
-test("gate: test, lint and release commands run through the temp-HOME wrapper in the container (SW-329)", async () => {
+test("gate: test, lint and release commands run through the temp-HOME wrapper in the container, failing a write to its ~/.werkmeister (SW-329, SW-1177)", async () => {
   const ws = icmWorkspace();
   try {
     const d = deps([DIFF_API]);
     assert.deepEqual(failed(await gate(ws, d)), []);
     const execs = d.raw.filter((c) => c.startsWith("docker exec "));
     assert.ok(execs.length >= 2, d.raw.join("\n"));
-    const wrapped = `sh -c ${TEMP_HOME_SCRIPT} with-temp-home --no-wait sh -c `;
+    const wrapped = `sh -c ${TEMP_HOME_SCRIPT} with-temp-home --no-wait --clean-home sh -c `;
     for (const c of execs) assert.ok(c.includes(wrapped), c);
     assert.ok(execs.includes(`docker exec feat-api ${wrapped}npm test -w api`));
   } finally {

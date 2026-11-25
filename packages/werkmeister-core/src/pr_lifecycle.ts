@@ -1303,7 +1303,8 @@ async function gateChecks(
       return { code: 1, stdout: "", stderr: "" };
     }
     // The container's HOME is the real one, ~/.werkmeister mounted (SW-329). Inline, not the workspace's
-    // copy: docs-site doesn't mount the workspace; --no-wait: the gate never waits on load (SW-542).
+    // copy: docs-site doesn't mount the workspace; --no-wait: the gate never waits on load (SW-542);
+    // --clean-home: a row that writes its HOME's .werkmeister fails here as in CI (SW-1177).
     const exec = () =>
       deps.run("docker", [
         "exec",
@@ -1313,6 +1314,7 @@ async function gateChecks(
         TEMP_HOME_SCRIPT,
         "with-temp-home",
         "--no-wait",
+        "--clean-home",
         "sh",
         "-c",
         cmd,
