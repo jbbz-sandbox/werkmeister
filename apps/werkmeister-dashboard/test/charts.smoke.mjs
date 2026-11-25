@@ -365,10 +365,19 @@ console.log("✓ multiLineView");
   assert.deepEqual(leadTrend(rows, "p90").series[1].values, [null, 60]);
 
   assert.deepEqual(waitSplit(rows), [
-    { stage: "01_research", total: 150, person: 30, capacity: 0, working: 120 },
-    { stage: "02_spec", total: 40, person: 0, capacity: 0, working: 40 },
-    { stage: "03_implement", total: 300, person: 50, capacity: 30, working: 220 },
+    { stage: "01_research", total: 150, person: 30, capacity: 0, working: 120, waiting: 30 },
+    { stage: "02_spec", total: 40, person: 0, capacity: 0, working: 40, waiting: 0 },
+    { stage: "03_implement", total: 300, person: 50, capacity: 30, working: 220, waiting: 80 },
   ]);
+  // A person and a capacity wait at the same time: 60 + 20 minutes of waits in a 60-minute stage
+  // with no working time. `waiting` counts each minute once, so the bar and "% waiting" stay at 60.
+  const overlap = slice({ stages: { "02_spec": st(60, 60, 1, 60, 60, 20, 0) } });
+  assert.deepEqual(
+    waitSplit(
+      sliceRows({ ...trends, rows: [{ bucket: "2026-11-02", ...overlap, byVersion: {} }] }, "all"),
+    ),
+    [{ stage: "02_spec", total: 60, person: 60, capacity: 20, working: 0, waiting: 60 }],
+  );
   const flag = bottleneck(rows);
   assert.equal(flag.text, "03_implement: 61% of stage time");
   assert.equal(flag.stage, "03_implement");

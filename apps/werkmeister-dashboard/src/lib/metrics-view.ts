@@ -156,6 +156,8 @@ export interface StageSplit {
   person: number;
   capacity: number;
   working: number;
+  /** Minutes waiting on anything, each minute once: `person + capacity` can exceed it when they overlap. */
+  waiting: number;
 }
 
 /** Each stage's summed minutes over the range, split by what it waited on (SW-1099 Q5). */
@@ -163,13 +165,18 @@ export function waitSplit(rows: SlicedRow[]): StageSplit[] {
   const s = slices(rows);
   const total = (st: string, k: keyof StageTrend) =>
     sum(s.map((x) => Number(x.stages[st]?.[k] ?? 0)));
-  return stageNames(rows).map((stage) => ({
-    stage,
-    total: total(stage, "totalMinutes"),
-    person: total(stage, "personMinutes"),
-    capacity: total(stage, "capacityMinutes"),
-    working: total(stage, "workingMinutes"),
-  }));
+  return stageNames(rows).map((stage) => {
+    const all = total(stage, "totalMinutes");
+    const working = total(stage, "workingMinutes");
+    return {
+      stage,
+      total: all,
+      person: total(stage, "personMinutes"),
+      capacity: total(stage, "capacityMinutes"),
+      working,
+      waiting: Math.max(0, all - working),
+    };
+  });
 }
 
 /** Fewer stage completions than this in range and no stage is flagged: one run is not a pattern. */
