@@ -6,6 +6,9 @@
  * ahead of PATH, and `claude`/`code` resolve by absolute path, so a PATH holding only `node` still
  * reaches them. Every off switch here is an existing override (`*_BIN`, WERKMEISTER_FIXTURE,
  * DOCKER_HOST, WERKMEISTER_HOST), each pointed at a stub that logs and fails.
+ *
+ * The stubs steer honest code; the boundary is {@link dashboardContainerArgs} (SW-1135): the
+ * served bundle is the worktree's own code, so it runs in a container with no way out.
  */
 
 import * as fs from "node:fs";
@@ -48,8 +51,13 @@ const STAGES = ["01_research", "02_spec", "03_implement", "04_propose"];
  *
  * @param home - The temp HOME.
  * @param now - The clock the seeded ages count back from.
+ * @param nodePath - What `bin/node` links to: the image's node when the dashboard runs in a container.
  */
-export function seedDashboardHome(home: string, now = Date.now()): string[] {
+export function seedDashboardHome(
+  home: string,
+  now = Date.now(),
+  nodePath = process.execPath,
+): string[] {
   const written: string[] = [];
   const mkdir = (p: string) => {
     fs.mkdirSync(p, { recursive: true });
@@ -72,7 +80,7 @@ export function seedDashboardHome(home: string, now = Date.now()): string[] {
 
   mkdir(path.join(home, "tmp"));
   mkdir(bin);
-  fs.symlinkSync(process.execPath, path.join(bin, "node"));
+  fs.symlinkSync(nodePath, path.join(bin, "node"));
   written.push(path.join(bin, "node"));
   for (const name of STUBBED_BINS)
     write(
@@ -261,11 +269,13 @@ export function seedDashboardHome(home: string, now = Date.now()): string[] {
  * @param home - The seeded temp HOME.
  * @param port - The loopback port to listen on.
  * @param env - Where `LANG` and `TZ` are copied from, when set.
+ * @param listen - The address it binds: `0.0.0.0` in a container, whose forwarder publishes only loopback.
  */
 export function dashboardServeEnv(
   home: string,
   port: number,
   env: NodeJS.ProcessEnv = process.env,
+  listen = "127.0.0.1",
 ): NodeJS.ProcessEnv {
   const bin = path.join(home, "bin");
   const stub = (name: string) => path.join(bin, name);
@@ -292,11 +302,119 @@ export function dashboardServeEnv(
     GIT_CEILING_DIRECTORIES: home,
     // open-workspaces-ui and status health-check this port: point it at this server, not the host's 3001.
     WERKMEISTER_DASHBOARD_PORT: String(port),
-    HOST: "127.0.0.1",
+    HOST: listen,
     PORT: String(port),
     ...(env.LANG ? { LANG: env.LANG } : {}),
     ...(env.TZ ? { TZ: env.TZ } : {}),
   };
+}
+
+/** Every node service in the registry runs on this tag, and it has the `git` the dashboard keeps real. */
+export const SEEDED_DASHBOARD_IMAGE = "node:22";
+/** On both containers and the network, so a run SIGKILLed before its teardown can be found. */
+export const SEEDED_DASHBOARD_LABEL = "werkmeister.seeded-dashboard";
+/**
+ * The hostname of the serve that made the run: pids are per pid namespace while the engine is shared
+ * (a werkmeister-core container has the docker socket), so a reaper judges only its own host's runs.
+ */
+export const SEEDED_DASHBOARD_HOST_LABEL = "werkmeister.seeded-dashboard.host";
+/** Where `node:22` keeps node: `bin/node` in the seeded HOME links here when it runs in the container. */
+export const SEEDED_DASHBOARD_NODE = "/usr/local/bin/node";
+
+// The forwarder's whole program, passed inline so none of it comes from the worktree: argv is <host> <port>.
+const FORWARD_JS = `const n=require("net");const[h,p]=process.argv.slice(1);n.createServer(c=>{const u=n.connect(+p,h);c.pipe(u).pipe(c);u.on("error",()=>c.destroy());c.on("error",()=>u.destroy())}).listen(+p,"0.0.0.0")`;
+
+/**
+ * The `docker` argv (without `docker`) for one seeded dashboard run (SW-1135). The dashboard sits
+ * alone on an `--internal` network, so edited bundle code reaches neither the host's daemon nor
+ * the internet; its only mounts are *dist* read-only and *home*, each at its host path so the
+ * seeded paths hold. A forwarder on the default bridge and that network publishes only
+ * `127.0.0.1:<port>`: a container on an internal network alone gets no published port.
+ * Run in order: network, app, forwarder, connect, start, then supervise attach: the app runs in the
+ * foreground there, so its output shows and its exit code is the run's. Teardown removes all three.
+ */
+export function dashboardContainerArgs(o: {
+  name: string;
+  dist: string;
+  home: string;
+  port: number;
+  uid: number;
+  gid: number;
+  host: string;
+  env: NodeJS.ProcessEnv;
+}): {
+  network: string[];
+  app: string[];
+  forwarder: string[];
+  connect: string[];
+  start: string[];
+  attach: string[];
+  teardown: string[][];
+} {
+  const label = [
+    ...["--label", `${SEEDED_DASHBOARD_LABEL}=${o.name}`],
+    ...["--label", `${SEEDED_DASHBOARD_HOST_LABEL}=${o.host}`],
+  ];
+  const locked = [
+    "--init",
+    "--read-only",
+    "--cap-drop",
+    "ALL",
+    "--security-opt",
+    "no-new-privileges",
+  ];
+  const app = `${o.name}-app`;
+  const fwd = `${o.name}-fwd`;
+  const env = Object.keys(o.env)
+    .sort()
+    .flatMap((k) => ["-e", `${k}=${o.env[k]}`]);
+  return {
+    network: ["network", "create", "--internal", ...label, o.name],
+    app: [
+      ...["create", "--rm", "--name", app, ...label, "--network", o.name, ...locked],
+      ...["--user", `${o.uid}:${o.gid}`],
+      ...["-v", `${o.dist}:${o.dist}:ro`, "-v", `${o.home}:${o.home}`, "-w", o.home],
+      ...env,
+      // The seeded PATH holds only stubs, which hides the image's docker-entrypoint.sh: name node itself.
+      ...[
+        "--entrypoint",
+        SEEDED_DASHBOARD_NODE,
+        SEEDED_DASHBOARD_IMAGE,
+        path.join(o.dist, "dashboard.js"),
+      ],
+    ],
+    forwarder: [
+      ...["create", "--rm", "--name", fwd, ...label, ...locked],
+      ...["-p", `127.0.0.1:${o.port}:${o.port}`],
+      ...[SEEDED_DASHBOARD_IMAGE, "node", "-e", FORWARD_JS, app, String(o.port)],
+    ],
+    connect: ["network", "connect", o.name, fwd],
+    start: ["start", fwd],
+    attach: ["start", "-a", app],
+    teardown: dashboardTeardownArgs(o.name),
+  };
+}
+
+/** Removes run *name*'s two containers, then its network (a network with containers attached stays). */
+export function dashboardTeardownArgs(name: string): string[][] {
+  return [
+    ["rm", "-f", `${name}-app`, `${name}-fwd`],
+    ["network", "rm", name],
+  ];
+}
+
+/**
+ * Runs left by a serve that died before its teardown (a task stop's SIGKILL), from the label values
+ * `docker ps -a` and `docker network ls` print: names are `<prefix>-<pid>-<port>`, and only a run whose
+ * pid *isAlive* says is gone is returned, so a live serve's run is never touched.
+ */
+export function deadDashboardRuns(labels: string, isAlive: (pid: number) => boolean): string[] {
+  const dead = new Set<string>();
+  for (const name of labels.split("\n")) {
+    const pid = Number(/^werkmeister-seeded-dashboard-(\d+)-\d+$/.exec(name.trim())?.[1]);
+    if (pid && !isAlive(pid)) dead.add(name.trim());
+  }
+  return [...dead];
 }
 
 /**
