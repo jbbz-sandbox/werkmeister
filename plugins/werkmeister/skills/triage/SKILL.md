@@ -1,11 +1,13 @@
 ---
 name: triage
-description: Use when asked to triage, groom, prioritize, reorder or "check" a project's Jira backlog or board (a project under projects: in ~/.werkmeister/config.yaml), when new issues need placing, when the weekly backlog report or notification comes up, or on "/triage".
+description: Use when asked to triage, groom, prioritize, reorder or "check" a project's Jira or GitHub backlog or board (a project under projects: in ~/.werkmeister/config.yaml), when new issues need placing, when the weekly backlog report or notification comes up, or on "/triage".
 ---
 
 # triage
 
 The board order is the priority, and the priority field is only a rough tier (High / Medium / Low). Triage places new issues and repairs the order. **You propose, the person approves, then you apply.** `/next-wave` reads this order, so triage before a wave when the report shows new issues.
+
+On GitHub the board is the project's Projects (v2) board and its item order is the rank. The priority tier and the work-in-progress status are labels on the issue: `priority:high` / `priority:medium` / `priority:low` (none counts as Medium) and the `status: in progress` / `status: in review` labels werkmeister's status moves write. Blockers are GitHub's "blocked by" relationships; an issue with sub-issues counts as an epic.
 
 **Project rules.** The project's own instructions (the CLAUDE.md files in your context) can add placement rules, links to add, report flags and a group cap. Read them before step 1 and apply them on top of the rules below; with none, the rules below are the whole set. Keep priorities matching position either way, because `/next-wave` sorts by priority before rank.
 
@@ -13,8 +15,10 @@ Scripts sit next to this file: `S="${CLAUDE_PLUGIN_ROOT}/skills/triage"`.
 
 ## Steps
 
-0. **Project.** Pick the project as `werkmeister issue ready` does: the one the person names, else the workspace's (`project:` in its workspace.yml), else the `default: true` one under `projects:`, else the only one (`werkmeister machine config --show` prints them). Tracker `github`: say triage handles Jira projects only for now and stop. No `board:`: say triage needs `board: { id, ready }` on the project and stop. Otherwise `KEY` = `tracker.project`, `BOARD` = `board.id`. No `projects:` at all: ask the person for the Jira key and board id. Credentials come from the `jira:` block of `~/.werkmeister/config.yaml`.
-1. **Report.** `python3 -I $S/report.py --project $KEY --board $BOARD`, plus any flags the project's instructions add. It only reads. Add `--out ~/.cache/backlog-triage/reports/$(date +%F).md` to keep a copy.
+0. **Project.** Pick the project as `werkmeister issue ready` does: the one the person names, else the workspace's (`project:` in its workspace.yml), else the `default: true` one under `projects:`, else the only one (`werkmeister machine config --show` prints them). No `board:`: say triage needs `board: { id, ready }` on the project and stop. No `projects:` at all: ask the person for the Jira key and board id.
+   - Jira: `KEY` = `tracker.project`, `ARGS="--project $KEY --board <board.id>"`. Credentials come from the `jira:` block of `~/.werkmeister/config.yaml`.
+   - GitHub: `ARGS="--tracker github --owner <tracker.org> --board <board.id> --project <project name> --components <repo.components names, comma-joined>"`, and `RANK="--tracker github --owner <tracker.org> --board <board.id>"`. Reading the board needs the `read:project` token scope and moving items needs `project`: if `gh auth status` lacks them, ask the person to run `gh auth refresh -s project` in their own terminal (it opens a browser). `--epic-steps` is Jira only: GitHub has no "relates to" links.
+1. **Report.** `python3 -I $S/report.py $ARGS`, plus any flags the project's instructions add. It only reads. Add `--out ~/.cache/backlog-triage/reports/$(date +%F).md` to keep a copy.
 2. **Read the new issues** in full: description, links, and whether a workspace is already on it (`werkmeister workspace list`, the CLI).
 3. **Propose** one table: key, summary, proposed priority, and position (the whole open order, top to bottom). List separately the links to add, the priority changes, and likely duplicates. Order by these rules:
    1. Work in progress first: In Review, then In Progress. Finish before starting.
@@ -27,7 +31,7 @@ Scripts sit next to this file: `S="${CLAUDE_PLUGIN_ROOT}/skills/triage"`.
    Also list likely duplicates by topic, not title (e.g. two tickets asking the gate to run `biome ci`), and the links the project's instructions ask for.
 
    Then propose **groups**: one workspace and one PR for tickets that would otherwise each pay for their own stages and gate run. `/next-wave` only reads groups, so they are made here. Show them as `lead ← members` with the shared file or text, under the order table.
-   - Give every open ticket one Jira component from § Components. The report's "No component" section lists the ones without. List the assignments beside the order table.
+   - Give every open ticket one component from § Components (a Jira component; on GitHub, a label). The report's "No component" section lists the ones without. List the assignments beside the order table.
    - Group by component: tickets with the same component form one group of up to 15 tickets, unless the project's instructions set another cap. Code-logic bugs included. Leave out stories, tickets for another repo, and tickets that overlap a running workspace (they wait for the next group). Split a larger set by rank. Tickets that change the same function always share a group.
    - The lead is the group's highest-ranked ticket; the group runs at the lead's rank, so members keep their own rank.
    - Never group a big story, a blocked ticket, a ticket that leaves a design choice to the person, or a ticket the project's instructions keep alone, with anything else.
@@ -40,7 +44,14 @@ Scripts sit next to this file: `S="${CLAUDE_PLUGIN_ROOT}/skills/triage"`.
    - components: `PUT /rest/api/3/issue/KEY` with `{"fields":{"components":[{"name":"<component>"}]}}`. A configured component the tracker doesn't have yet is made first: `POST /rest/api/3/component` with `{"project":"<KEY>","name":"<component>","description":"<what it covers>"}`.
    - groups: on each lead, a comment `Grouped PR (triage YYYY-MM-DD): <lead> leads one workspace and one PR for <members>. One commit per ticket so each can be reverted alone. Close each member when the PR ships.` (members as inline cards), and a "relates to" link from each member to the lead. When a group is extended, post a new comment with the full member list; the newest comment wins.
    - then the order: `python3 -I $S/rank.py KEY KEY ...` with the full order. It ranks one at a time and checks itself.
-6. **Verify** by rerunning the report: "Order problems" and "not linked" should be empty. "Order problems" covers rules 1 and 3–6 (`--self-test` checks those rules offline). A rank call can return 204 without moving the card, so trust the report, not the status code. Then `python3 -I $S/report.py --project $KEY --mark`, so next time only issues created after now count as new.
+
+   On GitHub (`gh`, each issue as `N -R <owner/repo>`):
+   - priorities: `gh issue edit N -R <owner/repo> --remove-label priority:<old> --add-label priority:<tier>`. Create a missing `priority:` label first, as for components.
+   - blockers: `gh api graphql -f query='mutation($i:ID!,$b:ID!){addBlockedBy(input:{issueId:$i,blockingIssueId:$b}){issue{number}}}' -f i=<blocked id> -f b=<blocker id>`, the ids from `gh issue view N -R <owner/repo> --json id`.
+   - components: `gh issue edit N -R <owner/repo> --add-label <component>`. A component the repo has no label for yet is made first: `gh label create <component> -R <owner/repo> --description "<what it covers>"`.
+   - groups: on each lead, `gh issue comment N -R <owner/repo> --body "Grouped PR (triage YYYY-MM-DD): …"` with the same text as above and members as `owner/repo#n`. GitHub has no "relates to" link; the comment's mentions link each member to the lead.
+   - then the order: `python3 -I $S/rank.py $RANK <owner/repo#n> ...` with the full order. It moves one board item at a time and re-reads the board to check.
+6. **Verify** by rerunning the report (`$ARGS`): "Order problems" and "not linked" should be empty. "Order problems" covers rules 1 and 3–6 (`--self-test` checks those rules offline). A rank call can return 204 without moving the card, so trust the report, not the status code. Then `python3 -I $S/report.py --project $KEY --mark` (GitHub: `--project <project name>`), so next time only issues created after now count as new.
 
 ## Components
 
@@ -58,7 +69,7 @@ The list is the project's own, not this skill's: `repo.components` in the repo's
 | New since last triage | Place it (step 3) |
 | No component | Assign one from § Components (step 3) |
 | Order problems | Move the blocker up or the blocked item down; work in progress to the top; with `--epic-steps`, a step's "relates to" ticket to just below that step; a Low card above higher ones down (parked) or its priority up; epics to the end |
-| Dependency written but not linked | Add a "blocks" link (the description's "Depends on" was never linked) |
+| Dependency written but not linked | Add a "blocks" link, on GitHub a "blocked by" relationship (the description's "Depends on" was never linked) |
 | In Review for over 7 days | Ask the person: merge, nudge or drop |
 | To Do with no update for 30+ days | Ask the person: keep (and re-place), or close |
 
