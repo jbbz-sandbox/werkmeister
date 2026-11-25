@@ -67,6 +67,24 @@ def _walk(n):
 def text(node):  # the agile API returns wiki text, v3 returns ADF, GitHub a string
     return node if isinstance(node, str) else ' '.join(x.get('text') or (x.get('attrs') or {}).get('url', '') for x in _walk(node))
 
+# shortcut: fenced blocks are skipped, so a path only inside a pasted log or snippet is missed; scan them if tickets lean on that.
+FENCED = re.compile(r'```.*?```|\{(code|noformat)[^}]*\}.*?\{\1\}', re.S)
+SPAN = re.compile(r'\{\{(.+?)\}\}|`([^`\n]+)`')
+BARE_PATH = re.compile(r'(?<![\w/.-])(?:[\w.-]+/)+[\w.-]+\.[A-Za-z]\w*(?::\d+)?')
+
+def code_named(desc):
+    """The code a ticket names (SKILL.md step 2 maps it): Jira wiki {{…}}, markdown `…`, ADF code marks, and bare paths in text descriptions.
+    Command spans (`pr open`) stay in: some duplicates share only those (SW-1206 / SW-1197)."""
+    if isinstance(desc, dict):
+        found = [n['text'] for n in _walk(desc) if n.get('text') and any(m.get('type') == 'code' for m in n.get('marks', []))]
+    else:
+        s = re.sub(r'https?://\S+', ' ', FENCED.sub(' ', desc or ''))
+        s = re.sub(r'\\([^\w\s]|_)', r'\1', s)  # the agile API's wiki text escapes - _ { } as \- \_ \{ \}
+        found = [a or b for a, b in SPAN.findall(s)] + BARE_PATH.findall(SPAN.sub(' ', s))
+    return list(dict.fromkeys(x.strip() for x in found if x.strip()))
+
+code_lines = lambda keys, f, url: [f"- [{k}]({url(k)}): {', '.join(c)}" for k in keys if (c := code_named(f[k].get('description')))]
+
 def checks(keys, f, epic_steps, ref_re):
     """Order problems (blocked above its open blocker, plus placement()) and "Depends on" refs with no "blocks" link."""
     rank = {k: n for n, k in enumerate(keys)}
@@ -150,6 +168,21 @@ if a.self_test:
                  'o/r#4 says it depends on o/r#2, but there is no "blocks" link'):
         assert want in got, f'missing {want!r} in:\n{got}'
     assert no_component(list(gf), gf) == ['o/r#7'], no_component(list(gf), gf)
+
+    # code named: Jira wiki, GitHub markdown, ADF, and a ticket with none
+    wiki = 'Seeds with {{seedDashboardHome}} from {{apps/cli/src/commands/serve.ts:57}}, again {{seedDashboardHome}}.'
+    assert code_named(wiki) == ['seedDashboardHome', 'apps/cli/src/commands/serve.ts:57'], code_named(wiki)
+    escaped = r'{{serve \-\-dashboard}} calls {{signal\_from}} in stages/01\_scope/output/scope.md'  # as the agile API sends it
+    assert code_named(escaped) == ['serve --dashboard', 'signal_from', 'stages/01_scope/output/scope.md'], code_named(escaped)
+    md = ('`pr open` reruns packages/x/y.ts and apps/x/schema.graphql; see https://example.com/a/b.md\n'
+          '```\nlog at packages/z/hidden.ts\n```\n{code}packages/z/also.ts{code}')
+    assert code_named(md) == ['pr open', 'packages/x/y.ts', 'apps/x/schema.graphql'], code_named(md)
+    adf = {'type': 'doc', 'content': [{'type': 'paragraph', 'content': [
+        {'type': 'text', 'text': 'calls '}, {'type': 'text', 'text': 'signalFrom', 'marks': [{'type': 'code'}]}]}]}
+    assert code_named(adf) == ['signalFrom'], code_named(adf)
+    assert code_named('Make a scratch Projects board by hand, 1/2.5 of it.') == [] and code_named(None) == []
+    named = {'K-1': {'description': wiki}, 'K-2': {'description': 'no code here'}}
+    assert code_lines(['K-1', 'K-2'], named, lambda k: k) == ['- [K-1](K-1): seedDashboardHome, apps/cli/src/commands/serve.ts:57']
     print('self-test ok')
     sys.exit(0)
 
@@ -200,7 +233,8 @@ else:
 rank = {k: n for n, k in enumerate(f)}
 cat = lambda k: f[k]['status']['statusCategory']['key']  # new / indeterminate / done
 comp = lambda k: ', '.join(c['name'] for c in f[k].get('components') or [])  # the grouping key (SKILL.md § Components)
-row = lambda k: f"| [{k}]({f[k].get('url') or f'{BASE}/browse/{k}'}) | {f[k]['issuetype']['name']} | {f[k]['priority']['name']} | {f[k]['status']['name']} | {comp(k)} | {f[k]['summary'][:80]} |"
+link = lambda k: f[k].get('url') or f'{BASE}/browse/{k}'
+row = lambda k: f"| [{k}]({link(k)}) | {f[k]['issuetype']['name']} | {f[k]['priority']['name']} | {f[k]['status']['name']} | {comp(k)} | {f[k]['summary'][:80]} |"
 HEAD = '| Key | Type | Priority | Status | Component | Summary |\n|---|---|---|---|---|---|'
 
 since = when(open(MARK).read()) if os.path.exists(MARK) else now - dt.timedelta(days=7)
@@ -217,6 +251,7 @@ lst = lambda title, xs: f"\n## {title} ({len(xs)})\n\n" + ('\n'.join(xs) if xs e
 md = (f"# {a.project} backlog check, {now:%Y-%m-%d}\n\n{len(rank)} open issues. "
       f"Last triage: {since:%Y-%m-%d}.\n"
       + sec('New since last triage: place on the board', new)
+      + lst('Code named in new tickets', code_lines(new, f, link))
       + sec('No component: assign one', no_component(list(rank), f))
       + lst('Order problems', order)
       + lst('Dependencies written in the description but not linked', unlinked)

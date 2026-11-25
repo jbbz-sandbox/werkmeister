@@ -33,6 +33,21 @@ test("repo: rejects ship: tag without release_tag, unknown keys and unknown ship
   assert.equal(validate({ ...withoutRepo, repo: { components: { gate: ["pr gate"] } } }), false);
 });
 
+test("repo: components take a description, or { description, paths } (SW-1209)", () => {
+  const ok = (c) => validate({ ...withoutRepo, repo: { components: c } });
+  const paths = { description: "adapters", paths: ["packages/x/src/harness"] };
+  assert.ok(ok({ gate: "pr gate" }));
+  assert.ok(ok({ harness: paths }));
+  assert.ok(ok({ gate: "pr gate", harness: paths }));
+  assert.equal(ok({ gate: { description: "x", paths: [] } }), false);
+  assert.equal(ok({ gate: { description: "x" } }), false);
+  assert.equal(ok({ gate: { paths: ["a"] } }), false);
+  assert.equal(ok({ gate: { description: "x", paths: ["a"], owner: "y" } }), false);
+  assert.ok(
+    fragment.repo.components.harness.paths.includes("packages/werkmeister-core/src/harness"),
+  );
+});
+
 test("repo: path_mappings takes a service or a non-empty list of them (SW-1087)", () => {
   const ok = (m) => validate({ ...withoutRepo, repo: { path_mappings: m } });
   assert.ok(ok({ plugins: "core" }));
