@@ -2625,7 +2625,10 @@ async function refreshPrStatusLocked(
         continue;
       }
       const view = JSON.parse(v.stdout) as PrView;
-      if (view.state === "OPEN") views.set(f.path, view);
+      if (view.state === "OPEN") {
+        views.set(f.path, view);
+        recordCiResult(ws, String(f.fm["url"]), view);
+      }
       const ahead =
         view.state === "OPEN" ? await aheadOfPr(path.join(ws, f.dir), f, view.headRefOid, deps) : 0;
       if (ahead)
@@ -2755,6 +2758,49 @@ async function refreshPrStatusLocked(
   if (changed.length)
     lines.push((await deps.commitRecord(ws, "chore: record PR status", changed)).message);
   return { lines, changed: changed.length > 0, views };
+}
+
+/**
+ * `ci.result` for *pr*'s head, from the first status pass (`pr status`, each `pr watch` poll) that finds
+ * every check finished (SW-1172); once per head, so a new push is a new result. Its time is the last check's end.
+ */
+function recordCiResult(ws: string, pr: string, view: PrView): void {
+  const checks = view.statusCheckRollup ?? [];
+  const commit = view.headRefOid ?? "";
+  const pending = (c: (typeof checks)[number]) =>
+    c.__typename === "StatusContext" ? PENDING_STATUS.has(c.state ?? "") : !c.conclusion;
+  if (!commit || !checks.length || checks.some(pending)) return;
+  const logged = workspaceSlice(ws).some((l) => {
+    const e = JSON.parse(l);
+    return e.event === "ci.result" && e.pr === pr && e.commit === commit;
+  });
+  if (logged) return;
+  const failed = checks.some((c) =>
+    c.__typename === "StatusContext"
+      ? FAILED_STATUS.has(c.state ?? "")
+      : FAILED_RUN.has(c.conclusion ?? ""),
+  );
+  const times = (k: "startedAt" | "completedAt") =>
+    checks.map((c) => Date.parse(c[k] ?? "")).filter((t) => !Number.isNaN(t));
+  const [starts, ends] = [times("startedAt"), times("completedAt")];
+  const end = ends.length ? Math.max(...ends) : Date.now();
+  const ticket = issueRefsOf(loadConfigFile(ws, null))[0];
+  recordEvent(
+    {
+      event: "ci.result",
+      workspace: path.basename(ws),
+      ...(ticket && { ticket }),
+      pr,
+      commit,
+      result: failed ? "error" : "ok",
+      // "From the push": GitHub gives no push time, so the first check's start stands in for it.
+      ...(starts.length && ends.length
+        ? { duration_ms: Math.max(0, end - Math.min(...starts)) }
+        : {}),
+      ...runTag(ws),
+    },
+    new Date(end).toISOString(),
+  );
 }
 
 /** Logs a PR metrics event at GitHub's or the tag's time *at*; with no time or URL, warns and logs nothing rather than use the local clock (SW-779). */
@@ -3146,6 +3192,10 @@ export interface PrView {
     detailsUrl?: string;
     /** A commit status's page. */
     targetUrl?: string;
+    /** When the check run or commit status started (ISO time). */
+    startedAt?: string;
+    /** When a check run finished (ISO time); unset while it runs. */
+    completedAt?: string;
   }>;
   /** Every submitted review, oldest first. */
   reviews?: Array<{
@@ -3187,6 +3237,7 @@ export type WakeEvent =
 
 const FAILED_RUN = new Set(["FAILURE", "TIMED_OUT", "STARTUP_FAILURE"]);
 const FAILED_STATUS = new Set(["FAILURE", "ERROR"]);
+const PENDING_STATUS = new Set(["PENDING", "EXPECTED"]);
 // The session's own replies post as the same GitHub account; this footer is how they differ.
 const OWN_FOOTER = "Generated with [Claude Code]";
 

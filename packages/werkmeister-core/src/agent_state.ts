@@ -275,7 +275,7 @@ const askingTool = (s: SessionRecord) =>
 /**
  * The ask / answer metrics this hook event makes (SW-776): an `ask` only where a tool sets `s.ask`, an
  * `answer` only at the open ask's own tool result, or the next prompt for a wrap_up ask. The paths that
- * merely delete `s.ask` run on every tool call and emit nothing.
+ * merely delete `s.ask` run on every tool call and emit nothing. Also `session.start` / `session.stop` (SW-1172).
  */
 export function askEvents(
   input: Record<string, any>,
@@ -287,6 +287,10 @@ export function askEvents(
   const event = input["hook_event_name"];
   const tool = String(input["tool_name"] ?? "");
   const session = String(input["session_id"]);
+  // A record already open means a compact or clear restart of a running session, not a new one.
+  if (event === "SessionStart" && !current) return [{ event: "session.start", workspace, session }];
+  if (event === "SessionEnd" && current && next === null)
+    return [{ event: "session.stop", workspace, session }];
   const set = next?.ask;
   if (event === "PreToolUse" && set?.at === now.toISOString() && set.source === "session") {
     if (set.via === "wrap_up") return [{ event: "ask", workspace, session, kind: "wrap-up" }];
