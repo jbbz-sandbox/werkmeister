@@ -219,7 +219,10 @@ test("startIssue: names the first stage without output; no issue, no move", () =
         fs.mkdirSync(path.join(ws, "stages", d, "output"), { recursive: true });
       fs.writeFileSync(path.join(ws, "stages", "01_research", "output", ".gitkeep"), "");
       fs.mkdirSync(dotDir(ws), { recursive: true });
-      fs.writeFileSync(path.join(dotDir(ws), "workspace.yml"), "feature: f\nissue_id: X-1\n");
+      fs.writeFileSync(
+        path.join(dotDir(ws), "workspace.yml"),
+        "feature: f\nissue_id: X-1\nrun_id: run-i\n",
+      );
       const t = tracker({ ref: "X-1", status: "To Do", statusCategory: "new" });
       assert.equal(await startIssue(ws, t, JIRA), "X-1 → In Progress");
       assert.deepEqual(t.updates, [
@@ -245,8 +248,8 @@ test("startIssue: names the first stage without output; no issue, no move", () =
           .map((l) => JSON.parse(l))
           .filter((e) => e.event === "issue.start" && e.workspace === path.basename(ws));
       assert.deepEqual(
-        starts().map(({ ticket, workspace }) => ({ ticket, workspace })),
-        [{ ticket: "X-1", workspace: path.basename(ws) }],
+        starts().map(({ ticket, workspace, run_id }) => ({ ticket, workspace, run_id })),
+        [{ ticket: "X-1", workspace: path.basename(ws), run_id: "run-i" }],
       );
       const already = tracker({
         ref: "X-1",
