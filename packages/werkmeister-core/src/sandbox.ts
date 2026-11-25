@@ -3637,7 +3637,11 @@ export async function resumeAndNudge(
   }
   // SW-1156: a headless turn can't ask, so only an auto-mode session keeps its approvals there.
   if (harnessIdOf(ws) === "claude") {
-    const { sessionId, sessionFile } = await resolveSessionSource(name);
+    // The containers are already back: a session we can't find waits as "not recorded", never fails the resume.
+    const { sessionId, sessionFile } = await resolveSessionSource(name).catch(() => ({
+      sessionId: null,
+      sessionFile: null,
+    }));
     const mode = await sessionPermissionMode(sessionFile);
     if (mode !== "auto") {
       writeNudge(ws, RESUME_NUDGE);
