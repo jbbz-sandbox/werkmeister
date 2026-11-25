@@ -18,25 +18,23 @@ const VARS = ["WERKMEISTER_SERVICES_YAML", "WERKMEISTER_CONFIG_FILE", "WERKMEIST
 const SAVED = Object.fromEntries(VARS.map((v) => [v, process.env[v]]));
 let open = [];
 
-/** A port nothing is listening on: bind an ephemeral one, then release it. */
-function freePort() {
-  return new Promise((resolve) => {
-    const srv = net.createServer();
-    srv.listen(0, "127.0.0.1", () => {
-      const { port } = srv.address();
-      srv.close(() => resolve(port));
-    });
+/**
+ * A port the OS picks, held until afterEach: a port freed and bound again later is a parallel
+ * test's to take in between, which made a dead forward answer (SW-1148).
+ */
+function hold(onData) {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer((sock) => sock.on("data", () => onData(sock)));
+    open.push(srv);
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => resolve(srv.address().port));
   });
 }
 
-/** Answer every request with `+PONG`, so the redis wire probe passes. */
-function serveRedis(port) {
-  return new Promise((resolve) => {
-    const srv = net.createServer((sock) => sock.on("data", () => sock.write("+PONG\r\n")));
-    open.push(srv);
-    srv.listen(port, "127.0.0.1", () => resolve(srv));
-  });
-}
+/** `+PONG` passes the redis wire probe. */
+const pong = (sock) => sock.write("+PONG\r\n");
+/** A forward that is down: it takes the connection and drops it unanswered. */
+const hangUp = (sock) => sock.destroy();
 
 /** A registry whose only forwards are redis-probed entries on *ports*. */
 async function registry(ports) {
@@ -66,20 +64,19 @@ afterEach(() => {
 });
 
 test("returns once every forward answers its probe", async () => {
-  const ports = [await freePort(), await freePort()];
-  await Promise.all(ports.map(serveRedis));
-  await registry(ports);
+  await registry([await hold(pong), await hold(pong)]);
 
   await waitForForwards(5_000, 50);
 });
 
 test("waits for a forward that is still reconnecting", async () => {
-  // The whole point: at the first probe this port is refused, exactly as a
-  // tunnel mid-reconnect is. A single-shot check would fail the run here.
-  const port = await freePort();
+  // The whole point: at the first probe this forward fails, as a tunnel
+  // mid-reconnect does. A single-shot check would fail the run here.
+  let up = false;
+  const port = await hold((sock) => (up ? pong(sock) : hangUp(sock)));
   await registry([port]);
 
-  const late = setTimeout(() => serveRedis(port), 300);
+  const late = setTimeout(() => (up = true), 300);
   try {
     await waitForForwards(10_000, 50);
   } finally {
@@ -88,8 +85,7 @@ test("waits for a forward that is still reconnecting", async () => {
 });
 
 test("names the forwards that never came back", async () => {
-  const [alive, dead] = [await freePort(), await freePort()];
-  await serveRedis(alive);
+  const [alive, dead] = [await hold(pong), await hold(hangUp)];
   await registry([alive, dead]);
 
   await assert.rejects(
@@ -109,14 +105,24 @@ test("a forward that hangs up without replying fails the wait instead of hanging
 }, async () => {
   // #207: the probe for this forward never settled, so neither did the wait,
   // and `sandbox up` exited mid-run with its containers left in Created.
-  const port = await freePort();
-  const srv = net.createServer((sock) => sock.on("data", () => sock.destroy()));
-  open.push(srv);
-  await new Promise((resolve) => srv.listen(port, "127.0.0.1", resolve));
-  srv.unref();
+  const port = await hold(hangUp);
+  open.at(-1).unref();
   await registry([port]);
 
   await assert.rejects(() => waitForForwards(300, 50), { code: "FORWARDS_NEVER_READY" });
+});
+
+test("a dead forward's port stays held for the whole test, so no parallel test can take it (SW-1148)", async () => {
+  const port = await hold(hangUp);
+  await assert.rejects(
+    () =>
+      new Promise((resolve, reject) => {
+        const thief = net.createServer();
+        thief.once("error", reject);
+        thief.listen(port, "127.0.0.1", () => thief.close(resolve));
+      }),
+    { code: "EADDRINUSE" },
+  );
 });
 
 test("no forwards in the registry is not something to wait for", async () => {
