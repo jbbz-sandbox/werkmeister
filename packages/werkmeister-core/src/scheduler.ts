@@ -108,6 +108,28 @@ export function headCanWaitOut(budget: Budget, running: Lease[], head: Waiter): 
 }
 
 /**
+ * The leases only a person can free, when waiting could free nothing else that makes room for *need*
+ * (SW-1147); else []. Blocked: waiting on a person with a run in flight, which neither preemption nor the
+ * idle reaper takes. *feature*'s own lease and *reserved* starts never free room during its wait.
+ */
+export function blockedOnPerson(
+  budget: Budget,
+  running: Lease[],
+  feature: string,
+  need: Cost,
+  reserved: Lease[] = [],
+): Lease[] {
+  const blocked = running.filter(
+    (l) => l.feature !== feature && l.rank === "human-check" && l.busy,
+  );
+  const kept = [...blocked, ...reserved, ...running.filter((l) => l.feature === feature)].reduce(
+    (a, l) => ({ memory: a.memory + l.cost.memory, cpus: a.cpus + l.cost.cpus }),
+    need,
+  );
+  return kept.memory > budget.memory || kept.cpus > budget.cpus ? blocked : [];
+}
+
+/**
  * Whether *req* may start now. *running* is ordered longest-inactive first;
  * *queue* is the waiting requests, first come first served.
  */

@@ -72,6 +72,26 @@ it("--running reads five tab-separated columns a line, --queue a comma list (SW-
   ).toEqual(["a", "b", "head:239:api,web"]);
   expect(r.steps).toEqual([["budget", "status"]]);
   expect(parse(["--running", "short.tsv", "budget", "status"], tmp)).toEqual({ bad: "--running" });
+  // SW-1147: a 7th column, asking, takes 0 or 1 only.
+  const row = "holder\tws\t2026-11-13T00:00:00Z\t0\t6000000000\t1";
+  for (const [asking, want] of [
+    ["1", { execs: 1, asking: true }],
+    ["0", { execs: 1 }],
+  ] as const) {
+    fs.writeFileSync(path.join(tmp, "asking.tsv"), `${row}\t${asking}\n`);
+    expect(parse(["--running", "asking.tsv", "budget", "status"], tmp).opts?.containers).toEqual([
+      expect.objectContaining(want),
+    ]);
+  }
+  expect(
+    parse(["--running", "asking.tsv", "budget", "status"], tmp).opts?.containers?.[0],
+  ).not.toHaveProperty("asking");
+  for (const bad of ["yes", "2", ""]) {
+    fs.writeFileSync(path.join(tmp, "asking.tsv"), `${row}\t${bad}\n`);
+    expect(parse(["--running", "asking.tsv", "budget", "status"], tmp)).toEqual({
+      bad: "--running",
+    });
+  }
   expect(parse(["--running", "secret-missing", "budget", "status"], tmp)).toEqual({
     bad: "--running",
   });

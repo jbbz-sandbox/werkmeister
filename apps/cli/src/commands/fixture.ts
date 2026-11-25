@@ -121,7 +121,7 @@ export function parse(argv: string[], base = cliWorktree()) {
       const v = argv[++i] as string;
       opts.queue = [...(opts.queue ?? []), ...(v.includes(":") ? [v] : v.split(","))];
     } else if (a === "--running" && argv[i + 1] !== undefined) {
-      // fixturePreset checks each value; here only the shape: five tab-separated columns a line, or six with the running execs (SW-856).
+      // fixturePreset checks each value; here only the shape: five tab-separated columns a line, six with the running execs (SW-856), seven with asking 0|1 (SW-1147).
       const p = argv[++i] as string;
       const file = inside(base, p);
       if (!file || !fs.existsSync(file)) return { bad: a, ...outside(base, p) };
@@ -130,15 +130,23 @@ export function parse(argv: string[], base = cliWorktree()) {
         .split("\n")
         .filter((l) => l.trim())
         .map((l) => l.split("\t"));
-      if (rows.some((r) => r.length !== 5 && r.length !== 6)) return { bad: a };
-      opts.containers = rows.map(([feature, workspace, startedAt, memory, nanoCpus, execs]) => ({
-        feature: feature as string,
-        workspace: workspace as string,
-        startedAt: startedAt as string,
-        memory: Number(memory),
-        nanoCpus: Number(nanoCpus),
-        ...(execs !== undefined && { execs: Number(execs) }),
-      }));
+      if (
+        rows.some(
+          (r) => r.length < 5 || r.length > 7 || (r.length === 7 && !/^[01]$/.test(r[6] as string)),
+        )
+      )
+        return { bad: a };
+      opts.containers = rows.map(
+        ([feature, workspace, startedAt, memory, nanoCpus, execs, asking]) => ({
+          feature: feature as string,
+          workspace: workspace as string,
+          startedAt: startedAt as string,
+          memory: Number(memory),
+          nanoCpus: Number(nanoCpus),
+          ...(execs !== undefined && { execs: Number(execs) }),
+          ...(asking === "1" && { asking: true }),
+        }),
+      );
     } else if (a === "--issue") {
       // Input hygiene: no leading dash or whitespace in what becomes gh's `-R <repo>` (gh is the fake here; `--workspace` refs are unchecked).
       const ref = argv[++i] ?? "";
@@ -318,7 +326,7 @@ export async function run(argv: string[], base = cliWorktree()): Promise<void> {
                       : parsed.bad === "--change"
                         ? "--change: a path inside the code repo, e.g. plugins/x/y.ts"
                         : parsed.bad === "--running"
-                          ? "--running: a file under the worktree, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus[<TAB>execs] line per container"
+                          ? "--running: a file under the worktree, one feature<TAB>workspace<TAB>startedAt<TAB>memoryBytes<TAB>nanoCpus[<TAB>execs[<TAB>asking 0|1]] line per container"
                           : `${parsed.bad}: a file under the worktree${parsed.bad === "--workspace" || parsed.bad === "--config" ? ", holding a YAML mapping" : ""}`,
       );
     console.error(USAGE);
