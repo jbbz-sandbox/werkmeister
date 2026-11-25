@@ -1,5 +1,11 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.112.1
+
+### Patch Changes
+
+- 1ef16d3: SW-1156 follow-up: when a resumed workspace's Claude session can't be found (for example, a workspace folder outside `workspaces_root`), `werkmeister feature resume` no longer fails after the containers are already unpaused. "Continue" waits for the session, as it does for a session with no recorded mode.
+
 ## 0.112.0
 
 ### Minor Changes
