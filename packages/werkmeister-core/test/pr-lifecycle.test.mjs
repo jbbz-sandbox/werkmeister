@@ -59,6 +59,8 @@ import { withFakeGh, withSandboxHome, writeSessions } from "./fixtures.mjs";
 
 // The host-load wait tests need it to wait; a caller exporting it for a quick run would skip it (SW-425).
 delete process.env.WERKMEISTER_NO_WAIT;
+// A status pass over finished checks logs ci.result (SW-1172): under a temp HOME, never the runner's real ~/.werkmeister.
+process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), "pr-life-home-"));
 
 const PASS_BODY = "## Acceptance\n| criterion | result |\n|---|---|\n| works | PASS |\n";
 
