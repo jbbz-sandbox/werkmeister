@@ -25,7 +25,7 @@ import { appRoot, Css } from "werkmeister-ui/theme";
 import { type HostBridge, WorkspaceList } from "werkmeister-ui/workspace-ui";
 import { FlowTab } from "./flow-ui.js";
 import { HealthTab } from "./health-ui.js";
-import { isTab, TABS, type Tab } from "./lib/tabs.js";
+import { parseHash, TABS, type Tab } from "./lib/tabs.js";
 import { MetricsTab } from "./metrics-ui.js";
 import { PrsTab } from "./prs-ui.js";
 import { LinksTab } from "./werkmeister-links-ui.js";
@@ -97,9 +97,11 @@ const TAB_TITLES: Record<Tab, string> = {
   links: "Links · Werkmeister Workspaces",
 };
 
+/** The workspace a `#flow/<workspace>` link opens (SW-1099), or null. */
+const flowFocusFromHash = () => parseHash(location.hash.replace(/^#/, "")).workspace;
+
 function tabFromHash(): Tab {
-  const h = location.hash.replace(/^#/, "");
-  return isTab(h) ? h : "list";
+  return parseHash(location.hash.replace(/^#/, "")).tab;
 }
 
 // Each top-level tab is a page addressed by the URL hash (…/#list, …/#new), so
@@ -112,6 +114,7 @@ function navigate(tab: Tab): void {
 
 function Dashboard() {
   const [tab, setTab] = useState(tabFromHash);
+  const [flowFocus, setFlowFocus] = useState(flowFocusFromHash);
   // A pane mounts on its first visit and then stays mounted (hidden), keeping its state.
   const visited = useRef(new Set<Tab>());
   visited.current.add(tab);
@@ -120,7 +123,10 @@ function Dashboard() {
   const reloadList = useRef(() => {});
 
   useEffect(() => {
-    const onHash = () => setTab(tabFromHash());
+    const onHash = () => {
+      setTab(tabFromHash());
+      setFlowFocus(flowFocusFromHash());
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -174,7 +180,7 @@ function Dashboard() {
       )}
       {pane("prs", <PrsTab bridge={bridge} />)}
       {pane("health", <HealthTab bridge={bridge} active={tab === "health"} />)}
-      {pane("flow", <FlowTab bridge={bridge} active={tab === "flow"} />)}
+      {pane("flow", <FlowTab bridge={bridge} active={tab === "flow"} focus={flowFocus} />)}
       {pane("metrics", <MetricsTab bridge={bridge} active={tab === "metrics"} />)}
       {pane("links", <LinksTab />)}
     </>

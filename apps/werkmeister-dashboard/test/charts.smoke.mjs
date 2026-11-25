@@ -1,4 +1,4 @@
-// SW-1098: the Metrics tab's inline-SVG chart primitives (data → marks) and its view model over a
+// SW-1098, SW-1099: the Metrics tab's inline-SVG chart primitives (data → marks) and its view model over a
 // hand-built `metrics-trends` result: versions, the empty state, tiles and preview inputs. No DOM.
 //   npm run build && node test/charts.smoke.mjs
 import assert from "node:assert";
@@ -6,10 +6,31 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const { W, lineBandView, stackedBarView, heatmapView, scatterView, statTile, formatUsd } =
-  await import(path.join(pkgRoot, "dist/lib/charts.js"));
-const { RANGE_BUCKET, versionsOf, sliceRows, isEmpty, emptyText, metricsTiles, previewCharts } =
-  await import(path.join(pkgRoot, "dist/lib/metrics-view.js"));
+const {
+  W,
+  lineBandView,
+  multiLineView,
+  stackedBarView,
+  heatmapView,
+  scatterView,
+  statTile,
+  formatUsd,
+} = await import(path.join(pkgRoot, "dist/lib/charts.js"));
+const {
+  RANGE_BUCKET,
+  versionsOf,
+  sliceRows,
+  isEmpty,
+  emptyText,
+  metricsTiles,
+  previewCharts,
+  stageTrend,
+  leadTrend,
+  stageHeatmap,
+  waitSplit,
+  bottleneck,
+  slowestTickets,
+} = await import(path.join(pkgRoot, "dist/lib/metrics-view.js"));
 
 // 1. lineBandView: p50 line over a p50→p90 band, broken by a null point.
 {
@@ -116,6 +137,7 @@ const slice = (o = {}) => ({
   shipped: 0,
   abandoned: 0,
   stages: {},
+  slowest: [],
   leadToMerge: NONE,
   leadToRelease: NONE,
   tokens: { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 },
@@ -206,14 +228,6 @@ assert.deepEqual(metricsTiles(all), [
 assert.equal(metricsTiles(only9)[3].value, "—", "no gate runs → unknown first-pass rate");
 const p = previewCharts(all);
 assert.deepEqual(
-  p.lead.map((l) => [l.label, l.p50, l.p90]),
-  [
-    ["2026-10-26", null, null],
-    ["2026-11-02", null, null],
-    ["2026-11-09", 300, 600],
-  ],
-);
-assert.deepEqual(
   p.closed.map((b) => b.values),
   [
     { shipped: 0, abandoned: 0 },
@@ -221,7 +235,7 @@ assert.deepEqual(
     { shipped: 2, abandoned: 0 },
   ],
 );
-assert.deepEqual(p.stages, {
+assert.deepEqual(stageHeatmap(all), {
   rows: ["01_research", "03_implement"],
   cols: ["2026-10-26", "2026-11-02", "2026-11-09"],
   grid: [
@@ -229,7 +243,7 @@ assert.deepEqual(p.stages, {
     [null, null, 90],
   ],
 });
-console.log("✓ metricsTiles, previewCharts");
+console.log("✓ metricsTiles, previewCharts, stageHeatmap");
 
 // 7. Daily points only for 7d.
 assert.deepEqual(RANGE_BUCKET, { "7d": "day", "30d": "week", "90d": "week", all: "week" });
@@ -265,4 +279,140 @@ assert.deepEqual(RANGE_BUCKET, { "7d": "day", "30d": "week", "90d": "week", all:
   assert.equal(one.p50Y, null);
   assert.equal(scatterView([], null, null, 0, 1, 100).yMax, 1);
 }
+// 9. multiLineView (SW-1099): one path per series on a shared scale; a null starts a new `M`.
+{
+  const v = multiLineView(
+    [
+      { key: "a", values: [10, null, 30] },
+      { key: "b", values: [20, 20, 20] },
+    ],
+    100,
+  );
+  assert.equal(v.yMax, 30);
+  assert.equal(v.lines[0].d, "M166.7 66.7 M833.3 0");
+  assert.equal(v.lines[1].d, "M166.7 33.3 L500 33.3 L833.3 33.3");
+  assert.deepEqual(
+    v.lines[0].dots.map((d) => [d.slot, d.value]),
+    [
+      [0, 10],
+      [2, 30],
+    ],
+  );
+  assert.equal(multiLineView([], 100).yMax, 1);
+}
+console.log("✓ multiLineView");
+
+// 10. SW-1099 from fixture data: stage and lead trends, the bottleneck flag (share of summed wall
+// minutes, ≥ 3 completions, a tie to the later stage, per version) and the waiting/working split.
+{
+  const st = (p50, p90, count, total, person, capacity, working) => ({
+    ...pct(p50, p90, count),
+    totalMinutes: total,
+    personMinutes: person,
+    capacityMinutes: capacity,
+    workingMinutes: working,
+  });
+  const slow = (ticket, workspace, merge, release) => ({
+    ticket,
+    workspace,
+    leadToMergeMinutes: merge,
+    leadToReleaseMinutes: release,
+  });
+  const a = slice({
+    stages: {
+      "01_research": st(60, 90, 2, 150, 30, 0, 120),
+      "03_implement": st(200, 300, 1, 200, 50, 20, 130),
+    },
+    leadToMerge: pct(10, 20, 1),
+    slowest: [slow("SW-1", "ws-1", 10, null)],
+  });
+  const b = slice({
+    stages: {
+      "02_spec": st(40, 40, 1, 40, 0, 0, 40),
+      "03_implement": st(100, 100, 1, 100, 0, 10, 90),
+    },
+    leadToRelease: pct(50, 60, 2),
+    slowest: [slow("SW-1", "ws-1", null, 50), slow("SW-2", "ws-2", 30, null)],
+  });
+  const t = {
+    ...trends,
+    rows: [
+      { bucket: "2026-11-02", ...a, byVersion: { "0.9.0": a } },
+      { bucket: "2026-11-09", ...b, byVersion: { "0.10.0": b } },
+    ],
+  };
+  const rows = sliceRows(t, "all");
+
+  const s50 = stageTrend(rows, "p50");
+  assert.deepEqual(s50.cols, ["2026-11-02", "2026-11-09"]);
+  assert.deepEqual(
+    s50.series.map((s) => [s.key, s.values]),
+    [
+      ["01_research", [60, null]],
+      ["02_spec", [null, 40]],
+      ["03_implement", [200, 100]],
+    ],
+  );
+  assert.deepEqual(stageTrend(rows, "p90").series[2].values, [300, 100]);
+  assert.deepEqual(s50.series[0].counts, [2, 0]);
+  assert.deepEqual(
+    leadTrend(rows, "p50").series.map((s) => [s.key, s.values]),
+    [
+      ["merged", [10, null]],
+      ["released", [null, 50]],
+    ],
+  );
+  assert.deepEqual(leadTrend(rows, "p90").series[1].values, [null, 60]);
+
+  assert.deepEqual(waitSplit(rows), [
+    { stage: "01_research", total: 150, person: 30, capacity: 0, working: 120 },
+    { stage: "02_spec", total: 40, person: 0, capacity: 0, working: 40 },
+    { stage: "03_implement", total: 300, person: 50, capacity: 30, working: 220 },
+  ]);
+  const flag = bottleneck(rows);
+  assert.equal(flag.text, "03_implement: 61% of stage time");
+  assert.equal(flag.stage, "03_implement");
+  assert.equal(
+    bottleneck(sliceRows(t, "0.9.0")).text,
+    "03_implement: 57% of stage time",
+    "the version filter narrows the share",
+  );
+  assert.equal(bottleneck(sliceRows(t, "0.10.0")), null, "2 completions: too few to flag");
+  const tie = sliceRows(
+    {
+      ...trends,
+      rows: [
+        {
+          bucket: "2026-11-16",
+          ...slice({
+            stages: {
+              "01_research": st(50, 50, 2, 100, 0, 0, 100),
+              "03_implement": st(100, 100, 1, 100, 0, 0, 100),
+            },
+          }),
+          byVersion: {},
+        },
+      ],
+    },
+    "all",
+  );
+  assert.equal(bottleneck(tie).stage, "03_implement", "a tie goes to the later stage");
+  assert.equal(bottleneck(sliceRows({ ...trends, rows: [] }, "all")), null);
+
+  assert.deepEqual(slowestTickets(rows), [
+    slow("SW-1", "ws-1", 10, 50),
+    slow("SW-2", "ws-2", 30, null),
+  ]);
+  const many = Array.from({ length: 7 }, (_, i) => slow(`SW-${i}`, `w${i}`, i * 10, null));
+  const manyRows = sliceRows(
+    { ...trends, rows: [{ bucket: "x", ...slice({ slowest: many }), byVersion: {} }] },
+    "all",
+  );
+  assert.deepEqual(
+    slowestTickets(manyRows).map((x) => x.ticket),
+    ["SW-6", "SW-5", "SW-4", "SW-3", "SW-2"],
+  );
+}
+console.log("✓ stageTrend, leadTrend, waitSplit, bottleneck, slowestTickets");
+
 console.log("charts smoke: OK");

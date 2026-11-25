@@ -173,24 +173,69 @@ export function seedDashboardHome(home: string, now = Date.now()): string[] {
   ev(1400, "pr.merged", "seed-shipped", { pr: prUrl(21) });
   ev(1300, "release", "seed-shipped", { pr: prUrl(21), tag: "v1.2.0" });
 
+  // Closed runs; *stages* is minutes per stage, counted back from *firstTurnMin*.
+  const closedRun = (
+    name: string,
+    ticket: string,
+    version: string,
+    firstTurnMin: number,
+    closedMin: number,
+    stages: number[],
+  ) => {
+    const ws = workspace(name, ticket, null, firstTurnMin, 4);
+    write(path.join(ws, "closeout.md"), "closed\n");
+    let at = firstTurnMin;
+    const timings = STAGES.map((stage, i) => {
+      at -= stages[i] ?? 0;
+      ev(at, "stage.done", name, { stage, commit: `${name}-${i}` });
+      return { stage, finishedAt: ago(at), minutes: stages[i] };
+    });
+    write(
+      path.join(ws, "usage.json"),
+      JSON.stringify({
+        schema: 1,
+        workspace: name,
+        ticket,
+        outcome: "shipped",
+        werkmeister: { version, commit: null },
+        closedAt: ago(closedMin),
+        firstTurn: ago(firstTurnMin),
+        estUsd: 1,
+        totals: { input: 1, output: 1, cacheCreation: 0, cacheRead: 0 },
+        activeMinutes: 5,
+        wallClockMinutes: 10,
+        turns: 3,
+        stages: timings,
+      }),
+    );
+    return ws;
+  };
+
   // A closed run: working → gate in 2 h gives the working column its p90.
-  const closed = workspace("seed-closed-out", "SW-900", null, 3000, 4);
-  write(path.join(closed, "closeout.md"), "closed\n");
-  write(
-    path.join(closed, "usage.json"),
-    JSON.stringify({
-      schema: 1,
-      workspace: "seed-closed-out",
-      ticket: "SW-900",
-      closedAt: ago(2000),
-      firstTurn: ago(2900),
-      estUsd: 1,
-      totals: { input: 1, output: 1, cacheCreation: 0, cacheRead: 0 },
-      activeMinutes: 5,
-      wallClockMinutes: 10,
-      turns: 3,
-    }),
-  );
+  closedRun("seed-closed-out", "SW-900", "0.111.0", 2900, 2000, [50, 30, 30, 25]);
+
+  // SW-1099: three weekly closed runs on two versions, 03_implement the longest (the seeded
+  // bottleneck), each with a person wait in 01_research, a capacity wait across the 02_spec →
+  // 03_implement boundary and a person wait in 03_implement, then merged and released.
+  const WEEK = 7 * 1440;
+  for (const k of [1, 2, 3]) {
+    const name = `seed-closed-${k}`;
+    const first = k * WEEK + 3000;
+    const implement = 1300 + k * 200;
+    const done = first - 1100 - implement;
+    closedRun(name, `SW-91${k}`, k === 3 ? "0.110.0" : "0.111.0", first, done - 400, [
+      600,
+      300,
+      implement,
+      200,
+    ]);
+    ev(first - 500, "answer", name, { session: "s", waited_s: 3600 });
+    ev(first - 930, "queue.admit", name, { feature: name, waited_s: 3600 });
+    ev(first - 1500, "answer", name, { session: "s", waited_s: 240 * 60 });
+    ev(done - 50, "pr.open", name, { pr: prUrl(30 + k) });
+    ev(done - 100, "pr.merged", name, { pr: prUrl(30 + k) });
+    ev(done - 300, "release", name, { pr: prUrl(30 + k), tag: `v0.11${k}.0` });
+  }
   ev(2780, "gate.start", "seed-closed-out", { run: "c1", retry: 0 });
   ev(2770, "gate.end", "seed-closed-out", { run: "c1", exit: 0 });
   ev(2760, "pr.open", "seed-closed-out", { pr: prUrl(900) });

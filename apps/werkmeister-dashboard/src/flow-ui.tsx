@@ -4,7 +4,7 @@
  * the session picker (the shared chat panel). Inline SVG; the repo has no chart dependency.
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MetricsRange, MetricsReport, TimelineEvent } from "werkmeister-core/metrics_report";
 import { ChatPanel } from "werkmeister-ui/chat-panel";
 import { renderMarkdown } from "werkmeister-ui/lib/markdown";
@@ -15,7 +15,6 @@ import { type StackBar, scatterView, stackedBarView, W } from "./lib/charts.js";
 import {
   agentBars,
   COLUMN_LABEL,
-  type CycleMode,
   cardView,
   cyclePoints,
   flowTiles,
@@ -158,8 +157,7 @@ function Bars({
 }
 
 function CycleScatter({ report }: { report: MetricsReport }) {
-  const [mode, setMode] = useState<CycleMode>("cycle");
-  const c = cyclePoints(report, mode);
+  const c = cyclePoints(report);
   const v = scatterView(c.points, c.p50, c.p90, c.x0, c.x1, H);
   const rule = (y: number | null, stroke: string) =>
     y !== null && (
@@ -175,19 +173,9 @@ function CycleScatter({ report }: { report: MetricsReport }) {
     );
   return (
     <section className="chart">
-      <h3>
-        {mode === "cycle" ? "Cycle time per ticket" : "Lead time per ticket"}
-        <fieldset className="ranges" aria-label="Time measured">
-          {(["cycle", "lead"] as const).map((m) => (
-            <button key={m} type="button" aria-pressed={m === mode} onClick={() => setMode(m)}>
-              {m === "cycle" ? "Cycle" : "Lead"}
-            </button>
-          ))}
-        </fieldset>
-      </h3>
+      <h3>Cycle time per ticket</h3>
       <div className="cap">
-        {mode === "cycle" ? "In Progress → merged" : "First turn → release"} · p50{" "}
-        {formatMinutes(c.p50)} · p90 {formatMinutes(c.p90)}
+        In Progress → merged · p50 {formatMinutes(c.p50)} · p90 {formatMinutes(c.p90)}
       </div>
       {v.dots.length === 0 ? (
         <div className="empty">No merges in this range.</div>
@@ -201,7 +189,7 @@ function CycleScatter({ report }: { report: MetricsReport }) {
             preserveAspectRatio="none"
             height={H}
             role="img"
-            aria-label={`${mode === "cycle" ? "Cycle" : "Lead"} time per ticket by merge date, with p50 and p90 lines`}
+            aria-label="Cycle time per ticket by merge date, with p50 and p90 lines"
           >
             {rule(v.p50Y, "var(--sd-accent)")}
             {rule(v.p90Y, "var(--sd-err)")}
@@ -369,8 +357,11 @@ function Detail({
       stale = true;
     };
   }, [bridge, workspace, active]);
+  const ref = useRef<HTMLElement>(null);
+  // A card click or a `#flow/<workspace>` link (SW-1099) mounts this below the board: bring it into view.
+  useEffect(() => ref.current?.scrollIntoView({ block: "start" }), []);
   return (
-    <section className="detail" aria-label={`${workspace} timeline`}>
+    <section ref={ref} className="detail" aria-label={`${workspace} timeline`}>
       <h3>{workspace}</h3>
       {err && <div className="load-status err">{err}</div>}
       {events ? <Timeline events={events} /> : !err && <div className="load-status">Loading…</div>}
@@ -416,11 +407,23 @@ function Detail({
 }
 
 /** `active`: the Flow tab is the one on screen. */
-export function FlowTab({ bridge, active }: { bridge: HostBridge; active: boolean }) {
+export function FlowTab({
+  bridge,
+  active,
+  focus = null,
+}: {
+  bridge: HostBridge;
+  active: boolean;
+  /** A workspace a `#flow/<workspace>` link opened (SW-1099). */
+  focus?: string | null;
+}) {
   const [range, setRange] = useState<MetricsRange>("7d");
   const [report, setReport] = useState<MetricsReport | null>(null);
   const [status, setStatus] = useState({ text: "Loading…", err: false });
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(focus);
+  useEffect(() => {
+    if (focus) setSelected(focus);
+  }, [focus]);
   useEffect(() => {
     let stale = false;
     setStatus({ text: "Loading…", err: false });
@@ -484,7 +487,9 @@ export function FlowTab({ bridge, active }: { bridge: HostBridge; active: boolea
         </div>
       )}
       {report && <Charts report={report} />}
-      {selected && <Detail key={selected} bridge={bridge} workspace={selected} active={active} />}
+      {report && selected && (
+        <Detail key={selected} bridge={bridge} workspace={selected} active={active} />
+      )}
     </div>
   );
 }
