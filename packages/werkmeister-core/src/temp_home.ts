@@ -57,8 +57,30 @@ export WERKMEISTER_DAEMON_RETRY_MS="\${WERKMEISTER_DAEMON_RETRY_MS:-500}"
 # An agent's shell inherits its Claude Code session's variables; CI has none (SW-332). CLAUDE_BIN stays.
 unset CLAUDECODE
 for v in $(env | sed -n '/^CLAUDE_CODE_[A-Za-z0-9_]*=/s/=.*//p'); do unset "$v"; done
-HOME=$tmp "$@"
-status=$?
+# A trap runs only once a foreground child returns, so the child runs in the background and gets the signal (SW-1149).
+# An async list's stdin is /dev/null in a non-interactive sh: hand it ours on fd 3.
+# The child leads its own process group, so the signal reaches what it started too (\`sh -c 'a && b'\`): setsid where
+# there is one (Linux; dash has no job control without a tty), else set -m (macOS sh). Trapped before the fork, so no signal slips between.
+# An async child ignores SIGINT here, so each signal goes on as TERM; dash's kill takes -- only after -s.
+# shortcut: on macOS with a terminal on stdin the child stays in our group (a background group reading the tty would stop), so only it gets TERM; fine until someone wraps an interactive command there.
+pid=
+trap '[ -n "$pid" ] || exit 130; kill -s TERM -- "-$pid" 2>/dev/null || kill -s TERM "$pid" 2>/dev/null' HUP INT TERM
+exec 3<&0
+if command -v setsid >/dev/null 2>&1; then
+  HOME=$tmp setsid "$@" <&3 3<&- &
+else
+  [ -t 0 ] || set -m
+  HOME=$tmp "$@" <&3 3<&- &
+  set +m
+fi
+pid=$!
+exec 3<&-
+# A trapped wait returns early: wait again for the child's own status.
+while :; do
+  wait "$pid"
+  status=$?
+  kill -0 "$pid" 2>/dev/null || break
+done
 # A failure under load reads as load (SW-209). Slim images have no uptime (procps): /proc/loadavg, else no load (SW-935).
 [ "$status" -eq 0 ] || {
   load=$(uptime 2>/dev/null | sed 's/.*load averages*: //; s/,//g')

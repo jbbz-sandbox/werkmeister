@@ -411,3 +411,58 @@ test("WERKMEISTER_TEMP_HOME is the temp HOME itself, whatever the caller exporte
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("SIGTERM to the wrapper ends its command and what it started, and removes the temp HOME (SW-1149)", async () => {
+  const { root, bin } = wrapper();
+  const alive = (pid) => {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return false;
+    }
+    const stat = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout;
+    return stat.trim() !== "" && !stat.trim().startsWith("Z");
+  };
+  // SW-507: wall-clock headroom for a loaded host, far under the command's 300 s.
+  const until = async (ok) => {
+    for (const end = Date.now() + 60_000; !ok() && Date.now() < end; )
+      await new Promise((r) => setTimeout(r, 100));
+    return ok();
+  };
+  // The sleep is the command's own child, as `pnpm build` is under `sh -c 'pnpm build && pnpm test'`.
+  const child = spawn(bin, ["sh", "-c", 'sleep 300 & echo "$! $HOME"; wait'], {
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  const exited = new Promise((r) => child.on("exit", (code) => r(code)));
+  let out = "";
+  child.stdout.on("data", (d) => (out += d));
+  let cmdPid = 0;
+  try {
+    assert.ok(await until(() => out.includes("\n")), "command started");
+    const [pid, home] = out.trim().split(" ");
+    cmdPid = Number(pid);
+    assert.ok(fs.existsSync(home));
+    child.kill("SIGTERM");
+    assert.ok(await until(() => !alive(cmdPid)), `command ${cmdPid} still running`);
+    assert.equal(await exited, 143);
+    assert.equal(fs.existsSync(home), false, "temp HOME left behind");
+  } finally {
+    if (cmdPid && alive(cmdPid)) process.kill(cmdPid);
+    child.kill("SIGKILL");
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the command still reads the caller's stdin (SW-1149)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const r = spawnSync(bin, ["sh", "-c", 'read l; echo "got:$l"'], {
+      input: "hi\n",
+      encoding: "utf8",
+    });
+    assert.equal(r.stdout, "got:hi\n");
+    assert.equal(r.status, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
