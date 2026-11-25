@@ -14,7 +14,8 @@ const CLI_DIR = path.resolve(fileURLToPath(import.meta.url), "../../../..");
 const RUNS = 11;
 const BUDGET_MS = 200;
 // An idle bare start measures 30-50 ms; above this, load is stretching the bare start and the gap alike (SW-921).
-const IDLE_BARE_MS = 80;
+// The middle of that range, not its double: at 80 a loaded budget was 2.5x bare against a gap already ~2x bare (SW-1183).
+const IDLE_BARE_MS = 40;
 
 /** The budget for a hook gap measured beside a bare start of *bare* ms: 200 ms idle, scaled by how much load slowed node itself. */
 const budgetMs = (bare: number) => BUDGET_MS * Math.max(1, bare / IDLE_BARE_MS);
@@ -112,6 +113,8 @@ it("the budget scales with a slow bare start, so load below the skip line can't 
   // Breaches seen under load at 4.3 and 11.3 on 12 cores (SW-921): bare 109 ms gap 217, bare 197 ms gap 287.
   expect(budgetMs(109)).toBeGreaterThan(217);
   expect(budgetMs(197)).toBeGreaterThan(287);
-  // An idle start (30-50 ms) keeps the plain budget.
+  // SW-1183, at load 2.99 in the full row: bare 120 ms, gap 354 ms.
+  expect(budgetMs(120)).toBeGreaterThan(354);
+  // An idle start up to 40 ms keeps the plain budget; 50 ms gets 250.
   expect(budgetMs(40)).toBe(BUDGET_MS);
 });
