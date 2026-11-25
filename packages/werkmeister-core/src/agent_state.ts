@@ -1109,7 +1109,9 @@ export function pauseGate(input: Record<string, any>, root: string): object | nu
       "lists this workspace under Running, this queue entry is stale: rerun the command, which goes through. " +
       "If it lists it under Waiting, go on with edits and git and rerun the command once it starts; or end the " +
       "turn, and a grant notice tells this session to continue."
-    : PAUSED_REASON;
+    : // SW-1169: a session reopened from before Resume read this as current and stopped without trying.
+      `${PAUSED_REASON} (read ${pausedPath(root)}; the pause ends when it is gone. After Resume or a ` +
+      "message from the person, retry one command before saying it is paused.)";
   switch (input["hook_event_name"]) {
     case "PreToolUse": {
       const deny = {
