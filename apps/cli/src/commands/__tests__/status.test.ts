@@ -35,6 +35,7 @@ vi.mock("werkmeister-core/compose_infra", async (orig) => ({
 vi.mock("werkmeister-core/slots", () => ({
   getAllSlots: vi.fn(async () => ({ a: { slot: 1, services: ["api"] } })),
   slotCount: vi.fn(() => 12),
+  heldSlotCount: vi.fn((labels: object | null) => Object.keys(labels ?? {}).length),
   getPortRange: vi.fn(() => [11100, 11119]),
 }));
 vi.mock("werkmeister-core/telepresence", async (orig) => ({

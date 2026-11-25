@@ -69,6 +69,7 @@ import {
   getPortRange,
   getServicePort,
   getSlot,
+  heldSlotCount,
   releaseSlot,
 } from "werkmeister-core/slots";
 import { type SandboxHome, useSandboxHome } from "./helpers/sandbox_home.js";
@@ -183,6 +184,19 @@ describe("containers labelled before SW-93 (com.sandbox.local.*)", () => {
       "feat-new": { slot: 2, services: ["frontend"] },
     });
     expect(await allocateSlot("feat-next")).toBe(3);
+  });
+});
+
+// SW-1151: status counted only labelled containers, so a leased slot with none read free.
+describe("heldSlotCount", () => {
+  it("counts a lease with no containers as the allocator does, and a leased, labelled slot once", async () => {
+    expect(await allocateSlot("feat-a", 4)).toBe(4);
+    expect(heldSlotCount(await getAllSlots())).toBe(1);
+    h.containers = fakeContainers({ "feat-a": [4, ["frontend"]], "feat-b": [2, ["frontend"]] });
+    expect(heldSlotCount(await getAllSlots())).toBe(2);
+    await releaseSlot("feat-a");
+    h.containers = [];
+    expect(heldSlotCount(await getAllSlots())).toBe(0);
   });
 });
 
