@@ -364,6 +364,14 @@ for (const mode of ["default", "acceptEdits", "plan", "bypassPermissions", "dont
     assert.equal(readLog(), "", "no headless turn that can't ask");
     assert.equal(await claimResumeNudge("demo-ws"), RESUME_NUDGE);
   });
+// The containers are already unpaused by then, so a failed session lookup must not fail the resume.
+test("SW-1156: resume whose session lookup fails leaves the nudge pending, no error", async () => {
+  paused(true);
+  const r = await resumeAndNudge("not-a-workspace", ws, "demo");
+  assert.equal(r.nudge, "pending");
+  assert.equal(readLog(), "", "no headless turn");
+  assert.ok(fs.existsSync(nudgeFile));
+});
 test("SW-1156: claude-send to an auto-mode session keeps auto; another mode keeps acceptEdits", async (t) => {
   sessionInMode(t, "auto");
   await sendToClaudeSession("demo-ws", "hi");
