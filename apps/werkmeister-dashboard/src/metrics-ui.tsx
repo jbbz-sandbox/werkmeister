@@ -248,7 +248,7 @@ function LeadChart({ rows }: { rows: SlicedRow[] }) {
               <li key={t.workspace}>
                 <a href={`#flow/${encodeURIComponent(t.workspace)}`}>{t.ticket}</a>{" "}
                 {formatMinutes(t.leadToReleaseMinutes ?? t.leadToMergeMinutes)}{" "}
-                {t.leadToReleaseMinutes === null ? "to merge" : "to release"}
+                {t.leadToReleaseMinutes == null ? "to merge" : "to release"}
                 {t.ticket !== t.workspace && <span className="ws">{t.workspace}</span>}
               </li>
             ))}
@@ -321,7 +321,9 @@ function SplitBars({ rows }: { rows: SlicedRow[] }) {
     <>
       <div className="split">
         {split.map((s) => {
-          const waiting = s.person + s.capacity;
+          // Person and capacity waits can overlap; scale them into `waiting` so the bar sums to the stage.
+          const both = s.person + s.capacity;
+          const scale = both > s.waiting ? s.waiting / both : 1;
           return (
             <div key={s.stage} style={{ display: "contents" }}>
               <span>{s.stage}</span>
@@ -336,14 +338,14 @@ function SplitBars({ rows }: { rows: SlicedRow[] }) {
                     <i
                       key={k}
                       title={`${label}: ${formatMinutes(s[k])}`}
-                      style={{ flex: s[k], background: color }}
+                      style={{ flex: k === "working" ? s[k] : s[k] * scale, background: color }}
                     />
                   ) : null,
                 )}
               </div>
               <span className="lab">
-                {formatMinutes(s.total)} ·{" "}
-                {s.total ? Math.round((Math.min(waiting, s.total) / s.total) * 100) : 0}% waiting
+                {formatMinutes(s.total)} · {s.total ? Math.round((s.waiting / s.total) * 100) : 0}%
+                waiting
               </span>
             </div>
           );
