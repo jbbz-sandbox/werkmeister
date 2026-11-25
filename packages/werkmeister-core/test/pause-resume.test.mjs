@@ -129,8 +129,12 @@ process.env.PATH = `${bin}:${process.env.PATH}`;
 process.chdir(ws);
 
 const { down, pause, resume, restart, up } = await import("../dist/lifecycle.js");
-const { claimResumeNudge, resumeAndNudge } = await import("../dist/sandbox.js");
+const { claimResumeNudge, resumeAndNudge, sendToClaudeSession } = await import(
+  "../dist/sandbox.js"
+);
 const { readPaused, writePaused, RESUME_NUDGE } = await import("../dist/agent_state.js");
+const { collectingReporter, withReporter } = await import("../dist/reporter.js");
+const { startTurn } = await import("../dist/harness/claude/session.js");
 
 const nudgeFile = path.join(dot, "resume-nudge.json");
 const readLog = () => (fs.existsSync(claudeLog) ? fs.readFileSync(claudeLog, "utf8") : "");
@@ -262,15 +266,6 @@ test("resumeAndNudge: nothing to continue when Pause cut no turn", async () => {
   assert.equal(fs.existsSync(nudgeFile), false);
 });
 
-test("resumeAndNudge: with no live session, continue goes headless", async () => {
-  paused(true);
-  assert.equal((await resumeAndNudge("demo-ws", ws, "demo")).nudge, "headless");
-  // `claude` is spawned detached; give a slow first exec time to log (SW-67).
-  for (const end = Date.now() + 30_000; !readLog() && Date.now() < end; ) await sleep(50);
-  assert.match(readLog(), new RegExp(RESUME_NUDGE));
-  assert.equal(fs.existsSync(nudgeFile), false);
-});
-
 // SW-397: the hooks' record can miss an open terminal session; a `claude` process in the
 // workspace still means no headless `--resume` beside it.
 // Fails, never skips: turbo caches a skip and replays it after the tool is back (SW-1027).
@@ -317,6 +312,75 @@ test("resumeAndNudge: an open codex process in a codex workspace gets a pending 
   assert.equal((await resumeAndNudge("demo-ws", ws, "demo")).nudge, "pending");
   assert.equal(readLog(), "", "no headless codex beside the open one");
   assert.equal(await claimResumeNudge("demo-ws"), RESUME_NUDGE);
+});
+
+// SW-1156: a headless turn can't ask, so it carries the session's own `auto` mode; any other
+// mode would refuse what the person approved interactively, so "continue" waits for them.
+const projectDir = path.join(home, ".claude", "projects", ws.replace(/[^a-zA-Z0-9]/g, "-"));
+const sessionInMode = (t, mode) => {
+  fs.mkdirSync(projectDir, { recursive: true });
+  t.after(() => fs.rmSync(projectDir, { recursive: true, force: true }));
+  const line = (o) => `${JSON.stringify({ sessionId: "s-1", cwd: ws, ...o })}\n`;
+  fs.writeFileSync(
+    path.join(projectDir, "s-1.jsonl"),
+    line({ type: "user", uuid: "u1", message: { role: "user", content: "start" } }) +
+      (mode === undefined ? "" : line({ type: "user", uuid: "u2", permissionMode: mode })),
+  );
+};
+// `claude` is spawned detached; give a slow first exec time to log (SW-67).
+const waitLog = async () => {
+  for (const end = Date.now() + 30_000; !readLog() && Date.now() < end; ) await sleep(50);
+  return readLog();
+};
+test("SW-1156: resuming an auto-mode session continues it headless in auto mode", async (t) => {
+  paused(true);
+  sessionInMode(t, "auto");
+  assert.equal((await resumeAndNudge("demo-ws", ws, "demo")).nudge, "headless");
+  const log = await waitLog();
+  assert.match(log, new RegExp(RESUME_NUDGE));
+  assert.match(log, /--permission-mode auto /);
+  assert.match(
+    log,
+    /--disallowedTools \S.*Bash\(werkmeister daemon restart:\*\).* --permission-mode auto /,
+  );
+  assert.match(log, /--resume s-1 /);
+  assert.equal(fs.existsSync(nudgeFile), false);
+  assert.ok(projectDir.startsWith(home), "the transcript is under the test's HOME");
+});
+for (const mode of ["default", "acceptEdits", "plan", "bypassPermissions", "dontAsk", undefined])
+  test(`SW-1156: a session in ${mode ?? "no recorded"} mode gets a pending nudge, not a headless turn`, async (t) => {
+    paused(true);
+    sessionInMode(t, mode);
+    const reporter = collectingReporter();
+    const r = await withReporter(reporter, () => resumeAndNudge("demo-ws", ws, "demo"));
+    assert.equal(r.nudge, "pending");
+    assert.match(
+      reporter.text(),
+      new RegExp(
+        `its last mode was ${mode ?? "not recorded"}; a headless turn can't ask for approval, ` +
+          "so open the session to continue \\(claude --resume s-1\\)",
+      ),
+    );
+    assert.equal(readLog(), "", "no headless turn that can't ask");
+    assert.equal(await claimResumeNudge("demo-ws"), RESUME_NUDGE);
+  });
+test("SW-1156: claude-send to an auto-mode session keeps auto; another mode keeps acceptEdits", async (t) => {
+  sessionInMode(t, "auto");
+  await sendToClaudeSession("demo-ws", "hi");
+  assert.match(await waitLog(), /--permission-mode auto /);
+  fs.rmSync(claudeLog, { force: true });
+  sessionInMode(t, "default");
+  await sendToClaudeSession("demo-ws", "hi");
+  const log = await waitLog();
+  assert.match(log, /--permission-mode acceptEdits /);
+  assert.doesNotMatch(log, /--disallowedTools/);
+});
+test("SW-1156: an unattended turn ignores the session's auto mode", async (t) => {
+  sessionInMode(t, "auto");
+  await startTurn("demo-ws", ws, "callback", "s-1", null, { unattended: ws });
+  const log = await waitLog();
+  assert.match(log, /--allowedTools .* --permission-mode acceptEdits --resume s-1 callback/);
+  assert.doesNotMatch(log, /--permission-mode auto/);
 });
 
 test("resumeAndNudge: a live session gets a pending nudge, claimed once", async () => {

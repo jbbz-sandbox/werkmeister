@@ -286,7 +286,8 @@ A grouped PR covers several tickets in one workspace and one PR. Give the member
 
 | Session | How it continues |
 |---|---|
-| no live `claude` process (headless runs) | sent through claude-send |
+| no live `claude` process, its last mode `auto` | sent through claude-send, in `auto` with the autonomous deny rules |
+| no live `claude` process, any other mode | not sent: a headless turn can't ask for approval, so resume prints `open the session to continue (claude --resume <id>)` and the session gets it on its next prompt |
 | a live Desktop session | the Workspaces pane sends it within one poll |
 | a live terminal or VS Code session | not sent; say "continue" there |
 

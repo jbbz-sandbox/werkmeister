@@ -37,6 +37,7 @@ import {
 import { cacheGet, cacheSet, runBatchOnce, withCache } from "./cache.js";
 import { extractJson, extractResult } from "./harness/claude/cli.js";
 import { type ClaudeSessionSignal, claudeOpenIn } from "./harness/claude/session.js";
+import { sessionPermissionMode } from "./harness/claude/transcript.js";
 import type { WorkspaceUsage } from "./harness/claude/usage.js";
 import { type HarnessAdapter, type HarnessId, harness } from "./harness/index.js";
 import { harnessFor, harnessIdOf } from "./harness/layout.js";
@@ -3585,8 +3586,10 @@ export async function getDockerUi(): Promise<{
  * Resumes a paused workspace: unpauses the containers the `pause` action froze
  * (starting any that were stopped meanwhile), releases its agent session, and,
  * when the agent was mid-turn at pause time, tells it to continue. If no Claude
- * session is open, "continue" is sent as a headless turn; if one is open, the
- * message is left for that session ({@link claimResumeNudge} takes it). Runs
+ * session is open and its newest session last ran in auto mode, "continue" is
+ * sent as a headless turn in that mode; otherwise the message is left for the
+ * session to pick up when it opens ({@link claimResumeNudge} takes it), since a
+ * headless turn in another mode can't ask for the approvals it needs. Runs
  * in-process and talks to Docker. {@link runWorkspaceAction} with `"resume"` does
  * the same from just the workspace name.
  *
@@ -3595,7 +3598,7 @@ export async function getDockerUi(): Promise<{
  * @param feature - The workspace's feature: `FEATURE` in its `.env`.
  * @returns The {@link ResumeResult} (`feature`, `workspace`, `containers` with
  *   what was done to each, `wasWorking`), plus `nudge`: `headless` (sent),
- *   `pending` (left for the open session) or `none` (not mid-turn).
+ *   `pending` (left for the session) or `none` (not mid-turn).
  * @throws {@link SandboxError} with code `NO_WORKSPACE` when no workspace has that
  *   feature, `NOT_PAUSED` when it isn't paused, `COMPOSE_RESUME_FAILED` when a
  *   container can't be resumed, or `INSIDE_OWN_CONTAINER` when called from inside
@@ -3631,6 +3634,19 @@ export async function resumeAndNudge(
       'Session: a live session will get "continue" (Desktop via the pane; in a terminal, say it)',
     );
     return { ...result, nudge: "pending" };
+  }
+  // SW-1156: a headless turn can't ask, so only an auto-mode session keeps its approvals there.
+  if (harnessIdOf(ws) === "claude") {
+    const { sessionId, sessionFile } = await resolveSessionSource(name);
+    const mode = await sessionPermissionMode(sessionFile);
+    if (mode !== "auto") {
+      writeNudge(ws, RESUME_NUDGE);
+      info(
+        `Session: its last mode was ${mode ?? "not recorded"}; a headless turn can't ask for approval, ` +
+          `so open the session to continue (claude --resume ${sessionId ?? "<session>"})`,
+      );
+      return { ...result, nudge: "pending" };
+    }
   }
   try {
     await sendToClaudeSession(name, RESUME_NUDGE);

@@ -295,6 +295,26 @@ export async function sessionSourceIn(
 }
 
 /**
+ * The permission mode a session last ran in (`auto`, `acceptEdits`, `default`, …): the newest
+ * `permissionMode` Claude Code wrote on a user entry of *file*. Null when none is recorded or
+ * the file can't be read (SW-1156).
+ */
+export async function sessionPermissionMode(file: string | null): Promise<string | null> {
+  if (!file) return null;
+  const lines = (await fs.readFile(file, "utf8").catch(() => "")).split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!lines[i].includes('"permissionMode"')) continue;
+    try {
+      const o = JSON.parse(lines[i]);
+      if (o?.type === "user" && typeof o.permissionMode === "string") return o.permissionMode;
+    } catch {
+      /* a half-written last line */
+    }
+  }
+  return null;
+}
+
+/**
  * The folder session *sessionId* started in: the `cwd` its transcript records, found by
  * id in any `~/.claude/projects` dir. Null when no transcript holds one (SW-16).
  */
