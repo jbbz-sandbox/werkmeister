@@ -19,6 +19,7 @@ import {
   firstFill,
   type MetricsEvent,
   recordEvent,
+  runTagOf,
   usageCachePath,
 } from "./metrics.js";
 import { warn } from "./reporter.js";
@@ -129,6 +130,7 @@ async function prEvents(
   url: string,
   workspace: string,
   ticket: string | undefined,
+  tag: { run_id?: string },
 ): Promise<TimedEvent[]> {
   let view: { createdAt?: string; mergedAt?: string | null };
   try {
@@ -139,7 +141,7 @@ async function prEvents(
     warn(`metrics rebuild: ${url}: ${(err as Error).message}`);
     return [];
   }
-  const base = { workspace, ...(ticket && { ticket }), pr: url };
+  const base = { workspace, ...(ticket && { ticket }), pr: url, ...tag };
   const out: TimedEvent[] = [];
   if (view.createdAt) out.push({ e: { event: "pr.open", ...base }, at: view.createdAt });
   if (view.mergedAt) out.push({ e: { event: "pr.merged", ...base }, at: view.mergedAt });
@@ -150,6 +152,8 @@ async function branchEvents(
   repo: string,
   branch: string,
   seenSessions: Set<string>,
+  /** The branch's run (SW-1158) for its stage and PR lines; transcripts are found by name, not run, so asks stay untagged. */
+  tag: { run_id?: string },
 ): Promise<TimedEvent[]> {
   let workspace = branch.slice(branch.indexOf("/") + 1);
   let ticket: string | undefined;
@@ -167,13 +171,16 @@ async function branchEvents(
   for (const stage of [...stages].sort()) {
     const fill = firstFill(repo, stage, branch);
     if (fill)
-      out.push({ e: { event: "stage.done", workspace, stage, commit: fill.commit }, at: fill.at });
+      out.push({
+        e: { event: "stage.done", workspace, stage, commit: fill.commit, ...tag },
+        at: fill.at,
+      });
   }
   for (const p of paths.filter((p) =>
     /^(stages\/[^/]+\/output|\.werkmeister\/notes)\/pr-[^/]+\.md$/.test(p),
   )) {
     const url = /^url:\s*["']?([^\s"']+)/m.exec(git(repo, "show", `${branch}:${p}`) ?? "")?.[1];
-    if (url) out.push(...(await prEvents(url, workspace, ticket)));
+    if (url) out.push(...(await prEvents(url, workspace, ticket, tag)));
   }
 
   const projects = await findClaudeProjectDir(path.join(workspacesRoot(), workspace));
@@ -277,9 +284,11 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
     const branches = [...authors.keys()];
     const slices = branchFiles(repo, branches, "metrics.jsonl");
     const usageFiles = branchFiles(repo, branches, "usage.json");
+    const ymls = branchFiles(repo, branches, ".werkmeister/workspace.yml");
     /** *line*: a slice line, appended as is (SW-1116); re-serialised, a later `v` or key order would miss `lines` next run. */
     const log = ({ e, at }: TimedEvent, line?: string) => {
       const k = keyOf(e);
+      // shortcut: a line an earlier rebuild logged without run_id keeps it (SW-1158); rewrite the log if old leaks matter.
       if (k && keys.has(k)) return;
       if (k) keys.add(k);
       const ok = line === undefined ? recordEvent(e, at) : appendLogLine(line, at, e.event);
@@ -295,7 +304,7 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
         if (t.e.event === "ask" || t.e.event === "answer") sessions.add(t.e.session);
         log(t, line);
       }
-      for (const t of await branchEvents(repo, branch, sessions)) {
+      for (const t of await branchEvents(repo, branch, sessions, runTagOf(ymls?.get(branch)))) {
         const slug =
           "pr" in t.e ? /github\.com\/([^/]+\/[^/]+)\/pull\//.exec(t.e.pr)?.[1] : undefined;
         if (slug) repos.add(slug);
