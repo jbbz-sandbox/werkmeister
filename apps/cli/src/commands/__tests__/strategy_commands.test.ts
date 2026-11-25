@@ -166,3 +166,63 @@ describe("skills check in an icm workspace from a user workflow", () => {
     expect(text).not.toContain("changed since init");
   });
 });
+
+// SW-1143: services' `stages:` text renders from the live registry, so it can drift a workspace too.
+describe("skills check with a service's stages: text", () => {
+  const registry = (text: string) =>
+    fs.writeFileSync(
+      path.join(home, "services.yaml"),
+      `services:\n  api:\n    stages:\n      research: "${text}"\n`,
+    );
+  let ws: string;
+  beforeEach(() => {
+    registry("List the api routes.");
+    ws = path.join(wsRoot, "stages-ws");
+    fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+    fs.writeFileSync(
+      path.join(ws, ".werkmeister", "workspace.yml"),
+      "context_strategy: icm\nwork_type: feature\nservices: api\n",
+    );
+    strategyFor(ws).init({
+      workspaceRoot: ws,
+      workspaceName: path.basename(ws),
+      repos: [],
+      task: "demo",
+      meta: { FEATURE: "", SERVICES: "api" },
+      inputs: { context_strategy: "icm", work_type: "feature", services: "api" },
+      configOverride: null,
+    });
+    vi.spyOn(process, "cwd").mockReturnValue(ws);
+  });
+
+  async function check(): Promise<{ text: string; code: number | undefined }> {
+    let code: number | undefined;
+    vi.spyOn(process, "exit").mockImplementation(((c?: number) => {
+      code = c;
+      throw new Error(`exit ${c}`);
+    }) as never);
+    const lines: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((m: unknown) => void lines.push(String(m)));
+    const c = collectingReporter();
+    await withReporter(c, () => skills({ action: "check" })).catch(() => {});
+    return { text: `${c.text()}${lines.join("\n")}`, code };
+  }
+
+  it("names the registry's stages: text as a cause after it changes", async () => {
+    registry("List the api routes and their auth.");
+    const { text, code } = await check();
+    expect(code).toBe(1);
+    expect(text).toContain("stages/01_research/CONTEXT.md");
+    expect(text).toContain("or a service's `stages:` text in the registry changed");
+  });
+
+  it("prints an over-long entry as [err], with no stack", async () => {
+    registry("x".repeat(601));
+    const { text, code } = await check();
+    expect(code).toBe(1);
+    expect(text).toMatch(
+      /\[err\]\s+services\.yaml: service 'api' stages\.research is 601 characters \(max 600\)/,
+    );
+    expect(text).not.toMatch(/\n\s+at /);
+  });
+});

@@ -323,3 +323,35 @@ test("a workspace-scoped server lists only the workspace verbs", async () => {
   const names = (await client.listTools()).tools.map((t) => t.name).sort();
   assert.deepEqual(names, [...WORKSPACE_SCOPED_TOOLS].sort());
 });
+
+// SW-1143: a malformed `stages:` entry comes back as the `[err]` line init prints, with no stack.
+test("skills: an over-long stages: entry returns an [err] line, not a stack", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-tools-root-"));
+  fs.mkdirSync(path.join(root, "ws", ".werkmeister"), { recursive: true });
+  fs.writeFileSync(
+    path.join(root, "ws", ".werkmeister", "workspace.yml"),
+    "context_strategy: icm\nwork_type: feature\nservices: api\n",
+  );
+  try {
+    await withSandboxHome(
+      async () => {
+        const r = await (await connect()).callTool({
+          name: "skills",
+          arguments: { workspace: "ws", action: "check" },
+        });
+        assert.equal(r.isError, true);
+        assert.match(
+          r.content[0].text,
+          /^\[err\] services\.yaml: service 'api' stages\.research is 601 characters \(max 600\)/,
+        );
+        assert.doesNotMatch(r.content[0].text, /\n\s+at /);
+      },
+      {
+        config: `paths:\n  workspaces_root: ${root}\n`,
+        services: `services:\n  api:\n    stages:\n      research: "${"x".repeat(601)}"\n`,
+      },
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
