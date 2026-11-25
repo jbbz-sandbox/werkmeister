@@ -185,7 +185,10 @@ test("--no-wait first runs at once, without wait-load, and is not passed on (SW-
     assert.equal(r.stdout, "first");
     const alone = spawnSync(bin, ["--no-wait"], { encoding: "utf8", env });
     assert.equal(alone.status, 2);
-    assert.match(alone.stderr, /usage: with-temp-home \[--no-wait\] \[--cwd <dir>\] <cmd>/);
+    assert.match(
+      alone.stderr,
+      /usage: with-temp-home \[--no-wait\] \[--clean-home\] \[--cwd <dir>\] <cmd>/,
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -214,7 +217,10 @@ test("--cwd <dir> runs the command there, whatever the shell's cwd, after --no-w
     assert.equal(gone.stdout, "", "a missing --cwd runs nothing");
     const alone = spawnSync(bin, ["--cwd", dir], { encoding: "utf8" });
     assert.equal(alone.status, 2);
-    assert.match(alone.stderr, /usage: with-temp-home \[--no-wait\] \[--cwd <dir>\] <cmd>/);
+    assert.match(
+      alone.stderr,
+      /usage: with-temp-home \[--no-wait\] \[--clean-home\] \[--cwd <dir>\] <cmd>/,
+    );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -462,6 +468,35 @@ test("the command still reads the caller's stdin (SW-1149)", () => {
     });
     assert.equal(r.stdout, "got:hi\n");
     assert.equal(r.status, 0);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// SW-1177: CI's require-clean-home.sh fails a test that writes the runner's real ~/.werkmeister; the gate's twin.
+test("--clean-home fails a passing command that wrote $HOME/.werkmeister, listing it (SW-1177)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const write = 'mkdir -p "$HOME/.werkmeister/metrics" && touch "$HOME/.werkmeister/metrics/x"';
+    const r = spawnSync(bin, ["--no-wait", "--clean-home", "sh", "-c", write], {
+      encoding: "utf8",
+    });
+    assert.equal(r.status, 1, r.stderr);
+    assert.match(r.stderr, /the command wrote \$HOME\/\.werkmeister/);
+    assert.match(r.stderr, /metrics\/x/);
+    // The opt-out: without the flag a CLI exercise that writes its temp HOME passes.
+    const plain = spawnSync(bin, ["--no-wait", "sh", "-c", write], { encoding: "utf8" });
+    assert.equal(plain.status, 0, plain.stderr);
+    // A failing command keeps its own status; a clean one passes.
+    const failing = 'mkdir "$HOME/.werkmeister"; exit 3';
+    const f = spawnSync(bin, ["--no-wait", "--clean-home", "sh", "-c", failing], {
+      encoding: "utf8",
+    });
+    assert.equal(f.status, 3, f.stderr);
+    const clean = spawnSync(bin, ["--no-wait", "--clean-home", "--cwd", root, "true"], {
+      encoding: "utf8",
+    });
+    assert.equal(clean.status, 0, clean.stderr);
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
