@@ -7,6 +7,7 @@
  */
 
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -103,6 +104,7 @@ import {
 import { composeUpAsync, getContainerStatus } from "werkmeister-core/compose";
 import { ensurePortForwardsHealthy, waitForForwards } from "werkmeister-core/k8s";
 import { up } from "werkmeister-core/lifecycle";
+import { metricsPath } from "werkmeister-core/metrics";
 
 const quiet: Reporter = { passthrough: false, emit: () => {} };
 let root: string;
@@ -275,5 +277,67 @@ describe("lifecycle.up when compose gives up with a container left Created", () 
       box("demo-docs", "created"),
     ]);
     await fails();
+  });
+});
+
+// SW-1172: an up that finds the whole set healthy logs one containers.healthy; one still starting logs none.
+describe("lifecycle.up logs containers.healthy", () => {
+  // ajv is a werkmeister-core dependency, not the CLI's.
+  const Ajv2020 = createRequire(
+    new URL("../../../../../packages/werkmeister-core/package.json", import.meta.url),
+  )("ajv/dist/2020.js").default;
+  const schema = JSON.parse(
+    fs.readFileSync(
+      new URL(
+        "../../../../../docs/superpowers/specs/2026-11-15-metrics-events.schema.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  const validate = new Ajv2020({
+    formats: { "date-time": (s: string) => !Number.isNaN(Date.parse(s)), uri: () => true },
+  }).compile(schema);
+  const box = (name: string, status: string, health = "", role = "") => ({
+    name,
+    status,
+    health,
+    ports: "",
+    service: name,
+    role,
+    exitCode: 0,
+  });
+  const healthy = () => {
+    const file = metricsPath(new Date().toISOString());
+    expect(file.startsWith(root)).toBe(true);
+    if (!fs.existsSync(file)) return [];
+    return fs
+      .readFileSync(file, "utf8")
+      .trimEnd()
+      .split("\n")
+      .map((l) => JSON.parse(l))
+      .filter((e) => e.event === "containers.healthy");
+  };
+
+  it("writes one line per up that sees every container settled, each valid", async () => {
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      box("install", "exited", "", "setup"),
+      box("core", "running", "healthy"),
+      box("docs", "created"),
+    ]);
+    await withReporter(quiet, () => up("demo", workspace(["cli"])));
+    const [line, ...rest] = healthy();
+    expect(rest).toEqual([]);
+    expect(validate(line)).toBe(true);
+    expect(line).toMatchObject({ workspace: path.basename(root) });
+    expect(line.duration_ms).toBeGreaterThanOrEqual(0);
+
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([box("core", "running", "starting")]);
+    await withReporter(quiet, () => up("demo", workspace(["cli"])));
+    expect(healthy()).toHaveLength(1);
+    // An unreadable docker gives []: no line, rather than a false "all healthy".
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([]);
+    await withReporter(quiet, () => up("demo", workspace(["cli"])));
+    expect(healthy()).toHaveLength(1);
   });
 });

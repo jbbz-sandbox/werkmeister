@@ -662,7 +662,7 @@ test("other hook events write nothing, the ask-deleting ones included", async ()
     fire("PostToolUse", ASK, 9);
     assert.deepEqual(
       hookLines().map((l) => l.event),
-      ["ask"],
+      ["session.start", "ask"],
     );
   });
 });
@@ -677,12 +677,120 @@ test("a headless turn on an interactive session's id writes nothing", async () =
       process.env.CLAUDE_CODE_ENTRYPOINT = "sdk-cli";
       fire("PreToolUse", ASK, 1);
       fire("PostToolUse", ASK, 2);
-      assert.deepEqual(hookLines(), []);
+      fire("SessionEnd", {}, 3);
+      assert.deepEqual(
+        hookLines().map((l) => l.event),
+        ["session.start"],
+        "only the interactive session's own start",
+      );
     });
   } finally {
     if (was === undefined) delete process.env.CLAUDE_CODE_ENTRYPOINT;
     else process.env.CLAUDE_CODE_ENTRYPOINT = was;
   }
+});
+
+// SW-1172: a session's start and end, once each; a compact or clear restart is not a new session.
+test("session.start and session.stop once per session, again after a resume", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const fire = hookWorkspace(fx, "sess");
+    fire("SessionStart", { source: "startup" }, 0);
+    fire("SessionStart", { source: "compact" }, 5);
+    fire("SessionEnd", {}, 10);
+    fire("SessionEnd", {}, 11);
+    fire("SessionStart", { source: "resume" }, 20);
+    fire("SessionEnd", {}, 30);
+    assert.deepEqual(
+      hookLines().map((l) => [l.event, l.session, l.run_id]),
+      [
+        ["session.start", "s1", "run-sess"],
+        ["session.stop", "s1", "run-sess"],
+        ["session.start", "s1", "run-sess"],
+        ["session.stop", "s1", "run-sess"],
+      ],
+    );
+  });
+});
+
+// SW-1172: the first status pass that sees a head's checks all finished logs ci.result; once per head.
+test("pr status logs one ci.result per PR head once its checks finish", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      assert.equal(open.ok, true, open.lines.join("\n"));
+      const run = (conclusion, completedAt) => ({
+        __typename: "CheckRun",
+        name: "test",
+        conclusion,
+        startedAt: "2026-01-03T10:00:00Z",
+        ...(completedAt && { completedAt }),
+      });
+      let view;
+      const base = defaultDeps();
+      const deps = {
+        ...base,
+        run: async (cmd, args, cwd) => {
+          const r = await base.run(cmd, args, cwd);
+          if (cmd !== "gh" || args[1] !== "view" || r.code !== 0) return r;
+          return { ...r, stdout: JSON.stringify({ ...JSON.parse(r.stdout), ...view }) };
+        },
+      };
+      const status = { __typename: "StatusContext", context: "lint", state: "SUCCESS" };
+      const pass = async (v) => {
+        view = v;
+        await refreshPrStatus(fx.workspace, deps);
+      };
+      await pass({ headRefOid: "a1", statusCheckRollup: [run("", null), status] });
+      await pass({
+        headRefOid: "a1",
+        statusCheckRollup: [run("SUCCESS", "2026-01-03T10:09:00Z"), status],
+      });
+      await pass({
+        headRefOid: "a1",
+        statusCheckRollup: [run("SUCCESS", "2026-01-03T10:09:00Z"), status],
+      });
+      await pass({
+        headRefOid: "b2",
+        statusCheckRollup: [
+          run("FAILURE", "2026-01-03T10:05:00Z"),
+          { ...status, state: "PENDING" },
+        ],
+      });
+      await pass({
+        headRefOid: "b2",
+        statusCheckRollup: [run("FAILURE", "2026-01-03T10:05:00Z"), { ...status, state: "ERROR" }],
+      });
+      const { run_id } = runTag(fx.workspace);
+      assert.deepEqual(
+        eventsOf(fx, "ci.result").map((e) => {
+          assert.ok(validate(e), JSON.stringify(validate.errors));
+          return [e.at, e.commit, e.result, e.duration_ms, e.pr, e.run_id];
+        }),
+        [
+          [
+            "2026-01-03T10:09:00.000Z",
+            "a1",
+            "ok",
+            540000,
+            "https://github.com/o/app/pull/1",
+            run_id,
+          ],
+          [
+            "2026-01-03T10:05:00.000Z",
+            "b2",
+            "error",
+            300000,
+            "https://github.com/o/app/pull/1",
+            run_id,
+          ],
+        ],
+      );
+    },
+    { gate: true },
+  );
 });
 
 // SW-991: a waiting.json that enqueue() or requeueFirst() wrote left no line, so its writer was unknown.

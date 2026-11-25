@@ -36,12 +36,16 @@
         "workspace.close",
         "workspace.abandon",
         "gate.row",
-        "call.slow"
+        "call.slow",
+        "containers.healthy",
+        "ci.result",
+        "session.start",
+        "session.stop"
       ]
     },
     "result": {
       "enum": ["ok", "error"],
-      "description": "workspace.*, gate.row, call.slow: whether the timed step succeeded (SW-404)"
+      "description": "workspace.*, gate.row, call.slow: whether the timed step succeeded (SW-404); ci.result: whether every check passed (SW-1172)"
     },
     "row": { "type": "string", "description": "gate.row: the gate row's name (SW-404)" },
     "cmd": {
@@ -57,7 +61,7 @@
       "description": "The writing workspace run's id, `run_id` in its workspace.yml (SW-1140); absent on lines written before it. Same-named runs' lines are told apart by it"
     },
     "ticket": { "type": "string", "description": "Tracker key, e.g. SW-753" },
-    "session": { "type": "string", "description": "Claude session id (ask, answer)" },
+    "session": { "type": "string", "description": "Claude session id (ask, answer, session.*)" },
     "version": {
       "type": "string",
       "description": "werkmeister version+commit that wrote the line, e.g. 0.91.3+1dbfac70"
@@ -96,7 +100,7 @@
     },
     "commit": {
       "type": "string",
-      "description": "stage.done: record-branch commit that first filled output/; coverage: the measured commit"
+      "description": "stage.done: record-branch commit that first filled output/; coverage: the measured commit; ci.result: the PR head the checks ran on"
     },
     "run": {
       "type": "string",
@@ -111,7 +115,11 @@
       "minimum": 0,
       "description": "gate.start: 0 for the first run of this PR's gate in this workspace, n for the nth rerun"
     },
-    "pr": { "type": "string", "format": "uri", "description": "pr.*, release: the PR URL" },
+    "pr": {
+      "type": "string",
+      "format": "uri",
+      "description": "pr.*, release, ci.result: the PR URL"
+    },
     "tag": { "type": "string", "description": "release: the release tag" },
     "source": {
       "enum": ["ci-main", "ci-pr", "gate"],
@@ -141,7 +149,7 @@
     "duration_ms": {
       "type": "integer",
       "minimum": 0,
-      "description": "coverage: wall time of the test command; workspace.*, gate.row, call.slow: wall time of the step (SW-404)"
+      "description": "coverage: wall time of the test command; workspace.*, gate.row, call.slow: wall time of the step (SW-404); containers.healthy: since the up began; ci.result: first check's start to last check's end (SW-1172)"
     }
   },
   "additionalProperties": false,
@@ -226,6 +234,18 @@
     {
       "if": { "properties": { "event": { "const": "release" } } },
       "then": { "required": ["pr", "tag"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "containers.healthy" } } },
+      "then": { "required": ["duration_ms"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "ci.result" } } },
+      "then": { "required": ["pr", "commit", "result"] }
+    },
+    {
+      "if": { "properties": { "event": { "enum": ["session.start", "session.stop"] } } },
+      "then": { "required": ["session"] }
     }
   ],
   "examples": [
@@ -362,6 +382,31 @@
       "statements": 54.8,
       "tests": 1715,
       "duration_ms": 121000
+    },
+    {
+      "v": 1,
+      "at": "2026-11-25T06:10:00Z",
+      "event": "containers.healthy",
+      "workspace": "sw-1158-metrics-run-id",
+      "duration_ms": 48000
+    },
+    {
+      "v": 1,
+      "at": "2026-11-25T07:20:00Z",
+      "event": "ci.result",
+      "workspace": "sw-1158-metrics-run-id",
+      "ticket": "SW-1158",
+      "pr": "https://github.com/jbbz-sandbox/werkmeister/pull/1080",
+      "commit": "01168bdeaa11223344556677889900aabbccddee",
+      "result": "ok",
+      "duration_ms": 540000
+    },
+    {
+      "v": 1,
+      "at": "2026-11-25T06:00:00Z",
+      "event": "session.start",
+      "workspace": "sw-1158-metrics-run-id",
+      "session": "14fe29e8-38ab-4c39-a88b-ed375cdcefb4"
     }
   ]
 }

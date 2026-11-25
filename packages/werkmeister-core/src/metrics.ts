@@ -56,6 +56,20 @@ type EventBody =
       result: Result;
     }
   | { event: "call.slow"; workspace: string; cmd: SlowCall; duration_ms: number; result: Result }
+  /** SW-1172: `feature up` found every container of the set healthy, *duration_ms* after the up began. */
+  | { event: "containers.healthy"; workspace: string; duration_ms: number }
+  /** SW-1172: a PR's checks on head *commit* all finished; *duration_ms* from the first check's start to the last one's end, when GitHub gives both. */
+  | {
+      event: "ci.result";
+      workspace: string;
+      ticket?: string;
+      pr: string;
+      commit: string;
+      result: Result;
+      duration_ms?: number;
+    }
+  /** SW-1172: a Claude session in the workspace started (new, or resumed after it ended) or ended. */
+  | { event: "session.start" | "session.stop"; workspace: string; session: string }
   /** One package's unit-test coverage for one run (SW-405); a CI row has no workspace. *version* is `<package version>+<short sha>`. */
   | {
       event: "coverage";

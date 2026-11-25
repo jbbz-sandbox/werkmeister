@@ -240,6 +240,7 @@ async function upUntimed(
     fromQueue?: boolean;
   } = {},
 ): Promise<UpResult> {
+  const upStart = Date.now();
   refuseInsideOwnContainer(feature, "up");
   refusePaused(feature, workspace);
   migrateWorkspaceCompose(workspace);
@@ -368,6 +369,16 @@ async function upUntimed(
       );
     }
     containersStarted = true;
+    // shortcut: one look as compose returns; a set still `starting` then logs nothing. Poll when those ups matter (SW-1172).
+    // An empty list is a docker read that failed (it returns [] then), not a healthy set.
+    const set = await getContainerStatus(feature);
+    if (set.length && allSettled(set))
+      recordEvent({
+        event: "containers.healthy",
+        workspace: path.basename(workspace),
+        duration_ms: Date.now() - upStart,
+        ...runTag(workspace),
+      });
     // Up now: two admits return before the one that dequeues (Docker unreadable, a zero-cost start), and
     // a leftover entry keeps the hook saying "queued" over running containers (SW-863), as in restart().
     await dequeue(feature);
@@ -733,6 +744,20 @@ export async function admitServiceStart(
   }
 }
 
+/** Every started container settled: a setup exited 0, the rest running and healthy (or without a healthcheck). */
+function allSettled(all: Awaited<ReturnType<typeof getContainerStatus>>): boolean {
+  return all
+    .filter((c) => c.status !== "created")
+    .every((c) =>
+      c.status === "exited"
+        ? c.exitCode === 0
+        : c.status === "running" &&
+          !isOneShotService(c.service, c.role) &&
+          c.health !== "starting" &&
+          c.health !== "unhealthy",
+    );
+}
+
 /**
  * After compose gave up (its 20 min ran out), start the containers of a plain `up` it left Created, never
  * started, as `docker start` did by hand (SW-973). Only once every other container has settled: a setup
@@ -744,17 +769,7 @@ async function startLeftCreated(feature: string, workspace: string): Promise<boo
   // An on-demand service a failed `--service` start left Created was never priced for this `up`.
   const plain = new Set(upServices(workspace));
   const created = all.filter((c) => c.status === "created" && plain.has(c.service));
-  const settled = all
-    .filter((c) => c.status !== "created")
-    .every((c) =>
-      c.status === "exited"
-        ? c.exitCode === 0
-        : c.status === "running" &&
-          !isOneShotService(c.service, c.role) &&
-          c.health !== "starting" &&
-          c.health !== "unhealthy",
-    );
-  if (!created.length || !settled) return false;
+  if (!created.length || !allSettled(all)) return false;
   const names = created.map((c) => c.name);
   const stuck: string[] = [];
   for (const name of names) {
