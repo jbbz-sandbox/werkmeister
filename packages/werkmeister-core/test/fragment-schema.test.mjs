@@ -57,6 +57,13 @@ test("the fast route names its install-and-build prerequisite (SW-227)", () => {
   );
 });
 
+test("the dashboard checks metrics numbers outside its container, which has no transcripts (SW-1141)", () => {
+  assert.match(
+    fragment.services["werkmeister-dashboard"].validate,
+    /lead time, first turn and tokens .*host `metrics-trends` MCP tool.*seeded `workspace serve --dashboard`/,
+  );
+});
+
 test("repo: lint takes a command string (SW-133)", () => {
   assert.match(
     fragment.repo.lint,
