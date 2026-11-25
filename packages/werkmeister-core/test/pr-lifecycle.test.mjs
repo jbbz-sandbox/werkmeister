@@ -3028,6 +3028,76 @@ test("refreshPrStatus: merged, then shipped once a release tag contains the merg
   }
 });
 
+/**
+ * SW-584: a fake gh, run through the real execRun, that writes the GH_TOKEN it saw to *seen*.
+ * It fails when *refuseApp* and a token is set, as the App's read-only permissions might.
+ */
+function tokenGh({ refuseApp = false } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "gh-token-"));
+  const seen = path.join(dir, "seen");
+  const bin = path.join(dir, "gh");
+  const view = JSON.stringify({ state: "MERGED", mergeCommit: { oid: "abc123" } });
+  fs.writeFileSync(
+    bin,
+    `#!/bin/sh\necho "token=\${GH_TOKEN:-none}" >> '${seen}'\n${refuseApp ? `[ -n "$GH_TOKEN" ] && { echo 'GraphQL: Resource not accessible by integration' >&2; exit 1; }\n` : ""}echo '${view}'\n`,
+    { mode: 0o755 },
+  );
+  return { bin, seen: () => fs.readFileSync(seen, "utf8").trim().split("\n"), dir };
+}
+
+/** refreshPrStatus with gh going through the real execRun and *gh*; every other command stubbed. */
+async function refreshThroughGh(gh, ghToken) {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) },
+  });
+  const d = deps([[/tag --contains abc123/, { stdout: "" }]], { ghToken });
+  const stubbed = d.run;
+  const real = await withSandboxHome(async () => defaultDeps().run);
+  d.run = (bin, args, cwd, env) =>
+    bin === "gh" ? real(bin, args, cwd, env) : stubbed(bin, args, cwd);
+  const prev = process.env.WERKMEISTER_GH_BIN;
+  process.env.WERKMEISTER_GH_BIN = gh.bin;
+  // A caller's own GH_TOKEN would reach the fake gh through childEnv() and stand in for "none".
+  const callerToken = process.env.GH_TOKEN;
+  delete process.env.GH_TOKEN;
+  try {
+    await refreshPrStatus(ws, d);
+    return { status: readPrFiles(ws)[0].fm.status, seen: gh.seen() };
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_GH_BIN;
+    else process.env.WERKMEISTER_GH_BIN = prev;
+    if (callerToken !== undefined) process.env.GH_TOKEN = callerToken;
+    clean(ws);
+    fs.rmSync(gh.dir, { recursive: true, force: true });
+  }
+}
+
+test("refreshPrStatus: gh pr view runs with the GitHub App's installation token (SW-584)", async () => {
+  const gh = tokenGh();
+  const repos = [];
+  const { status, seen } = await refreshThroughGh(gh, async (repo) => {
+    repos.push(repo);
+    return "ghs_apptoken";
+  });
+  assert.deepEqual(repos, ["o/app"], "the token is asked for the PR file's repo");
+  assert.deepEqual(seen, ["token=ghs_apptoken"]);
+  assert.equal(status, "merged");
+});
+
+test("refreshPrStatus: a gh pr view the App can't run reruns as gh's own login (SW-584)", async () => {
+  const gh = tokenGh({ refuseApp: true });
+  const { status, seen } = await refreshThroughGh(gh, async () => "ghs_apptoken");
+  assert.deepEqual(seen, ["token=ghs_apptoken", "token=none"]);
+  assert.equal(status, "merged", "the fallback's view still refreshed the PR file");
+});
+
+test("refreshPrStatus: no App configured, gh pr view runs as before (SW-584)", async () => {
+  const gh = tokenGh();
+  const { status, seen } = await refreshThroughGh(gh, async () => null);
+  assert.deepEqual(seen, ["token=none"]);
+  assert.equal(status, "merged");
+});
+
 test("refreshPrStatus: ship: merge ships on merge", async () => {
   const ws = icmWorkspace({
     files: { app: prFile({ status: "merged", extra: "merge_sha: abc\n" }) },

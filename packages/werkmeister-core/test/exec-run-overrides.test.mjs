@@ -38,6 +38,27 @@ for (const [name, env] of [
   });
 }
 
+test("execRun passes a per-call env over childEnv (SW-584)", async () => {
+  const prev = process.env.WERKMEISTER_GH_BIN;
+  const bin = fake("gh");
+  fs.writeFileSync(bin, `#!/bin/sh\necho "token=\${GH_TOKEN:-none}"\n`, { mode: 0o755 });
+  process.env.WERKMEISTER_GH_BIN = bin;
+  try {
+    const run = await withSandboxHome(async () => defaultDeps().run);
+    const res = await withSandboxHome(() => run("gh", ["pr"], os.tmpdir(), { GH_TOKEN: "ghs_x" }));
+    assert.equal(res.stdout.trim(), "token=ghs_x");
+    const plain = await withSandboxHome(() => run("gh", ["pr"], os.tmpdir()));
+    assert.equal(
+      plain.stdout.trim(),
+      `token=${process.env.GH_TOKEN || "none"}`,
+      "no leak into the next call",
+    );
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_GH_BIN;
+    else process.env.WERKMEISTER_GH_BIN = prev;
+  }
+});
+
 test("proc.run and runAsync run docker from WERKMEISTER_DOCKER_BIN", async () => {
   const prev = process.env.WERKMEISTER_DOCKER_BIN;
   process.env.WERKMEISTER_DOCKER_BIN = fake("docker");

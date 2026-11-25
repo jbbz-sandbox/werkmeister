@@ -44,7 +44,9 @@ Go to GitHub → Settings → Developer settings → GitHub Apps → New GitHub 
 - **Subscribe to events:** Check run, Workflow run, Pull request, Pull request review, Pull request review comment, Issue comment.
 - **Where can this App be installed:** only on this account.
 
-Then install it from the App's **Install App** tab with **All repositories**. You don't need the App's private key, so ignore GitHub's prompt to generate one: werkmeister calls no API as the App, and `gh` keeps doing the reading.
+Then install it from the App's **Install App** tab with **All repositories**.
+
+To let the PR status refresh read as the App ([Calls that run as the App](#calls-that-run-as-the-app)), note the **App ID** on the App's **General** page, and under **Private keys** generate a key. GitHub downloads it as a `.pem` file. This part is optional: without it, ingest works the same and every `gh` call runs as you.
 
 ### 3. Each machine: point the daemon at the queue
 
@@ -54,6 +56,7 @@ Add this to `~/.werkmeister/config.yaml`:
 github_ingest:
   queue_url: https://sqs.us-east-1.amazonaws.com/123456789012/WerkmeisterGithubIngest-Queue...
   region: us-east-1
+  app_id: "123456"        # optional: the App ID from step 2
 ```
 
 and the key pair to `~/.werkmeister/secrets.env` (owner-only, mode 600), not to config.yaml:
@@ -61,7 +64,10 @@ and the key pair to `~/.werkmeister/secrets.env` (owner-only, mode 600), not to 
 ```sh
 GITHUB_INGEST_ACCESS_KEY_ID=AKIA...
 GITHUB_INGEST_SECRET_ACCESS_KEY=...
+GITHUB_APP_PRIVATE_KEY=...   # optional: the App's .pem as one base64 line
 ```
+
+secrets.env holds one value per line, so store the key base64-encoded: `base64 < werkmeister.private-key.pem | tr -d '\n'` prints the line's value. Delete the `.pem` afterwards.
 
 A machine that still has `access_key_id` and `secret_access_key` under `github_ingest:` in config.yaml keeps working. The next `werkmeister machine config --write` or `werkmeister machine setup` moves them to secrets.env; a key secrets.env already holds wins, and the config.yaml copy is dropped.
 
@@ -77,6 +83,16 @@ Use only one machine per queue. A second machine polling the same queue would ta
 - Comment on an open PR that a workspace has a PR file for. Within about 20 s, the log shows `github ingest: issue_comment/created on <owner>/<repo> (<delivery id>): …`.
 - The App's **Advanced** tab lists each delivery with its response: 202 queued, 204 an event type that isn't forwarded, 401 a bad signature. You can redeliver from there.
 - To see failed messages: `aws sqs receive-message --queue-url <DlqUrl> --max-number-of-messages 10`.
+
+## Calls that run as the App
+
+With `app_id` and `GITHUB_APP_PRIVATE_KEY` both set, one call runs as the App: the per-PR `gh pr view` of every PR status refresh. That covers each `pr watch` pass (the ones the daemon runs on an event and the 10-minute schedule), `werkmeister pr status`, the MCP workspace-pr status action and close-out. werkmeister signs a JWT with the key, exchanges it for an installation token for the PR's repo, and passes the token to that one `gh` call as `GH_TOKEN`. The token lasts an hour and is reused until 5 minutes before it expires. Those reads then count against the App's rate limit, not yours.
+
+Every other `gh` call still runs as you, because it needs your identity or a write permission the App doesn't have: `pr open`, approvals, `open-prs`, CI logs and metrics.
+
+If the App can't be used, the read runs as you, as it did before. That happens when the token can't be minted (wrong App ID, bad key, a repo the App isn't installed on) or when the App's `gh pr view` fails, for example because its read-only permissions don't cover a field. Minting that takes over 10 seconds counts as a failure. After either failure, werkmeister doesn't use the App for that repo owner for 10 minutes. Each fallback logs a `warn` line beginning `GitHub App token for` or `gh pr view as the GitHub App failed`. To check that it works, run `WERKMEISTER_LOG_LEVEL=warn werkmeister pr watch`: with the App working, neither line appears. The token, the JWT and the key are never logged, and `ghs_` tokens are scrubbed from log lines.
+
+To turn it off, delete either line. werkmeister doesn't manage which repos the App is installed on. The App is installed on all repositories, so there is nothing to manage.
 
 ## Cost
 

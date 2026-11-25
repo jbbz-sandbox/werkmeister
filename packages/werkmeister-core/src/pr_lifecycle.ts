@@ -46,6 +46,7 @@ import { writeContextSnapshot } from "./context_snapshot.js";
 import { recordGateCoverage, writeCoverageSnapshot } from "./coverage.js";
 import { logsDir } from "./dot_dir.js";
 import { GATE_COMPOSE_FILE, renderGateCompose } from "./generate.js";
+import { appInstallationToken, refuseAppToken } from "./github_app.js";
 import { updateNoteStatus } from "./graduate.js";
 import { eachIssue, type IssueStatuses, issueStatuses, moveIssue } from "./issue_status.js";
 import { groupOf, issueIdOf, issueRefsOf, issueTracker, projectOf } from "./issue_tracker.js";
@@ -166,6 +167,7 @@ export type Run = (
   bin: string,
   args: string[],
   cwd?: string,
+  env?: Record<string, string>,
 ) => Promise<{ stdout: string; stderr: string; code: number }>;
 
 /**
@@ -258,6 +260,8 @@ export interface Deps {
   stop: (ws: string) => Promise<string>;
   /** Whether the `pr watch` schedule is installed. */
   prWatch: () => PrWatchScheduleState;
+  /** A GitHub App installation token for *repo* (`owner/name`), or null to run `gh` as the person. */
+  ghToken?: (repo: string) => Promise<string | null>;
   /** `os.loadavg()` and the core count, read before and after each gate check. */
   hostLoad: () => {
     /** The 1, 5 and 15 minute load averages. */
@@ -311,12 +315,12 @@ export interface Deps {
 }
 
 // Test suites outlast runCapture's 120 s timeout, which is sized for `claude -p`.
-const execRun: Run = (bin, args, cwd) =>
+const execRun: Run = (bin, args, cwd, env) =>
   new Promise((resolve) => {
     execFile(
       toolBin(bin),
       args,
-      { cwd, env: childEnv(), maxBuffer: 64 * 1024 * 1024, timeout: 30 * 60_000 },
+      { cwd, env: { ...childEnv(), ...env }, maxBuffer: 64 * 1024 * 1024, timeout: 30 * 60_000 },
       (err, stdout, stderr) => {
         const code = err ? (typeof err.code === "number" ? err.code : 1) : 0;
         resolve({
@@ -385,6 +389,7 @@ export function defaultDeps(): Deps {
       })),
     stop: stopWorkspace,
     prWatch: () => prWatchScheduleState(),
+    ghToken: (repo) => appInstallationToken(repo),
     hostLoad: readHostLoad,
     vmLoad: readVmLoad,
     hostMemory: readHostMemory,
@@ -2613,13 +2618,25 @@ async function refreshPrStatusLocked(
     let notShipped = "";
     let partial = "";
     if (opts.gh !== false && before === "open" && f.fm["url"]) {
-      const v = await deps.run("gh", [
+      const viewArgs = [
         "pr",
         "view",
         String(f.fm["url"]),
         "--json",
         "state,mergeCommit,reviewDecision,latestReviews,number,headRefOid,baseRefName,mergeable,statusCheckRollup,reviews,comments,files,createdAt,mergedAt",
-      ]);
+      ];
+      // SW-584: read as the GitHub App when it's set up, off the person's rate limit; any refusal reruns as the person.
+      const token = await deps.ghToken?.(String(f.fm["repo"] ?? ""));
+      let v = token
+        ? await deps.run("gh", viewArgs, undefined, { GH_TOKEN: token })
+        : await deps.run("gh", viewArgs);
+      if (token && v.code !== 0) {
+        currentLogger().warn(
+          `${f.stem}: gh pr view as the GitHub App failed (${v.stderr.trim()}); retrying as gh's own login`,
+        );
+        refuseAppToken(String(f.fm["repo"] ?? ""));
+        v = await deps.run("gh", viewArgs);
+      }
       if (v.code !== 0) {
         lines.push(`${f.stem}: gh pr view failed — ${v.stderr.trim()}`);
         continue;
