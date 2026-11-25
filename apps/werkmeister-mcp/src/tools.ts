@@ -562,9 +562,15 @@ function registerAuthoringTools(server: McpServer): void {
       adapt(async () => {
         const workspace = resolveWorkspace(args.workspace, headersOf(extra)).dir;
         const strategy = strategyFor(workspace);
-        return args.action === "sync"
-          ? { ...strategy.sync(workspace) }
-          : { drift: strategy.check(workspace) };
+        try {
+          return args.action === "sync"
+            ? { ...strategy.sync(workspace) }
+            : { drift: strategy.check(workspace) };
+        } catch (e) {
+          // SW-1143: the same `[err]` line `skills check` and `workspace init` print.
+          if (e instanceof SandboxError) throw new SandboxError(`[err] ${e.message}`, e.code);
+          throw e;
+        }
       }),
   );
 
