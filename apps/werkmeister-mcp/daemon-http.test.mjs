@@ -300,8 +300,10 @@ test("/api/tool reports a tool error as 400 with its code", async () => {
 
 // SW-700: undici, behind Node's fetch, fails a response with no headers after 300 s
 // (headersTimeout) and a body that goes 300 s without a byte (bodyTimeout); AbortSignal
-// can't extend either. Shrink both to 1 s on Node's own global Agent to reach them quickly.
+// can't extend either. Shrink both on Node's own global Agent to reach them quickly: to 3 s, not 1, since
+// a loaded host can stall either event loop past 1 s and drop a live stream (SW-1191). Delays sit past it.
 const DISPATCHER = Symbol.for("undici.globalDispatcher.1");
+const UNDICI_MS = 3000;
 async function withUndiciTimeouts(ms, fn) {
   await fetchFresh(`${base}/api/status`); // makes undici create its global Agent
   const prev = globalThis[DISPATCHER];
@@ -322,36 +324,41 @@ async function daemonClient() {
 
 test("a daemon call slower than undici's header and body timeouts still answers (SW-700)", async () => {
   const { callTool } = await daemonClient();
-  slowListMs = 3500;
-  const r = await withUndiciTimeouts(1000, () => callTool("status", {}, { token: machineToken }));
+  slowListMs = UNDICI_MS + 2500;
+  const r = await withUndiciTimeouts(UNDICI_MS, () =>
+    callTool("status", {}, { token: machineToken }),
+  );
   assert.deepEqual(r.data.statuses.map((s) => s.name).sort(), ["a", "b"]);
 });
 
 test("a daemon call that outlasts timeoutMs is still DaemonTimeout (SW-700)", async () => {
   const { callTool, DaemonTimeout } = await daemonClient();
-  // undici's timers tick coarsely (~1 s), so timeoutMs sits well past its 1 s timeouts.
-  slowListMs = 6000;
+  // undici's timers tick coarsely (~1 s), so timeoutMs sits well past its timeouts.
+  slowListMs = UNDICI_MS + 5000;
   const t0 = Date.now();
-  await withUndiciTimeouts(1000, () =>
-    assert.rejects(callTool("status", {}, { token: machineToken, timeoutMs: 4000 }), (e) => {
-      assert.ok(e instanceof DaemonTimeout, e.message);
-      assert.match(e.message, /TimeoutError/);
-      return true;
-    }),
+  await withUndiciTimeouts(UNDICI_MS, () =>
+    assert.rejects(
+      callTool("status", {}, { token: machineToken, timeoutMs: UNDICI_MS + 3000 }),
+      (e) => {
+        assert.ok(e instanceof DaemonTimeout, e.message);
+        assert.match(e.message, /TimeoutError/);
+        return true;
+      },
+    ),
   );
-  assert.ok(Date.now() - t0 >= 4000, "gave up before timeoutMs");
+  assert.ok(Date.now() - t0 >= UNDICI_MS + 3000, "gave up before timeoutMs");
   await sleep(2500); // let the daemon finish the call the client left
 });
 
 // SW-722: the session proxy reaches /mcp through the same global fetch. A tool call quiet past
 // bodyTimeout answers only if the SSE stream sends keep-alive comments faster than that.
 test("an /mcp tool call slower than undici's body timeout still answers (SW-722)", async () => {
-  slowListMs = 3500;
-  const r = await withUndiciTimeouts(1000, async () => {
+  slowListMs = UNDICI_MS + 2500;
+  const r = await withUndiciTimeouts(UNDICI_MS, async () => {
     const client = await mcp(machineToken);
     try {
       return await client.callTool({ name: "status", arguments: {} }, undefined, {
-        timeout: 10_000,
+        timeout: 30_000,
       });
     } finally {
       await client.close();
