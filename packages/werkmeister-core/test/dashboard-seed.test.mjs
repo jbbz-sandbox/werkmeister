@@ -9,7 +9,9 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import {
+  dashboardContainerArgs,
   dashboardServeEnv,
+  deadDashboardRuns,
   findDashboardBundle,
   SEEDED_STATES,
   STUBBED_BINS,
@@ -104,6 +106,11 @@ test("the dashboard env has exactly the allowlisted keys, every path under HOME"
     "WERKMEISTER_WORKSPACES_ROOT",
   ]);
   assert.equal(env.HOST, "127.0.0.1");
+  assert.equal(
+    dashboardServeEnv(home, 4321, {}, "0.0.0.0").HOST,
+    "0.0.0.0",
+    "a container binds all",
+  );
   assert.equal(env.PORT, "4321");
   assert.equal(env.PATH, path.join(home, "bin"));
   assert.equal(env.WERKMEISTER_HOST, "http://127.0.0.1:65535");
@@ -157,4 +164,80 @@ test("WERKMEISTER_DASHBOARD_PORT moves the dashboard port tools health-check; un
     if (before === undefined) delete process.env.WERKMEISTER_DASHBOARD_PORT;
     else process.env.WERKMEISTER_DASHBOARD_PORT = before;
   }
+});
+
+test("bin/node links to the node it is given: the image's in a container (SW-1135)", () => {
+  const home = tmp("dashboard-node-");
+  seedDashboardHome(home, Date.now(), "/usr/local/bin/node");
+  assert.equal(fs.readlinkSync(path.join(home, "bin", "node")), "/usr/local/bin/node");
+});
+
+test("the container mounts only dist read-only and the seeded HOME: no docker socket, no ~/.werkmeister (SW-1135)", () => {
+  // Read before anything moves HOME: the real one is what must never be mounted.
+  const realWerkmeister = path.join(os.homedir(), ".werkmeister");
+  const home = tmp("dashboard-ctr-");
+  const dist = path.join(tmp("dashboard-dist-"), "apps", "cli", "dist");
+  const run = dashboardContainerArgs({
+    name: "wm-seeded-1",
+    dist,
+    home,
+    port: 4321,
+    host: "mac-1",
+    uid: 501,
+    gid: 20,
+    env: dashboardServeEnv(home, 4321, {}, "0.0.0.0"),
+  });
+  const values = (argv, flag) => argv.flatMap((a, i) => (argv[i - 1] === flag ? [a] : []));
+
+  assert.deepEqual(values(run.app, "-v"), [`${dist}:${dist}:ro`, `${home}:${home}`]);
+  assert.deepEqual(values(run.forwarder, "-v"), []);
+  assert.deepEqual(values(run.app, "--mount"), []);
+  for (const a of [...run.app, ...run.forwarder]) {
+    // The seeded HOME's DOCKER_HOST is its own dead no-docker.sock; a real socket is named docker.sock.
+    assert.doesNotMatch(a, /\/docker\.sock|\/var\/run/, a);
+    assert.ok(!a.includes(realWerkmeister), `${a} reaches ${realWerkmeister}`);
+  }
+  // Loopback only, and only through the forwarder: the dashboard publishes nothing.
+  assert.deepEqual(values(run.app, "-p"), []);
+  assert.deepEqual(values(run.forwarder, "-p"), ["127.0.0.1:4321:4321"]);
+  // Alone on an internal network: no route to the host's daemon or the internet.
+  assert.deepEqual(values(run.app, "--network"), ["wm-seeded-1"]);
+  assert.deepEqual(run.network.slice(0, 3), ["network", "create", "--internal"]);
+  assert.equal(run.network.at(-1), "wm-seeded-1");
+  for (const f of ["--read-only", "--init", "--rm"]) assert.ok(run.app.includes(f), f);
+  // Created, then attached by serve: a detached app that crashes takes its log with it (--rm).
+  assert.equal(run.app[0], "create");
+  // Each part names the host that made it: a reaper in another pid namespace must not judge it.
+  for (const argv of [run.network, run.app, run.forwarder])
+    assert.ok(argv.includes("werkmeister.seeded-dashboard.host=mac-1"), argv.join(" "));
+  assert.deepEqual(run.attach, ["start", "-a", "wm-seeded-1-app"]);
+  assert.deepEqual(values(run.app, "--cap-drop"), ["ALL"]);
+  assert.deepEqual(values(run.app, "--user"), ["501:20"]);
+  assert.ok(run.app.includes("node:22") && run.forwarder.includes("node:22"));
+  // node by path: the seeded PATH holds only stubs, so the image's entrypoint would not be found.
+  assert.deepEqual(run.app.slice(-4), [
+    "--entrypoint",
+    "/usr/local/bin/node",
+    "node:22",
+    path.join(dist, "dashboard.js"),
+  ]);
+  assert.deepEqual(run.teardown, [
+    ["rm", "-f", "wm-seeded-1-app", "wm-seeded-1-fwd"],
+    ["network", "rm", "wm-seeded-1"],
+  ]);
+});
+
+test("only runs whose serve pid is gone are reaped, each once; other labels are ignored (SW-1135)", () => {
+  const labels = [
+    "werkmeister-seeded-dashboard-111-5000", // dead: app container
+    "werkmeister-seeded-dashboard-111-5000", // dead: fwd container
+    "werkmeister-seeded-dashboard-222-5001", // live serve
+    "werkmeister-seeded-dashboard-111-5000", // dead: network
+    "someone-else-111-5000",
+    "",
+  ].join("\n");
+  assert.deepEqual(
+    deadDashboardRuns(labels, (pid) => pid === 222),
+    ["werkmeister-seeded-dashboard-111-5000"],
+  );
 });
