@@ -816,21 +816,17 @@ test("SW-807: each bugfix contract lists its own pre-approved commands and steer
           .readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8")
           .split("## Pre-approved\n")[1]
           .split("\n\n")[0];
-      assert.match(
-        section("01_reproduce"),
-        /^- `werkmeister issue start`\n- `werkmeister issue view`\n/,
-      );
+      // SW-958: each grant this test is about, not the whole list, so another grant breaks nothing here.
+      assert.match(section("01_reproduce"), /^- `werkmeister issue start`$/m);
+      assert.match(section("01_reproduce"), /^- `werkmeister issue view`$/m);
       assert.match(section("02_fix"), /^- Every other command asks\./);
       // SW-963: the browser check's static-page server.
-      assert.match(
-        section("03_exercise"),
-        /^- `werkmeister workspace serve …`\n- Every other command asks\./,
-      );
+      assert.match(section("03_exercise"), /^- `werkmeister workspace serve …`$/m);
       // SW-717: rule 5's conflict fix pushes the session's own rebased branch. SW-1059: the fixup fold.
-      assert.match(
-        section("04_propose"),
-        /^- `werkmeister pr push …`\n- `werkmeister pr autosquash …`\n- Every other command asks\./,
-      );
+      assert.match(section("04_propose"), /^- `werkmeister pr push …`$/m);
+      assert.match(section("04_propose"), /^- `werkmeister pr autosquash …`$/m);
+      for (const d of ["01_reproduce", "03_exercise", "04_propose"])
+        assert.match(section(d), /^- Every other command asks\./m, d);
       for (const d of ["01_reproduce", "02_fix", "03_exercise", "04_propose"])
         assert.match(section(d), /never a `python3` heredoc or `python3 -c`/);
       // SW-1011: the router agrees with 04_propose: `pr open` pushes the record.

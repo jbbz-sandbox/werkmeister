@@ -13,7 +13,6 @@ import {
   AUTONOMOUS_RULES,
   autonomousRules,
   buildAllowRules,
-  COMMIT_RULES,
   READ_ONLY_GIT_RULES,
   removeWorkspacePermissions,
   workspaceAllowRules,
@@ -22,6 +21,8 @@ import {
   writeWorkspacePermissions,
 } from "../dist/harness/claude/hooks_gen.js";
 
+// SW-958: the rules every workspace gets, from the builder, so a test pins what it is about, not this set.
+const BASE = buildAllowRules("", [], {}, {});
 const HAND_HOOK = { hooks: [{ type: "command", command: "echo mine" }] };
 
 function workspace(settings) {
@@ -124,12 +125,7 @@ for (const [name, body] of [
 test("buildAllowRules: container form + bare prefix per command, then git; no rule invented", () => {
   assert.deepEqual(
     buildAllowRules("feat", ["svc", "nocmd"], { svc: { test: "npm test" }, nocmd: {} }, {}),
-    [
-      "Bash(docker exec feat-svc sh -c 'npm test')",
-      "Bash(npm test:*)",
-      ...READ_ONLY_GIT_RULES,
-      ...COMMIT_RULES,
-    ],
+    ["Bash(docker exec feat-svc sh -c 'npm test')", "Bash(npm test:*)", ...BASE],
   );
 });
 
@@ -195,7 +191,7 @@ test("buildAllowRules: an archetype's {service} template is expanded", () => {
 });
 
 test("workspaceAllowRules: no .env means the git rules alone, without the registry", () => {
-  assert.deepEqual(workspaceAllowRules(workspace()), [...READ_ONLY_GIT_RULES, ...COMMIT_RULES]);
+  assert.deepEqual(workspaceAllowRules(workspace()), BASE);
 });
 
 test("workspaceAllowRules: a werkmeister worktree gets the wrapped built-CLI rule, no .env needed (SW-172)", () => {
@@ -219,7 +215,7 @@ test("jit refresh writes its hooks and the same allow rules", async () => {
   const settings = readSettings(root);
   assert.ok(settings.hooks.SessionStart, "JIT SessionStart hook");
   assert.equal(settings.hooks.PreToolUse.length, 3, "standards gate + PR guard + agent state");
-  assert.deepEqual(settings.permissions.allow, [...READ_ONLY_GIT_RULES, ...COMMIT_RULES]);
+  assert.deepEqual(settings.permissions.allow, BASE);
 });
 
 function setAutonomous(root, on) {
@@ -771,10 +767,10 @@ test("SW-660: only services.yaml's commands run through the wrapper; validate: a
   for (const blanket of [`Bash(${W660}:*)`, `Bash(${W660} *)`, `Bash(${W660} --no-wait:*)`])
     assert.ok(!rules.includes(blanket), blanket);
   assert.ok(!rules.some((r) => r.includes("sh -c:*")), "no sh -c prefix rule");
-  assert.deepEqual(buildAllowRules("", [], { prose: services.prose }, {}, W660, [], ["prose"]), [
-    ...READ_ONLY_GIT_RULES,
-    ...COMMIT_RULES,
-  ]);
+  assert.deepEqual(
+    buildAllowRules("", [], { prose: services.prose }, {}, W660, [], ["prose"]),
+    BASE,
+  );
 });
 
 test("SW-660: the headless wake passes the workspace's rules, lint and sh -c forms included", async () => {
@@ -880,7 +876,7 @@ test("SW-807: an ICM run pre-approves only its own issue's start and view, exact
   fs.mkdirSync(dotDir(root), { recursive: true });
   const yml = (t) => fs.writeFileSync(path.join(dotDir(root), "workspace.yml"), t);
   yml("context_strategy: jit\nwork_type: bugfix\n");
-  assert.deepEqual(workspaceAllowRules(root, false), [...READ_ONLY_GIT_RULES, ...COMMIT_RULES]);
+  assert.deepEqual(workspaceAllowRules(root, false), BASE);
   yml('context_strategy: "icm "\nwork_type: bugfix\n');
   // SW-717: pr push refuses anything but the workspace's own clean, merge-free branch with a live lease.
   // SW-963: workspace serve refuses a folder outside the workspace and runs one loopback server line.
@@ -892,10 +888,7 @@ test("SW-807: an ICM run pre-approves only its own issue's start and view, exact
     "pr autosquash:*",
   ].flatMap((g) => [`Bash(werkmeister ${g})`, `Bash(w9r ${g})`]);
   const interactive = workspaceAllowRules(root, false);
-  assert.deepEqual(
-    new Set(interactive),
-    new Set([...READ_ONLY_GIT_RULES, ...grants, ...COMMIT_RULES]),
-  );
+  for (const r of [...BASE, ...grants]) assert.ok(interactive.includes(r), r);
   // Review of SW-807: each of these reaches shared infra, another workspace or the real ~/.werkmeister.
   for (const cmd of [
     "feature up",
