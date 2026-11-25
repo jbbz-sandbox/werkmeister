@@ -31,6 +31,12 @@ test("github_ingest AWS keys are masked, the queue URL stays visible (SW-583)", 
   assert.equal(r.github_ingest.queue_url, "https://sqs/q");
 });
 
+test("a GitHub App key hand-placed in github_ingest is masked, app_id stays visible (SW-584)", () => {
+  const r = redact({ github_ingest: { app_id: "4242", private_key: "-----BEGIN RSA" } });
+  assert.equal(r.github_ingest.private_key, "<redacted>");
+  assert.equal(r.github_ingest.app_id, "4242");
+});
+
 test("an unset secret stays empty and the input is not mutated", () => {
   const input = cfg();
   input.jira.api_token = "";

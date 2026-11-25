@@ -150,6 +150,7 @@ test("redaction: fields, secrets.env values, secret-named env values and token s
   process.env.SW404_SHORT_KEY = "abc"; // under 8 characters: not treated as a secret
   const gh = `ghp_${"a".repeat(36)}`;
   const aws = "AKIAABCDEFGHIJKLMNOP";
+  const appToken = `ghs_${"b".repeat(36)}`;
   const log = createLogger({ pid: 1 }, { workspaceDir: ws, stderr: false });
   const cases = [
     ["field token", { token: "plain-field-token" }, "plain-field-token"],
@@ -160,6 +161,7 @@ test("redaction: fields, secrets.env values, secret-named env values and token s
     ["env value", { err: new Error(`auth failed for ${fromEnv}`) }, fromEnv],
     ["stderr tail", { stderrTail: `fatal: ${gh} rejected` }, gh],
     ["aws key", { detail: `key ${aws}` }, aws],
+    ["GitHub App installation token (SW-584)", { detail: `GH_TOKEN=${appToken}` }, appToken],
     ["bearer", { detail: "Authorization: Bearer abc.def-ghi" }, "abc.def-ghi"],
     ["basic", { detail: "Basic dXNlcjpwYXNzd29yZDEyMzQ=" }, "dXNlcjpwYXNzd29yZDEyMzQ="],
   ];

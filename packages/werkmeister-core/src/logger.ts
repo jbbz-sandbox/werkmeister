@@ -54,7 +54,7 @@ export const workspaceLogPath = (ws: string) => path.join(logsDir(ws), "werkmeis
 
 const ENV_SECRET = /(_TOKEN|_KEY|_SECRET|PASSWORD)$/;
 const TOKEN_PATTERNS = [
-  /gh[po]_[A-Za-z0-9]{20,}/g,
+  /gh[pos]_[A-Za-z0-9]{20,}/g,
   /github_pat_[A-Za-z0-9_]{20,}/g,
   /xox[abp]-[A-Za-z0-9-]+/g,
   /AKIA[0-9A-Z]{16}/g,
