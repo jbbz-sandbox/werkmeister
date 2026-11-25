@@ -1,5 +1,18 @@
 # sandbox-core
 
+## 0.112.0
+
+### Minor Changes
+
+- 4796103: SW-1099: the dashboard Metrics tab charts stage and ticket time. It shows p50/p90 minutes per ICM stage per bucket (one line per stage), a stage heatmap, the bottleneck stage with its share of stage time ("03_implement: 54% of stage time"), each stage's time split into waiting on a person, waiting on capacity and working, and lead time from the first turn to merge and to release, with the five slowest tickets linking to their Flow timeline (`#flow/<workspace>`). Every chart follows the version filter. `metrics-trends` stages gain `totalMinutes`, `personMinutes`, `capacityMinutes` and `workingMinutes`, and each row and version slice a `slowest` list. Flow's scatter now shows cycle time only; lead time moved to Metrics.
+
+### Patch Changes
+
+- 302fe96: SW-1139: in a grouped workspace, `werkmeister pr gate` (and `pr gate --tests`) has a `revert` row. It reverts each commit in `origin/<base>..HEAD` alone in a throwaway worktree off HEAD, then removes it, and fails naming each commit that conflicts (`<sha> <subject>` and the files). The ICM commit stages tell a grouped run to put each ticket's new tests in a file of its own and keep tickets off adjacent lines. Single-ticket workspaces get neither.
+- 80f094c: SW-1143: when a stage contract drifts, `werkmeister skills check` also names a service's `stages:` text in the registry (after `werkmeister registry sync`) as a cause, not only a werkmeister upgrade. A malformed `stages:` entry prints as one `[err]` line from `skills check` / `skills sync` and the MCP `skills` tool, as `workspace init` does. docs/registry-fragments.md § Stage text says `werkmeister skills sync` brings an edit into an existing workspace.
+- 9c4562d: SW-1157: every ICM human check tells the agent, before it ends the turn, to `grep -l "status: proposed" stages/*/output/*.md`, ask every hit, and ask again when the question call errors or is interrupted. The werkmeister Claude Code plugin adds a Stop guard. In a workspace with a stage output still at `status: proposed` and no answered AskUserQuestion since the last prompt, it blocks the stop once and names the files.
+- 3e9d473: SW-1160: the bugfix `01_reproduce` stage contract asks, when the fix changes a shared writer or adds persisted state, for each caller that writes another workspace's files or the machine's (a migrate or sweep across workspaces, a daemon, close-out), how the change reaches each, and a test per such caller.
+
 ## 0.111.0
 
 ## 0.110.1
