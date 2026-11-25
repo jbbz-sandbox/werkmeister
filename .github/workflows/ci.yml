@@ -67,8 +67,6 @@ jobs:
       # dependency: its licence is outside the allowlist. Bump with the plugin's types.
       - run: npm i -g @anthropic-ai/claude-code@2.1.316
       - run: pnpm turbo run typecheck build test --continue --filter='!werkmeister-core'
-      - run: sh scripts/require-clean-home.sh
-        if: ${{ !cancelled() }}
       # After the build: commands and flags come from the built CLI's `__complete`.
       # Its unit test runs with `licenses` above (scripts/*.test.mjs).
       - run: pnpm run docs:check
@@ -86,6 +84,9 @@ jobs:
       # `vsce package` fails on a README link it can't rewrite, and is the only
       # check on .vscodeignore — #38 broke packaging and nothing caught it.
       - run: pnpm --filter werkmeister-vscode run package
+      # Last, so docs:check's `__complete` and the VS Code tests are checked too (SW-1154).
+      - run: sh scripts/require-clean-home.sh
+        if: ${{ !cancelled() }}
 
   # The core suite is ~100 files that each spawn a process, CPU-bound on a
   # 4-vCPU runner: 116s when it shared the runner with every other build. Two
