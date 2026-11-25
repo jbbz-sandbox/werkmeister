@@ -270,6 +270,10 @@ const GATE_ROUTES =
 const STATE_CLEAR_POINTS =
   " When the fix adds persisted state (a file, a record field, a marker), list each write and each clear point (every path that ends what the state stands for: success, failure, the other entry points to the same lifecycle) and give each clear point a test.";
 
+// SW-1160: sw-1140 listed `machine migrate` as a caller of the shared writer but not that it writes other workspaces' files.
+const SHARED_WRITER_CALLERS =
+  " When the fix changes a shared writer or adds persisted state, list each caller that writes another workspace's files or the machine's (a migrate or sweep across workspaces, a daemon, close-out), and settle how the change reaches each before the fix is decided; give each such caller a test that the new state is or isn't written there.";
+
 // SW-821: sw-807 designed a stage-grant allow list in 02_fix without the reach check; review found 6 Must-fix routes.
 const PREAPPROVED_IN_STAGE = `When this stage adds an allow rule or another pre-approved command: ${PREAPPROVED_INPUT} Write that list into this stage's output and into the question that asks the person to approve it.`;
 
@@ -566,7 +570,8 @@ const bugfix: Stage[] = [
         "List every other caller of the function at the root cause and what each does with the result (an early return, a printed value, a stored state), so the fix's return shape is checked against every caller before the fix stage — a fix there reaches them too. When the fix belongs in shared code, list its call sites through every helper or entry point that reaches that code, not one argument shape, and record the search commands (greps) you used in `repro.md`." +
           WHOLE_REPO_GREP +
           RESOLVER_CALLERS +
-          GATE_ROUTES,
+          GATE_ROUTES +
+          SHARED_WRITER_CALLERS,
         // SW-442: sessionBusy had two true cases; stage 01 listed callers, so only review caught the second (sw-418).
         `When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test. ${PREAPPROVED_INPUT}${STATE_CLEAR_POINTS}`,
         NAME_HISTORY_STEP,
