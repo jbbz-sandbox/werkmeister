@@ -57,6 +57,13 @@ test("the fast route names its install-and-build prerequisite (SW-227)", () => {
   );
 });
 
+test("a rebase that changes pnpm-lock.yaml reinstalls in the container (SW-1180)", () => {
+  assert.match(
+    fragment.services["werkmeister-core"].validate,
+    /After a rebase or pull that changes `pnpm-lock\.yaml` \(`git diff --name-only ORIG_HEAD HEAD -- pnpm-lock\.yaml` prints it\), rerun `pnpm install --frozen-lockfile` from the worktree root in the container before the build and tests/,
+  );
+});
+
 test("the dashboard checks metrics numbers outside its container, which has no transcripts (SW-1141)", () => {
   assert.match(
     fragment.services["werkmeister-dashboard"].validate,
