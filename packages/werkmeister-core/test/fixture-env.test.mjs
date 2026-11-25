@@ -69,3 +69,24 @@ test("every binary or path variable src reads is set by the fixture, never the c
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a --services registry's {{home}} and the other placeholders resolve to the fixture's own paths (SW-1144)", () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fixture-env-")));
+  try {
+    const services =
+      "services:\n  lib:\n    type: lib\n    repo: app\n    path: packages/lib\n" +
+      '    extra_volumes:\n      - "{{home}}/.kube:{{home}}/.kube:ro"\n' +
+      '      - "{{workspaces_root}}:{{workspaces_root}}"\n' +
+      '    environment:\n      HOME: "{{home}}"\n      WM: "{{werkmeister_home}}"\n';
+    seedFixture(root, { bare: true, services });
+    const written = fs.readFileSync(path.join(root, "services.yaml"), "utf8");
+    const home = path.join(root, "home");
+    assert.ok(written.includes(`"${home}/.kube:${home}/.kube:ro"`), written);
+    assert.ok(written.includes(`"${root}/ws:${root}/ws"`), written);
+    assert.ok(written.includes(`HOME: "${home}"`), written);
+    assert.ok(written.includes(`WM: "${home}/.werkmeister"`), written);
+    assert.doesNotMatch(written, /\{\{/);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
