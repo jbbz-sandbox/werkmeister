@@ -69,9 +69,11 @@ function lines(when = new Date().toISOString()) {
     });
 }
 
+/** A workspace folder whose run id is `run-<name>`, so each writer's line is checked for it (SW-1161). */
 function workspace(fx, name) {
   const ws = path.join(fx.root, "ws", name);
   fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
+  fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), `run_id: run-${name}\n`);
   fs.writeFileSync(path.join(ws, "compose.yml"), COMPOSE);
   return ws;
 }
@@ -119,10 +121,12 @@ test("a capacity wait writes one queue.wait however often it re-asks, then one q
           feature: "mine",
           position: 1,
           reason: "waiting for capacity",
+          run_id: "run-mine",
         },
       );
       assert.equal(admit.event, "queue.admit");
       assert.equal(admit.feature, "mine");
+      assert.equal(admit.run_id, "run-mine");
       assert.ok(admit.waited_s >= 0 && admit.waited_s < 60);
     },
     { slotsFull: true },
@@ -181,13 +185,15 @@ test("pr open then pr status write pr.open and pr.merged at the fake gh's times"
         .map((l) => {
           const o = JSON.parse(l);
           assert.ok(validate(o), JSON.stringify(validate.errors));
-          return [o.event, o.at, o.workspace, o.pr];
+          return [o.event, o.at, o.workspace, o.pr, o.run_id];
         });
       const ws = path.basename(fx.workspace);
       const pr = "https://github.com/o/app/pull/1";
+      const { run_id } = runTag(fx.workspace);
+      assert.ok(run_id, "init gave the run an id");
       assert.deepEqual(got, [
-        ["pr.open", "2026-01-02T03:04:05.000Z", ws, pr],
-        ["pr.merged", "2026-01-02T04:05:06.000Z", ws, pr],
+        ["pr.open", "2026-01-02T03:04:05.000Z", ws, pr, run_id],
+        ["pr.merged", "2026-01-02T04:05:06.000Z", ws, pr, run_id],
       ]);
     },
     { gate: true, merged: true },
@@ -339,6 +345,9 @@ test("a gate run writes one gate.start (retry 0) and one gate.end (exit 0) shari
       );
       assert.equal(start.run, end.run);
       assert.ok(end.at >= start.at);
+      const { run_id } = runTag(fx.workspace);
+      assert.ok(run_id, "init gave the run an id");
+      assert.deepEqual([start.run_id, end.run_id], [run_id, run_id]);
       // SW-404: every row the gate checked is a gate.row of this run.
       const rows = lines().filter((l) => l.event === "gate.row");
       assert.ok(rows.length > 0, "gate rows recorded");
@@ -545,12 +554,15 @@ const hookLines = () => lines(at(0).toISOString()); // the hooks fire at T0's mo
 /** A recordable workspace under the fixture and a `fire(event, extra, seconds)` that records into it. */
 function hookWorkspace(fx, name) {
   const ws = workspace(fx, name);
-  fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), "autonomous: false\n");
+  fs.writeFileSync(
+    path.join(ws, ".werkmeister", "workspace.yml"),
+    `autonomous: false\nrun_id: run-${name}\n`,
+  );
   return (event, extra = {}, s = 0) =>
     record({ hook_event_name: event, cwd: ws, session_id: "s1", ...extra }, at(s));
 }
 
-const strip = ({ v, at, ...rest }) => rest;
+const strip = ({ v, at, run_id, ...rest }) => rest;
 const ASK = { tool_name: "AskUserQuestion", tool_input: { questions: [{ question: "Which?" }] } };
 
 test("one AskUserQuestion round-trip writes one ask and one answer timed tool_use→tool_result", async () => {
@@ -565,6 +577,10 @@ test("one AskUserQuestion round-trip writes one ask and one answer timed tool_us
       { event: "ask", workspace: "mine", session: "s1", kind: "question" },
       { event: "answer", workspace: "mine", session: "s1", waited_s: 65 },
     ]);
+    assert.deepEqual(
+      hookLines().map((l) => l.run_id),
+      ["run-mine", "run-mine"],
+    );
   });
 });
 
@@ -676,12 +692,13 @@ test("every writer that queues a feature writes a queue.wait naming it", async (
     await enqueue("victim", workspace(fx, "victim"));
     await requeueFirst("head", workspace(fx, "head"));
     assert.deepEqual(
-      lines().map(({ event, workspace, feature, position, reason }) => ({
+      lines().map(({ event, workspace, feature, position, reason, run_id }) => ({
         event,
         workspace,
         feature,
         position,
         reason,
+        run_id,
       })),
       [
         {
@@ -690,6 +707,7 @@ test("every writer that queues a feature writes a queue.wait naming it", async (
           feature: "victim",
           position: 1,
           reason: "preempted",
+          run_id: "run-victim",
         },
         {
           event: "queue.wait",
@@ -697,6 +715,7 @@ test("every writer that queues a feature writes a queue.wait naming it", async (
           feature: "head",
           position: 1,
           reason: "requeued",
+          run_id: "run-head",
         },
       ],
     );
