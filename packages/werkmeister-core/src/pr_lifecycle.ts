@@ -1093,6 +1093,60 @@ async function groupCheck(
     .join("\n");
 }
 
+/**
+ * SW-1139: each commit of a grouped PR must revert alone. sw-1116 found two that conflicted only at
+ * review (one shared test file, adjacent lines), and fixing it meant rebuilding every commit. Each
+ * commit is reverted in its own throwaway worktree off HEAD, so HEAD and the working tree are untouched.
+ */
+export async function revertAloneCheck(
+  dir: string,
+  base: string,
+  deps: Pick<Deps, "run">,
+): Promise<[boolean, string]> {
+  const range = `origin/${base}..HEAD`;
+  const list = await deps.run("git", ["-C", dir, "rev-list", "--reverse", "--no-merges", range]);
+  if (list.code !== 0)
+    return [false, `cannot list commits in ${range} — ${(list.stderr || list.stdout).trim()}`];
+  const shas = list.stdout.split("\n").filter(Boolean);
+  if (shas.length < 2) return [true, `fewer than 2 commits in ${range}, nothing to check`];
+  const failed: string[] = [];
+  for (const sha of shas) {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-revert-"));
+    const wt = path.join(tmp, "wt");
+    try {
+      // No repo hook (post-checkout) runs on the host mid-gate, as with the auto-rebase.
+      const add = await deps.run("git", [
+        "-c",
+        "core.hooksPath=/dev/null",
+        "-C",
+        dir,
+        "worktree",
+        "add",
+        "-q",
+        "--detach",
+        wt,
+        "HEAD",
+      ]);
+      if (add.code !== 0)
+        return [false, `cannot add a throwaway worktree — ${(add.stderr || add.stdout).trim()}`];
+      if ((await deps.run("git", ["-C", wt, "revert", "--no-commit", sha])).code === 0) continue;
+      const files = await deps.run("git", ["-C", wt, "diff", "--name-only", "--diff-filter=U"]);
+      const subject = await deps.run("git", ["-C", dir, "log", "-1", "--format=%s", sha]);
+      failed.push(
+        `${sha.slice(0, 7)} ${subject.stdout.trim()} does not revert alone (conflicts in ${files.stdout.trim().split("\n").join(", ") || "unknown files"})`,
+      );
+    } finally {
+      await deps.run("git", ["-C", dir, "worktree", "remove", "--force", wt]);
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  }
+  if (!failed.length) return [true, `each of ${shas.length} commits reverts alone`];
+  return [
+    false,
+    `${failed.join("\n")}\nput each ticket's tests in a file of its own and keep tickets off adjacent lines, then rebuild the commits`,
+  ];
+}
+
 // Moved beside hostLoadLimit so lifecycle's container starts can use it without an import cycle (SW-630).
 export { waitForHostLoadNow };
 
@@ -1505,6 +1559,9 @@ async function gateChecks(
       return { ...done(), ok: false };
     }
   }
+  // Outside the block above, so `pr gate --tests` in the stage that commits catches it (SW-1139).
+  if (groupOf(loadConfigFile(ws, null)).length)
+    add("revert", ...(await revertAloneCheck(dir, base, deps)));
 
   // The shared registry holds main's fragment; a branch that renames packages
   // must be tested with its own `test:` filters and path mappings (SW-25).

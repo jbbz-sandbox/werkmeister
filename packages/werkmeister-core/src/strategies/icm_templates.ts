@@ -174,6 +174,8 @@ const groupStep = (v: IcmVars) =>
         `This workspace is a grouped PR (\`group\` in \`workspace.yml\`): one commit per ticket, for the workspace's issue and each member, ${keys(v.group)}, so each can be reverted alone. ` +
           "Take the tickets one at a time: make that ticket's changes and tests, run the diff check below on them, then commit on the worktree's branch with a message that starts with its key (`<KEY> <summary>`) before starting the next. " +
           "Each commit builds and passes the host tests on its own. " +
+          // SW-1139: sw-1116 appended three tickets' tests to one file, so two commits would not revert alone.
+          "Put each ticket's new tests in a test file of its own, not one another ticket's tests also go in, and keep one ticket's edits off lines next to another ticket's where you can: `werkmeister pr gate --tests` reverts each commit alone in a throwaway worktree and fails naming the one that conflicts. " +
           // SW-904: sw-856 split nine tickets' mixed diff by hunk afterwards; `git apply --cached -U0` misplaced code.
           `Commit each ticket as soon as its change, test and release entry pass, before starting the next; a later fix to an earlier ticket goes in as ${FOLD}. ` +
           "Never split a mixed diff afterwards by hunk (`git apply --cached` with small context, `git add -p`); if a split can't be avoided, stage whole-file versions per commit. " +
