@@ -19,6 +19,8 @@ const EXEMPT = {
     "the fixture runner sets it to this build's own root (internal fixture, pinWerkmeisterRoot)",
   WERKMEISTER_TEMP_HOME:
     "named in the probe guidance text only, never read by src; with-temp-home sets it (SW-1049)",
+  WERKMEISTER_TELEPRESENCE_BIN:
+    "read only under a test runner, the stub a test names; unset, telepresence is refused (SW-1153)",
 };
 
 /** Every binary or path variable a src module reads: process.env.X, process.env["X"], envVar("X"), registryPath(…, "X", …). */
