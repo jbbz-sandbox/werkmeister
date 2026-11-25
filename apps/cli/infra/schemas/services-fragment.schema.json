@@ -67,8 +67,21 @@
         },
         "components": {
           "type": "object",
-          "additionalProperties": { "type": "string" },
-          "description": "This project's tracker components: name → what it covers, e.g. `gate: pr gate, test rows`. One per ticket, the subsystem its fix lands in; backlog triage sets them and groups tickets by them. No command reads it yet."
+          "additionalProperties": {
+            "oneOf": [
+              { "type": "string" },
+              {
+                "type": "object",
+                "properties": {
+                  "description": { "type": "string" },
+                  "paths": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+                },
+                "required": ["description", "paths"],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "description": "This project's tracker components: name → what it covers, e.g. `gate: pr gate, test rows`, or `{ description, paths }` where `paths` are repo-relative prefixes (a directory or a file; the longest match wins, as in `path_mappings`) whose files belong to it. One per ticket, the subsystem its fix lands in; the triage skill sets them, maps a ticket's named files to one through `paths`, and groups tickets by them."
         }
       },
       "if": { "properties": { "ship": { "const": "tag" } }, "required": ["ship"] },

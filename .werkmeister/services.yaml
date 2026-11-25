@@ -40,21 +40,56 @@ repo:
   # Tracker components: one per ticket, the subsystem its fix lands in. Backlog triage sets them and groups tickets
   # by them (one workspace and PR per group). Each project lists its own here; werkmeister has no built-in list.
   # A new component is a change to this map, never a name made up in the tracker.
+  # `paths` (repo-relative prefixes, longest wins, as in path_mappings) map a ticket's named files to the component;
+  # a component with no single home stays a plain description (SW-1209).
   components:
-    gate: pr gate, pr open checks, test rows, gate speed
-    scheduler: capacity queue, host-load waits, feature up admission, preemption
-    test-harness: with-temp-home, with-fixture-workspace, run-tests.sh, fixtures
-    metrics: event log, usage and cost numbers, Flow tab data
-    docs: docs-site, SDK docs, screenshots
-    setup: machine setup, install, certs, demo apps, config location
-    release: changesets, publish, pr status shipped checks
+    gate:
+      description: pr gate, pr open checks, test rows, gate speed
+      paths: [packages/werkmeister-core/src/gate.ts]
+    scheduler:
+      description: capacity queue, host-load waits, feature up admission, preemption
+      paths:
+        - packages/werkmeister-core/src/scheduler.ts
+        - packages/werkmeister-core/src/scheduler_client.ts
+        - packages/werkmeister-core/src/scheduler_state.ts
+    test-harness:
+      description: with-temp-home, with-fixture-workspace, run-tests.sh, fixtures
+      paths:
+        - packages/werkmeister-core/src/temp_home.ts
+        - packages/werkmeister-core/src/fixture_workspace.ts
+        - packages/werkmeister-core/src/fixture_fakes.ts
+    metrics:
+      description: event log, usage and cost numbers, Flow tab data
+      paths:
+        - packages/werkmeister-core/src/metrics.ts
+        - packages/werkmeister-core/src/metrics_rebuild.ts
+        - packages/werkmeister-core/src/metrics_report.ts
+    docs:
+      description: docs-site, SDK docs, screenshots
+      paths: [apps/docs-site, docs]
+    setup:
+      description: machine setup, install, certs, demo apps, config location
+      paths: [packages/werkmeister-core/src/machine_setup.ts]
+    release:
+      description: changesets, publish, pr status shipped checks
+      paths: [.changeset]
     permissions: autonomous run limits, ask rules, hooks
     contracts: generated ICM stage-contract and pr-rules text, generated skills
     workspace: workspace create/init/close, issue commands, PR lifecycle
-    ui: VS Code extension, dashboard, workspaces pane
-    infra: containers, Caddy, shared infra, daemon, MCP proxy
+    ui:
+      description: VS Code extension, dashboard, workspaces pane
+      paths: [apps/werkmeister-dashboard, packages/werkmeister-vscode, packages/werkmeister-ui]
+    infra:
+      description: containers, Caddy, shared infra, daemon, MCP proxy
+      paths:
+        - packages/werkmeister-core/src/caddy.ts
+        - packages/werkmeister-core/src/infra.ts
+        - packages/werkmeister-core/src/compose_infra.ts
+        - packages/werkmeister-core/src/k8s_forwards.ts
     core: werkmeister-core internals, import structure, error types, shared readers
-    harness: harness adapters (OpenCode, Codex), hooks, tool names, lifecycle tests
+    harness:
+      description: harness adapters (OpenCode, Codex), hooks, tool names, lifecycle tests
+      paths: [packages/werkmeister-core/src/harness]
     project: non-code work, legal, trademark, launch
 
 services:
