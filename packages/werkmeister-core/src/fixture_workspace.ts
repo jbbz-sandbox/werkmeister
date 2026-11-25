@@ -16,8 +16,10 @@ import { COMPOSE_FILE } from "./compose_file.js";
 import { containerOf } from "./config.js";
 import { dotDir } from "./dot_dir.js";
 import { writeFakes } from "./fixture_fakes.js";
+import { INGRESS_DEFAULTS } from "./global_config.js";
 import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
 import { gitEnv } from "./proc.js";
+import { expandPlaceholders } from "./registry_sync.js";
 import { prDir, stageDirs, templateFor } from "./strategies/icm_templates.js";
 
 export interface FixtureRepo {
@@ -325,10 +327,18 @@ export function seedFixture(root: string, opts: FixtureOptions = {}): Fixture {
     execFileSync("git", args, { cwd, stdio: "pipe", env: { ...gitEnv(), ...GIT_ENV } });
   const repos = opts.repos ?? [{ name: "app" }];
 
-  write(path.join(root, "services.yaml"), opts.services ?? SERVICES);
-  write(path.join(root, "ports.yaml"), PORTS);
   // At the temp HOME's default path, so `machine migrate` treats it as the home it is (SW-581).
   const home = path.join(root, "home");
+  // A repo's own fragment uses the placeholders `registry sync` expands; this file skips that sync (SW-1144).
+  const services = expandPlaceholders(opts.services ?? SERVICES, {
+    home,
+    repos_root: path.join(root, "repos"),
+    workspaces_root: path.join(root, "ws"),
+    werkmeister_home: dotDir(home),
+    local_domain: INGRESS_DEFAULTS.local_domain,
+  });
+  write(path.join(root, "services.yaml"), services);
+  write(path.join(root, "ports.yaml"), PORTS);
   const configFile = path.join(dotDir(home), "config.yaml");
   write(
     configFile,
