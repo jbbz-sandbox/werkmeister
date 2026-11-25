@@ -254,6 +254,14 @@ function heldSlots(
 }
 
 /**
+ * How many slots the allocator would count held, given Docker's *labels*: leases too, so a
+ * workspace leased but stopped or queued reads held, not free (SW-1151). Read without the lock: a display count.
+ */
+export function heldSlotCount(labels: Record<string, SlotEntry> | null): number {
+  return heldSlots(labels).held.size;
+}
+
+/**
  * Allocate *feature*'s slot and lease it before the lock is released.
  *
  * Idempotent: a feature that already holds a slot (lease or label) gets it

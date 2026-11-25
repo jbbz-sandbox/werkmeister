@@ -10,7 +10,7 @@ import { K8S_FORWARDS_CONTAINER, warnStaleInfra } from "werkmeister-core/compose
 import { type ForwardStatus, getPerServiceStatus } from "werkmeister-core/k8s";
 import type { HostSummary, ProjectHealth, Usage } from "werkmeister-core/resources";
 import { waitingQueue } from "werkmeister-core/scheduler_client";
-import { getAllSlots, type SlotEntry, slotCount } from "werkmeister-core/slots";
+import { getAllSlots, heldSlotCount, type SlotEntry, slotCount } from "werkmeister-core/slots";
 import {
   buildInterceptRows,
   type FeatureVitals,
@@ -440,7 +440,7 @@ export async function run(args: Record<string, unknown>): Promise<void> {
 
   // Summary
   const totalFeatures = Object.keys(allSlots).length;
-  const available = slotCount() - totalFeatures;
+  const available = slotCount() - heldSlotCount(allSlots);
   const k8sTotal = k8s.length;
   const stopped = forwarderStopped(k8s);
   let k8sColor: string;

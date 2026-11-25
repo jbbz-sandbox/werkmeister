@@ -36,7 +36,7 @@ import {
 // module for no gain.
 
 import { waitingQueue } from "./scheduler_client.js";
-import { getAllSlots, getPortRange, type SlotEntry, slotCount } from "./slots.js";
+import { getAllSlots, getPortRange, heldSlotCount, type SlotEntry, slotCount } from "./slots.js";
 import {
   type InterceptState,
   interceptBlocker,
@@ -380,7 +380,7 @@ export interface StatusSnapshot {
   summary: {
     /** Features holding a slot. */
     total_features: number;
-    /** Slots still free for another feature. */
+    /** Slots still free for another feature, as the allocator counts them: a leased slot with no containers is held. */
     available_slots: number;
     /** At least one infra container is up and every one is healthy or running. */
     infra_healthy: boolean;
@@ -482,7 +482,7 @@ export async function statusSnapshot(): Promise<StatusSnapshot> {
     caches: await caches,
     summary: {
       total_features: features.length,
-      available_slots: slotCount() - features.length,
+      available_slots: slotCount() - heldSlotCount(allSlots),
       infra_healthy:
         infra.length > 0 && infra.every((c) => c.display === "healthy" || c.display === "running"),
       k8s_alive: k8s.filter((s) => s.status === "alive").length,
