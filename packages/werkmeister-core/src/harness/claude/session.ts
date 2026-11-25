@@ -7,6 +7,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { runCapture, shellQuote } from "../../tool_bins.js";
+import { AUTONOMOUS_DENY } from "../autonomous_deny.js";
 import { signalFrom } from "../sessions.js";
 import { runTurn } from "../turn.js";
 import type {
@@ -18,7 +19,7 @@ import type {
   TurnState,
 } from "../types.js";
 import { resolveClaudeBin } from "./cli.js";
-import { parseSessionLines } from "./transcript.js";
+import { findClaudeProjectDir, parseSessionLines, sessionPermissionMode } from "./transcript.js";
 
 export type ClaudeSessionSignal = SessionSignal;
 export type ClaudeTurnState = TurnState;
@@ -40,7 +41,7 @@ export function claudeSendArgs(
   body: string,
   sessionId: string | null,
   model: string | null,
-  opts: { allow?: string[]; deny?: string[]; json?: boolean } = {},
+  opts: { allow?: string[]; deny?: string[]; json?: boolean; mode?: "auto" | "acceptEdits" } = {},
 ): string[] {
   return [
     "-p",
@@ -48,7 +49,7 @@ export function claudeSendArgs(
     ...(opts.allow?.length ? ["--allowedTools", opts.allow.join(",")] : []),
     ...(opts.deny?.length ? ["--disallowedTools", opts.deny.join(",")] : []),
     "--permission-mode",
-    "acceptEdits",
+    opts.mode ?? "acceptEdits",
     ...(opts.json ? ["--output-format", "json"] : []),
     ...(model ? ["--model", model] : []),
     ...(sessionId ? ["--resume", sessionId] : []),
@@ -67,9 +68,11 @@ export function claudeSendArgs(
  * appends messages to the session JSONL as the turn progresses).
  *
  * Headless mode can't prompt for tool permissions; `acceptEdits` lets it edit
- * files in the workspace without stalling. `unattended` also grants the
- * workspace's autonomous rules, and `wait` holds the child to its end and
- * returns what it was refused (`claude -p` exits 0 either way).
+ * files in the workspace without stalling. A session that last ran in `auto`
+ * keeps `auto`, so the classifier still approves what it approved there, with the
+ * unattended deny rules under it (SW-1156); no other mode is carried. `unattended` instead grants the workspace's
+ * autonomous rules under `acceptEdits`, and `wait` holds the child to its end
+ * and returns what it was refused (`claude -p` exits 0 either way).
  */
 export async function startTurn(
   name: string,
@@ -84,6 +87,10 @@ export async function startTurn(
   // Loaded here: a static import closes a cycle that reaches issue_tracker before it is initialised.
   // biome-ignore lint/suspicious/noImportCycles: jira→harness→…→issue_tracker (SW-188); SW-411
   const rules = root && (await import("./hooks_gen.js"));
+  const projectDir = !root && sessionId ? await findClaudeProjectDir(cwd) : null;
+  const mode = projectDir
+    ? await sessionPermissionMode(path.join(projectDir, `${sessionId}.jsonl`))
+    : null;
   const args = claudeSendArgs(body, sessionId, model, {
     ...(root &&
       rules && {
@@ -91,6 +98,8 @@ export async function startTurn(
         deny: rules.workspaceDenyRules(root, true),
       }),
     json: opts.wait,
+    // Nobody watches a headless turn, so the classifier gets the unattended deny floor under it.
+    ...(mode === "auto" && { mode, deny: AUTONOMOUS_DENY }),
   });
 
   const stdout = await runTurn(name, bin, args, cwd, Boolean(opts.wait));
