@@ -213,6 +213,9 @@ export function parse(argv: string[], base = cliWorktree()) {
       opts[a === "--workspace" ? "workspace" : "config"] = yml as Record<string, unknown>;
     } else if (a === "--workflow" && argv[i + 1] !== undefined) {
       const dir = inside(base, argv[++i] as string);
+      // Missing: inside(dir, …) would realpath it and throw ENOENT (SW-1167).
+      if (dir && !fs.existsSync(dir))
+        return { bad: a, file: dir, base: fs.realpathSync(base as string) };
       const yml = dir && inside(dir, "workflow.yaml");
       if (!dir || !yml || !fs.existsSync(yml)) return { bad: a };
       // Resolved before listing: a symlinked stages/ must not list a folder out of the worktree.
@@ -310,7 +313,9 @@ export async function run(argv: string[], base = cliWorktree()): Promise<void> {
     if ("bad" in parsed)
       console.error(
         "file" in parsed && parsed.file
-          ? `${parsed.bad}: a file under the worktree; ${parsed.file} is not under ${parsed.base} (the worktree, as this process sees it): pass it relative to the worktree`
+          ? parsed.bad === "--workflow"
+            ? `--workflow: ${parsed.file} is not a folder (resolved against ${parsed.base}, the worktree of the running CLI): pass a folder under it holding workflow.yaml`
+            : `${parsed.bad}: a file under the worktree; ${parsed.file} is not under ${parsed.base} (the worktree, as this process sees it): pass it relative to the worktree`
           : parsed.bad === "--then-append"
             ? "--then-append <path> <text>: after a werkmeister step, followed by --then or the end; <path> an existing .md in the fixture workspace (no .git), or workflow:workflow.yaml / workflow:stages/<name>.md"
             : parsed.bad === "--workflow"
