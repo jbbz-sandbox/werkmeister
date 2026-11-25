@@ -110,6 +110,7 @@ import { workspaceServices } from "./registry_sync.js";
 import { info, raw, success, warn } from "./reporter.js";
 import { withStartRecord } from "./resources.js";
 import {
+  blockedOnPerson,
   type Cost,
   headCanWaitOut,
   type Lease,
@@ -641,10 +642,13 @@ export async function admitServiceStart(
     for (let waited = 0; ; waited += SERVICE_POLL_MS) {
       // Never byPerson: an agent's gate in a person's workspace must not stop another run's containers.
       let position = await admitOrQueue(feature, workspace, false, starting);
+      // SW-1147: before the release, which would stop its own set for room no wait can free.
+      const blocked = position === null ? [] : await personBlocked(feature, workspace, starting);
       // Not in a person's workspace: their running app must not go down because they asked for one more service.
       // Nor in the grant pass (SW-873): with no wait it would stop its own set and drop it, never parked.
       if (
         position !== null &&
+        !blocked.length &&
         grant &&
         ownRunning.length &&
         !released.length &&
@@ -697,7 +701,7 @@ export async function admitServiceStart(
         if (released.length) claimLastStop(workspace);
         return;
       }
-      if (waited >= waitMs) {
+      if (waited >= waitMs || blocked.length) {
         // A released set can't park: the grant would bring back *service*, not what it stopped.
         const waiting = park && !released.length ? readWaiting(workspace) : null;
         if (waiting) {
@@ -705,7 +709,10 @@ export async function admitServiceStart(
           parked = true;
         }
         throw new SandboxError(
-          `No capacity to start ${services.join(", ")} for '${feature}' after ${Math.round(waitMs / 60_000)} min ` +
+          `No capacity to start ${services.join(", ")} for '${feature}' ` +
+            (blocked.length
+              ? "without waiting: only a person can free the room "
+              : `after ${Math.round(waitMs / 60_000)} min `) +
             `(queue position ${position})${parked ? "; it stays queued" : ""}.` +
             (released.length
               ? ` ${[...up].join(", ")} stayed stopped; \`werkmeister feature up\` starts the feature again.`
@@ -794,6 +801,22 @@ export function describeLease(l: Lease): string {
   return `${l.feature} (${cpus(l.cost.cpus)}, ${gib(l.cost.memory)}, ${RANK_WORD[l.rank]}${l.busy ? ", run in flight" : ""})`;
 }
 
+/** The holders only a person can free when nothing else could make room for *starting* (SW-1147). */
+async function personBlocked(
+  feature: string,
+  workspace: string,
+  starting: Starting,
+): Promise<Lease[]> {
+  const running = runningLeases() ?? [];
+  return blockedOnPerson(
+    await loadBudget(),
+    running,
+    feature,
+    featureCost(workspace, starting.services),
+    reservedLeases(running, feature),
+  );
+}
+
 /**
  * Who holds the budget, the head *feature* waits behind, and what happens next: the same lines for a
  * queued `up` and a timed-out service start (SW-675). *stays*: still queued, so the grant starts it.
@@ -810,9 +833,10 @@ export async function capacityWait(
   ];
   // What is asked against what is free, so a too-big request reads apart from a busy host (SW-763).
   const budget = await loadBudget();
+  // Admission also counts admitted starts not yet running (SW-907 review).
+  const reserved = reservedLeases(running, feature);
   if (Number.isFinite(budget.memory)) {
-    // Admission also counts admitted starts not yet running (SW-907 review).
-    const used = [...running, ...reservedLeases(running, feature)].reduce(
+    const used = [...running, ...reserved].reduce(
       (a, l) => ({ cpus: a.cpus + l.cost.cpus, memory: a.memory + l.cost.memory }),
       { cpus: 0, memory: 0 },
     );
@@ -836,10 +860,17 @@ export async function capacityWait(
           : ""),
     );
   }
+  const blocked = blockedOnPerson(budget, running, feature, need, reserved);
+  for (const l of blocked)
+    lines.push(
+      `${l.feature}: answer its question, or stop it from the pane (werkmeister feature stop ${l.feature}).`,
+    );
   lines.push(
     stays
       ? "It starts by itself when room frees, and the session is told to continue. Exit 75: queued, not a failure."
-      : "Exit 75: no capacity yet, not a failure of the change. Rerun the same command; nothing to ask a person.",
+      : blocked.length
+        ? "Exit 75: no capacity, not a failure of the change. Rerun the same command once one of these is answered or stopped."
+        : "Exit 75: no capacity yet, not a failure of the change. Rerun the same command; nothing to ask a person.",
   );
   // Never *feature* itself: a re-up of a running one waits here too, and its own stop frees nothing for it (SW-909).
   const others = running.filter((l) => l.feature !== feature);

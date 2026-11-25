@@ -115,6 +115,8 @@ export interface FixtureContainer {
   nanoCpus: number;
   /** `docker exec`s running in it (SW-856): the scheduler treats any as work in flight. */
   execs?: number;
+  /** Its folder gets a session parked on a question, so the scheduler reads it as waiting on a person (SW-1147). */
+  asking?: boolean;
 }
 
 // Names become folders under the fixture and lines in the fakes, from a pre-approved wrapper's input.
@@ -513,6 +515,14 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
   const containers = (opts.containers ?? []).map((c) => {
     const ws = path.join(root, "ws", c.workspace);
     fs.mkdirSync(ws, { recursive: true });
+    if (c.asking) {
+      const at = new Date().toISOString();
+      const ask = { kind: "question", what: "Approve the fix?", at };
+      write(
+        path.join(ws, ".werkmeister", "sessions", "s1.json"),
+        JSON.stringify({ status: "busy", at, last: at, ask }),
+      );
+    }
     return [c.feature, ws, c.startedAt, c.memory, c.nanoCpus, c.execs ?? 0].join("\t");
   });
 
