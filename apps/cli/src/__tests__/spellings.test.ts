@@ -52,6 +52,25 @@ async function parseBatch(sets: string[][]): Promise<Parsed[]> {
   return lines.map((l) => JSON.parse(l));
 }
 
+const SHARED_INIT_ARGV = [
+  "--work-type",
+  "refactor",
+  "--context-strategy",
+  "icm",
+  "--harness",
+  "mcp",
+  "--autonomous",
+  "--model",
+  "mid",
+  "--auto-stop",
+  "--test-path",
+  "/t",
+  "--description",
+  "d",
+  "--starting-prompt",
+  "p",
+];
+
 // [old argv, new argv]; the same argv twice is a spelling SW-186 kept, which must not warn.
 const CASES: [string[], string[]][] = [
   [
@@ -134,6 +153,15 @@ const CASES: [string[], string[]][] = [
   [
     ["init-workspace", "--feature", "f", "--refresh-issue"],
     ["workspace", "init", "--feature", "f", "--refresh-issue"],
+  ],
+  // SW-1195: the init options both commands share reach the namespace with their values.
+  [
+    ["workspace", "new", "f", ...SHARED_INIT_ARGV],
+    ["workspace", "new", "f", ...SHARED_INIT_ARGV],
+  ],
+  [
+    ["init-workspace", ...SHARED_INIT_ARGV],
+    ["workspace", "init", ...SHARED_INIT_ARGV],
   ],
   [["list-workspaces"], ["workspace", "list"]],
   [
