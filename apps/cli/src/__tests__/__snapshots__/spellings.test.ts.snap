@@ -129,6 +129,33 @@ exports[`command spellings > ["init-workspace","--feature","f","--refresh-issue"
 }
 `;
 
+exports[`command spellings > ["init-workspace","--work-type","refactor","--context-strategy","icm","--harness","mcp","--autonomous","--model","mid","--auto-stop","--test-path","/t","--description","d","--starting-prompt","p"] 1`] = `
+{
+  "auto_stop": true,
+  "autonomous": true,
+  "build": true,
+  "config_file": null,
+  "context_strategy": "icm",
+  "description": "d",
+  "feature": null,
+  "force": false,
+  "group": null,
+  "harness": "mcp",
+  "issue_id": null,
+  "labels": null,
+  "model": "mid",
+  "project": null,
+  "prune_context": false,
+  "refresh_issue": false,
+  "repos": null,
+  "services": null,
+  "starting_prompt": "p",
+  "task": null,
+  "test_path": "/t",
+  "work_type": "refactor",
+}
+`;
+
 exports[`command spellings > ["intercept","f","-s","api","--leave"] 1`] = `
 {
   "docker_daemon": false,
@@ -545,5 +572,31 @@ exports[`command spellings > ["workspace","new","f","--issue-id","SW-1","-s","ap
   "task": null,
   "test_path": null,
   "work_type": null,
+}
+`;
+
+exports[`command spellings > ["workspace","new","f","--work-type","refactor","--context-strategy","icm","--harness","mcp","--autonomous","--model","mid","--auto-stop","--test-path","/t","--description","d","--starting-prompt","p"] 1`] = `
+{
+  "auto_stop": true,
+  "autonomous": true,
+  "browser_form": false,
+  "context_strategy": "icm",
+  "description": "d",
+  "feature": "f",
+  "force": false,
+  "group": null,
+  "harness": "mcp",
+  "issue_id": null,
+  "labels": null,
+  "model": "mid",
+  "no_distill": false,
+  "open_vscode": false,
+  "project": null,
+  "repos": null,
+  "services": null,
+  "starting_prompt": "p",
+  "task": null,
+  "test_path": "/t",
+  "work_type": "refactor",
 }
 `;

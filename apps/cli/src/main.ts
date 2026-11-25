@@ -188,6 +188,62 @@ const deprecation = (old: string, now: string) =>
   `werkmeister: '${old}' is deprecated and will be removed in ${REMOVE_IN}; use 'werkmeister ${now}'. ` +
   "Run 'werkmeister machine migrate' to update hooks and permission rules.";
 
+/** SW-1195: options `workspace new` passes through to `workspace init`, declared once for both. */
+function addWorkspaceInitOptions(cmd: Command): void {
+  cmd
+    .addOption(
+      new Option(
+        "--work-type <type>",
+        "Kind of work; selects the ICM stages and seeds the JIT first-phase handoff note " +
+          "(env: WERKMEISTER_WORK_TYPE; config: work_type).",
+      ).choices(["feature", "bugfix", "refactor", "spike", "incident"]),
+    )
+    .addOption(
+      new Option(
+        "--context-strategy <id>",
+        "Context layer to generate: icm (staged folders; the supported strategy) or jit (experimental: skills, hooks, notes). " +
+          "(env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).",
+      ).choices([...STRATEGY_IDS]),
+    )
+    .addOption(
+      new Option(
+        "--harness <id>",
+        "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), " +
+          "mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, " +
+          ".codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, " +
+          "opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).",
+      ).choices([...HARNESS_IDS]),
+    )
+    .option(
+      "--autonomous",
+      "Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a " +
+        "headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).",
+    )
+    .option(
+      "--model <tier|model>",
+      "Model tier (small, mid, frontier, advanced_frontier) or an explicit model; blank = " +
+        "models.default_tier in ~/.werkmeister/config.yaml (frontier) (env: WERKMEISTER_MODEL; config: model).",
+    )
+    .option(
+      "--auto-stop",
+      "Stop this workspace's feature containers when a Claude session in it ends and no " +
+        "other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).",
+    );
+}
+
+/** SW-1195: the namespace fields both workspace commands map the same way. */
+const workspaceInitNamespace = (o: Record<string, unknown>) => ({
+  test_path: o.testPath ?? null,
+  description: o.description ?? null,
+  starting_prompt: o.startingPrompt ?? null,
+  work_type: o.workType ?? null,
+  context_strategy: o.contextStrategy ?? null,
+  harness: o.harness ?? null,
+  autonomous: o.autonomous ?? null,
+  model: o.model ?? null,
+  auto_stop: o.autoStop ?? null,
+});
+
 const SPECS: CommandSpec[] = [
   {
     name: "feature up",
@@ -852,45 +908,9 @@ const SPECS: CommandSpec[] = [
         .option(
           "--starting-prompt <text>",
           "First instruction for the agent; passed through to init-workspace.",
-        )
-        .addOption(
-          new Option(
-            "--work-type <type>",
-            "Kind of work; selects the ICM stages and seeds the JIT first-phase handoff note. " +
-              "Passed through to init-workspace.",
-          ).choices(["feature", "bugfix", "refactor", "spike", "incident"]),
-        )
-        .addOption(
-          new Option(
-            "--context-strategy <id>",
-            "Context layer to generate: icm (staged folders; the supported strategy) or jit (experimental: skills, hooks, notes). " +
-              "(env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).",
-          ).choices([...STRATEGY_IDS]),
-        )
-        .addOption(
-          new Option(
-            "--harness <id>",
-            "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), " +
-              "mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, " +
-              ".codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, " +
-              "opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).",
-          ).choices([...HARNESS_IDS]),
-        )
-        .option(
-          "--autonomous",
-          "Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a " +
-            "headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).",
-        )
-        .option(
-          "--model <tier|model>",
-          "Model tier (small, mid, frontier, advanced_frontier) or an explicit model; blank = " +
-            "models.default_tier in ~/.werkmeister/config.yaml (frontier) (env: WERKMEISTER_MODEL; config: model).",
-        )
-        .option(
-          "--auto-stop",
-          "Stop this workspace's feature containers when a Claude session in it ends and no " +
-            "other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).",
-        )
+        );
+      addWorkspaceInitOptions(cmd);
+      cmd
         .option(
           "--browser-form",
           "Collect inputs through the Werkmeister-branded browser form (the same " +
@@ -921,15 +941,7 @@ const SPECS: CommandSpec[] = [
       labels: o.labels ?? null,
       group: o.group ?? null,
       task: o.task ?? null,
-      test_path: o.testPath ?? null,
-      description: o.description ?? null,
-      starting_prompt: o.startingPrompt ?? null,
-      work_type: o.workType ?? null,
-      context_strategy: o.contextStrategy ?? null,
-      harness: o.harness ?? null,
-      autonomous: o.autonomous ?? null,
-      model: o.model ?? null,
-      auto_stop: o.autoStop ?? null,
+      ...workspaceInitNamespace(o),
       browser_form: Boolean(o.browserForm),
       open_vscode: Boolean(o.open),
       no_distill: o.distill === false,
@@ -1258,45 +1270,9 @@ const SPECS: CommandSpec[] = [
           "--starting-prompt <text>",
           "First instruction for the agent; persisted to .werkmeister/workspace.yml " +
             "(env: WERKMEISTER_STARTING_PROMPT; config: starting_prompt).",
-        )
-        .addOption(
-          new Option(
-            "--work-type <type>",
-            "Kind of work; selects the ICM stages and seeds the JIT first-phase handoff note " +
-              "(env: WERKMEISTER_WORK_TYPE; config: work_type).",
-          ).choices(["feature", "bugfix", "refactor", "spike", "incident"]),
-        )
-        .addOption(
-          new Option(
-            "--context-strategy <id>",
-            "Context layer to generate: icm (staged folders; the supported strategy) or jit (experimental: skills, hooks, notes). " +
-              "(env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).",
-          ).choices([...STRATEGY_IDS]),
-        )
-        .addOption(
-          new Option(
-            "--harness <id>",
-            "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), " +
-              "mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, " +
-              ".codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, " +
-              "opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).",
-          ).choices([...HARNESS_IDS]),
-        )
-        .option(
-          "--autonomous",
-          "Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a " +
-            "headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).",
-        )
-        .option(
-          "--model <tier|model>",
-          "Model tier (small, mid, frontier, advanced_frontier) or an explicit model; blank = " +
-            "models.default_tier in ~/.werkmeister/config.yaml (frontier) (env: WERKMEISTER_MODEL; config: model).",
-        )
-        .option(
-          "--auto-stop",
-          "Stop this workspace's feature containers when a Claude session in it ends and no " +
-            "other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).",
-        )
+        );
+      addWorkspaceInitOptions(cmd);
+      cmd
         .option(
           "--config <path>",
           "Path to a YAML config file (JSONC/JSON also accepted). Defaults " +
@@ -1324,15 +1300,7 @@ const SPECS: CommandSpec[] = [
       project: o.project ?? null,
       labels: o.labels ?? null,
       group: o.group ?? null,
-      test_path: o.testPath ?? null,
-      description: o.description ?? null,
-      starting_prompt: o.startingPrompt ?? null,
-      work_type: o.workType ?? null,
-      context_strategy: o.contextStrategy ?? null,
-      harness: o.harness ?? null,
-      autonomous: o.autonomous ?? null,
-      model: o.model ?? null,
-      auto_stop: o.autoStop ?? null,
+      ...workspaceInitNamespace(o),
       config_file: o.config ?? null,
       prune_context: Boolean(o.pruneContext),
       refresh_issue: Boolean(o.refreshIssue),
