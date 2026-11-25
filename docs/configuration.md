@@ -553,10 +553,12 @@ open work in priority order. With a board, it is the board's `ready` column in b
 one, the scope's open issues (Jira: `statusCategory != Done` by priority then rank; GitHub: each
 scoped repo's open issues, oldest first). The project is `--project`, else the workspace's, else
 the `default: true` one, else the only one. The `next-wave` plugin skill reads its tickets from it.
-The `triage` skill reads the project's `tracker.project` and `board.id` from `projects:`, and needs a board.
-Jira needs the REST token (`jira.api_token`, [Issue trackers § Jira](issue-trackers.md#jira-api-token)). A GitHub board
-needs the `read:project` token scope: `gh auth refresh -s read:project`. One page is read: 100
-issues on Jira, 200 board items on GitHub.
+The `triage` skill reads the project's `tracker.project` (Jira) or `tracker.org` (GitHub) and `board.id` from
+`projects:`, and needs a board. On GitHub the board's item order is the rank, and priority and work-in-progress status
+are `priority:` and `status:` labels. Jira needs the REST token (`jira.api_token`,
+[Issue trackers § Jira](issue-trackers.md#jira-api-token)). A GitHub board needs the `read:project` token scope
+(`gh auth refresh -s read:project`); triage also needs `project` to reorder it (`gh auth refresh -s project`).
+`issue ready` reads one page: 100 issues on Jira, 200 board items on GitHub.
 
 `werkmeister machine config --check` names each invalid project; an invalid project is skipped with a
 warning. `werkmeister infra connect` checks sign-in for each project's tracker.
