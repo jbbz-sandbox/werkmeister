@@ -13,7 +13,7 @@ import { harnessFor, harnessLayoutFor, parseHarnessId } from "../dist/harness/la
 import { OPENCODE_PLUGIN_PATH, writeOpencodeHooks } from "../dist/harness/opencode/hooks.js";
 import { opencodeAdapter } from "../dist/harness/opencode/index.js";
 import { opencodeResumeCommand, opencodeSendArgs } from "../dist/harness/opencode/session.js";
-import { turnStatus } from "../dist/harness/turn.js";
+import { runTurn, turnStatus } from "../dist/harness/turn.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { initWorkspace } from "../dist/workspace_init.js";
 import { pinWerkmeisterRoot, withSandboxHome, writeSessionState } from "./fixtures.mjs";
@@ -430,6 +430,14 @@ esac`,
     // The headless turn's own `working` record (its Stop was lost on exit) reads as done.
     writeSessionState(root, "working");
     assert.equal((await opencodeAdapter.agentSignal("oc-key", root, null)).signal.agent, "done");
+    // A failed turn's stuck `working` record reads idle, at the record's time.
+    await assert.rejects(
+      runTurn("oc-fail", process.execPath, ["-e", "process.exit(3)"], root, true),
+    );
+    const at = new Date(Date.now() - 1000).toISOString();
+    writeSessionState(root, "working", { at });
+    const failed = (await opencodeAdapter.agentSignal("oc-fail", root, null)).signal;
+    assert.deepEqual([failed.state, failed.agent, failed.at], ["failed", "idle", at]);
     fs.rmSync(path.join(root, ".werkmeister", "sessions"), { recursive: true });
     assert.deepEqual(fs.readFileSync(path.join(bin, "run.args"), "utf8").trim().split("\n"), [
       "run",

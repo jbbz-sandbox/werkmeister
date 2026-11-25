@@ -57,13 +57,15 @@ export async function readFileTail(file: string, maxBytes = 131072): Promise<str
  * the session last did. A workspace whose hooks predate it falls back to the
  * transcript tail: the agent spoke last → needs-you if it asked, else done; a
  * fresh tool row or user message → working; anything else → idle. The tail
- * can't see a permission prompt; only a hook can.
+ * can't see a permission prompt; only a hook can. With `staleWorking`, a finished turn
+ * overrides a `working` record: done, or idle when it failed.
  */
 export async function signalFrom(
   key: string,
   dir: string,
   src: { sessionFile: string | null; updatedAt: string | null } | null,
   parse: (text: string) => SessionMessage[],
+  opts: { staleWorking?: boolean } = {},
 ): Promise<{ signal: SessionSignal; lastActivity: string | null }> {
   const lastActivity = src?.updatedAt ?? null;
   const state = turnStatus(key).state;
@@ -73,6 +75,16 @@ export async function signalFrom(
   });
   if (state === "running") return signal("working");
   const recorded = agentOf(readSessions(dir));
+  // A headless `opencode run` exits before the plugin's Stop call finishes (seen on 2.2.5), so
+  // a `working` record from that turn would stick; the turn runner knows the turn ended.
+  // The record keeps its first `at` while it stays working, so it can predate the last turn.
+  // shortcut: an interactive session working after that turn reads done until the daemon restarts or another turn runs; record the turn's end time if that shows up.
+  if (
+    opts.staleWorking &&
+    (state === "done" || state === "failed") &&
+    recorded?.agent === "working"
+  )
+    return signal(state === "done" ? "done" : "idle", recorded.at);
   if (recorded) return signal(recorded.agent, recorded.at, recorded.question);
   let last: SessionMessage | undefined;
   try {

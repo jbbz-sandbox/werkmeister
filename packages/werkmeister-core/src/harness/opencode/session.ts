@@ -1,10 +1,10 @@
 /** Driving an OpenCode session (SW-385): one `opencode run` turn through the shared runner. */
 import os from "node:os";
 import path from "node:path";
-import { type AgentState, agentOf, readSessions } from "../../agent_state.js";
 import { isFixture } from "../../config.js";
 import { fixtureOpencodeBin, isExecutable, shellQuote } from "../../tool_bins.js";
-import { runTurn, turnStatus } from "../turn.js";
+import { signalFrom } from "../sessions.js";
+import { runTurn } from "../turn.js";
 import type { SessionSignal, TurnOptions, TurnResult } from "../types.js";
 
 /** $OPENCODE_BIN → the usual install locations → bare `opencode` (resolved on childEnv's PATH). */
@@ -57,28 +57,16 @@ export async function startTurn(
   return stdout === null ? null : { denied: [] };
 }
 
-/** A live turn → working; else what the plugin last recorded; else idle. */
-export async function sessionSignal(
+/**
+ * The workspace list's agent signal ({@link signalFrom}), with a finished turn overriding a
+ * stuck `working` record. No session file, so no transcript tail: without a record, idle.
+ */
+export function sessionSignal(
   key: string,
   dir: string,
   src: { sessionFile: string | null; updatedAt: string | null } | null,
 ): Promise<{ signal: SessionSignal; lastActivity: string | null }> {
-  const lastActivity = src?.updatedAt ?? null;
-  const state = turnStatus(key).state;
-  const signal = (agent: AgentState, at = lastActivity, question: string | null = null) => ({
-    signal: { state, agent, at, question },
-    lastActivity,
-  });
-  if (state === "running") return signal("working");
-  const recorded = agentOf(readSessions(dir));
-  // A headless `opencode run` exits before the plugin's Stop call finishes (seen on 2.2.5), so
-  // a `working` record from that turn would stick; the turn runner knows the turn ended.
-  // The record keeps its first `at` while it stays working, so it can predate the last turn.
-  // shortcut: an interactive session working after that turn reads done until the daemon restarts or another turn runs; record the turn's end time if that shows up.
-  if ((state === "done" || state === "failed") && recorded?.agent === "working")
-    return signal(state === "done" ? "done" : "idle", recorded.at);
-  if (recorded) return signal(recorded.agent, recorded.at, recorded.question);
-  return signal("idle");
+  return signalFrom(key, dir, src, () => [], { staleWorking: true });
 }
 
 export function opencodeResumeCommand(
