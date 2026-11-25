@@ -63,6 +63,39 @@ export function lineBandView(points: BandPoint[], h: number): BandView {
   };
 }
 
+export interface LineSeries {
+  key: string;
+  /** One per slot; null breaks the line. */
+  values: (number | null)[];
+}
+export interface MultiLineView {
+  yMax: number;
+  lines: {
+    key: string;
+    d: string;
+    dots: { x: number; y: number; slot: number; value: number }[];
+  }[];
+}
+
+/** One line per series over shared slots, on one y scale. */
+export function multiLineView(series: LineSeries[], h: number): MultiLineView {
+  const yMax = Math.max(1, ...series.flatMap((s) => s.values.map((v) => v ?? 0)));
+  return {
+    yMax,
+    lines: series.map((s) => {
+      const dots = s.values.flatMap((v, slot) =>
+        v === null
+          ? []
+          : [{ x: r1(slotX(slot, s.values.length)), y: r1(h - (v / yMax) * h), slot, value: v }],
+      );
+      const d = dots
+        .map((p, k) => `${k && dots[k - 1].slot === p.slot - 1 ? "L" : "M"}${p.x} ${p.y}`)
+        .join(" ");
+      return { key: s.key, d, dots };
+    }),
+  };
+}
+
 export interface StackBar {
   label: string;
   values: Record<string, number>;

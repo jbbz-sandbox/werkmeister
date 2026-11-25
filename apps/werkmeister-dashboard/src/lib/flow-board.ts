@@ -149,16 +149,14 @@ export function waitBars(r: MetricsReport): StackBar[] {
   }));
 }
 
-export type CycleMode = "cycle" | "lead";
-
-/** The scatter's dots (x = merge time) and lines for cycle or lead time, x spanning the range. */
-export function cyclePoints(r: MetricsReport, mode: CycleMode) {
+/** The scatter's dots (x = merge time) and p50/p90 lines for cycle time, x spanning the range. */
+export function cyclePoints(r: MetricsReport) {
   const points = r.tickets.map((t) => ({
     t: Date.parse(t.mergedAt),
-    value: mode === "cycle" ? t.cycleMinutes : t.leadMinutes,
+    value: t.cycleMinutes,
     label: t.ticket,
   }));
-  const p = mode === "cycle" ? r.cycle : r.lead;
+  const p = r.cycle;
   const x1 = Date.parse(r.to);
   const x0 = r.from ? Date.parse(r.from) : Math.min(x1, ...points.map((d) => d.t));
   return { points, p50: p.p50Minutes, p90: p.p90Minutes, x0, x1 };

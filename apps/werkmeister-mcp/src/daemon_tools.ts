@@ -153,7 +153,23 @@ const COUNTED = PERCENTILES.extend({ count: z.number() });
 const TREND_SLICE = z.object({
   shipped: z.number(),
   abandoned: z.number(),
-  stages: z.record(z.string(), COUNTED),
+  stages: z.record(
+    z.string(),
+    COUNTED.extend({
+      totalMinutes: z.number(),
+      personMinutes: z.number(),
+      capacityMinutes: z.number(),
+      workingMinutes: z.number(),
+    }),
+  ),
+  slowest: z.array(
+    z.object({
+      ticket: z.string(),
+      workspace: z.string(),
+      leadToMergeMinutes: z.number().nullable(),
+      leadToReleaseMinutes: z.number().nullable(),
+    }),
+  ),
   leadToMerge: COUNTED,
   leadToRelease: COUNTED,
   tokens: TOKENS,
@@ -281,8 +297,9 @@ export function registerDaemonTools(server: McpServer): void {
       annotations: { readOnlyHint: true },
       description:
         "The same work over time, one row per day or ISO week (Monday, UTC) over a range (default 30d, " +
-        "week): shipped and abandoned workspaces, minutes per ICM stage (p50, p90, count), lead time from " +
-        "the first turn to merge and to release (p50, p90), tokens and estimated cost in total and by " +
+        "week): shipped and abandoned workspaces, minutes per ICM stage (p50, p90, count, and summed " +
+        "total, waiting on a person, waiting on capacity and working), lead time from the first turn to " +
+        "merge and to release (p50, p90) with the five slowest tickets, tokens and estimated cost in total and by " +
         "model, cache-read share, active and wall minutes, and gate runs, gate minutes and first-pass rate " +
         "(exit-75 capacity retries left out). Each item counts in the bucket it ended in: a workspace by " +
         "its close-out, a stage when it finished, a lead time at its merge or release, a gate run at its " +

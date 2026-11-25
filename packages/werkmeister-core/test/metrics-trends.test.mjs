@@ -131,18 +131,108 @@ test("weeks run from the oldest item to now with no gaps; Sunday 23:59Z and Mond
 
 test("stage and lead-time percentiles by the bucket each one ended in", () => {
   const [w1, w2, w3] = trendSeries(INPUT, "all", "week", NOW).rows;
+  const noWait = (total) => ({
+    totalMinutes: total,
+    personMinutes: 0,
+    capacityMinutes: 0,
+    workingMinutes: total,
+  });
   assert.deepEqual(w1.stages, {
-    "01_research": { p50Minutes: 120, p90Minutes: 240, count: 2 },
-    "02_spec": { p50Minutes: 30, p90Minutes: 60, count: 2 },
+    "01_research": { p50Minutes: 120, p90Minutes: 240, count: 2, ...noWait(360) },
+    "02_spec": { p50Minutes: 30, p90Minutes: 60, count: 2, ...noWait(90) },
   });
   assert.deepEqual(w2.stages, {}, "ws-2 closed in week 2, but its stages finished in week 1");
-  assert.deepEqual(w3.stages, { "01_research": { p50Minutes: 120, p90Minutes: 120, count: 1 } });
+  assert.deepEqual(w3.stages, {
+    "01_research": { p50Minutes: 120, p90Minutes: 120, count: 1, ...noWait(120) },
+  });
 
   assert.deepEqual(w1.leadToMerge, { p50Minutes: 4560, p90Minutes: 5760, count: 2 });
   assert.deepEqual(w1.leadToRelease, none);
   assert.deepEqual(w2.leadToMerge, none);
   assert.deepEqual(w2.leadToRelease, { p50Minutes: 8640, p90Minutes: 11520, count: 2 });
   assert.deepEqual(w3.leadToMerge, { p50Minutes: 2880, p90Minutes: 2880, count: 1 });
+});
+
+test("SW-1099: each stage's minutes split into waiting on a person, on capacity and working", () => {
+  const stages = [
+    { stage: "01_research", finishedAt: "2026-11-16T10:00:00Z", minutes: 120 }, // 08:00–10:00
+    { stage: "02_spec", finishedAt: "2026-11-16T11:00:00Z", minutes: 60 }, // 10:00–11:00
+    { stage: "03_implement", finishedAt: "2026-11-16T12:00:00Z", minutes: 60 }, // 11:00–12:00
+  ];
+  const usages = [
+    usage("ws-a", "1.5.0", "shipped", "2026-11-16T08:00:00Z", "2026-11-17T08:00:00Z", {
+      ticket: "SW-1",
+      stages,
+    }),
+    usage("ws-b", "1.4.0", "shipped", "2026-11-16T08:00:00Z", "2026-11-17T08:00:00Z", {
+      stages: [stages[0]],
+    }),
+  ];
+  const events = [
+    ev("2026-11-16T09:00:00Z", "answer", "ws-a", { session: "s", waited_s: 1800 }), // 08:30–09:00
+    // 10:40–11:20: 20 min in 02_spec, 20 in 03_implement.
+    ev("2026-11-16T11:20:00Z", "queue.admit", "ws-a", { feature: "ws-a", waited_s: 2400 }),
+    // 10:00–11:00, all of 02_spec: with the queue wait its waits pass 60 minutes, so working is 0.
+    ev("2026-11-16T11:00:00Z", "answer", "ws-a", { session: "s", waited_s: 3600 }),
+    ev("2026-11-16T09:30:00Z", "queue.admit", "ws-b", { feature: "ws-b", waited_s: 600 }),
+  ];
+  const [w] = trendSeries({ events, open: [], usages }, "all", "week", NOW).rows;
+  const split = (s) => [s.totalMinutes, s.personMinutes, s.capacityMinutes, s.workingMinutes];
+  assert.deepEqual(split(w.stages["01_research"]), [240, 30, 10, 200]);
+  assert.deepEqual(split(w.stages["02_spec"]), [60, 60, 20, 0]);
+  assert.deepEqual(split(w.stages["03_implement"]), [60, 0, 20, 40]);
+  assert.deepEqual(split(w.byVersion["1.4.0"].stages["01_research"]), [120, 0, 10, 110]);
+  assert.deepEqual(split(w.byVersion["1.5.0"].stages["01_research"]), [120, 30, 0, 90]);
+
+  // Parallel sessions: overlapping waits of one cause count once; working subtracts every wait once.
+  const research = (evs) =>
+    split(
+      trendSeries({ events: evs, open: [], usages: [usages[0]] }, "all", "week", NOW).rows[0]
+        .stages["01_research"],
+    );
+  // 08:10–09:40 and 08:20–09:50: person 08:10–09:50, 100 min; 08:00–08:10 and 09:50–10:00 work.
+  assert.deepEqual(
+    research([
+      ev("2026-11-16T09:40:00Z", "answer", "ws-a", { session: "s1", waited_s: 5400 }),
+      ev("2026-11-16T09:50:00Z", "answer", "ws-a", { session: "s2", waited_s: 5400 }),
+    ]),
+    [120, 100, 0, 20],
+  );
+  // Two sessions both 08:10–08:40, and capacity 08:20–08:30 inside it: 30 min not working.
+  assert.deepEqual(
+    research([
+      ev("2026-11-16T08:40:00Z", "answer", "ws-a", { session: "s1", waited_s: 1800 }),
+      ev("2026-11-16T08:40:00Z", "answer", "ws-a", { session: "s2", waited_s: 1800 }),
+      ev("2026-11-16T08:30:00Z", "queue.admit", "ws-a", { feature: "ws-a", waited_s: 600 }),
+    ]),
+    [120, 30, 10, 90],
+  );
+});
+
+test("SW-1099: slowest holds up to 5 tickets, longest lead to release (else merge) first", () => {
+  const usages = ["a", "b", "c", "d", "e", "f"].map((n, i) =>
+    usage(`ws-${n}`, "1.5.0", "shipped", `2026-11-1${i}T00:00:00Z`, "2026-11-19T00:00:00Z", {
+      ticket: n === "f" ? null : `SW-${n}`,
+    }),
+  );
+  const events = usages.flatMap((u, i) => [
+    ev("2026-11-17T00:00:00Z", "pr.merged", u.workspace, { pr: `p${i}` }),
+    ...(i === 0
+      ? [ev("2026-11-18T00:00:00Z", "release", u.workspace, { pr: "p0", tag: "v" })]
+      : []),
+  ]);
+  const [w] = trendSeries({ events, open: [], usages }, "all", "week", NOW).rows.slice(-1);
+  assert.deepEqual(
+    w.slowest.map((t) => [t.ticket, t.leadToMergeMinutes, t.leadToReleaseMinutes]),
+    [
+      ["SW-a", 10080, 11520], // released: ranked by its release lead
+      ["SW-b", 8640, null],
+      ["SW-c", 7200, null],
+      ["SW-d", 5760, null],
+      ["SW-e", 4320, null],
+    ],
+  );
+  assert.equal(w.byVersion["1.5.0"].slowest.length, 5);
 });
 
 test("tokens and cost in total and per model, cache-read share and minutes by close-out", () => {
@@ -260,6 +350,7 @@ test("no test-minutes field until SW-1101 logs test events", () => {
       "leadToMerge",
       "leadToRelease",
       "shipped",
+      "slowest",
       "stages",
       "tokens",
       "wallClockMinutes",

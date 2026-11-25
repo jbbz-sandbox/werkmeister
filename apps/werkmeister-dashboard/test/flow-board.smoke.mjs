@@ -19,7 +19,7 @@ const {
   agentBars,
 } = await import(path.join(pkgRoot, "dist/lib/flow-board.js"));
 const { stackedBarView } = await import(path.join(pkgRoot, "dist/lib/charts.js"));
-const { TABS, isTab } = await import(path.join(pkgRoot, "dist/lib/tabs.js"));
+const { TABS, isTab, parseHash } = await import(path.join(pkgRoot, "dist/lib/tabs.js"));
 const { flowMetrics } = await import("werkmeister-core/metrics_report");
 
 const NOW = new Date("2026-11-20T12:00:00.000Z");
@@ -168,6 +168,13 @@ console.log("✓ timelineView");
 
 // 5. #flow is a tab after Health, and #metrics after Flow.
 assert.ok(isTab("flow") && isTab("metrics") && !isTab("nope"));
+// SW-1099: a Metrics slowest-ticket link opens the Flow tab on that workspace.
+assert.deepEqual(parseHash("flow/seed%2Fws"), { tab: "flow", workspace: "seed/ws" });
+assert.deepEqual(parseHash("flow/a/b"), { tab: "flow", workspace: "a/b" });
+assert.deepEqual(parseHash("flow/%E0"), { tab: "flow", workspace: null });
+assert.deepEqual(parseHash("flow"), { tab: "flow", workspace: null });
+assert.deepEqual(parseHash("metrics"), { tab: "metrics", workspace: null });
+assert.deepEqual(parseHash("nope/x"), { tab: "list", workspace: null });
 assert.deepEqual(
   TABS.map(([t]) => t),
   ["list", "new", "prs", "health", "flow", "metrics", "links"],
@@ -224,14 +231,11 @@ assert.deepEqual(
     ["person", "capacity", "pr", "gateRetry", "release"],
   );
 
-  const cycle = cyclePoints(r, "cycle");
-  const lead = cyclePoints(r, "lead");
+  const cycle = cyclePoints(r);
   assert.deepEqual(cycle.points, [
     { t: Date.parse("2026-11-18T12:00:00Z"), value: 28 * 60, label: "SW-9" },
   ]);
-  assert.equal(lead.points[0].value, 31 * 60);
   assert.equal(cycle.p50, r.cycle.p50Minutes);
-  assert.equal(lead.p90, r.lead.p90Minutes);
   assert.deepEqual([cycle.x0, cycle.x1], [Date.parse(r.from), NOW.getTime()]);
 
   const days = agentBars(r);

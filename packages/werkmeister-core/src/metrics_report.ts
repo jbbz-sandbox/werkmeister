@@ -884,6 +884,28 @@ export interface CountedPercentiles extends Percentiles {
   /** How many values. */
   count: number;
 }
+/** One ICM stage's minutes in a bucket: percentiles over runs, and sums split by what it waited on. */
+export interface StageTrend extends CountedPercentiles {
+  /** Summed wall minutes, the previous stage's end → this stage's end. */
+  totalMinutes: number;
+  /** Summed minutes of `answer` waits (`waited_s` before it) inside the stage. */
+  personMinutes: number;
+  /** Summed minutes of `queue.admit` waits inside the stage. */
+  capacityMinutes: number;
+  /** Summed minutes of each run's stage with no wait of any cause (a person and a capacity wait at once count once). */
+  workingMinutes: number;
+}
+/** A ticket whose lead time ends in a bucket. */
+export interface SlowTicket {
+  /** The tracker key, or the workspace name when there is none. */
+  ticket: string;
+  /** The workspace folder name. */
+  workspace: string;
+  /** First turn → last `pr.merged`, when that merge is in the bucket. */
+  leadToMergeMinutes: number | null;
+  /** First turn → last `release`, when that release is in the bucket. */
+  leadToReleaseMinutes: number | null;
+}
 /** One bucket's numbers, for every version or for one. */
 export interface TrendSlice {
   /** `usage.json` snapshots with outcome shipped, closed in the bucket. */
@@ -891,7 +913,9 @@ export interface TrendSlice {
   /** Snapshots with outcome abandoned, closed in the bucket. */
   abandoned: number;
   /** Minutes per ICM stage (`02_spec`, …), by the bucket each stage finished in. */
-  stages: Record<string, CountedPercentiles>;
+  stages: Record<string, StageTrend>;
+  /** Up to 5 tickets with the longest lead (to release, else to merge), longest first. */
+  slowest: SlowTicket[];
   /** First turn → last `pr.merged`, by the merge's bucket. */
   leadToMerge: CountedPercentiles;
   /** First turn → last `release`, by the release's bucket. */
@@ -965,8 +989,20 @@ export interface MetricsTrends {
 
 type TrendItem = { at: string; version: string } & (
   | { kind: "closed"; usage: UsageRow }
-  | { kind: "stage"; stage: string; minutes: number }
-  | { kind: "leadToMerge" | "leadToRelease"; minutes: number }
+  | {
+      kind: "stage";
+      stage: string;
+      minutes: number;
+      person: number;
+      capacity: number;
+      working: number;
+    }
+  | {
+      kind: "leadToMerge" | "leadToRelease";
+      minutes: number;
+      workspace: string;
+      ticket: string;
+    }
   | { kind: "gate"; minutes: number }
   | { kind: "firstGate"; passed: boolean }
 );
@@ -980,14 +1016,29 @@ const counted = (values: number[]): CountedPercentiles => ({
   count: values.length,
 });
 
+const slowLead = (t: SlowTicket) => t.leadToReleaseMinutes ?? t.leadToMergeMinutes ?? 0;
+const sortSlowest = (ts: SlowTicket[]) => ts.sort((a, b) => slowLead(b) - slowLead(a)).slice(0, 5);
+
 function trendSlice(items: TrendItem[]): TrendSlice {
   const closed = items.flatMap((i) => (i.kind === "closed" ? [i.usage] : []));
   const minutesOf = (kind: TrendItem["kind"]) =>
     items.flatMap((i) => (i.kind === kind && "minutes" in i ? [i.minutes] : []));
-  const stageMinutes = new Map<string, number[]>();
+  const stageRuns = new Map<string, Extract<TrendItem, { kind: "stage" }>[]>();
   for (const i of items)
-    if (i.kind === "stage")
-      stageMinutes.set(i.stage, [...(stageMinutes.get(i.stage) ?? []), i.minutes]);
+    if (i.kind === "stage") stageRuns.set(i.stage, [...(stageRuns.get(i.stage) ?? []), i]);
+  const sumOf = (ns: number[]) => Math.round(ns.reduce((a, n) => a + n, 0));
+  const slow = new Map<string, SlowTicket>();
+  for (const i of items) {
+    if (i.kind !== "leadToMerge" && i.kind !== "leadToRelease") continue;
+    const t = slow.get(i.workspace) ?? {
+      ticket: i.ticket,
+      workspace: i.workspace,
+      leadToMergeMinutes: null,
+      leadToReleaseMinutes: null,
+    };
+    t[i.kind === "leadToMerge" ? "leadToMergeMinutes" : "leadToReleaseMinutes"] = i.minutes;
+    slow.set(i.workspace, t);
+  }
   // The same cost math as the report's usage (SW-1128), so the two can't drift apart.
   const { tokens, estUsd, costUnknown, cacheReadShare, activeMinutes, wallClockMinutes } =
     usageRollup(closed);
@@ -997,7 +1048,19 @@ function trendSlice(items: TrendItem[]): TrendSlice {
   return {
     shipped: closed.filter((u) => u.outcome === "shipped").length,
     abandoned: closed.filter((u) => u.outcome === "abandoned").length,
-    stages: Object.fromEntries([...stageMinutes].map(([s, v]) => [s, counted(v)])),
+    stages: Object.fromEntries(
+      [...stageRuns].map(([s, runs]) => [
+        s,
+        {
+          ...counted(runs.map((r) => r.minutes)),
+          totalMinutes: sumOf(runs.map((r) => r.minutes)),
+          personMinutes: sumOf(runs.map((r) => r.person)),
+          capacityMinutes: sumOf(runs.map((r) => r.capacity)),
+          workingMinutes: sumOf(runs.map((r) => r.working)),
+        },
+      ]),
+    ),
+    slowest: sortSlowest([...slow.values()]),
     leadToMerge: counted(minutesOf("leadToMerge")),
     leadToRelease: counted(minutesOf("leadToRelease")),
     tokens,
@@ -1044,21 +1107,62 @@ export function trendSeries(
   }
   const versionOf = (ws: string) => version.get(ws)?.v ?? "unknown";
 
+  const { firstTurn, events } = runEvents(input);
+  // `any` is every wait whatever its cause: a person and a capacity wait at once is one wait to working.
+  type WaitCauseOrAny = "person" | "capacity" | "any";
+  const waits = new Map<string, { cause: WaitCauseOrAny; from: number; to: number }[]>();
+  for (const e of events) {
+    const cause =
+      e["event"] === "answer" ? "person" : e["event"] === "queue.admit" ? "capacity" : null;
+    const s = Number(e["waited_s"]) || 0;
+    if (!cause || s <= 0) continue;
+    const ws = String(e["workspace"]);
+    const at = ms(String(e["at"]));
+    const list = waits.get(ws) ?? [];
+    list.push(
+      { cause, from: at - s * 1000, to: at },
+      { cause: "any", from: at - s * 1000, to: at },
+    );
+    waits.set(ws, list);
+  }
+  // Parallel sessions can wait at once: merge each cause's overlapping windows so none counts twice.
+  for (const [ws, list] of waits) {
+    const merged: typeof list = [];
+    for (const w of [...list].sort((a, b) => a.cause.localeCompare(b.cause) || a.from - b.from)) {
+      const last = merged.at(-1);
+      if (last?.cause === w.cause && w.from <= last.to) last.to = Math.max(last.to, w.to);
+      else merged.push({ ...w });
+    }
+    waits.set(ws, merged);
+  }
+
   const items: TrendItem[] = [];
+  const ticketOf = new Map<string, string>();
+  for (const o of input.open) if (o.ticket) ticketOf.set(o.workspace, o.ticket);
   for (const u of input.usages) {
     const v = versionOf(u.workspace);
+    if (u.ticket) ticketOf.set(u.workspace, u.ticket);
     items.push({ at: u.closedAt, version: v, kind: "closed", usage: u });
-    for (const s of u.stages ?? [])
-      if (s.finishedAt && s.minutes != null)
-        items.push({
-          at: s.finishedAt,
-          version: v,
-          kind: "stage",
-          stage: s.stage,
-          minutes: s.minutes,
-        });
+    for (const s of u.stages ?? []) {
+      if (!s.finishedAt || s.minutes == null) continue;
+      // `minutes` is the previous stage's end → this one's (usage_snapshot), so this is its window.
+      const end = ms(s.finishedAt);
+      const start = end - s.minutes * 60_000;
+      const waited: Record<WaitCauseOrAny, number> = { person: 0, capacity: 0, any: 0 };
+      for (const w of waits.get(u.workspace) ?? [])
+        waited[w.cause] += Math.max(0, Math.min(end, w.to) - Math.max(start, w.from)) / 60_000;
+      items.push({
+        at: s.finishedAt,
+        version: v,
+        kind: "stage",
+        stage: s.stage,
+        minutes: s.minutes,
+        person: waited.person,
+        capacity: waited.capacity,
+        working: Math.max(0, s.minutes - waited.any),
+      });
+    }
   }
-  const { firstTurn, events } = runEvents(input);
   const lastMerged = new Map<string, string>();
   const lastRelease = new Map<string, string>();
   const gateStart = new Map<string, string>();
@@ -1095,7 +1199,15 @@ export function trendSeries(
   ] as const)
     for (const [ws, at] of last) {
       const start = firstTurn.get(ws);
-      if (start) items.push({ at, version: versionOf(ws), kind, minutes: minutes(start, at) });
+      if (start)
+        items.push({
+          at,
+          version: versionOf(ws),
+          kind,
+          minutes: minutes(start, at),
+          workspace: ws,
+          ticket: ticketOf.get(ws) ?? ws,
+        });
     }
 
   const kept = items.filter((i) => inRange(i.at));
