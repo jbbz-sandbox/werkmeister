@@ -16,6 +16,7 @@ const ws = path.join(root, "ws");
 fs.mkdirSync(path.join(ws, ".werkmeister"), { recursive: true });
 
 const { codexAdapter } = await import("../dist/harness/codex/adapter.js");
+const { runTurn } = await import("../dist/harness/turn.js");
 
 const day = path.join(process.env.CODEX_HOME, "sessions", "2026", "11", "05");
 fs.mkdirSync(day, { recursive: true });
@@ -129,6 +130,9 @@ test("agentSignal: hooks' state wins, else the tail decides", async () => {
   writeSessionState(ws, "working");
   try {
     assert.equal((await codexAdapter.agentSignal("k-tail", ws, src)).signal.agent, "working");
+    // opencode's stale-working override is opt-in: a finished turn leaves codex's record as is.
+    await runTurn("k-done", process.execPath, ["-e", ""], ws, true);
+    assert.equal((await codexAdapter.agentSignal("k-done", ws, src)).signal.agent, "working");
   } finally {
     fs.rmSync(state, { recursive: true });
   }
