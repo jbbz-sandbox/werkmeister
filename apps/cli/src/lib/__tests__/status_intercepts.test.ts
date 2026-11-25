@@ -15,6 +15,9 @@ const h = vi.hoisted(() => ({
   calls: [] as string[],
 }));
 
+// proc is mocked, so nothing runs: name a binary to get past the test-runner refusal (SW-1153).
+vi.stubEnv("WERKMEISTER_TELEPRESENCE_BIN", "/mocked/telepresence");
+
 vi.mock("werkmeister-core/proc", async (importOriginal) => {
   const actual = await importOriginal<typeof import("werkmeister-core/proc")>();
   const run = (cmd: string[]) => {

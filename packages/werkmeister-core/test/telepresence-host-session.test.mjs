@@ -9,6 +9,7 @@ import * as path from "node:path";
 import { test } from "node:test";
 
 import {
+  _run,
   ensureConnected,
   leaveIntercept,
   listIntercepts,
@@ -16,20 +17,25 @@ import {
 } from "../dist/telepresence.js";
 import { withSandboxHome } from "./fixtures.mjs";
 
-/** Run *fn* with a `telepresence` on PATH that logs each call; returns the logged lines. */
-async function withStubTelepresence(fn) {
+/**
+ * Run *fn* with a `telepresence` stub that logs each call; returns the logged lines. On PATH for
+ * `which()`, and named in WERKMEISTER_TELEPRESENCE_BIN unless *named* is false (SW-1153).
+ */
+async function withStubTelepresence(fn, { named = true } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tp-stub-"));
   const log = path.join(dir, "calls.log");
-  fs.writeFileSync(path.join(dir, "telepresence"), `#!/bin/sh\necho "$*" >> "${log}"\n`, {
-    mode: 0o755,
-  });
-  const prevPath = process.env.PATH;
-  process.env.PATH = `${dir}${path.delimiter}${prevPath}`;
+  const stub = path.join(dir, "telepresence");
+  fs.writeFileSync(stub, `#!/bin/sh\necho "$*" >> "${log}"\n`, { mode: 0o755 });
+  const prev = [process.env.PATH, process.env.WERKMEISTER_TELEPRESENCE_BIN];
+  process.env.PATH = `${dir}${path.delimiter}${prev[0]}`;
+  if (named) process.env.WERKMEISTER_TELEPRESENCE_BIN = stub;
   try {
     await fn();
     return fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : [];
   } finally {
-    process.env.PATH = prevPath;
+    process.env.PATH = prev[0];
+    if (prev[1] === undefined) delete process.env.WERKMEISTER_TELEPRESENCE_BIN;
+    else process.env.WERKMEISTER_TELEPRESENCE_BIN = prev[1];
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }
@@ -114,6 +120,52 @@ test("with HOME moved off the with-temp-home marker, the stub is reached: the te
       if (prev[0] === undefined) delete process.env.WERKMEISTER_TEMP_HOME;
       else process.env.WERKMEISTER_TEMP_HOME = prev[0];
       if (prev[1] !== undefined) process.env.WERKMEISTER_FIXTURE = prev[1];
+    }
+  }, home);
+});
+
+test("under a test runner a bare telepresence is refused; WERKMEISTER_TELEPRESENCE_BIN runs only that path (SW-1153)", async () => {
+  await withSandboxHome(async () => {
+    const prev = [
+      process.env.WERKMEISTER_TEMP_HOME,
+      process.env.WERKMEISTER_FIXTURE,
+      process.env.WERKMEISTER_TELEPRESENCE_BIN,
+    ];
+    delete process.env.WERKMEISTER_FIXTURE;
+    delete process.env.WERKMEISTER_TELEPRESENCE_BIN;
+    // HOME moved off the marker: SW-1074's guard is off, so only the runner stands in the way.
+    process.env.WERKMEISTER_TEMP_HOME = path.join(process.env.HOME, "elsewhere");
+    try {
+      let refused;
+      const unnamed = await withStubTelepresence(
+        async () => {
+          await ensureConnected("ctx", "dev").catch(() => {});
+          await listIntercepts();
+          refused = _run(["telepresence", "version"]);
+        },
+        { named: false },
+      );
+      assert.deepEqual(unnamed, []);
+      // The refusal itself, so the empty log isn't some earlier stop (testing standard).
+      assert.deepEqual(refused, [127, "telepresence: refused under a test runner (SW-1153)"]);
+
+      process.env.WERKMEISTER_TELEPRESENCE_BIN = "telepresence";
+      assert.equal(_run(["telepresence", "version"])[0], 127, "a relative name is refused");
+      delete process.env.WERKMEISTER_TELEPRESENCE_BIN;
+
+      const named = await withStubTelepresence(async () => {
+        assert.equal(_run(["telepresence", "version"])[0], 0);
+      });
+      assert.deepEqual(named, ["version"]);
+    } finally {
+      for (const [k, v] of [
+        ["WERKMEISTER_TEMP_HOME", prev[0]],
+        ["WERKMEISTER_FIXTURE", prev[1]],
+        ["WERKMEISTER_TELEPRESENCE_BIN", prev[2]],
+      ]) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
     }
   }, home);
 });

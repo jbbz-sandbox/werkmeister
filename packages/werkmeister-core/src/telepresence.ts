@@ -61,11 +61,31 @@ function which(cmd: string): string | null {
   return null;
 }
 
+/**
+ * *cmd* as a default runner may spawn it. Under a test runner a bare `telepresence` is refused:
+ * a test that moves HOME turns {@link hostSessionSkipReason} off, and the real binary's
+ * `quit -s` would end the user's daemon and every workspace's intercepts (SW-1153). A test
+ * opts in by naming its stub in WERKMEISTER_TELEPRESENCE_BIN, so only that file can run.
+ */
+function testSafeCmd(cmd: string[]): string[] | [number, string] {
+  if (cmd[0] !== "telepresence" || !(process.env.NODE_TEST_CONTEXT || process.env.VITEST))
+    return cmd;
+  const bin = process.env.WERKMEISTER_TELEPRESENCE_BIN;
+  if (bin && path.isAbsolute(bin)) return [bin, ...cmd.slice(1)];
+  process.stderr.write(
+    "telepresence refused in a test without WERKMEISTER_TELEPRESENCE_BIN (SW-1153)\n",
+  );
+  return [127, "telepresence: refused under a test runner (SW-1153)"];
+}
+
 /** Run *cmd*, returning [returncode, combined output]. Never throws. */
 export function _run(cmd: string[], timeout = 120): [number, string] {
+  const safe = testSafeCmd(cmd);
+  if (typeof safe[0] === "number") return safe as [number, string];
+  const argv = safe as string[];
   let res;
   try {
-    res = run(cmd, { capture: true, timeout });
+    res = run(argv, { capture: true, timeout });
   } catch (e) {
     if (e instanceof ProcError && e.code === "ENOENT") {
       return [127, `${cmd[0]}: command not found`];
@@ -98,9 +118,12 @@ export async function runAsyncRunner(
   signal?: AbortSignal,
   timeout = 120,
 ): Promise<[number, string]> {
+  const safe = testSafeCmd(cmd);
+  if (typeof safe[0] === "number") return safe as [number, string];
+  const argv = safe as string[];
   let res;
   try {
-    res = await runAsync(cmd, { capture: true, timeout, signal });
+    res = await runAsync(argv, { capture: true, timeout, signal });
   } catch (e) {
     if (e instanceof ProcError && e.code === "ENOENT") {
       return [127, `${cmd[0]}: command not found`];
