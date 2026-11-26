@@ -23,6 +23,7 @@ import { parse as parseYaml } from "yaml";
 import {
   type Archetype,
   type ArchetypeRegistry,
+  DEFAULT_CPUS,
   dotDir,
   expandUser,
   getReposRoot,
@@ -188,11 +189,13 @@ export function containerTestCommand(
   svc: string,
   cmd: string,
   tempHome?: string,
+  cpus?: unknown,
 ): string {
   const quoted = `sh -c '${cmd.split("'").join(`'\\''`)}'`;
   // SW-769: a container holding the real ~/.werkmeister runs its tests under a temp HOME, as Validation says.
   return tempHome
-    ? `docker exec -w /app ${feature}-${svc} ${tempHome} --no-wait ${quoted}`
+    ? // SW-1202: with-temp-home warns when another, smaller container of the repo runs this row.
+      `docker exec -e WERKMEISTER_ROW=${feature}-${svc}:${String(cpus ?? DEFAULT_CPUS)} -w /app ${feature}-${svc} ${tempHome} --no-wait ${quoted}`
     : `docker exec ${feature}-${svc} ${quoted}`;
 }
 

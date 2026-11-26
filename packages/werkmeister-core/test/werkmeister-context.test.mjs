@@ -160,7 +160,7 @@ test("a host-access container that sees the workspace prints its test under with
       );
       assert.match(
         out,
-        /^- `core`: `docker exec -w \/app test-core \/ws\/\.werkmeister\/bin\/with-temp-home --no-wait sh -c 'npm test'`$/m,
+        /^- `core`: `docker exec -e WERKMEISTER_ROW=test-core:1\.0 -w \/app test-core \/ws\/\.werkmeister\/bin\/with-temp-home --no-wait sh -c 'npm test'`$/m,
       );
       assert.match(
         out,
@@ -182,6 +182,42 @@ test("a host-access container that sees the workspace prints its test under with
     path: packages/sock
     test: npm test
     extra_volumes: ["/var/run/docker.sock:/var/run/docker.sock"]
+`,
+    },
+  );
+});
+
+// SW-1202: a row run by hand in a smaller container of the repo ran 3× slower; the line names its own and its CPUs.
+test("a with-temp-home test line passes its container and CPUs so another container warns (SW-1202)", async () => {
+  await withSandboxHome(
+    async () => {
+      const out = buildSandboxContextMd(
+        "test",
+        1,
+        11100,
+        11119,
+        ["core"],
+        loadServices(),
+        "",
+        {},
+        ["core"],
+        false,
+        "/ws/.werkmeister/bin/with-temp-home",
+      );
+      assert.match(
+        out,
+        /^- `core`: `docker exec -e WERKMEISTER_ROW=test-core:3 -w \/app test-core \/ws\/\.werkmeister\/bin\/with-temp-home --no-wait sh -c 'npm test'`$/m,
+      );
+      assert.match(out, /Each line runs in the container it names[^\n]*WERKMEISTER_ROW` warns/);
+    },
+    {
+      services: `${SERVICES}  core:
+    type: library
+    repo: demo-repo
+    path: packages/core
+    test: npm test
+    cpus: 3
+    extra_volumes: ["/var/run/docker.sock:/var/run/docker.sock", "/ws:/ws"]
 `,
     },
   );
