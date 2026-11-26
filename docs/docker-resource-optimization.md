@@ -73,6 +73,16 @@ all, because it asks for 5 CPUs; lower `cpus` on `werkmeister-core` in
 Agent sessions run outside Docker ([Sizing a machine](#sizing-a-machine) has the numbers), so the laptop's own
 memory, not the engine's, limits how many sessions run beside them.
 
+## Stop or pause while a workspace waits
+
+| Wait | Its own running containers | Why |
+|---|---|---|
+| a whole `feature up` queued for capacity | none run | a running feature is never queued |
+| `feature up --service`, `pr gate` / `pr open` starting a service | **stopped** in an autonomous workspace, started again with the new service once admitted; kept running in a person's workspace | stop frees CPU, memory and queue room |
+| `with-temp-home` load wait, the gate's retry wait | untouched | the wait runs inside one of them and the next command needs them |
+
+Pause keeps memory, and the scheduler counts a paused feature as running and busy (it is never preempted), so a pause frees CPU but no room in the queue. werkmeister only pauses on the person's ⏸.
+
 ## Sizing a machine
 
 There are two budgets. Containers share the memory you gave Docker (OrbStack or
