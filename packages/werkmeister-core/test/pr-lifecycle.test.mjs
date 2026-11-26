@@ -7621,3 +7621,56 @@ for (const [what, table, over, why] of [
       clean(ws);
     }
   });
+
+// ---- a red row under host load asks for a rerun (SW-1184) ----
+
+const VITEST_TIMEOUT_FAIL = [
+  " FAIL  test/fixture_harness.test.ts > file flags resolve (SW-916)",
+  "Error: Test timed out in 120000ms.",
+  " Test Files  1 failed | 104 passed (105)",
+  "      Tests  1 failed | 883 passed (884)",
+].join("\n");
+
+test("runGate: a row whose only failures are timeouts, with host load over the limit, asks for a rerun (exit 75) (SW-1184)", async () => {
+  for (const stdout of [VITEST_RPC_TIMEOUT, VITEST_TIMEOUT_FAIL]) {
+    const ws = icmWorkspace();
+    try {
+      const d = answer(deps([DIFF_API], loaded([90])), API_EXEC, [{ code: 1, stdout }]);
+      const g = await gate(ws, d);
+      assert.equal(testRow(g).ok, false, stdout);
+      assert.equal(testRow(g).retry, true, testRow(g).detail);
+      assert.match(testRow(g).detail, /failed under host load 90\.0 \(over 8\): rerun/);
+      assert.equal(g.retry, true, "the gate exits 75");
+    } finally {
+      clean(ws);
+    }
+  }
+});
+
+test("runGate: a timeout at normal load, or an assertion failure under load, stays red (SW-1184)", async () => {
+  const cases = [
+    [VITEST_TIMEOUT_FAIL, 1],
+    [
+      `${VITEST_TIMEOUT_FAIL}\nAssertionError: expected 1 to be 2\n      Tests  2 failed | 882 passed (884)`,
+      90,
+    ],
+    ["werkmeister-core:test: not ok 3 - x\n# fail 1", 90],
+    // A file that fails to import counts under Test Files only.
+    [
+      `${VITEST_TIMEOUT_FAIL.replace("Test Files  1 failed", "Test Files  2 failed")}\n FAIL  test/a.test.ts\nError: Cannot find module "./x"`,
+      90,
+    ],
+  ];
+  for (const [stdout, load] of cases) {
+    const ws = icmWorkspace();
+    try {
+      const d = answer(deps([DIFF_API], loaded([load])), API_EXEC, [{ code: 1, stdout }]);
+      const g = await gate(ws, d);
+      assert.equal(testRow(g).ok, false);
+      assert.equal(testRow(g).retry, undefined, `${load}: ${stdout}`);
+      assert.equal(g.retry, undefined);
+    } finally {
+      clean(ws);
+    }
+  }
+});
