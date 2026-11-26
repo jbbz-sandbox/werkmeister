@@ -225,7 +225,9 @@ const WRITE_BRIEF =
   // SW-414: no werkmeister file names in a generic template (SW-143).
   "For a change to text a generator writes, the criterion is a fixture run of the built generator showing the new text; regenerating this workspace's own copy is a post-release check, not a criterion. " +
   // SW-996: sw-779's "the real ~/.werkmeister/metrics/ is unchanged" contradicted the run limits and was denied.
-  "Never write a criterion that reads or lists the real `~/.werkmeister`: the run may not read it. Prove a write lands only under the test's temporary HOME with a test assertion (the written path is under it).";
+  "Never write a criterion that reads or lists the real `~/.werkmeister`: the run may not read it. Prove a write lands only under the test's temporary HOME with a test assertion (the written path is under it). " +
+  // SW-1210: sw-1195 answered "no changeset"; the gate's release check then refused it.
+  "When the repo's `Release check:` in `../../.werkmeister/werkmeister-context.md` is `changeset status`, a question on whether the change needs a release entry offers two answers, an empty changeset (`changeset add --empty`: no release) or a patch or minor entry, never none: that check fails on a changed package with no changeset.";
 
 // SW-275: SW-257's brief said "test-only" but the cause was in production code; with no rule the run stopped to ask.
 const OUT_OF_SCOPE =
