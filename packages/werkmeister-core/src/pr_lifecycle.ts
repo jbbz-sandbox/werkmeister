@@ -3076,6 +3076,19 @@ async function releasePackages(
     const front = r.code === 0 ? (r.stdout.split(/^---\s*$/m)[1] ?? "") : "";
     for (const m of front.matchAll(/^\s*["']?([^"':\s]+)["']?\s*:/gm)) names.add(m[1]);
   }
+  // SW-952: a `fixed` group versions and publishes together, so naming one member releases them all.
+  if (names.size) {
+    const cfg = await deps.run("git", ["-C", dir, "show", `${head}:.changeset/config.json`]);
+    let fixed: unknown = [];
+    try {
+      fixed = cfg.code === 0 ? JSON.parse(cfg.stdout).fixed : [];
+    } catch {
+      // unreadable config: no groups to widen by
+    }
+    for (const group of Array.isArray(fixed) ? fixed : [])
+      if (Array.isArray(group) && group.some((g) => names.has(g)))
+        for (const g of group) if (typeof g === "string") names.add(g);
+  }
   const named: string[] = [];
   for (const name of names) {
     // shortcut: matches biome's `"name": "x"` formatting only; a differently spaced private package.json reads public.
