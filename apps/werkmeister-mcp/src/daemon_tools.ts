@@ -480,7 +480,36 @@ export function registerSchedulerTool(server: McpServer): void {
           "grant-later": () => grantInBackground(),
           queue: () => waitingQueue(),
         };
-        return { value: (await ops[a.op]()) ?? null };
+        return { value: (await timedOp(`${a.op} ${feature}`.trim(), ops[a.op])) ?? null };
       }),
   );
+}
+
+/** Past this a scheduler op is logged: its client gives up at 120 s, and the log held no op lines to say why (SW-1235). */
+export const SLOW_OP_MS = 30_000;
+
+/**
+ * Runs *run*, logging when it started and what it was once it passes {@link SLOW_OP_MS}, and again when it ends.
+ * The first line fires while it still runs: an op stuck on a lock or a hung call never reaches the end (SW-1235).
+ */
+export async function timedOp<T>(
+  what: string,
+  run: () => Promise<T> | T,
+  log: (msg: string) => void = (m) => console.error(`[werkmeister-mcp] ${m}`),
+  now: () => number = Date.now,
+): Promise<T> {
+  const start = now();
+  const at = new Date(start).toISOString();
+  const stuck = setTimeout(
+    () => log(`${at} scheduler ${what} still running after ${SLOW_OP_MS / 1000} s`),
+    SLOW_OP_MS,
+  );
+  stuck.unref();
+  try {
+    return await run();
+  } finally {
+    clearTimeout(stuck);
+    const ms = now() - start;
+    if (ms > SLOW_OP_MS) log(`${at} scheduler ${what} took ${Math.round(ms / 1000)} s`);
+  }
 }
