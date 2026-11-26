@@ -107,6 +107,7 @@ const EVENTS = [
 
 const INPUT = { events: EVENTS, open: [], usages: USAGES };
 const none = { p50Minutes: null, p90Minutes: null, count: 0 };
+const NO_ROWS = { setup: 0, lint: 0, test: 0, release: 0, checks: 0 };
 const slice = ({ bucket: _bucket, byVersion: _byVersion, ...rest }) => rest;
 
 test("weeks run from the oldest item to now with no gaps; Sunday 23:59Z and Monday 00:00Z split", () => {
@@ -264,6 +265,7 @@ test("gate runs and minutes leave out exit 75; first-pass rate is each workspace
     firstPassRate: 0.5,
     passed: 1,
     workspaces: 2,
+    byKind: NO_ROWS,
   });
   assert.deepEqual(w2.gate, {
     runs: 0,
@@ -271,6 +273,7 @@ test("gate runs and minutes leave out exit 75; first-pass rate is each workspace
     firstPassRate: null,
     passed: 0,
     workspaces: 0,
+    byKind: NO_ROWS,
   });
   assert.deepEqual(w3.gate, {
     runs: 1,
@@ -278,6 +281,7 @@ test("gate runs and minutes leave out exit 75; first-pass rate is each workspace
     firstPassRate: 1,
     passed: 1,
     workspaces: 1,
+    byKind: NO_ROWS,
   });
 });
 
@@ -335,7 +339,7 @@ test("the first bucket counts from its start, before now − range; the Sunday b
   );
 });
 
-test("no test-minutes field until SW-1101 logs test events", () => {
+test("every row has the same fields, test minutes per package (SW-1101) among them", () => {
   for (const row of trendSeries(INPUT, "all", "week", NOW).rows)
     assert.deepEqual(Object.keys(row).sort(), [
       "abandoned",
@@ -352,6 +356,7 @@ test("no test-minutes field until SW-1101 logs test events", () => {
       "shipped",
       "slowest",
       "stages",
+      "tests",
       "tokens",
       "wallClockMinutes",
     ]);
@@ -409,4 +414,69 @@ test("metricsTrends reads the log, a workspace folder and a local record branch 
     },
     { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
   );
+});
+
+// SW-1101: gate.row minutes by kind, and test minutes per package from test.run (else a test row).
+test("gate rows sum by kind and test runs give per-package weekly p50/p90, cached and exit-75 runs left out", () => {
+  const row = (at, run, r, ms, more = {}) =>
+    ev(at, "gate.row", "ws-g", { run, row: r, duration_ms: ms, result: "ok", ...more });
+  const task = (at, run, pkg, ms, more = {}) =>
+    ev(at, "test.run", "ws-g", {
+      run,
+      row: "test core",
+      package: pkg,
+      task: "test:coverage",
+      duration_ms: ms,
+      result: "ok",
+      cached: false,
+      ...more,
+    });
+  const events = [
+    // Run g1, week 2026-11-16: a test row with turbo tasks, and an old line with no row_kind.
+    row("2026-11-17T10:00:00Z", "g1", "start core", 60_000, { row_kind: "setup" }),
+    row("2026-11-17T10:01:00Z", "g1", "lint", 30_000),
+    row("2026-11-17T10:05:00Z", "g1", "test core", 240_000, { row_kind: "test" }),
+    task("2026-11-17T10:05:00Z", "g1", "pkg-a", 60_000),
+    task("2026-11-17T10:05:00Z", "g1", "pkg-a", 180_000),
+    task("2026-11-17T10:05:00Z", "g1", "pkg-a", 120_000),
+    task("2026-11-17T10:05:00Z", "g1", "pkg-a", 15, { cached: true }),
+    task("2026-11-17T10:05:00Z", "g1", "pkg-a", 90_000, { result: "error" }),
+    ev("2026-11-17T10:05:00Z", "test.run", "ws-g", {
+      run: "g1",
+      row: "test core",
+      package: "pkg-a",
+      task: "build",
+      duration_ms: 999_999,
+      result: "ok",
+      cached: false,
+    }),
+    // A test row whose turbo run held only a build (its tests ran outside turbo): its own time stands in;
+    // a skipped (sub-second) one doesn't.
+    ev("2026-11-17T10:07:00Z", "test.run", "ws-g", {
+      run: "g1",
+      row: "test web",
+      package: "web",
+      task: "build",
+      duration_ms: 5000,
+      result: "ok",
+      cached: false,
+    }),
+    row("2026-11-17T10:07:00Z", "g1", "test web", 120_000, { row_kind: "test" }),
+    row("2026-11-17T10:07:01Z", "g1", "test docs", 20, { row_kind: "test" }),
+    // Run g2 ended 75: a capacity retry, none of its rows or tasks count.
+    row("2026-11-18T10:00:00Z", "g2", "start core", 600_000, { row_kind: "setup" }),
+    task("2026-11-18T10:00:00Z", "g2", "pkg-a", 600_000),
+    ev("2026-11-18T10:10:00Z", "gate.end", "ws-g", { run: "g2", exit: 75 }),
+  ];
+  const r = trendSeries({ events, open: [], usages: [] }, "all", "week", NOW);
+  const [w] = r.rows.slice(-1);
+  assert.equal(w.bucket, "2026-11-16");
+  assert.deepEqual(w.gate.byKind, { setup: 1, lint: 0.5, test: 6, release: 0, checks: 0 });
+  assert.deepEqual(w.tests, {
+    "pkg-a": { p50Minutes: 1.5, p90Minutes: 3, count: 4, cached: 1, failed: 1 },
+    web: { p50Minutes: 2, p90Minutes: 2, count: 1, cached: 0, failed: 0 },
+  });
+  assert.deepEqual(r.suites["pkg-a"], { p50Minutes: 1.5, p90Minutes: 3, count: 4 });
+  assert.deepEqual(Object.keys(r.suitesByVersion), ["unknown"]);
+  assert.deepEqual(w.byVersion.unknown.tests["pkg-a"].count, 4);
 });

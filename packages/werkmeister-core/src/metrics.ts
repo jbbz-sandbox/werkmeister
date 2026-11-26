@@ -27,6 +27,18 @@ export type TimedEvent =
 export type SlowCall = "docker build" | "install" | "git fetch" | "tracker";
 type Result = "ok" | "error";
 
+/** What a gate row does, for the Metrics tab's stacked gate minutes (SW-1101). */
+export type GateRowKind = "setup" | "lint" | "test" | "release" | "checks";
+
+/** *row*'s kind from its name; also read-side for `gate.row` lines from before `row_kind`. */
+export function gateRowKind(row: string): GateRowKind {
+  if (["containers", "memory", "registry"].includes(row) || row.startsWith("start "))
+    return "setup";
+  if (row === "lint" || row === "release") return row;
+  if (row === "tests" || row.startsWith("test ")) return "test";
+  return "checks";
+}
+
 /** *run_id*: the writing run's id from its workspace.yml ({@link runTag}), so same-named runs' lines stay apart (SW-1140). */
 export type MetricsEvent = EventBody & { run_id?: string };
 
@@ -54,6 +66,23 @@ type EventBody =
       row: string;
       duration_ms: number;
       result: Result;
+      row_kind: GateRowKind;
+      /** Host-load wait before the row's one retry, left out of *duration_ms* (SW-1101). */
+      wait_ms?: number;
+    }
+  /** One turbo task a gate row ran (SW-1101), from turbo's run summary; *tests* and *failures* from the package's `coverage/run.json`. */
+  | {
+      event: "test.run";
+      workspace: string;
+      run: string;
+      row: string;
+      package: string;
+      task: string;
+      duration_ms: number;
+      result: Result;
+      cached: boolean;
+      tests?: number;
+      failures?: number;
     }
   | { event: "call.slow"; workspace: string; cmd: SlowCall; duration_ms: number; result: Result }
   /** SW-1172: `feature up` found every container of the set healthy, *duration_ms* after the up began. */
@@ -84,6 +113,7 @@ type EventBody =
       functions: number;
       statements: number;
       tests?: number;
+      failures?: number;
       duration_ms?: number;
     };
 

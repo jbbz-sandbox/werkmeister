@@ -40,6 +40,18 @@ export function countTests(text) {
   return n;
 }
 
+/** Failed tests the run reported, in the same summaries as {@link countTests} (SW-1101). Null when none. */
+export function countFailures(text) {
+  const plain = text.replace(ANSI, "");
+  let n = null;
+  // node prints `# fail N` after `# pass`, just before `# cancelled`; anchored on it as countTests is on `suites`.
+  for (const m of plain.matchAll(/^(?:#|ℹ) fail (\d+)\r?\n(?:#|ℹ) cancelled /gm))
+    n = (n ?? 0) + Number(m[1]);
+  for (const m of plain.matchAll(/^\s*Tests\s+(?:(\d+) failed\b)?.*\(\d+\)/gm))
+    n = (n ?? 0) + Number(m[1] ?? 0);
+  return n;
+}
+
 function c8Command(cmd, temp) {
   const c8 = createRequire(import.meta.url).resolve("c8/bin/c8.js");
   // Without --exclude-after-remap, `-x dist/**` drops every file: it matches before the map points at src/ (c8 11).
@@ -91,8 +103,10 @@ async function main(argv) {
   rmSync(temp, { recursive: true, force: true });
   // Written on failure too, so a red run still gets its row.
   mkdirSync("coverage", { recursive: true });
+  const out = Buffer.concat(chunks).toString("utf8");
   const run = {
-    tests: countTests(Buffer.concat(chunks).toString("utf8")),
+    tests: countTests(out),
+    failures: countFailures(out),
     duration_ms: Date.now() - started,
   };
   writeFileSync("coverage/run.json", `${JSON.stringify(run)}\n`);

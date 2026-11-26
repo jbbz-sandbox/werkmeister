@@ -41,7 +41,7 @@ Several people can work against one Kubernetes baseline. `werkmeister infra inte
 
 **Status: works today**
 
-Werkmeister writes a metrics event log on each machine, `~/.werkmeister/metrics/events-YYYY-MM.jsonl`: `issue.start`, `stage.done`, `pr.open`, `pr.merged`, `release`, `gate.start` / `gate.end`, and `ask` / `answer`. The `metrics` MCP tool reports cycle time, lead time and waits by cause from it. `werkmeister metrics rebuild` backfills the log from record branches, GitHub and transcripts.
+Werkmeister writes a metrics event log on each machine, `~/.werkmeister/metrics/events-YYYY-MM.jsonl`: `issue.start`, `stage.done`, `pr.open`, `pr.merged`, `release`, `gate.start` / `gate.end`, `gate.row` (each gate row's time and kind), `test.run` (each turbo task's time, read from turbo's run summary, with test and failure counts), and `ask` / `answer`. The `metrics` MCP tool reports cycle time, lead time and waits by cause from it. `werkmeister metrics rebuild` backfills the log from record branches, GitHub and transcripts.
 
 | Metric | Data Werkmeister records today | Gap |
 |---|---|---|

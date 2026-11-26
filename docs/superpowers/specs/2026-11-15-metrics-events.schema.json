@@ -40,14 +40,40 @@
         "containers.healthy",
         "ci.result",
         "session.start",
-        "session.stop"
+        "session.stop",
+        "test.run"
       ]
     },
     "result": {
       "enum": ["ok", "error"],
-      "description": "workspace.*, gate.row, call.slow: whether the timed step succeeded (SW-404); ci.result: whether every check passed (SW-1172)"
+      "description": "workspace.*, gate.row, call.slow: whether the timed step succeeded (SW-404); test.run: whether the turbo task exited 0 (SW-1101); ci.result: whether every check passed (SW-1172)"
     },
-    "row": { "type": "string", "description": "gate.row: the gate row's name (SW-404)" },
+    "row": {
+      "type": "string",
+      "description": "gate.row: the gate row's name (SW-404); test.run: the gate row whose turbo run held the task (SW-1101)"
+    },
+    "row_kind": {
+      "enum": ["setup", "lint", "test", "release", "checks"],
+      "description": "gate.row: the row's kind, from its name (SW-1101); absent on lines from before it"
+    },
+    "wait_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "gate.row: host-load wait before the row's one retry, left out of duration_ms (SW-1101)"
+    },
+    "task": {
+      "type": "string",
+      "description": "test.run: the turbo task name, e.g. test:coverage (SW-1101)"
+    },
+    "cached": {
+      "type": "boolean",
+      "description": "test.run: turbo replayed the task from its cache (SW-1101)"
+    },
+    "failures": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "coverage, test.run: failed tests the run counted (SW-1101)"
+    },
     "cmd": {
       "enum": ["docker build", "install", "git fetch", "tracker"],
       "description": "call.slow: which external call took 5 s or more (SW-404)"
@@ -104,7 +130,7 @@
     },
     "run": {
       "type": "string",
-      "description": "gate.*: id shared by a gate.start and its gate.end; coverage: the gate run or CI run id"
+      "description": "gate.*: id shared by a gate.start and its gate.end; gate.row, test.run: the gate run they belong to; coverage: the gate run or CI run id"
     },
     "exit": {
       "type": "integer",
@@ -125,7 +151,10 @@
       "enum": ["ci-main", "ci-pr", "gate"],
       "description": "coverage: where the run happened; merge-queue runs count as ci-main (SW-405)"
     },
-    "package": { "type": "string", "description": "coverage: the measured package name" },
+    "package": {
+      "type": "string",
+      "description": "coverage: the measured package name; test.run: the turbo task's package (SW-1101)"
+    },
     "lines": { "type": "number", "minimum": 0, "maximum": 100, "description": "coverage: lines %" },
     "branches": {
       "type": "number",
@@ -145,11 +174,15 @@
       "maximum": 100,
       "description": "coverage: statements %"
     },
-    "tests": { "type": "integer", "minimum": 0, "description": "coverage: tests the run counted" },
+    "tests": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "coverage, test.run: tests the run counted"
+    },
     "duration_ms": {
       "type": "integer",
       "minimum": 0,
-      "description": "coverage: wall time of the test command; workspace.*, gate.row, call.slow: wall time of the step (SW-404); containers.healthy: since the up began; ci.result: first check's start to last check's end (SW-1172)"
+      "description": "coverage: wall time of the test command; workspace.*, gate.row, call.slow: wall time of the step (SW-404); test.run: the turbo task's start to end (SW-1101); containers.healthy: since the up began; ci.result: first check's start to last check's end (SW-1172)"
     }
   },
   "additionalProperties": false,
@@ -222,6 +255,10 @@
     {
       "if": { "properties": { "event": { "const": "gate.row" } } },
       "then": { "required": ["run", "row", "duration_ms", "result"] }
+    },
+    {
+      "if": { "properties": { "event": { "const": "test.run" } } },
+      "then": { "required": ["run", "row", "package", "task", "duration_ms", "result", "cached"] }
     },
     {
       "if": { "properties": { "event": { "const": "call.slow" } } },
@@ -322,9 +359,25 @@
       "event": "gate.row",
       "workspace": "sw-753-incremental-tsc",
       "run": "g1",
-      "row": "werkmeister-core",
+      "row": "test werkmeister-core",
+      "row_kind": "test",
       "duration_ms": 312000,
       "result": "ok"
+    },
+    {
+      "v": 1,
+      "at": "2026-11-15T07:25:10Z",
+      "event": "test.run",
+      "workspace": "sw-753-incremental-tsc",
+      "run": "g1",
+      "row": "test werkmeister-core",
+      "package": "werkmeister-core",
+      "task": "test:coverage",
+      "duration_ms": 201000,
+      "result": "ok",
+      "cached": false,
+      "tests": 1715,
+      "failures": 0
     },
     {
       "v": 1,

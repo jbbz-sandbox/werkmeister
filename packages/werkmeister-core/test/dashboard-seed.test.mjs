@@ -17,6 +17,7 @@ import {
   STUBBED_BINS,
   seedDashboardHome,
 } from "../dist/dashboard_seed.js";
+import { trendSeries } from "../dist/metrics_report.js";
 import { lifecycleOf } from "../dist/pr_lifecycle.js";
 
 const Ajv2020 = createRequire(import.meta.url)("ajv/dist/2020.js").default;
@@ -240,4 +241,26 @@ test("only runs whose serve pid is gone are reaped, each once; other labels are 
     deadDashboardRuns(labels, (pid) => pid === 222),
     ["werkmeister-seeded-dashboard-111-5000"],
   );
+});
+
+test("the seed's gates fill the Metrics tab's gate and test charts, pkg-b slower in the last complete week (SW-1101)", () => {
+  const home = tmp("dashboard-seed-");
+  try {
+    seedDashboardHome(home);
+    const metrics = path.join(home, ".werkmeister", "metrics");
+    const events = fs
+      .readdirSync(metrics)
+      .flatMap((f) => fs.readFileSync(path.join(metrics, f), "utf8").trim().split("\n"))
+      .map((l) => JSON.parse(l));
+    const t = trendSeries({ events, open: [], usages: [] }, "90d", "week", new Date());
+    assert.deepEqual(Object.keys(t.suites).sort(), ["pkg-a", "pkg-b", "pkg-c"]);
+    const done = t.rows.slice(0, -1);
+    const latest = done.at(-1);
+    assert.equal(latest.tests["pkg-b"].p50Minutes, 5.1);
+    assert.ok(latest.tests["pkg-c"].cached > 0, "pkg-c is partly cached");
+    for (const r of done.slice(-5, -1)) assert.equal(r.tests["pkg-b"].p50Minutes, 3.1);
+    assert.ok(t.rows.some((r) => r.gate.byKind.lint > 0 && r.gate.byKind.setup > 0));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });

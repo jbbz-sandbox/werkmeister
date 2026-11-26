@@ -71,7 +71,14 @@ import {
   prWatchScheduleState,
   type Step,
 } from "./machine_setup.js";
-import { recordEvent, runTag, timed, workspaceSlice, writeLogRecord } from "./metrics.js";
+import {
+  gateRowKind,
+  recordEvent,
+  runTag,
+  timed,
+  workspaceSlice,
+  writeLogRecord,
+} from "./metrics.js";
 import { openDecisions } from "./notes.js";
 import { prRulesPath } from "./pr_guard.js";
 import {
@@ -107,6 +114,7 @@ import {
 import { getServicePort } from "./slots.js";
 import { repoDirs } from "./standards.js";
 import { TEMP_HOME_SCRIPT } from "./temp_home.js";
+import { readTurboTasks, recordTestRuns } from "./test_runs.js";
 import { childEnv, toolBin } from "./tool_bins.js";
 // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 import { writeUsageSnapshot } from "./usage_snapshot.js";
@@ -1293,20 +1301,33 @@ async function gateChecks(
   let capacityShort = false;
   // After a NO_CAPACITY start, the rows that then find no container are its consequence, not a verdict.
   const NO_CONTAINER = /no running container|container not running|not run — fix the rows above/;
-  /** Every row that took time goes through here, so each one is timed and a failed one is logged (SW-404). */
-  const push = (check: GateCheck) => {
+  // A load wait inside the row, left out of its duration_ms (SW-1101).
+  let rowWaitMs = 0;
+  const recordRow = (name: string, ok: boolean) => {
     // shortcut: rows run in sequence, so the time since the last row is this row's; time each row itself if rows ever run in parallel.
     const now = Date.now();
     recordEvent({
       event: "gate.row",
       workspace: path.basename(ws),
       run,
-      row: check.name,
-      duration_ms: now - rowStart,
-      result: check.ok ? "ok" : "error",
+      row: name,
+      row_kind: gateRowKind(name),
+      duration_ms: Math.max(0, now - rowStart - rowWaitMs),
+      ...(rowWaitMs > 0 && { wait_ms: rowWaitMs }),
+      result: ok ? "ok" : "error",
       ...tag,
     });
     rowStart = now;
+    rowWaitMs = 0;
+  };
+  // A start that passes adds no check, so without its own row its capacity wait would land in the next row (SW-1101).
+  const startTimed = async (...args: Parameters<Deps["startService"]>) => {
+    await deps.startService(...args);
+    recordRow(`start ${args[2]}`, true);
+  };
+  /** Every row that took time goes through here, so each one is timed and a failed one is logged (SW-404). */
+  const push = (check: GateCheck) => {
+    recordRow(check.name, check.ok);
     if (!check.ok)
       currentLogger().error({ row: check.name, detail: check.detail }, "gate row failed");
     checks.push(check);
@@ -1368,9 +1389,14 @@ async function gateChecks(
     // The container's HOME is the real one, ~/.werkmeister mounted (SW-329). Inline, not the workspace's
     // copy: docs-site doesn't mount the workspace; --no-wait: the gate never waits on load (SW-542);
     // --clean-home: a row that writes its HOME's .werkmeister fails here as in CI (SW-1177).
+    // TURBO_RUN_SUMMARY: turbo writes each task's time to .turbo/runs, read into test.run events (SW-1101).
+    // The container's /app, where turbo writes .turbo/runs.
+    const repoDir = path.join(ws, file.dir);
     const exec = () =>
       deps.run("docker", [
         "exec",
+        "-e",
+        "TURBO_RUN_SUMMARY=true",
         container,
         "sh",
         "-c",
@@ -1383,15 +1409,22 @@ async function gateChecks(
         cmd,
       ]);
     const began = Date.now();
+    let attemptStart = began;
     let res = await exec();
     const lines = [`${cmd} → exit ${res.code}`];
     const why = res.code ? retryIf(res) : null;
     if (why) {
       // Only before this one retry: the gate itself never waits on load (SW-542).
+      const waitStart = Date.now();
       const { note: waited } = await waitForHostLoadNow(deps, undefined, "the gate's retry");
+      rowWaitMs += Date.now() - waitStart;
+      // The first attempt's summaries are dropped unread: only the counted attempt's tasks are its test time.
+      readTurboTasks(repoDir, attemptStart);
+      attemptStart = Date.now();
       res = await exec();
       lines[0] = `${cmd} → exit ${res.code}, retried once after ${why}${waited ? `; ${waited}` : ""}`;
     }
+    recordTestRuns(repoDir, attemptStart, { workspace: path.basename(ws), run, row: name, ...tag });
     // Written on a pass too, so a fixed row never leaves its old failing log behind (SW-317).
     const log = path.join(logsDir(ws), `gate-${file.dir}-${name.replace(/\s+/g, "-")}.log`);
     let saved = `full log: ${log}`;
@@ -1969,7 +2002,7 @@ async function gateChecks(
     if (!(await portsFree([pick]))) return false;
     touchExecMarker(ws);
     try {
-      await deps.startService(ws, feature, pick);
+      await startTimed(ws, feature, pick);
       running.add(containerOf(feature, pick));
       started.push(containerOf(feature, pick));
       clearEarlierStart(pick);
@@ -2019,7 +2052,7 @@ async function gateChecks(
         // Its setup one-shot first, so the check sees this branch's node_modules (SW-362, SW-541).
         touchExecMarker(ws);
         try {
-          await deps.startService(ws, feature, kept);
+          await startTimed(ws, feature, kept);
           setupRerun = true;
           container = containerOf(feature, kept);
         } catch {
@@ -2042,7 +2075,7 @@ async function gateChecks(
       if (wasRunning) recreated.push(svc);
       touchExecMarker(ws);
       try {
-        await deps.startService(ws, feature, svc, GATE_COMPOSE_FILE);
+        await startTimed(ws, feature, svc, GATE_COMPOSE_FILE);
         if (!wasRunning) started.push(container);
         running.add(container);
       } catch (e) {
@@ -2070,7 +2103,7 @@ async function gateChecks(
   for (const svc of ownStarts) {
     touchExecMarker(ws);
     try {
-      await deps.startService(ws, feature, svc);
+      await startTimed(ws, feature, svc);
       running.add(containerOf(feature, svc));
       started.push(containerOf(feature, svc));
       clearEarlierStart(svc);
@@ -2105,7 +2138,7 @@ async function gateChecks(
     if (rerun) {
       touchExecMarker(ws);
       try {
-        await deps.startService(ws, feature, rerun);
+        await startTimed(ws, feature, rerun);
       } catch (e) {
         startFailed(`start ${rerun}`, e);
       }
