@@ -199,3 +199,46 @@ it("a start over the host load fails before admission: no admit, no queue entry"
   expect(readQueue()).toEqual([]);
   expect(readWaiting(mine)).toBeNull();
 });
+
+// SW-1159: compose's fixed 20-minute `--wait` ran out while a fresh worktree's install was still
+// building; the service stayed Created and `--service` failed, though the install exited 0 minutes later.
+it("a start whose compose wait ran out while its install still builds waits for the install, then starts, then grants", async () => {
+  const other = path.join(tmp, "other");
+  fs.mkdirSync(path.join(other, ".werkmeister"), { recursive: true });
+  await enqueue("other", other);
+  const install = {
+    ...container,
+    name: "mine-werkmeister-install",
+    service: "werkmeister-install",
+    role: "setup",
+    status: "running",
+    exitCode: 0,
+  };
+  const api = { ...container, status: "created", exitCode: 0 };
+  vi.mocked(composeUpServiceAsync)
+    .mockClear()
+    .mockImplementationOnce(async () => {
+      ops.push("compose-up");
+      return false;
+    });
+  vi.mocked(getContainerStatus)
+    .mockResolvedValueOnce([install, api])
+    .mockResolvedValueOnce([install, api])
+    .mockResolvedValue([{ ...install, status: "exited" }, api]);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  try {
+    let done = false;
+    const start = startService("mine", mine, "api").finally(() => {
+      done = true;
+    });
+    start.catch(() => {});
+    // Steps the fake clock through the 15 s polls until the start settles.
+    while (!done) await vi.advanceTimersByTimeAsync(15_000);
+    await start;
+  } finally {
+    vi.useRealTimers();
+  }
+  expect(vi.mocked(composeUpServiceAsync).mock.calls.length).toBe(2);
+  // The grant follows the retry, not the first failed up: `api` was still Created then (SW-737).
+  expect(ops).toEqual(["admit", "compose-up", "compose-up", "grant-later"]);
+});

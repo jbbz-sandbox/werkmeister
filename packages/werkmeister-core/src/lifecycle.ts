@@ -47,6 +47,7 @@ import {
 import { ensureSharedNetwork, isCaddyRunning, reloadCaddy, startCaddy } from "./caddy.js";
 import { Colors } from "./colors.js";
 import {
+  type ContainerStatus,
   // Both spellings: `up`/`down` take an AbortSignal and use the async pair;
   // `remove`/`clean` are not signal verbs (spec D4) and keep the sync ones.
   composeDown,
@@ -361,7 +362,7 @@ async function upUntimed(
       !(await withStartRecord(workspace, "up", () =>
         oneStartAt(feature, () => composeUpAsync(feature, signal)),
       )) &&
-      (signal?.aborted || !(await startLeftCreated(feature, workspace)))
+      (signal?.aborted || !(await startLeftCreated(feature, workspace, signal)))
     ) {
       throw new SandboxError(
         // Not "above": a grant runs this in another process, and its nudge carries this text (SW-861).
@@ -548,11 +549,15 @@ export async function startService(
   let started: boolean;
   try {
     requireSharedNetwork();
-    started = await withStartRecord(workspace, "gate", () =>
+    const up = () =>
       oneStartAt(feature, () =>
         composeUpServiceAsync(feature, service, path.join(workspace, composeName), noDeps),
-      ),
-    );
+      );
+    started = await withStartRecord(workspace, "gate", up);
+    // Compose's wait ran out on a still-building install: once it exits 0, one more up starts the rest.
+    // Inside the try: the grant below must follow this start too (SW-737).
+    if (!started && (await setupsFinishedLate(feature, await getContainerStatus(feature))))
+      started = await up();
   } finally {
     // Its admit reservation ends with the start, as `up`'s dequeue ends its (SW-907 review).
     await dequeue(feature);
@@ -771,8 +776,16 @@ function allSettled(all: Awaited<ReturnType<typeof getContainerStatus>>): boolea
  * exited 0, the rest running and not still `starting`. A running install or a failed one is what its
  * dependents wait on by design, so compose's failure stands (false). Throws naming any that won't start.
  */
-async function startLeftCreated(feature: string, workspace: string): Promise<boolean> {
-  const all = await getContainerStatus(feature);
+async function startLeftCreated(
+  feature: string,
+  workspace: string,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  let all = await getContainerStatus(feature);
+  if (await setupsFinishedLate(feature, all, signal)) {
+    if (signal?.aborted) return false;
+    all = await getContainerStatus(feature);
+  }
   // An on-demand service a failed `--service` start left Created was never priced for this `up`.
   const plain = new Set(upServices(workspace));
   const created = all.filter((c) => c.status === "created" && plain.has(c.service));
@@ -794,6 +807,61 @@ async function startLeftCreated(feature: string, workspace: string): Promise<boo
     );
   warn(`docker compose gave up with ${names.join(", ")} left Created; started it directly`);
   return true;
+}
+
+// shortcut: a setup whose log is unchanged for 10 min counts as stuck, and there is no overall cap, so a log that
+// keeps changing (a retry counter) waits forever; raise the 10 min if a quiet build step outlasts it, add a cap if one loops.
+const SETUP_STALL_MS = 10 * 60_000;
+
+/**
+ * After compose gave up (its 20 min ran out), wait out *feature*'s setup containers that still run: a fresh
+ * worktree's install and build can outlast compose's wait (SW-1159). *all* is the status compose left.
+ * True once each has exited 0; false when none was running, one failed, or its log stopped changing.
+ */
+async function setupsFinishedLate(
+  feature: string,
+  all: ContainerStatus[],
+  signal?: AbortSignal,
+): Promise<boolean> {
+  const busyIn = (set: ContainerStatus[]) =>
+    set.filter((c) => isOneShotService(c.service, c.role) && c.status === "running");
+  let busy = busyIn(all);
+  if (!busy.length) return false;
+  info(
+    `docker compose gave up waiting, but ${busy.map((c) => c.name).join(", ")} is still installing; waiting for it`,
+  );
+  let last = "";
+  let changed = Date.now();
+  while (busy.length) {
+    // A cancelled `up` stops waiting, so nothing starts after the person said stop.
+    if (signal?.aborted) return false;
+    const lines: string[] = [];
+    try {
+      await containerLogs(
+        await liveProject(feature),
+        (busy[0] as ContainerStatus).service,
+        { follow: false, tail: 1, color: false },
+        (line) => lines.push(line),
+      );
+    } catch {
+      // Unreadable logs count as unchanged, so a dead Docker ends the wait at the stall cap.
+    }
+    if (lines.join("\n") !== last) {
+      last = lines.join("\n");
+      changed = Date.now();
+    } else if (Date.now() - changed >= SETUP_STALL_MS) {
+      const name = (busy[0] as ContainerStatus).name;
+      warn(
+        `${name} wrote nothing for 10 min; giving up on it: \`docker logs ${name}\` shows where it stopped`,
+      );
+      return false;
+    }
+    // The global timer, not timers/promises: a test fakes this wait.
+    await new Promise((resolve) => setTimeout(resolve, SERVICE_POLL_MS));
+    all = await getContainerStatus(feature);
+    busy = busyIn(all);
+  }
+  return all.every((c) => !isOneShotService(c.service, c.role) || c.exitCode === 0);
 }
 
 /** A grant pass when anyone waits: room can free without a release, and only a grant starts a whole-feature waiter (SW-737). */
