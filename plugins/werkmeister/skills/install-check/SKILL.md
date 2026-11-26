@@ -57,7 +57,7 @@ The dev link is current when it is built from an up-to-date `main`; this machine
 bash "${CLAUDE_PLUGIN_ROOT}/skills/install-check/queue-pr.sh" <pr> [owner/repo]
 ```
 
-It waits for the PR's checks (a bot-pushed branch lists none at first; that isn't a failure), refuses a PR whose checks failed or whose head moved meanwhile, queues it with the GraphQL `enqueuePullRequest`, and waits for `MERGED`. Exit 1 says why it stopped. It merges: run it only when the person asked for that PR to merge.
+It waits for the PR's checks (a bot-pushed branch lists none at first; that isn't a failure), refuses a PR whose checks failed or whose head moved meanwhile, queues it with the GraphQL `enqueuePullRequest` (a PR already in the queue, queued by `pr watch` or a person, is waited on instead: `already queued (position N)`), and waits for `MERGED`. Exit 1 says why it stopped. It merges: run it only when the person asked for that PR to merge.
 
 - One at a time, in order. A merge to `main` force-pushes the Changesets version PR, and a push drops a PR from the queue.
 - Don't queue the version PR: `.github/workflows/queue-version-pr.yml` queues it once a day at 06:00 UTC, when its head has a green CI run and the queue is empty (SW-480, SW-582). To release sooner, run `gh workflow run queue-version-pr.yml`. If it sits unqueued with green checks, read that workflow's latest run: it logs why it skipped.
