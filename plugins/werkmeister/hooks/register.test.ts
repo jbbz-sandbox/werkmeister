@@ -2531,6 +2531,93 @@ test("a desktop session runs the PR callback pass at start and every 10 min, and
   expect(passes()).toBe(2);
 });
 
+/** A desktop session whose core reports `pushDir`, with `listing` as that folder's entries (SW-272). */
+function pushWorld(
+  on: On,
+  listing: () => ReturnType<typeof stamp>[],
+  pushDir: string | null = "/h/pr-push",
+) {
+  const w = world(on, {
+    [`${WS}/pr-watch`]: () => ok({ ok: true, lines: [], desktop: [], pushDir }),
+    [`${WS}/pr-push`]: () =>
+      ok({
+        ok: true,
+        lines: [],
+        desktop: [
+          {
+            dir: "app",
+            url: "u1",
+            hostSession: "local_other",
+            message: "check test failed on PR u1, fix it.",
+          },
+        ],
+      }),
+    "ccd_session_mgmt/get_session": () => ok(undefined, JSON.stringify({ sessionId: "local_me" })),
+    "ccd_session_mgmt/send_message": () =>
+      ok(undefined, "Message delivered. (delivery: delivered; message_id: m1)"),
+  });
+  const listed: string[] = [];
+  on("session.start", (_$, e) => ({ cwd: e.cwd }));
+  on("fs.list", (_$, e) => {
+    listed.push(e.path);
+    return { value: e.path === pushDir ? listing() : [] };
+  });
+  on("fs.exists", () => ({ value: false }));
+  const count = (key: string) => w.calls.filter((c) => c.key === key).length;
+  return { w, listed, count };
+}
+const stamp = (name: string) => ({
+  name,
+  kind: "file" as const,
+  size: 5,
+  mtimeMs: 1,
+  isLink: false,
+});
+
+test("a pushed-event stamp runs the pr-push pass within 15 s and sends its desktop callback (SW-272)", async ($, on) => {
+  const { w, count } = pushWorld(on, () => [stamp("o__app")]);
+  await $.session.start({ cwd: "/elsewhere", surface: "desktop", isInteractive: true });
+  await w.clock.advance(0);
+  expect(count(`${WS}/pr-push`)).toBe(0);
+  await w.clock.advance(15000);
+  expect(count(`${WS}/pr-push`)).toBe(1);
+  expect(
+    w.calls.filter((c) => c.key === "ccd_session_mgmt/send_message").map((c) => c.args),
+  ).toEqual([{ session_id: "local_other", message: "check test failed on PR u1, fix it." }]);
+});
+
+test("no stamp, or only a claimed or partial one: no pr-push pass, the 10-min pass as before (SW-272)", async ($, on) => {
+  const { w, listed, count } = pushWorld(on, () => [
+    stamp("o__app.claimed-9"),
+    stamp("o__lib.tmp-3"),
+  ]);
+  await $.session.start({ cwd: "/elsewhere", surface: "desktop", isInteractive: true });
+  await w.clock.advance(0);
+  await w.clock.advance(60000);
+  expect(listed.filter((p) => p === "/h/pr-push").length).toBe(4);
+  expect(count(`${WS}/pr-push`)).toBe(0);
+  await w.clock.advance(540000);
+  expect(count(`${WS}/pr-watch`)).toBe(2);
+});
+
+test("a core with no push support: the push folder is never listed (SW-272)", async ($, on) => {
+  const { w, listed, count } = pushWorld(on, () => [stamp("o__app")], null);
+  await $.session.start({ cwd: "/elsewhere", surface: "desktop", isInteractive: true });
+  await w.clock.advance(0);
+  await w.clock.advance(600000);
+  expect(listed).not.toContain("/h/pr-push");
+  expect(count(`${WS}/pr-push`)).toBe(0);
+  expect(count(`${WS}/pr-watch`)).toBe(2);
+});
+
+test("a terminal session arms no push check (SW-272)", async ($, on) => {
+  const { w, listed, count } = pushWorld(on, () => [stamp("o__app")]);
+  await $.session.start({ cwd: "/elsewhere", surface: "terminal", isInteractive: true });
+  await w.clock.advance(60000);
+  expect(listed).not.toContain("/h/pr-push");
+  expect(count(`${WS}/pr-push`)).toBe(0);
+});
+
 // --- Intercept toggles (SW-2) -------------------------------------------------
 
 const ODD = "front end; rm -rf /";
