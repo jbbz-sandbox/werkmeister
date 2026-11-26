@@ -455,6 +455,15 @@ async function stopWorkspace(ws: string): Promise<string> {
 /** Well inside the shortest sane idle_stop_minutes, so a running gate always reads as busy. */
 const EXEC_BEAT_MS = 60_000;
 
+/**
+ * SW-1213: there, and beaten with the exec marker, only while `runGate` runs: the plugin's Stop guard
+ * holds its proposed-item prompt until the gate ends. `last-exec` can't say that: it outlives the gate.
+ */
+// shortcut: one marker per workspace, so of two gates running at once the first to end removes it; write the run id and remove only its own if that shows.
+function gateRunningMarker(ws: string): string {
+  return path.join(dotDir(ws), "gate-running");
+}
+
 /** Record that the gate is about to `docker exec`, so the idle reaper keeps the containers. */
 function touchExecMarker(ws: string): void {
   try {
@@ -979,7 +988,18 @@ export async function runGate(
   let result!: GateResult;
   // A row can outlast idle_stop_minutes; the scheduler then read the gate as not busy and a queue
   // head preempted its containers mid-run (SW-745, SW-738).
-  const beat = setInterval(() => touchExecMarker(ws), EXEC_BEAT_MS);
+  const markRunning = () => {
+    try {
+      fs.writeFileSync(gateRunningMarker(ws), "");
+    } catch {
+      // a missing dot-dir must not fail the gate
+    }
+  };
+  markRunning();
+  const beat = setInterval(() => {
+    touchExecMarker(ws);
+    markRunning();
+  }, EXEC_BEAT_MS);
   beat.unref();
   const workspace = path.basename(ws);
   const run = randomUUID();
@@ -1039,6 +1059,7 @@ export async function runGate(
     recordGateCoverage(path.join(ws, file.dir), workspace, run, startedMs, tag.run_id);
     // The CLI's exit codes (pr.ts exitOf): 75 retry later; no result means gateChecks threw.
     const exit = result?.ok ? 0 : result?.retry ? 75 : 1;
+    fs.rmSync(gateRunningMarker(ws), { force: true });
     recordEvent({ event: "gate.end", workspace, run, exit, ...tag });
   }
   return result;
