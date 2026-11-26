@@ -3173,6 +3173,47 @@ test("refreshPrStatus: shipped only once every public package its changesets nam
   }
 });
 
+// SW-952: a `fixed` group versions and publishes together, so a changeset naming one member releases them all.
+test("refreshPrStatus: a changeset naming one member of a fixed group waits on every public member's tag (SW-952)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) },
+  });
+  try {
+    const view = {
+      state: "MERGED",
+      mergeCommit: { oid: "abc123" },
+      headRefOid: "h1",
+      files: [{ path: ".changeset/a.md" }],
+    };
+    const config = JSON.stringify({ fixed: [["app", "app-core", "app-ui"], ["other"]] });
+    await refreshPrStatus(
+      ws,
+      deps([
+        [/^gh pr view/, { stdout: JSON.stringify(view) }],
+        [/show h1:\.changeset\/a\.md$/, { stdout: '---\n"app": patch\n---\n\nfix\n' }],
+        [/show h1:\.changeset\/config\.json$/, { stdout: config }],
+        [/grep -l -F "name": "app-ui" h1/, { stdout: "h1:packages/ui/package.json\n" }],
+        [/show h1:packages\/ui\/package\.json$/, { stdout: '{"name": "app-ui", "private": true}' }],
+        [/tag --contains/, { stdout: "" }],
+      ]),
+    );
+    assert.equal(
+      readPrFiles(ws)[0].fm.release_packages,
+      "app, app-core",
+      "the fixed group's public members; private app-ui and the other group left out",
+    );
+    const mono = { repos: { app: { ...REGISTRY.repos.app, release_tag: "app@*" } } };
+    const r = await refreshPrStatus(
+      ws,
+      deps([[/tag --contains abc123 --list app@\*/, { stdout: "app@1.2.0\n" }]], mono),
+    );
+    assert.equal(readPrFiles(ws)[0].fm.status, "merged", r.lines.join("\n"));
+    assert.ok(r.lines.includes("app: partially released: app-core missing"), r.lines.join("\n"));
+  } finally {
+    clean(ws);
+  }
+});
+
 test("refreshPrStatus: a single-package changesets repo (v* tags) ships on its v* tag, release_packages or not (SW-712)", async () => {
   const ws = icmWorkspace({
     files: {
