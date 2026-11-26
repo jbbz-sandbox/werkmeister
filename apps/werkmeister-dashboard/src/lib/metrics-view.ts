@@ -93,7 +93,7 @@ export interface PreviewCharts {
   closedKeys: string[];
 }
 
-/** The closed-workspaces preview, until SW-1100/1101 decide its chart. */
+/** The closed-workspaces preview, until SW-1100 decides its chart. */
 export function previewCharts(rows: SlicedRow[]): PreviewCharts {
   return {
     closed: rows.map((r) => ({
@@ -218,3 +218,131 @@ export function slowestTickets(rows: SlicedRow[]): SlowTicket[] {
   }
   return [...byWs.values()].sort((a, b) => lead(b) - lead(a)).slice(0, 5);
 }
+
+/** The stacked gate-minutes chart's row kinds, in stack order (SW-1101 Q3). */
+export const GATE_KINDS = ["setup", "lint", "test", "release", "checks"] as const;
+
+/** Gate minutes per bucket, stacked by row kind (SW-1101 Q9). */
+export function gateKindBars(rows: SlicedRow[]): StackBar[] {
+  return rows.map((r) => ({
+    label: r.bucket,
+    values: Object.fromEntries(GATE_KINDS.map((k) => [k, r.slice?.gate.byKind[k] ?? 0])),
+  }));
+}
+
+const packagesOf = (rows: SlicedRow[]) =>
+  [...new Set(slices(rows).flatMap((s) => Object.keys(s.tests)))].sort();
+
+/** One line per package: its uncached test minutes, p50 or p90, per bucket (SW-1101 Q9). */
+export function testTrend(rows: SlicedRow[], p: Pct): TrendLines {
+  return {
+    cols: rows.map((r) => r.bucket),
+    series: packagesOf(rows).map((pkg) => ({
+      key: pkg,
+      values: rows.map((r) => r.slice?.tests[pkg]?.[pctKey(p)] ?? null),
+      counts: rows.map((r) => r.slice?.tests[pkg]?.count ?? 0),
+    })),
+  };
+}
+
+export interface SlowSuite {
+  package: string;
+  /** p90 over the whole range. */
+  p90Minutes: number;
+  runs: number;
+  /** p50 per bucket, for the sparkline. */
+  spark: (number | null)[];
+  /** p50 of the latest bucket with runs. */
+  latestP50: number | null;
+  /** latestP50 above the range p90: drawn in the warn colour (SW-1101 Q10). */
+  slow: boolean;
+}
+
+/** The five packages with the highest test p90 over the range (SW-1101 Q9). */
+export function slowestSuites(t: MetricsTrends, rows: SlicedRow[], v: VersionFilter): SlowSuite[] {
+  const suites = (v === "all" ? t.suites : t.suitesByVersion[v]) ?? {};
+  return Object.entries(suites)
+    .flatMap(([pkg, s]) => (s.p90Minutes === null ? [] : [{ pkg, s, p90: s.p90Minutes }]))
+    .sort((a, b) => b.p90 - a.p90)
+    .slice(0, 5)
+    .map(({ pkg, s, p90 }) => {
+      const spark = rows.map((r) => r.slice?.tests[pkg]?.p50Minutes ?? null);
+      const latestP50 = spark.filter((x): x is number => x !== null).at(-1) ?? null;
+      return {
+        package: pkg,
+        p90Minutes: p90,
+        runs: s.count,
+        spark,
+        latestP50,
+        slow: latestP50 !== null && latestP50 > p90,
+      };
+    });
+}
+
+/** Gate first-pass rate per bucket, 0–1, null with no first run (SW-1101 Q9); its count is the workspaces. */
+export function firstPassLine(rows: SlicedRow[]): TrendLines {
+  return {
+    cols: rows.map((r) => r.bucket),
+    series: [
+      {
+        key: "first pass",
+        values: rows.map((r) => r.slice?.gate.firstPassRate ?? null),
+        counts: rows.map((r) => r.slice?.gate.workspaces ?? 0),
+      },
+    ],
+  };
+}
+
+export interface TestRegression {
+  package: string;
+  beforeP50: number;
+  afterP50: number;
+  /** A version with runs of the package in the slower bucket, or null. */
+  version: string | null;
+  text: string;
+}
+
+/** Fewer uncached runs than this in a bucket, and it can't show a regression (SW-1101 Q11). */
+const MIN_RUNS = 3;
+
+/**
+ * A package whose test p50 in the latest complete bucket is ≥ 25 % and ≥ 30 s above the median of
+ * its previous three buckets' p50, each with `MIN_RUNS` runs (SW-1101 Q11; three, not four, so the
+ * default 30d range, four complete weeks, can show it); the largest rise wins.
+ */
+export function testRegression(t: MetricsTrends, rows: SlicedRow[]): TestRegression | null {
+  // The last row is the bucket still filling.
+  const done = rows.slice(0, -1);
+  if (done.length < 4) return null;
+  const latest = done.at(-1);
+  const before = done.slice(-4, -1);
+  let best: TestRegression | null = null;
+  for (const pkg of packagesOf(rows)) {
+    const now = latest?.slice?.tests[pkg];
+    const prior = before.map((r) => r.slice?.tests[pkg]);
+    if (!now || now.count < MIN_RUNS || now.p50Minutes === null) continue;
+    if (prior.some((p) => !p || p.count < MIN_RUNS || p.p50Minutes === null)) continue;
+    const ps = prior.map((p) => p?.p50Minutes as number).sort((a, b) => a - b);
+    const median = ps[1];
+    const after = now.p50Minutes;
+    if (after < median * 1.25 || after - median < 0.5) continue;
+    if (best && after - median <= best.afterP50 - best.beforeP50) continue;
+    const row = t.rows.find((r) => r.bucket === latest?.bucket);
+    const version =
+      Object.entries(row?.byVersion ?? {}).find(
+        ([v, s]) => v !== "unknown" && (s.tests[pkg]?.count ?? 0) > 0,
+      )?.[0] ?? null;
+    best = {
+      package: pkg,
+      beforeP50: median,
+      afterP50: after,
+      version,
+      text: `${pkg} tests slowed: ${formatTestMinutes(median)} → ${formatTestMinutes(after)} p50${version ? ` (first seen in ${version})` : ""}`,
+    };
+  }
+  return best;
+}
+
+/** Test minutes as seconds under a minute: most suites run in seconds, which formatMinutes rounds to 0m. */
+export const formatTestMinutes = (m: number | null) =>
+  m === null ? "—" : m < 1 ? `${Math.round(m * 60)} s` : `${m.toFixed(1)} min`;

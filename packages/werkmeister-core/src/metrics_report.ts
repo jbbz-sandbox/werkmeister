@@ -10,7 +10,7 @@ import * as path from "node:path";
 import { liveWaiting, sessionGone, sessionsDir } from "./agent_state.js";
 import { getReposRoot, sandboxHome } from "./config.js";
 import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
-import { branchFiles, usageCachePath } from "./metrics.js";
+import { branchFiles, type GateRowKind, gateRowKind, usageCachePath } from "./metrics.js";
 import { lifecycleOf } from "./pr_lifecycle.js";
 import { warn } from "./reporter.js";
 import {
@@ -884,6 +884,13 @@ export interface CountedPercentiles extends Percentiles {
   /** How many values. */
   count: number;
 }
+/** One package's test minutes in a bucket. */
+export interface SuiteTrend extends CountedPercentiles {
+  /** Runs turbo replayed from its cache, left out of the percentiles. */
+  cached: number;
+  /** Runs whose tests failed. */
+  failed: number;
+}
 /** One ICM stage's minutes in a bucket: percentiles over runs, and sums split by what it waited on. */
 export interface StageTrend extends CountedPercentiles {
   /** Summed wall minutes, the previous stage's end → this stage's end. */
@@ -954,7 +961,11 @@ export interface TrendSlice {
     passed: number;
     /** Workspaces whose first finished run ended in the bucket. */
     workspaces: number;
+    /** Summed `gate.row` minutes per row kind, to 0.1 min. */
+    byKind: Record<GateRowKind, number>;
   };
+  /** Test minutes per package: percentiles over uncached test-task runs, from `test.run` (else a `test <svc>` gate row). */
+  tests: Record<string, SuiteTrend>;
 }
 /** One bucket of {@link MetricsTrends}. */
 export interface TrendRow extends TrendSlice {
@@ -985,6 +996,10 @@ export interface MetricsTrends {
   to: string;
   /** One row per bucket from the range's start (for `all`, the oldest item) to now, oldest first, no gaps. */
   rows: TrendRow[];
+  /** Test minutes per package over the whole range, every version: ranks the slowest suites. */
+  suites: Record<string, CountedPercentiles>;
+  /** {@link MetricsTrends.suites} per werkmeister version. */
+  suitesByVersion: Record<string, Record<string, CountedPercentiles>>;
 }
 
 type TrendItem = { at: string; version: string } & (
@@ -1004,6 +1019,8 @@ type TrendItem = { at: string; version: string } & (
       ticket: string;
     }
   | { kind: "gate"; minutes: number }
+  | { kind: "gateRow"; rowKind: GateRowKind; minutes: number }
+  | { kind: "testRun"; package: string; minutes: number; cached: boolean; failed: boolean }
   | { kind: "firstGate"; passed: boolean }
 );
 
@@ -1076,9 +1093,48 @@ function trendSlice(items: TrendItem[]): TrendSlice {
       firstPassRate: firstGates.length ? passed / firstGates.length : null,
       passed,
       workspaces: firstGates.length,
+      byKind: Object.fromEntries(
+        GATE_ROW_KINDS.map((k) => [
+          k,
+          Math.round(
+            items.reduce(
+              (a, i) => a + (i.kind === "gateRow" && i.rowKind === k ? i.minutes : 0),
+              0,
+            ) * 10,
+          ) / 10,
+        ]),
+      ) as Record<GateRowKind, number>,
     },
+    tests: Object.fromEntries(
+      [...testRuns(items)].map(([pkg, runs]) => [
+        pkg,
+        {
+          ...counted(runs.filter((r) => !r.cached).map((r) => r.minutes)),
+          cached: runs.filter((r) => r.cached).length,
+          failed: runs.filter((r) => r.failed).length,
+        },
+      ]),
+    ),
   };
 }
+
+const GATE_ROW_KINDS: readonly GateRowKind[] = ["setup", "lint", "test", "release", "checks"];
+
+function testRuns(items: TrendItem[]): Map<string, Extract<TrendItem, { kind: "testRun" }>[]> {
+  const out = new Map<string, Extract<TrendItem, { kind: "testRun" }>[]>();
+  for (const i of items)
+    if (i.kind === "testRun") out.set(i.package, [...(out.get(i.package) ?? []), i]);
+  return out;
+}
+
+/** Uncached test minutes per package. */
+const suitePercentiles = (items: TrendItem[]) =>
+  Object.fromEntries(
+    [...testRuns(items)].map(([pkg, runs]) => [
+      pkg,
+      counted(runs.filter((r) => !r.cached).map((r) => r.minutes)),
+    ]),
+  );
 
 /**
  * *input* as one row per *bucket* over *range*, as of *now*, each split by werkmeister version.
@@ -1167,11 +1223,57 @@ export function trendSeries(
   const lastRelease = new Map<string, string>();
   const gateStart = new Map<string, string>();
   const firstFinished = new Set<string>();
+  // A capacity retry's rows are left out, as its wall minutes are.
+  const retried = new Set(
+    events
+      .filter((e) => e["event"] === "gate.end" && Number(e["exit"]) === 75)
+      .map((e) => String(e["run"])),
+  );
+  const rowsWithTasks = new Set(
+    events
+      .filter((e) => e["event"] === "test.run" && String(e["task"]).startsWith("test"))
+      .map((e) => `${e["run"]}\0${e["row"]}`),
+  );
   for (const e of events) {
     const at = String(e["at"]);
     const ws = String(e["workspace"]);
     if (e["event"] === "pr.merged") lastMerged.set(ws, max(lastMerged.get(ws), at));
     else if (e["event"] === "release") lastRelease.set(ws, max(lastRelease.get(ws), at));
+    else if (e["event"] === "gate.row" && !retried.has(String(e["run"]))) {
+      const row = String(e["row"]);
+      const rowKind = (e["row_kind"] as GateRowKind | undefined) ?? gateRowKind(row);
+      const minutes = Number(e["duration_ms"]) / 60_000;
+      items.push({ at, version: versionOf(ws), kind: "gateRow", rowKind, minutes });
+      // shortcut: a skipped or covered row is the only sub-second test row; key on a skip flag if gate.row ever gets one.
+      if (
+        rowKind === "test" &&
+        row.startsWith("test ") &&
+        Number(e["duration_ms"]) >= 1000 &&
+        !rowsWithTasks.has(`${e["run"]}\0${row}`)
+      )
+        items.push({
+          at,
+          version: versionOf(ws),
+          kind: "testRun",
+          package: row.slice("test ".length),
+          minutes,
+          cached: false,
+          failed: e["result"] === "error",
+        });
+    } else if (
+      e["event"] === "test.run" &&
+      String(e["task"]).startsWith("test") &&
+      !retried.has(String(e["run"]))
+    )
+      items.push({
+        at,
+        version: versionOf(ws),
+        kind: "testRun",
+        package: String(e["package"]),
+        minutes: Number(e["duration_ms"]) / 60_000,
+        cached: e["cached"] === true,
+        failed: e["result"] === "error",
+      });
     else if (e["event"] === "gate.start") gateStart.set(String(e["run"]), at);
     else if (e["event"] === "gate.end" && Number(e["exit"]) !== 75) {
       const start = gateStart.get(String(e["run"]));
@@ -1223,6 +1325,13 @@ export function trendSeries(
     bucket,
     from: from === null ? null : new Date(from).toISOString(),
     to: now.toISOString(),
+    suites: suitePercentiles(kept),
+    suitesByVersion: Object.fromEntries(
+      [...new Set(kept.map((i) => i.version))].map((v) => [
+        v,
+        suitePercentiles(kept.filter((i) => i.version === v)),
+      ]),
+    ),
     rows: [...byBucket].map(([b, its]) => {
       const versions = new Map<string, TrendItem[]>();
       for (const i of its) versions.set(i.version, [...(versions.get(i.version) ?? []), i]);
@@ -1238,8 +1347,9 @@ export function trendSeries(
 /**
  * Daily or weekly series over *range* (default `30d`, bucket `week`): shipped and abandoned
  * workspaces, ICM stage minutes p50/p90, lead time from the first turn to merge and to release,
- * tokens and cost by model, cache-read share, active and wall minutes, and gate runs, minutes and
- * first-pass rate, each row also split by werkmeister version. Reads what {@link metricsReport}
+ * tokens and cost by model, cache-read share, active and wall minutes, gate runs, minutes (also by
+ * row kind) and first-pass rate, and test minutes per package, each row also split by werkmeister
+ * version; `suites` holds the per-package test minutes over the whole range. Reads what {@link metricsReport}
  * reads; never fetches.
  *
  * @param opts - `range`: `"7d"`, `"30d"`, `"90d"` or `"all"`; `bucket`: `"day"` or `"week"`.

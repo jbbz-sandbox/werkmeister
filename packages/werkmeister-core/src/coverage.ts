@@ -22,6 +22,7 @@ export interface PackageCoverage extends Pcts {
   name: string;
   version?: string;
   tests?: number | null;
+  failures?: number | null;
   duration_ms?: number | null;
 }
 
@@ -68,7 +69,8 @@ export function findCoverageReports(repoDir: string): CoverageReport[] {
       try {
         meta = readJson(path.join(dir, "package.json"));
       } catch {}
-      let run: { tests?: number | null; duration_ms?: number | null } = {};
+      let run: { tests?: number | null; failures?: number | null; duration_ms?: number | null } =
+        {};
       try {
         run = readJson(path.join(dir, "coverage", "run.json"));
       } catch {}
@@ -80,6 +82,7 @@ export function findCoverageReports(repoDir: string): CoverageReport[] {
           ...(meta.version && { version: meta.version }),
           ...(Object.fromEntries(METRICS.map((m) => [m, pctOf(total[m])])) as Pcts),
           tests: run.tests ?? null,
+          failures: run.failures ?? null,
           duration_ms: run.duration_ms ?? null,
         },
         mtimeMs: fs.statSync(file).mtimeMs,
@@ -121,6 +124,7 @@ export function coverageRows(
       functions: p.functions,
       statements: p.statements,
       ...(count(p.tests) && { tests: p.tests as number }),
+      ...(count(p.failures) && { failures: p.failures as number }),
       ...(count(p.duration_ms) && { duration_ms: p.duration_ms as number }),
       ...(ctx.run_id && { run_id: ctx.run_id }),
     }));

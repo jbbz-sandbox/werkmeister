@@ -185,13 +185,17 @@ const TREND_SLICE = z.object({
     firstPassRate: z.number().nullable(),
     passed: z.number(),
     workspaces: z.number(),
+    byKind: z.record(z.string(), z.number()),
   }),
+  tests: z.record(z.string(), COUNTED.extend({ cached: z.number(), failed: z.number() })),
 });
 const TRENDS_OUTPUT = {
   range: z.enum(METRICS_RANGES as [MetricsRange, ...MetricsRange[]]),
   bucket: z.enum(TREND_BUCKETS as [TrendBucket, ...TrendBucket[]]),
   from: z.string().nullable(),
   to: z.string(),
+  suites: z.record(z.string(), COUNTED),
+  suitesByVersion: z.record(z.string(), z.record(z.string(), COUNTED)),
   rows: z.array(
     TREND_SLICE.extend({ bucket: z.string(), byVersion: z.record(z.string(), TREND_SLICE) }),
   ),
@@ -300,8 +304,10 @@ export function registerDaemonTools(server: McpServer): void {
         "week): shipped and abandoned workspaces, minutes per ICM stage (p50, p90, count, and summed " +
         "total, waiting on a person, waiting on capacity and working), lead time from the first turn to " +
         "merge and to release (p50, p90) with the five slowest tickets, tokens and estimated cost in total and by " +
-        "model, cache-read share, active and wall minutes, and gate runs, gate minutes and first-pass rate " +
-        "(exit-75 capacity retries left out). Each item counts in the bucket it ended in: a workspace by " +
+        "model, cache-read share, active and wall minutes, and gate runs, gate minutes (also by row kind: " +
+        "setup, lint, test, release, checks) and first-pass rate (exit-75 capacity retries left out), and " +
+        "test minutes per package (p50, p90, count, cached and failed runs; cached runs left out of the " +
+        "percentiles), with suites: the same per package over the whole range, for the slowest suites. Each item counts in the bucket it ended in: a workspace by " +
         "its close-out, a stage when it finished, a lead time at its merge or release, a gate run at its " +
         "end. Every row also has byVersion: the same numbers per werkmeister version from each " +
         "workspace's usage.json, `unknown` when it has none. Reads the metrics event log, workspace state " +

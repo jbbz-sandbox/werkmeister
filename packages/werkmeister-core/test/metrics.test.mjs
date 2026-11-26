@@ -13,6 +13,7 @@ import { record } from "../dist/agent_state.js";
 import { sandboxHome } from "../dist/config.js";
 import { createLogger, machineLogPath, withLogger } from "../dist/logger.js";
 import {
+  gateRowKind,
   metricsPath,
   noteSlow,
   recordEvent,
@@ -354,6 +355,8 @@ test("a gate run writes one gate.start (retry 0) and one gate.end (exit 0) shari
       for (const r of rows) {
         assert.equal(r.run, start.run);
         assert.ok(r.row && r.result === "ok" && r.duration_ms >= 0, JSON.stringify(r));
+        // SW-1101: each row carries its kind.
+        assert.equal(r.row_kind, gateRowKind(r.row), JSON.stringify(r));
       }
     },
     { gate: true },
@@ -1141,4 +1144,182 @@ test("workspaceLogSlice keeps this run's machine-log lines: its run id, or its n
       ["old", "mine", "untagged"],
     );
   });
+});
+
+// SW-1101: row kinds, per-task test.run from turbo's run summary, and capacity waits kept out of test rows.
+test("gateRowKind: setup, lint, test, release, else checks", () => {
+  assert.deepEqual(
+    [
+      "containers",
+      "memory",
+      "registry",
+      "start lib",
+      "lint",
+      "test lib",
+      "tests",
+      "release",
+      "stages",
+      "review",
+      "revert",
+    ].map(gateRowKind),
+    [
+      "setup",
+      "setup",
+      "setup",
+      "setup",
+      "lint",
+      "test",
+      "test",
+      "release",
+      "checks",
+      "checks",
+      "checks",
+    ],
+  );
+});
+
+test("gate.row with row_kind and wait_ms and test.run pass the schema; test.run needs cached", () => {
+  const at = "2026-11-25T10:00:00Z";
+  const row = {
+    v: 1,
+    at,
+    event: "gate.row",
+    workspace: "ws",
+    run: "g1",
+    row: "test lib",
+    row_kind: "test",
+    duration_ms: 1200,
+    wait_ms: 300,
+    result: "ok",
+  };
+  assert.ok(validate(row), JSON.stringify(validate.errors));
+  assert.equal(validate({ ...row, row_kind: "docs" }), false, "row_kind is an enum");
+  const task = {
+    v: 1,
+    at,
+    event: "test.run",
+    workspace: "ws",
+    run: "g1",
+    row: "test lib",
+    package: "lib",
+    task: "test:coverage",
+    duration_ms: 900,
+    result: "error",
+    cached: false,
+    tests: 12,
+    failures: 2,
+  };
+  assert.ok(validate(task), JSON.stringify(validate.errors));
+  const { cached: _, ...noCached } = task;
+  assert.equal(validate(noCached), false, "test.run without cached");
+});
+
+/** A turbo 2.x run summary, the shape probed in SW-1101's research (turbo 2.10.6). */
+const turboSummary = (start) => ({
+  id: "x",
+  version: "1",
+  turboVersion: "2.10.6",
+  tasks: [
+    {
+      taskId: "lib#build",
+      task: "build",
+      package: "lib",
+      directory: "packages/lib",
+      cache: { local: true, remote: false, status: "HIT", timeSaved: 2352 },
+      execution: { startTime: start, endTime: start + 15, exitCode: 0 },
+    },
+    {
+      taskId: "lib#test:coverage",
+      task: "test:coverage",
+      package: "lib",
+      directory: "packages/lib",
+      cache: { local: false, remote: false, status: "MISS", timeSaved: 0 },
+      execution: { startTime: start + 15, endTime: start + 4015, exitCode: 1 },
+    },
+    {
+      taskId: "//#test:coverage",
+      task: "test:coverage",
+      package: "//",
+      directory: "",
+      cache: { status: "MISS" },
+      execution: { startTime: start + 4015, endTime: start + 4100, exitCode: 0 },
+    },
+  ],
+});
+
+test("a gate's test row writes one test.run per turbo task, with counts from run.json, and removes the summary", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const base = defaultDeps();
+      const repo = path.join(fx.workspace, "app");
+      const runs = path.join(repo, ".turbo", "runs");
+      let summary;
+      const run = async (bin, args, ...rest) => {
+        const r = await base.run(bin, args, ...rest);
+        if (bin === "docker" && args[0] === "exec") {
+          assert.deepEqual(args.slice(1, 3), ["-e", "TURBO_RUN_SUMMARY=true"]);
+          // What turbo and coverage-run.mjs leave in the worktree.
+          fs.mkdirSync(runs, { recursive: true });
+          summary = path.join(runs, "r1.json");
+          fs.writeFileSync(summary, JSON.stringify(turboSummary(Date.now())));
+          fs.mkdirSync(path.join(repo, "packages", "lib", "coverage"), { recursive: true });
+          fs.writeFileSync(
+            path.join(repo, "packages", "lib", "coverage", "run.json"),
+            JSON.stringify({ tests: 12, failures: 2, duration_ms: 3900 }),
+          );
+        }
+        return r;
+      };
+      const { results } = await gateRuns(fx, { ...base, run });
+      assert.ok(summary, results[0].lines.join("\n"));
+      const start = lines().find((l) => l.event === "gate.start");
+      const tasks = lines().filter((l) => l.event === "test.run");
+      assert.deepEqual(
+        tasks.map((t) => [
+          t.run,
+          t.row,
+          t.package,
+          t.task,
+          t.duration_ms,
+          t.result,
+          t.cached,
+          t.tests,
+          t.failures,
+        ]),
+        [
+          [start.run, "test lib", "lib", "build", 15, "ok", true, undefined, undefined],
+          [start.run, "test lib", "lib", "test:coverage", 4000, "error", false, 12, 2],
+        ],
+      );
+      assert.equal(fs.existsSync(summary), false, "the summary is read once");
+    },
+    { gate: true },
+  );
+});
+
+test("a start's capacity wait is its own setup row, not the next row's time", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      const base = defaultDeps();
+      let starts = 0;
+      // Stands in for an admission that queued: the start returns only after the wait.
+      const startService = async (...a) => {
+        starts++;
+        await new Promise((r) => setTimeout(r, 1500));
+        return base.startService(...a);
+      };
+      const { results } = await gateRuns(fx, { ...base, startService });
+      assert.ok(starts > 0, `no start ran:\n${results[0].lines.join("\n")}`);
+      const rows = lines().filter((l) => l.event === "gate.row");
+      const start = rows.filter((r) => r.row.startsWith("start "));
+      assert.ok(start.length > 0, JSON.stringify(rows));
+      for (const r of start) {
+        assert.equal(r.row_kind, "setup");
+        assert.ok(r.duration_ms >= 1500, JSON.stringify(r));
+      }
+      for (const r of rows.filter((x) => !x.row.startsWith("start ")))
+        assert.ok(r.duration_ms < 1500, `the wait leaked into ${JSON.stringify(r)}`);
+    },
+    { gate: true },
+  );
 });

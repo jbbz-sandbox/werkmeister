@@ -310,9 +310,14 @@ test("the daemon tools are listed, and clean/cache prune default to a dry run", 
     "leadToMerge",
     "leadToRelease",
     "gate",
+    "tests",
   ])
     assert.ok(row?.properties?.[k], `rows[] has ${k}`);
   assert.equal(row?.properties?.byVersion?.type, "object");
+  // SW-1101: gate minutes by row kind, and the range-wide suites for the slowest-suites table.
+  assert.ok(row?.properties?.gate?.properties?.byKind, "gate.byKind");
+  for (const k of ["suites", "suitesByVersion"])
+    assert.ok(trends?.outputSchema?.properties?.[k], `output has ${k}`);
 });
 
 test("a workspace-scoped server lists only the workspace verbs", async () => {

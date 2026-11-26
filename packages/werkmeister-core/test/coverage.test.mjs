@@ -56,7 +56,7 @@ const tmp = () => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "coverag
 test("findCoverageReports: the repo root and two levels down, never node_modules or deeper", () => {
   const root = tmp();
   try {
-    pkg(root, "packages/core", "werkmeister-core", {}, { tests: 7, duration_ms: 900 });
+    pkg(root, "packages/core", "werkmeister-core", {}, { tests: 7, failures: 1, duration_ms: 900 });
     pkg(root, "apps/cli", "werkmeister", {});
     pkg(root, ".", "root", {});
     pkg(root, "node_modules/dep", "dep", {});
@@ -78,6 +78,7 @@ test("findCoverageReports: the repo root and two levels down, never node_modules
       functions: 75,
       statements: 75,
       tests: 7,
+      failures: 1,
       duration_ms: 900,
     });
     assert.equal(found.find((r) => r.pkg.name === "werkmeister").pkg.tests, null);
@@ -97,6 +98,7 @@ test("coverage rows land under the temp HOME and validate; CI rows carry no work
         functions: 34.15,
         statements: 54.8,
         tests: 1715,
+        failures: 0,
         duration_ms: 121000,
       },
       {
@@ -119,6 +121,8 @@ test("coverage rows land under the temp HOME and validate; CI rows carry no work
     assert.equal(ci[0].version, "0.9.1+d7b749c0");
     assert.equal("version" in ci[1], false);
     assert.equal("tests" in ci[1], false, "an unknown count is left out");
+    assert.equal(ci[0].failures, 0, "SW-1101: a zero failure count is kept");
+    assert.equal("failures" in ci[1], false);
     assert.equal("workspace" in ci[0], false);
     assert.equal(gate[0].workspace, "ws");
     for (const e of [...ci, ...gate]) assert.ok(recordEvent(e, "2026-11-24T10:00:00.000Z"));

@@ -13,6 +13,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { gateRowKind } from "./metrics.js";
 import type { Lifecycle } from "./pr_lifecycle.js";
 
 /** One seeded workspace per state, so every column and badge has a card. */
@@ -251,6 +252,68 @@ export function seedDashboardHome(
 
   workspace("seed-abandoned", "SW-906", "abandoned", 4000, 2);
   ev(3900, "stage.done", "seed-abandoned", { stage: "01_research", commit: "d1" });
+
+  // SW-1101: seven weeks of gates, three runs a week, for the gate and test charts. pkg-b slows in
+  // the last complete week (the regression banner); pkg-c is partly cached.
+  // Placed by ISO week (Monday 00:00Z), not "w weeks ago", so a week's runs share a bucket on any weekday.
+  const today = new Date(now);
+  const sinceMonday =
+    ((today.getUTCDay() + 6) % 7) * 1440 + today.getUTCHours() * 60 + today.getUTCMinutes();
+  for (let w = 0; w < 7; w++) {
+    // In the first minutes of a Monday this week has no past to place runs in.
+    if (w === 0 && sinceMonday < 10) continue;
+    const name = `seed-gate-w${w}`;
+    for (let i = 0; i < 3; i++) {
+      // This week: spread over the part already past; earlier weeks: around their Thursday noon.
+      const end =
+        w === 0
+          ? Math.floor(sinceMonday * (0.3 + 0.2 * i)) + 1
+          : sinceMonday + (w - 1) * 7 * 1440 + 3.5 * 1440 + i * 120;
+      const run = `t${w}${i}`;
+      const testMs = {
+        "pkg-a": 120_000 + i * 6000,
+        "pkg-b": (w === 1 ? 300_000 : 180_000) + i * 6000,
+        "pkg-c": 30_000,
+      };
+      const testRow = testMs["pkg-a"] + testMs["pkg-b"] + testMs["pkg-c"] + 60_000;
+      ev(end + 20, "gate.start", name, { run, retry: i });
+      for (const [row, ms] of [
+        ["start werkmeister-core", 40_000],
+        ["lint", 60_000],
+        ["test werkmeister-core", testRow],
+        ["review", 2000],
+      ] as const)
+        ev(end, "gate.row", name, {
+          run,
+          row,
+          row_kind: gateRowKind(row),
+          duration_ms: ms,
+          result: "ok",
+        });
+      for (const [pkg, ms] of Object.entries(testMs))
+        ev(end, "test.run", name, {
+          run,
+          row: "test werkmeister-core",
+          package: pkg,
+          task: "test:coverage",
+          duration_ms: ms,
+          result: "ok",
+          cached: false,
+          tests: 40,
+          failures: 0,
+        });
+      ev(end, "test.run", name, {
+        run,
+        row: "test werkmeister-core",
+        package: "pkg-c",
+        task: "test:coverage",
+        duration_ms: 15,
+        result: "ok",
+        cached: true,
+      });
+      ev(end, "gate.end", name, { run, exit: w === 3 && i === 0 ? 1 : 0 });
+    }
+  }
 
   const byMonth = new Map<string, Record<string, unknown>[]>();
   for (const e of events) {

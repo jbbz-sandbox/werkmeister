@@ -30,6 +30,13 @@ const {
   waitSplit,
   bottleneck,
   slowestTickets,
+  GATE_KINDS,
+  gateKindBars,
+  testTrend,
+  slowestSuites,
+  firstPassLine,
+  testRegression,
+  formatTestMinutes,
 } = await import(path.join(pkgRoot, "dist/lib/metrics-view.js"));
 
 // 1. lineBandView: p50 line over a p50→p90 band, broken by a null point.
@@ -147,7 +154,15 @@ const slice = (o = {}) => ({
   cacheReadShare: null,
   activeMinutes: 0,
   wallClockMinutes: 0,
-  gate: { runs: 0, wallMinutes: 0, firstPassRate: null, passed: 0, workspaces: 0 },
+  gate: {
+    runs: 0,
+    wallMinutes: 0,
+    firstPassRate: null,
+    passed: 0,
+    workspaces: 0,
+    byKind: { setup: 0, lint: 0, test: 0, release: 0, checks: 0 },
+  },
+  tests: {},
   ...o,
 });
 const gate = (passed, workspaces) => ({ ...slice().gate, passed, workspaces });
@@ -164,6 +179,8 @@ const trends = {
   bucket: "week",
   from: "2026-10-26",
   to: "2026-11-20T12:00:00.000Z",
+  suites: {},
+  suitesByVersion: {},
   rows: [
     { bucket: "2026-10-26", ...slice(), byVersion: {} },
     { bucket: "2026-11-02", ...v9, byVersion: { "0.9.0": v9 } },
@@ -423,5 +440,120 @@ console.log("✓ multiLineView");
   );
 }
 console.log("✓ stageTrend, leadTrend, waitSplit, bottleneck, slowestTickets");
+
+// SW-1101: gate minutes by row kind, test time per package, the slowest suites, first pass, regression.
+{
+  const suite = (p50, p90, count, cached = 0, failed = 0) => ({
+    ...pct(p50, p90, count),
+    cached,
+    failed,
+  });
+  // Six weekly buckets, the last still filling: pkg-b is 2 min a week, then 3 min in the last complete one.
+  const p50s = {
+    "pkg-a": [1, 1, 1, 1, 1, 1],
+    "pkg-b": [2, 2, 2, 2, 3, 2],
+    "pkg-c": [0.5, 0.5, 0.5, 0.5, 0.6, 0.5],
+  };
+  const rows6 = Array.from({ length: 6 }, (_, i) => {
+    const s = slice({
+      gate: {
+        ...slice().gate,
+        firstPassRate: i % 2 ? 1 : 0.5,
+        workspaces: 2,
+        byKind: { ...slice().gate.byKind, test: 3 + i, lint: 1 },
+      },
+      tests: Object.fromEntries(
+        Object.entries(p50s).map(([k, v]) => [k, suite(v[i], v[i] + 0.5, 3)]),
+      ),
+    });
+    return {
+      bucket: `2026-10-${String(5 + 7 * i).padStart(2, "0")}`,
+      ...s,
+      byVersion: { [i === 4 ? "1.2.0" : "1.1.0"]: s },
+    };
+  });
+  const t6 = {
+    ...trends,
+    rows: rows6,
+    suites: {
+      "pkg-a": pct(1, 1.2, 18),
+      "pkg-b": pct(2, 2.5, 18),
+      "pkg-c": pct(0.5, 0.55, 18),
+      "pkg-d": NONE,
+    },
+    suitesByVersion: { "1.2.0": { "pkg-b": pct(3, 3.5, 3) } },
+  };
+  const r6 = sliceRows(t6, "all");
+
+  const bars = gateKindBars(r6);
+  assert.deepEqual(GATE_KINDS, ["setup", "lint", "test", "release", "checks"]);
+  assert.deepEqual(bars[2].values, { setup: 0, lint: 1, test: 5, release: 0, checks: 0 });
+
+  const tt = testTrend(r6, "p90");
+  assert.deepEqual(
+    tt.series.map((s) => s.key),
+    ["pkg-a", "pkg-b", "pkg-c"],
+  );
+  assert.deepEqual(tt.series[1].values, [2.5, 2.5, 2.5, 2.5, 3.5, 2.5]);
+  assert.deepEqual(tt.series[1].counts, [3, 3, 3, 3, 3, 3]);
+
+  const slow = slowestSuites(t6, r6, "all");
+  assert.deepEqual(
+    slow.map((s) => s.package),
+    ["pkg-b", "pkg-a", "pkg-c"],
+    "no p90, not ranked",
+  );
+  assert.deepEqual(slow[0].spark, p50s["pkg-b"]);
+  assert.equal(slow[0].latestP50, 2);
+  assert.equal(slow[0].slow, false, "latest p50 2 is under the range p90 2.5");
+  assert.equal(slow[2].slow, false);
+  // A package whose latest p50 is above its range p90 is drawn as slow.
+  const hot = slowestSuites({ ...t6, suites: { "pkg-b": pct(2, 1.8, 18) } }, r6, "all");
+  assert.equal(hot[0].slow, true);
+  assert.deepEqual(
+    slowestSuites(t6, r6, "1.2.0").map((s) => s.package),
+    ["pkg-b"],
+  );
+  assert.deepEqual(slowestSuites(t6, r6, "9.9.9"), []);
+
+  const fp = firstPassLine(r6);
+  assert.deepEqual(fp.series[0].values, [0.5, 1, 0.5, 1, 0.5, 1]);
+  assert.deepEqual(fp.series[0].counts, [2, 2, 2, 2, 2, 2]);
+
+  // pkg-b: 2 → 3 min is +50 % and +60 s; pkg-c: 0.5 → 0.6 is +20 % and +6 s, neither threshold.
+  const reg = testRegression(t6, r6);
+  assert.deepEqual(
+    [reg?.package, reg?.beforeP50, reg?.afterP50, reg?.version],
+    ["pkg-b", 2, 3, "1.2.0"],
+  );
+  assert.equal(reg.text, "pkg-b tests slowed: 2.0 min → 3.0 min p50 (first seen in 1.2.0)");
+  // No recorded version: the banner names none rather than "unknown".
+  const noVersion = rows6.map((r, i) => (i === 4 ? { ...r, byVersion: { unknown: r } } : r));
+  const regU = testRegression(
+    { ...t6, rows: noVersion },
+    sliceRows({ ...t6, rows: noVersion }, "all"),
+  );
+  assert.equal(regU?.version, null);
+  assert.equal(regU?.text, "pkg-b tests slowed: 2.0 min → 3.0 min p50");
+  // +25 % but only +20 s: under the 30 s floor.
+  const small = { ...p50s, "pkg-b": [1.33, 1.33, 1.33, 1.33, 1.67, 1.33] };
+  const rowsSmall = rows6.map((r, i) => ({
+    ...r,
+    tests: Object.fromEntries(Object.entries(small).map(([k, v]) => [k, suite(v[i], v[i], 3)])),
+  }));
+  assert.equal(testRegression(t6, sliceRows({ ...t6, rows: rowsSmall }, "all")), null);
+  // Two runs in the slower bucket: not enough to flag.
+  const thin = rows6.map((r, i) =>
+    i === 4 ? { ...r, tests: { ...r.tests, "pkg-b": suite(3, 3.5, 2) } } : r,
+  );
+  assert.equal(testRegression(t6, sliceRows({ ...t6, rows: thin }, "all")), null);
+  assert.equal(testRegression(t6, r6.slice(0, 4)), null, "too few buckets");
+
+  assert.deepEqual(
+    [formatTestMinutes(0.25), formatTestMinutes(3), formatTestMinutes(null)],
+    ["15 s", "3.0 min", "—"],
+  );
+}
+console.log("✓ gateKindBars, testTrend, slowestSuites, firstPassLine, testRegression (SW-1101)");
 
 console.log("charts smoke: OK");

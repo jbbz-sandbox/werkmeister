@@ -59,8 +59,9 @@ show() { IFS= read -r v < "$dir/$1"; printf '%s\\n' "$v"; }
 out() { printf '%s\\n' "$1"; }
 fail() { printf '%s\\n' "$1" >&2; exit 1; }
 if [ "$tool" = gh ]; then log=calls; else log=docker-calls; fi
-# A gate exec logs as \`exec <container> <row command>\`: the inlined with-temp-home script is ~1.5 KB a row (SW-511).
-if [ "$tool" = docker ] && [ "$1" = exec ]; then for last; do :; done; line="exec $2 $last"; else line="$*"; fi
+# A gate exec logs as \`exec <container> <row command>\`: the inlined with-temp-home script is ~1.5 KB a row (SW-511),
+# and the gate's \`-e TURBO_RUN_SUMMARY=true\` comes before the container (SW-1101).
+if [ "$tool" = docker ] && [ "$1" = exec ]; then for last; do :; done; c=$2; [ "$c" = -e ] && c=$4; line="exec $c $last"; else line="$*"; fi
 case "$line" in *'
 '*) line=$(printf '%s' "$line" | tr '\\n' ' ') ;; esac
 printf '%s\\n' "$line" >> "$dir/$log"

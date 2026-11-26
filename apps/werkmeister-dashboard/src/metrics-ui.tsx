@@ -1,7 +1,7 @@
 /**
  * "Metrics" dashboard tab (SW-1098): the `metrics-trends` series over a range, filtered by
  * werkmeister version, drawn with the inline-SVG primitives in lib/charts.ts. SW-1099 adds stage
- * and ticket time; the closed-workspaces chart stays a preview until SW-1100/1101.
+ * and ticket time, SW-1101 gate and test time; the closed-workspaces chart stays a preview until SW-1100.
  */
 
 import { type ReactNode, useEffect, useState } from "react";
@@ -13,6 +13,10 @@ import { formatMinutes, RANGES } from "./lib/flow-board.js";
 import {
   bottleneck,
   emptyText,
+  firstPassLine,
+  formatTestMinutes,
+  GATE_KINDS,
+  gateKindBars,
   isEmpty,
   leadTrend,
   metricsTiles,
@@ -20,11 +24,15 @@ import {
   previewCharts,
   RANGE_BUCKET,
   type SlicedRow,
+  type SlowSuite,
   sliceRows,
+  slowestSuites,
   slowestTickets,
   stageHeatmap,
   stageTrend,
   type TrendLines,
+  testRegression,
+  testTrend,
   versionsOf,
   waitSplit,
 } from "./lib/metrics-view.js";
@@ -71,6 +79,13 @@ const CSS = `
   .metrics .slow li { padding: 4px 0; border-top: 1px solid var(--sd-line-soft); }
   .metrics .slow a { color: var(--sd-accent); font-weight: 600; }
   .metrics .slow .ws { color: var(--sd-muted); margin-left: 6px; overflow-wrap: anywhere; }
+  .metrics .suites { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .metrics .suites th, .metrics .suites td { text-align: left; padding: 4px 6px; border-top: 1px solid var(--sd-line-soft); white-space: nowrap; }
+  .metrics .suites thead th { color: var(--sd-muted); font-weight: 500; border-top: 0; }
+  .metrics .suites td:nth-child(4) { width: 40%; }
+  .metrics .suites tr.warn { background: var(--sd-warn-bg); }
+  .metrics .suites .tag { margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--sd-ink); border: 1px solid var(--sd-warn-bd); border-radius: 4px; padding: 0 4px; }
+  @media (max-width: 599px) { .metrics .suites th:nth-child(3), .metrics .suites td:nth-child(3) { display: none; } }
 `;
 
 const H = 120;
@@ -97,7 +112,7 @@ function Chart({
   return (
     <section className="chart">
       <h3>{title}</h3>
-      {preview && <div className="cap">Preview — replaced by SW-1100–1101</div>}
+      {preview && <div className="cap">Preview — replaced by SW-1100</div>}
       {children}
     </section>
   );
@@ -134,20 +149,22 @@ function Lines({
   label,
   p,
   empty,
+  fmt = formatMinutes,
 }: {
   trend: TrendLines;
   /** One colour per series, in series order. */
   colors: string[];
   label: string;
-  p: Pct;
+  p?: Pct;
   empty: string;
+  fmt?: (n: number) => string;
 }) {
   const v = multiLineView(trend.series, H);
   if (!v.lines.some((l) => l.dots.length)) return <div className="empty">{empty}</div>;
   return (
     <>
       <div className="xlabels">
-        <span>{formatMinutes(v.yMax)}</span>
+        <span>{fmt(v.yMax)}</span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
@@ -168,7 +185,7 @@ function Lines({
                 strokeLinecap="round"
                 vectorEffect="non-scaling-stroke"
               >
-                <title>{`${l.key}, ${trend.cols[d.slot]}: ${p} ${formatMinutes(d.value)} (n ${trend.series[si].counts[d.slot]})`}</title>
+                <title>{`${l.key}, ${trend.cols[d.slot]}: ${p ? `${p} ` : ""}${fmt(d.value)} (n ${trend.series[si].counts[d.slot]})`}</title>
               </path>
             ))}
           </g>
@@ -356,26 +373,39 @@ function SplitBars({ rows }: { rows: SlicedRow[] }) {
   );
 }
 
-const STACK_FILL: Record<string, string> = {
+const CLOSED_FILL: Record<string, string> = {
   shipped: "var(--sd-ok)",
   abandoned: "var(--sd-muted)",
 };
 
-function StackedBars({ bars, keys }: { bars: StackBar[]; keys: string[] }) {
+function StackedBars({
+  bars,
+  keys,
+  fill,
+  label,
+  empty,
+  fmt = String,
+}: {
+  bars: StackBar[];
+  keys: string[];
+  fill: Record<string, string>;
+  label: string;
+  empty: string;
+  fmt?: (n: number) => string;
+}) {
   const v = stackedBarView(bars, keys, H);
-  if (!v.bars.some((b) => b.segments.length))
-    return <div className="empty">No workspace closed in this range.</div>;
+  if (!v.bars.some((b) => b.segments.length)) return <div className="empty">{empty}</div>;
   return (
     <>
       <div className="xlabels">
-        <span>{v.yMax}</span>
+        <span>{fmt(v.yMax)}</span>
       </div>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         preserveAspectRatio="none"
         height={H}
         role="img"
-        aria-label="Closed workspaces per bucket, shipped and abandoned"
+        aria-label={label}
       >
         {v.bars.flatMap((b) =>
           b.segments.map((s) => (
@@ -385,7 +415,7 @@ function StackedBars({ bars, keys }: { bars: StackBar[]; keys: string[] }) {
               y={s.y}
               width={b.width}
               height={s.height}
-              fill={STACK_FILL[s.key]}
+              fill={fill[s.key]}
             >
               <title>{`${b.label}: ${s.value} ${s.key}`}</title>
             </rect>
@@ -393,6 +423,137 @@ function StackedBars({ bars, keys }: { bars: StackBar[]; keys: string[] }) {
         )}
       </svg>
       <XLabels cols={bars.map((b) => b.label)} />
+    </>
+  );
+}
+
+// Row kinds and suites take the stage palette by position, as stages do.
+const GATE_FILL: Record<string, string> = Object.fromEntries(
+  GATE_KINDS.map((k, i) => [k, STAGE_COLORS[i % STAGE_COLORS.length]]),
+);
+const pct = (n: number) => `${Math.round(n * 100)}%`;
+
+function TestTrendChart({ rows }: { rows: SlicedRow[] }) {
+  const [p, setP] = useState<Pct>("p50");
+  return (
+    <Chart
+      title={
+        <>
+          Test time per package
+          <PctToggle value={p} onChange={setP} />
+        </>
+      }
+    >
+      <Lines
+        trend={testTrend(rows, p)}
+        colors={STAGE_COLORS}
+        p={p}
+        fmt={formatTestMinutes}
+        label={`${p} test minutes per package per bucket, one line per package`}
+        empty="No test run in this range."
+      />
+    </Chart>
+  );
+}
+
+const SPARK_H = 24;
+
+function Spark({ values, warn }: { values: (number | null)[]; warn: boolean }) {
+  const line = multiLineView([{ key: "p50", values }], SPARK_H).lines[0];
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${SPARK_H}`}
+      preserveAspectRatio="none"
+      height={SPARK_H}
+      aria-hidden="true"
+      style={{ width: "100%", minWidth: 60 }}
+    >
+      <path
+        d={line?.d ?? ""}
+        fill="none"
+        stroke={warn ? "var(--sd-warn)" : "var(--sd-accent)"}
+        strokeWidth={2}
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  );
+}
+
+function SlowSuites({ suites }: { suites: SlowSuite[] }) {
+  if (!suites.length) return <div className="empty">No test run in this range.</div>;
+  return (
+    <table className="suites">
+      <thead>
+        <tr>
+          <th scope="col">Package</th>
+          <th scope="col">p90</th>
+          <th scope="col">Runs</th>
+          <th scope="col">p50 trend</th>
+          <th scope="col">Latest p50</th>
+        </tr>
+      </thead>
+      <tbody>
+        {suites.map((s) => (
+          <tr key={s.package} className={s.slow ? "warn" : undefined}>
+            <th scope="row">
+              {s.package}
+              {s.slow && <span className="tag">slow</span>}
+            </th>
+            <td>{formatTestMinutes(s.p90Minutes)}</td>
+            <td>{s.runs}</td>
+            <td>
+              <Spark values={s.spark} warn={s.slow} />
+            </td>
+            <td>{formatTestMinutes(s.latestP50)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** SW-1101: gate minutes by row kind, test time per package, the slowest suites and the first-pass rate. */
+function GateSection({
+  trends,
+  rows,
+  version,
+}: {
+  trends: MetricsTrends;
+  rows: SlicedRow[];
+  version: string;
+}) {
+  const regression = testRegression(trends, rows);
+  return (
+    <>
+      {regression && (
+        <p className="bottleneck" role="status">
+          Regression · {regression.text}
+        </p>
+      )}
+      <Chart title="Gate minutes by row kind">
+        <StackedBars
+          bars={gateKindBars(rows)}
+          keys={[...GATE_KINDS]}
+          fill={GATE_FILL}
+          fmt={formatTestMinutes}
+          label="Gate minutes per bucket, stacked by row kind"
+          empty="No gate rows in this range."
+        />
+        <Legend items={GATE_KINDS.map((k) => [k, GATE_FILL[k]])} />
+      </Chart>
+      <TestTrendChart rows={rows} />
+      <Chart title="Slowest suites (by p90 over the range)">
+        <SlowSuites suites={slowestSuites(trends, rows, version)} />
+      </Chart>
+      <Chart title="Gate first-pass rate">
+        <Lines
+          trend={firstPassLine(rows)}
+          colors={["var(--sd-ok)"]}
+          fmt={pct}
+          label="Share of workspaces whose first gate run passed, per bucket"
+          empty="No first gate run in this range."
+        />
+      </Chart>
     </>
   );
 }
@@ -479,8 +640,15 @@ export function MetricsTab({ bridge, active }: { bridge: HostBridge; active: boo
             <SplitBars rows={rows} />
           </Chart>
           <LeadChart rows={rows} />
+          <GateSection trends={trends} rows={rows} version={version} />
           <Chart title="Closed workspaces (shipped / abandoned)" preview>
-            <StackedBars bars={charts.closed} keys={charts.closedKeys} />
+            <StackedBars
+              bars={charts.closed}
+              keys={charts.closedKeys}
+              fill={CLOSED_FILL}
+              label="Closed workspaces per bucket, shipped and abandoned"
+              empty="No workspace closed in this range."
+            />
           </Chart>
         </>
       )}
