@@ -146,3 +146,55 @@ test("a dependency with no checked-out repo stays out of compose (SW-942)", asyn
   assert.equal(compose.services["cluster-only"], undefined);
   assert.equal(compose.services.frontend.depends_on, undefined);
 });
+
+// SW-956: in an all-on-demand workspace the gate starts frontend and, through depends_on, backend's
+// container; frontend read BACKEND_URL (shared .env) and its {backend} ref as the k8s forward.
+async function gateStartEnv(workspaceYml = "") {
+  const services = DEPENDS.replace(
+    "depends_on: [backend]",
+    'depends_on: [backend]\n    environment:\n      API: "http://{backend}/api"',
+  );
+  const ws = fs.mkdtempSync(path.join(os.tmpdir(), "sandbox-od-ws-"));
+  fs.mkdirSync(path.join(ws, "demo-repo"));
+  fs.mkdirSync(path.join(ws, ".werkmeister"));
+  fs.writeFileSync(path.join(ws, ".werkmeister", "workspace.yml"), workspaceYml);
+  try {
+    return await withSandboxHome(
+      async () => {
+        const compose = YAML.parse(
+          fs.readFileSync(generateFeatureCompose("f", 1, [], null, ws), "utf8"),
+        );
+        generateFeatureEnv("f", 1, [], null, ws);
+        // What startService writes before the gate's `up -d frontend`.
+        writeServiceSecretEnvs(ws, ["frontend"], loadServices());
+        // Compose reads env_file in order, a later file winning; `environment:` beats both.
+        const env = {};
+        for (const f of compose.services.frontend.env_file) {
+          const file = path.join(ws, typeof f === "string" ? f : f.path);
+          if (!fs.existsSync(file)) continue;
+          for (const line of fs.readFileSync(file, "utf8").split("\n")) {
+            const m = /^([A-Z0-9_]+)=(.*)$/.exec(line);
+            if (m) env[m[1]] = m[2];
+          }
+        }
+        return { env, environment: compose.services.frontend.environment };
+      },
+      { services },
+    );
+  } finally {
+    fs.rmSync(ws, { recursive: true, force: true });
+  }
+}
+
+test("an on-demand service the gate starts reaches its on-demand dependency's container (SW-956)", async () => {
+  const { env, environment } = await gateStartEnv();
+  assert.equal(env.BACKEND_URL, "http://backend:3000");
+  assert.equal(env.BACKEND_HOST, "backend");
+  assert.ok(environment.includes("API=http://backend:3000/api"), environment);
+});
+
+test("a workspace's own env_vars still win over a dependency's container URL (SW-956)", async () => {
+  const { env } = await gateStartEnv("env_vars:\n  BACKEND_URL: http://elsewhere:1\n");
+  assert.equal(env.BACKEND_URL, "http://elsewhere:1");
+  assert.equal(env.BACKEND_HOST, "backend");
+});
