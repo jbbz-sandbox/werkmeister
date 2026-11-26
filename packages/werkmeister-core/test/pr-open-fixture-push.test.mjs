@@ -140,3 +140,68 @@ test("a push GitHub keeps refusing stops after 3 tries and points at GitHub's st
     },
   );
 });
+
+// SW-1198: a failed push or gh pr create adds githubstatus.com's verdict, and nothing when it says nothing.
+const OUTAGE =
+  "GitHub Pull Requests: partial_outage; nothing was created; retry when https://www.githubstatus.com shows it operational";
+
+const failingCreate = (deps) => {
+  const run = deps.run;
+  deps.run = async (bin, args, cwd) =>
+    bin === "gh" && args[1] === "list"
+      ? { code: 0, stdout: "", stderr: "" }
+      : bin === "gh" && args[1] === "create"
+        ? { code: 1, stdout: "", stderr: "GraphQL: Something went wrong" }
+        : run(bin, args, cwd);
+};
+
+for (const [name, status, want] of [
+  ["an outage line", OUTAGE, `  ${OUTAGE}`],
+  ["no extra line when status reads operational or fails", null, null],
+]) {
+  test(`a failed push gets ${name} (SW-1198)`, async () => {
+    await withGateFixture(
+      async (fx, deps) => {
+        delete process.env.WERKMEISTER_FIXTURE;
+        deps.githubStatus = async () => status;
+        const { ok, lines } = await openPrs(fx.workspace, undefined, deps);
+        assert.equal(ok, false);
+        const i = lines.findIndex((l) => l.includes("push failed — denied"));
+        assert.ok(i >= 0, lines.join("\n"));
+        assert.equal(
+          lines.includes(OUTAGE) || lines.includes(`  ${OUTAGE}`),
+          !!want,
+          lines.join("\n"),
+        );
+        if (want) assert.equal(lines[i + 1], want);
+      },
+      { origin: "git@github.com:o/app.git", pushCode: 1 },
+    );
+  });
+
+  test(`a failed gh pr create gets ${name} (SW-1198)`, async () => {
+    await withGateFixture(
+      async (fx, deps) => {
+        delete process.env.WERKMEISTER_FIXTURE;
+        failingCreate(deps);
+        deps.githubStatus = async () => status;
+        const { ok, lines } = await openPrs(fx.workspace, undefined, deps);
+        assert.equal(ok, false);
+        const i = lines.findIndex((l) =>
+          l.includes("gh pr create failed — GraphQL: Something went wrong"),
+        );
+        assert.ok(i >= 0, lines.join("\n"));
+        assert.equal(lines.includes(`  ${OUTAGE}`), !!want, lines.join("\n"));
+        if (want) assert.equal(lines[i + 1], want);
+      },
+      { origin: "git@github.com:o/app.git" },
+    );
+  });
+}
+
+test("the default githubStatus makes no network call under a fixture (SW-1198)", async () => {
+  await withGateFixture(async (_fx, deps) => {
+    assert.ok(process.env.WERKMEISTER_FIXTURE);
+    assert.equal(await deps.githubStatus(), null);
+  });
+});
