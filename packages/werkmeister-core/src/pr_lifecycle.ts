@@ -6,7 +6,7 @@
  */
 
 import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -901,6 +901,46 @@ function readEnv(ws: string, key: string): string {
   return "";
 }
 
+/** SW-1197: a passing tested gate on one worktree, which `pr open` reuses on the same HEAD, base and commands. */
+interface GatePass {
+  head: string;
+  base: string;
+  base_sha: string;
+  commands: string[];
+  commands_sha256: string;
+  at: string;
+  by: "pr gate --tests" | "pr gate" | "pr open";
+}
+type GateKey = Omit<GatePass, "at" | "by"> & { clean: boolean };
+/** What gateChecks hands back to runGate: the key once it reached the rows, and whether it reused a pass. */
+type PassState = { key?: GateKey; reused?: boolean };
+
+const gatePassPath = (ws: string, dir: string) => path.join(logsDir(ws), `gate-pass-${dir}.json`);
+const commandsSha = (commands: string[]) =>
+  createHash("sha256").update(commands.join("\n")).digest("hex");
+
+function readGatePass(ws: string, dir: string): GatePass | null {
+  try {
+    const p = JSON.parse(fs.readFileSync(gatePassPath(ws, dir), "utf8")) as GatePass;
+    return typeof p.head === "string" && typeof p.commands_sha256 === "string" ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Writes or drops the record; a failure only costs the next `pr open` a rerun. */
+function saveGatePass(ws: string, dir: string, pass: GatePass | null): void {
+  try {
+    if (!pass) fs.rmSync(gatePassPath(ws, dir), { force: true });
+    else {
+      fs.mkdirSync(logsDir(ws), { recursive: true });
+      fs.writeFileSync(gatePassPath(ws, dir), `${JSON.stringify(pass, null, 2)}\n`);
+    }
+  } catch {
+    /* best effort */
+  }
+}
+
 /**
  * The pre-PR gate for one repo. A container it had to start for the repo's
  * tests is stopped again, pass or fail; what was running before stays (SW-34).
@@ -915,8 +955,11 @@ export async function runGate(
     testsOnly = false,
     rebase = false,
     keepStarted = false,
+    reuse = false,
   }: {
     testsOnly?: boolean;
+    /** SW-1197: `pr open` skips the lint and test rows when a recorded pass matches. */
+    reuse?: boolean;
     /** SW-1046: `pr open` re-gates next; stopping them would queue its starts for capacity again. The idle reaper still stops them. */
     keepStarted?: boolean;
     /** SW-857: rebase an unpushed branch behind its base, as `pr open` does. */
@@ -935,10 +978,28 @@ export async function runGate(
   const startedMs = Date.now();
   const tag = runTag(ws);
   recordEvent({ event: "gate.start", workspace, run, retry: nextGateRun(ws, file.stem), ...tag });
+  const pass: PassState = {};
   try {
-    result = await gateChecks(ws, file, deps, started, recreated, testsOnly, rebase, run);
+    result = await gateChecks(
+      ws,
+      file,
+      deps,
+      started,
+      recreated,
+      testsOnly,
+      rebase,
+      run,
+      reuse,
+      pass,
+    );
   } finally {
     clearInterval(beat);
+    // A dirty-tree pass tested the uncommitted tree, not HEAD: it neither writes nor drops the record.
+    if (pass.key && !pass.reused && !(result?.ok && !pass.key.clean)) {
+      const { clean: _clean, ...key } = pass.key;
+      const by = testsOnly ? "pr gate --tests" : rebase ? "pr open" : "pr gate";
+      saveGatePass(ws, file.dir, result?.ok ? { ...key, at: new Date().toISOString(), by } : null);
+    }
     fs.rmSync(path.join(ws, GATE_COMPOSE_FILE), { force: true });
     const feature = String(loadConfigFile(ws, null)["feature"] ?? readEnv(ws, "FEATURE")).trim();
     for (const svc of recreated) {
@@ -1222,6 +1283,8 @@ async function gateChecks(
   testsOnly = false,
   rebase = false,
   run: string,
+  reuse = false,
+  pass: PassState = {},
 ): Promise<GateResult> {
   const tag = runTag(ws);
   let rowStart = Date.now();
@@ -1753,6 +1816,57 @@ async function gateChecks(
     ? ((repo["services"] ?? []) as string[]).filter((s) => !touched.includes(s))
     : [];
   if (rest.length) add("tests", true, `not touched, not run: ${rest.join(", ")}`);
+
+  // SW-1197: the key a passing run records, and `pr open` matches before it runs any lint or test row.
+  const commands = [
+    `lint: ${repo["lint"] ?? ""}`,
+    ...touched.map((s) => {
+      const why = reason(skips[s]);
+      const none = serviceNoTests(services[s]);
+      const cmd = serviceTestCommand(s, services[s], deps.archetypes) ?? "";
+      return `${s}: ${why ? `skipped: ${why}` : none ? `no tests: ${none}` : cmd}`;
+    }),
+  ];
+  const rev = async (ref: string) => {
+    const r = await deps.run("git", ["-C", dir, "rev-parse", "--verify", "-q", ref]);
+    return r.code ? "" : r.stdout.trim();
+  };
+  const head = await rev("HEAD");
+  const baseSha = await rev(`origin/${base}`);
+  const tree = await deps.run("git", ["-C", dir, "status", "--porcelain"]);
+  if (head && baseSha && tree.code === 0) {
+    const key = {
+      head,
+      base,
+      base_sha: baseSha,
+      commands,
+      commands_sha256: commandsSha(commands),
+      clean: !tree.stdout.trim(),
+    };
+    pass.key = key;
+    const was = reuse ? readGatePass(ws, file.dir) : null;
+    const stale = !was
+      ? null
+      : was.head !== head
+        ? "HEAD moved"
+        : was.base !== base || was.base_sha !== baseSha
+          ? `origin/${base} moved`
+          : was.commands_sha256 !== key.commands_sha256
+            ? "test commands changed"
+            : !key.clean
+              ? "the tree is uncommitted now"
+              : null;
+    if (was && !stale) {
+      pass.reused = true;
+      add(
+        "tests",
+        true,
+        `reused the passing gate from ${was.at} (${was.by}) on HEAD ${head.slice(0, 12)}, origin/${base} ${baseSha.slice(0, 12)}, same lint and test commands; ${path.relative(ws, gatePassPath(ws, file.dir))}`,
+      );
+    } else if (stale) add("tests", true, `rerunning — ${stale} since the recorded pass`);
+  }
+  const reused = Boolean(pass.reused);
+
   const releaseRuns =
     repo["ship"] === "tag" && Boolean(repo["release_check"]) && !reason(file.fm["skip_release"]);
 
@@ -1778,7 +1892,7 @@ async function gateChecks(
   // Running containers come from compose.yml, rendered from the machine registry; a
   // touched service whose branch settings render differently runs from compose.gate.yml (SW-118).
   let changed: string[] = [];
-  if (own)
+  if (own && !reused)
     try {
       // A skip_tests service runs no row, so its branch settings need no container either (SW-734).
       changed = deps
@@ -1810,7 +1924,10 @@ async function gateChecks(
   // A refused one gets no container or row: a compose.yml start would clear its failed row (SW-891).
   const withCommand = touched.filter(
     (s) =>
-      !reason(skips[s]) && !refused.has(s) && serviceTestCommand(s, services[s], deps.archetypes),
+      !reused &&
+      !reason(skips[s]) &&
+      !refused.has(s) &&
+      serviceTestCommand(s, services[s], deps.archetypes),
   );
   const covers = coveredRows(
     Object.fromEntries(
@@ -1963,7 +2080,8 @@ async function gateChecks(
   }
   await dropStopped();
 
-  const needsContainer = releaseRuns || Boolean(repo["lint"]) || tested.some((s) => !toRendered(s));
+  const needsContainer =
+    releaseRuns || (Boolean(repo["lint"]) && !reused) || tested.some((s) => !toRendered(s));
   const serving = needsContainer ? repoServices.map(containerFor).find(Boolean) : null;
   // Not one this run started or recreated for the gate (SW-118): only a container left up counts.
   if (
@@ -2014,7 +2132,7 @@ async function gateChecks(
   if (needsContainer && !repoServices.some(containerFor) && !(await startRepoContainer()))
     return { ...done(), ok: false };
 
-  if (repo["lint"]) {
+  if (repo["lint"] && !reused) {
     const container = repoContainer();
     if (!container)
       add("lint", false, "no running container for this repo — run `werkmeister feature up`");
@@ -2023,7 +2141,7 @@ async function gateChecks(
     }
   }
 
-  for (const svc of touched) {
+  for (const svc of reused ? [] : touched) {
     // A refused one's row would test compose.yml's container, not the branch's (SW-891).
     if (covers[svc] || refused.has(svc)) continue;
     const cmd = serviceTestCommand(svc, services[svc], deps.archetypes);
@@ -2083,7 +2201,7 @@ async function gateChecks(
   const slot = Number(readEnv(ws, "WERKMEISTER_SLOT"));
   // Only a served endpoint has a baseline; the test check already proved a container ran the rest.
   const isServed = (s: string) => ["api", "web"].includes(services[s]?.["type"] ?? "");
-  for (const svc of touched.filter((s) => local.has(s) && isServed(s))) {
+  for (const svc of (reused ? [] : touched).filter((s) => local.has(s) && isServed(s))) {
     const def = services[svc] ?? {};
     if (!running.has(containerOf(feature, svc))) {
       add(`baseline ${svc}`, false, "container not running — run `werkmeister feature up`");
@@ -2362,7 +2480,7 @@ export async function openPrs(
       );
       continue;
     }
-    const g = await runGate(ws, f, deps, { rebase: true });
+    const g = await runGate(ws, f, deps, { rebase: true, reuse: true });
     lines.push(...formatGate(f.stem, g));
     if (!g.ok) {
       ok = false;

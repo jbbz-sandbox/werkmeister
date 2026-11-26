@@ -1,5 +1,5 @@
 /**
- * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--workspace-repo] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--workflow <dir> [--workflow-in repo]] [--print <file>]... <args> [--then <args> | --then-append <path> <text>]...
+ * werkmeister internal fixture [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--create-fails] [--behind] [--slots-full] [--postmortem] [--workspace-repo] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--workflow <dir> [--workflow-in repo]] [--print <file>]... <args> [--then <args> | --then-append <path> <text>]...
  *
  * What `.werkmeister/bin/with-fixture-workspace` runs (SW-292): seeds a fixture in a temp folder,
  * runs this same build with each `<args>` from the fixture workspace (stopping at the first
@@ -23,7 +23,7 @@ import {
 import YAML from "yaml";
 
 const USAGE =
-  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--behind] [--slots-full] [--postmortem] [--workspace-repo] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--workflow <dir> [--workflow-in repo]] [--print <file>]... <werkmeister args> [--then <werkmeister args> | --then-append <path> <text>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
+  "usage: with-fixture-workspace [--no-wait] [--gate] [--bare] [--daemon] [--exec-runs] [--merged] [--create-fails] [--behind] [--slots-full] [--postmortem] [--workspace-repo] [--worktrees] [--jira] [--running <file>] [--queue <feature>[,<feature>]... | --queue <feature>:<waitedMin>[:<service>,...]]... [--issue <ref>] [--pr-field <key>=<value>]... [--pr-line '<key>: <value>']... [--workspace <file>] [--config <file>] [--services <file>] [--fragment <file>] [--change <path>] [--change-base <file>] [--change-branch <file>] [--fragment-change <file>] [--stale-compose] [--workflow <dir> [--workflow-in repo]] [--print <file>]... <werkmeister args> [--then <werkmeister args> | --then-append <path> <text>]...\n(fixture options come first: the first other argument starts the werkmeister args)";
 
 /** PR-file keys the pre-approved wrapper may set: none reaches a git or Claude call (SW-514). */
 const PR_KEYS = "skip_release|skip_exercise|skip_review|release|status|url";
@@ -76,6 +76,7 @@ export function parse(argv: string[], base = cliWorktree()) {
     daemon: false,
     execRuns: false,
     merged: false,
+    createFails: false,
     behind: false,
     slotsFull: false,
     postmortem: false,
@@ -109,6 +110,7 @@ export function parse(argv: string[], base = cliWorktree()) {
     // First only, so the workspace's prefix ask rule sees it (workspaceAskRules); later, it is a werkmeister arg.
     else if (a === "--exec-runs" && i === 0) opts.execRuns = true;
     else if (a === "--merged") opts.merged = true;
+    else if (a === "--create-fails") opts.createFails = true;
     else if (a === "--behind") opts.behind = true;
     else if (a === "--slots-full") opts.slotsFull = true;
     else if (a === "--postmortem") opts.postmortem = true;
