@@ -7152,3 +7152,142 @@ test("runGate: a row whose container stopped under it names the stop and asks fo
     }
   }
 });
+
+// SW-1197: a passing tested gate on a clean tree is recorded per worktree; `pr open` reuses it on the
+// same HEAD, origin/<base> and lint and test commands, and a failed `gh pr create` keeps it.
+const SHA = (c) => c.repeat(40);
+const keyed = ({ head = "a", base = "b", dirty = "" } = {}) => [
+  [/rev-parse --verify -q HEAD$/, { stdout: `${SHA(head)}\n` }],
+  [/rev-parse --verify -q origin\/main$/, { stdout: `${SHA(base)}\n` }],
+  [/status --porcelain$/, { stdout: dirty }],
+];
+const API_CHANGE = [/diff --name-only abc$/, { stdout: "apps/api/x.ts\n" }];
+const CREATED = [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }];
+const passFile = (ws) => path.join(dotDir(ws), "logs", "gate-pass-app.json");
+const testExecs = (d) => d.calls.filter((c) => /^docker exec \S+ sh -c npm test/.test(c));
+/** An approved PR file plus the worktree `pr gate --tests` looks for. */
+function reuseWorkspace() {
+  const ws = icmWorkspace();
+  fs.mkdirSync(path.join(ws, "app", ".git"), { recursive: true });
+  return ws;
+}
+
+test("gate --tests: a pass on a clean tree records HEAD, origin/<base> and the commands in the workspace (SW-1197)", async () => {
+  const ws = reuseWorkspace();
+  try {
+    const g = await gateT(ws, deps([MERGE_BASE, API_CHANGE, ...keyed()]));
+    assert.equal(g.ok, true, g.lines.join("\n"));
+    const file = passFile(ws);
+    assert.ok(file.startsWith(ws + path.sep), `${file} is under the workspace`);
+    const rec = JSON.parse(fs.readFileSync(file, "utf8"));
+    assert.equal(rec.head, SHA("a"));
+    assert.equal(rec.base_sha, SHA("b"));
+    assert.equal(rec.by, "pr gate --tests");
+    assert.deepEqual(rec.commands, ["lint: ", "api: npm test -w api"]);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate --tests: a pass on an uncommitted tree writes no record (SW-1197)", async () => {
+  const ws = reuseWorkspace();
+  try {
+    const d = deps([MERGE_BASE, API_CHANGE, ...keyed({ dirty: " M apps/api/x.ts\n" })]);
+    assert.equal((await gateT(ws, d)).ok, true);
+    assert.equal(fs.existsSync(passFile(ws)), false);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("gate --tests: a failing row writes no record and deletes an earlier one (SW-1197)", async () => {
+  const ws = reuseWorkspace();
+  try {
+    await gateT(ws, deps([MERGE_BASE, API_CHANGE, ...keyed()]));
+    assert.ok(fs.existsSync(passFile(ws)));
+    const d = deps([
+      MERGE_BASE,
+      API_CHANGE,
+      ...keyed(),
+      [/docker exec feat-api sh -c npm test/, { code: 1, stdout: "not ok 1\n" }],
+    ]);
+    assert.equal((await gateT(ws, d)).ok, false);
+    assert.equal(fs.existsSync(passFile(ws)), false);
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openPrs: a matching recorded pass skips the lint and test rows, still runs the cheap rows and release (SW-1197)", async () => {
+  const ws = reuseWorkspace();
+  try {
+    await gateT(ws, deps([MERGE_BASE, API_CHANGE, ...keyed()]));
+    const d = deps([DIFF_API, ...keyed(), CREATED]);
+    const r = await open(ws, d);
+    const out = r.lines.join("\n");
+    assert.ok(r.ok, out);
+    assert.match(
+      out,
+      /✓ tests: reused the passing gate from \S+ \(pr gate --tests\) on HEAD a{12}, origin\/main b{12}, same lint and test commands; \.werkmeister\/logs\/gate-pass-app\.json/,
+    );
+    for (const row of ["acceptance", "base", "clean"]) assert.match(out, new RegExp(`✓ ${row}:`));
+    assert.deepEqual(testExecs(d), []);
+    assert.ok(d.calls.includes("docker exec feat-api sh -c npx changeset status"), out);
+    assert.ok(d.calls.some((c) => c.startsWith("gh pr create")));
+  } finally {
+    clean(ws);
+  }
+});
+
+test("openPrs: a failed gh pr create keeps pr open's own recorded pass; the retry runs no test row (SW-1197)", async () => {
+  const ws = reuseWorkspace();
+  try {
+    const down = [/^gh pr create/, { code: 1, stderr: "HTTP 503" }];
+    const first = deps([DIFF_API, ...keyed(), down]);
+    const r1 = await open(ws, first);
+    assert.equal(r1.ok, false);
+    assert.match(r1.lines.join("\n"), /gh pr create failed — HTTP 503/);
+    assert.equal(testExecs(first).length, 1, "the first open ran the tests");
+    const rec = fs.readFileSync(passFile(ws), "utf8");
+    assert.equal(JSON.parse(rec).by, "pr open");
+    const retry = deps([DIFF_API, ...keyed(), CREATED]);
+    const r2 = await open(ws, retry);
+    assert.ok(r2.ok, r2.lines.join("\n"));
+    assert.match(r2.lines.join("\n"), /✓ tests: reused the passing gate from \S+ \(pr open\)/);
+    assert.deepEqual(testExecs(retry), []);
+    assert.ok(retry.calls.some((c) => c.startsWith("gh pr create")));
+    assert.equal(fs.readFileSync(passFile(ws), "utf8"), rec, "a reused pass is not rewritten");
+  } finally {
+    clean(ws);
+  }
+});
+
+for (const [what, table, over, why] of [
+  ["a new commit", keyed({ head: "c" }), {}, "HEAD moved"],
+  ["a move of origin/<base>", keyed({ base: "d" }), {}, "origin/main moved"],
+  [
+    "a changed registry test command",
+    keyed(),
+    {
+      services: {
+        ...REGISTRY.services,
+        api: { ...REGISTRY.services.api, test: "npm test -w api -- --ci" },
+      },
+    },
+    "test commands changed",
+  ],
+])
+  test(`openPrs: ${what} invalidates the recorded pass, so the test rows run again (SW-1197)`, async () => {
+    const ws = reuseWorkspace();
+    try {
+      await gateT(ws, deps([MERGE_BASE, API_CHANGE, ...keyed()]));
+      const d = deps([DIFF_API, ...table, CREATED], over);
+      const r = await open(ws, d);
+      const out = r.lines.join("\n");
+      assert.ok(r.ok, out);
+      assert.match(out, new RegExp(`✓ tests: rerunning — ${why} since the recorded pass`));
+      assert.equal(testExecs(d).length, 1, out);
+    } finally {
+      clean(ws);
+    }
+  });

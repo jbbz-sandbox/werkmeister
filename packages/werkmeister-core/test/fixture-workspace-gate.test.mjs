@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 
-import { closeOut, gatePrs, openPrs, refreshPrStatus } from "../dist/pr_lifecycle.js";
+import { closeOut, gatePrs, gateTests, openPrs, refreshPrStatus } from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
 import { initWorkspace } from "../dist/workspace_init.js";
 import { pinWerkmeisterRoot, withFixtureWorkspace } from "./fixtures.mjs";
@@ -96,5 +96,41 @@ test("with issue, pr open, pr status and workspace close move it through the fak
       assert.doesNotMatch(closed.text(), /no Jira REST credentials/);
     },
     { gate: true, merged: true, issue: "o/app#1" },
+  );
+});
+
+// SW-1197: a failed `gh pr create` keeps the recorded pass, so the retry runs no test row and goes straight to the create.
+test("with createFails a pr open retry after pr gate --tests runs no test exec and creates again", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const execs = () =>
+        fs
+          .readFileSync(fx.dockerLog, "utf8")
+          .split("\n")
+          .filter((c) => c.startsWith("exec "));
+      const gated = await gateTests(fx.workspace);
+      assert.equal(gated.ok, true, gated.lines.join("\n"));
+      const tested = execs().length;
+      assert.ok(tested > 0, "pr gate --tests ran its rows");
+      for (const n of [1, 2]) {
+        const open = await openPrs(fx.workspace);
+        const out = open.lines.join("\n");
+        assert.equal(open.ok, false, out);
+        assert.match(
+          out,
+          /✓ tests: reused the passing gate from .* \(pr gate --tests\)/,
+          `open ${n}`,
+        );
+        assert.match(out, /✓ clean: clean/);
+        assert.match(out, /gh pr create failed — fake gh: pr create failed \(fixture\)/);
+      }
+      assert.equal(execs().length, tested, "neither pr open ran a row");
+      const creates = fs.readFileSync(fx.ghLog, "utf8").match(/^pr create /gm) ?? [];
+      assert.equal(creates.length, 2);
+    },
+    { gate: true, createFails: true },
   );
 });

@@ -23,6 +23,8 @@ export interface FakeWorld {
   items?: unknown[];
   /** `gh issue list` prints these, for every repo. */
   issues?: unknown[];
+  /** `gh pr create` exit code (SW-1197); 0 prints `prUrl`. */
+  prCreate?: number;
   /** `gh pr create` prints it. */
   prUrl?: string;
   /** `gh pr view` reports this state (default `OPEN`); `MERGED` adds a merge commit (SW-482). Every view has `createdAt` 2026-01-02T03:04:05Z, a merged one `mergedAt` 2026-01-02T04:05:06Z (SW-779). */
@@ -74,7 +76,9 @@ if [ "$tool" = gh ]; then
       case "$2" in */rules/branches/*) show rules.json ;; *) fail "fake gh: unhandled: $*" ;; esac ;;
     "search prs") out '[]' ;;
     "pr list") ;;
-    "pr create") out "$(get prUrl https://github.com/o/app/pull/1)" ;;
+    "pr create")
+      [ "$(get prCreate 0)" = 0 ] || fail "fake gh: pr create failed (fixture)"
+      out "$(get prUrl https://github.com/o/app/pull/1)" ;;
     "pr view")
       state=$(get prState OPEN)
       merge=null
@@ -127,6 +131,7 @@ export function writeFakes(dir: string, world: FakeWorld = {}): Fakes {
   put("containers", lines(world.containers ?? []));
   if (world.issue != null) put("issue.json", JSON.stringify(world.issue));
   if (world.prUrl !== undefined) put("prUrl", world.prUrl);
+  if (world.prCreate !== undefined) put("prCreate", String(world.prCreate));
   if (world.prState !== undefined) put("prState", world.prState);
   if (world.execCwd) put("execCwd", world.execCwd);
   for (const tool of ["gh", "docker"])

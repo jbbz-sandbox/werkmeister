@@ -55,6 +55,8 @@ export interface FixtureOptions {
   workspace?: Record<string, unknown>;
   /** The fake gh reports the PR merged, so `pr status` and `workspace close` run to the end (SW-482). */
   merged?: boolean;
+  /** The fake gh's `pr create` exits 1, as when GitHub is down (SW-1197). */
+  createFails?: boolean;
   /** origin/main gains 2 commits after the branch is cut, so the branch is behind its base (SW-669); with a repo's `conflict`, the first edits its change file (SW-857). */
   behind?: boolean;
   /** The workspace's `issue_id` (`o/<repo>#N`): resolved by the fixture's GitHub project to the fake gh, whose `issue view` answers it (SW-509). */
@@ -542,6 +544,7 @@ ${githubProject(repos.map((r) => r.name))}${opts.config ? YAML.stringify(opts.co
     running: opts.running ?? [],
     containers,
     prState: opts.merged ? "MERGED" : undefined,
+    prCreate: opts.createFails ? 1 : undefined,
     issue: yml["issue_id"] ? FIXTURE_ISSUE : undefined,
     // shortcut: every exec runs in the first code repo; map container → repo when a fixture has two.
     execCwd: opts.execRuns ? path.join(workspace, (repos[0] as FixtureRepo).name) : undefined,
