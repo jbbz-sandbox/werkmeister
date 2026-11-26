@@ -627,15 +627,32 @@ test("each template renders with no undefined and a route per stage", async () =
           );
           if (d.endsWith("_implement")) {
             // SW-430: host tests → review and fix → the gate, once → exercise.md.
+            // SW-1203: containers stopped before the review; the full gate only after it settles.
             const order = [
               "Run the test command",
+              "Before the review below, and before a browser check that doesn't use the test containers, run `werkmeister feature stop`",
               "Review the diff",
-              "Once the review's fixes are in, run `werkmeister pr gate --tests`",
+              "Run `werkmeister pr gate --tests` once, after the last review round has no open finding the person wants fixed",
               "Write `output/exercise.md`",
             ].map((s) => c.indexOf(s));
             assert.ok(
               order.every((at, i) => at >= 0 && (i === 0 || at > order[i - 1])),
               `${wt}/${d}: ${order}`,
+            );
+            assert.match(
+              c,
+              /then rerun only the test files the fix reaches and the cheap rows \(the repo's lint chain, a service's test row that runs in about a minute or less\), not the full gate/,
+              `${wt}/${d}`,
+            );
+            assert.match(
+              c,
+              /no open finding the person wants fixed .*and never while a review runs/,
+              `${wt}/${d}`,
+            );
+            assert.match(
+              c,
+              /Then: a failing `werkmeister pr gate --tests` stops the containers it started \(a passing one leaves them running for `pr open`\).*before testing anything after the gate, check `docker ps` and start the service's container with `werkmeister feature up --service <name>` if it is not running/,
+              `${wt}/${d}`,
             );
           } else
             assert.ok(
@@ -674,11 +691,11 @@ test("each template renders with no undefined and a route per stage", async () =
             /^2\. .*Before committing, run the repo's lint command.*Run the repo's release check .*after the commit, not before: a check that compares the branch with its base in git history does not see an uncommitted release entry/m,
             `${wt}/${d}`,
           );
-        // SW-825: an earlier gate stopped the container it started, and the check runs in it.
+        // SW-825: the check runs in a container the gate (or the idle reaper) may have stopped. SW-1046: not a passing gate.
         if (d.endsWith("_propose"))
           assert.match(
             c,
-            /^2\. .*Run the repo's release check .*an earlier `werkmeister pr gate --tests` stopped the containers it started: start the one it runs in with `werkmeister feature up --service <name>` first/m,
+            /^2\. .*Run the repo's release check .*When it runs in a service's container: a failing `werkmeister pr gate --tests` stops the containers it started.*`werkmeister feature up --service <name>` if it is not running/m,
             `${wt}/${d}`,
           );
         if (d.endsWith("_propose"))
