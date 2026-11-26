@@ -259,15 +259,81 @@ describe("lifecycle.up when compose gives up with a container left Created", () 
   });
 
   // Review: the timeout fires while a slow install still runs; core started then sees half a node_modules.
-  it("leaves it while the install still runs or a dependency is still starting", async () => {
-    for (const other of [
-      box("demo-install-setup", "running"),
+  it("leaves it while a dependency is still starting", async () => {
+    vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
       { ...box("demo-broken", "running"), health: "starting" },
-    ]) {
+      box("demo-core", "created"),
+    ]);
+    await fails();
+  });
+
+  // SW-1159: compose's 20 min ran out on a fresh worktree's install, which exited 0 minutes later.
+  describe("while the install still runs", () => {
+    beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] }));
+    afterEach(() => {
+      vi.useRealTimers();
+      vi.mocked(getContainerStatus).mockReset().mockResolvedValue([]);
+    });
+    const core = box("demo-core", "created");
+    const install = (status: string, code = 0) => box("demo-install-setup", status, code);
+    /** `up`, with the fake clock stepping through its 15 s polls until it settles. */
+    const polledUp = async (signal?: AbortSignal) => {
+      let done = false;
+      const run = withReporter(quiet, () => up("demo", workspace(["cli"]), { signal })).finally(
+        () => {
+          done = true;
+        },
+      );
+      run.catch(() => {});
+      while (!done) await vi.advanceTimersByTimeAsync(15_000);
+      return run;
+    };
+    const failsPolled = async (signal?: AbortSignal) => {
+      await expect(polledUp(signal)).rejects.toThrow(/Failed to start containers/);
+      expect(dockerStarted).toEqual([]);
+    };
+
+    it("waits for it, then starts what compose left Created", async () => {
       vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
-      vi.mocked(getContainerStatus).mockResolvedValueOnce([other, box("demo-core", "created")]);
-      await fails();
-    }
+      vi.mocked(getContainerStatus)
+        .mockResolvedValueOnce([install("running"), core])
+        .mockResolvedValueOnce([install("running"), core])
+        .mockResolvedValue([install("exited"), core]);
+      const result = await polledUp();
+      expect(dockerStarted).toEqual(["demo-core"]);
+      expect(result.containersStarted).toBe(true);
+    });
+
+    it("fails, starting nothing, when it then exits non-zero", async () => {
+      vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
+      vi.mocked(getContainerStatus)
+        .mockResolvedValueOnce([install("running"), core])
+        .mockResolvedValue([install("exited", 1), core]);
+      await failsPolled();
+      // It polled past the first read: the wait ran, then the exit 1 ended it.
+      expect(vi.mocked(getContainerStatus).mock.calls.length).toBeGreaterThan(2);
+    });
+
+    it("starts nothing when the person cancels during the wait, though the install then exits 0", async () => {
+      const ac = new AbortController();
+      vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
+      vi.mocked(getContainerStatus)
+        .mockResolvedValueOnce([install("running"), core])
+        .mockImplementation(async () => {
+          ac.abort();
+          return [install("exited"), core];
+        });
+      await failsPolled(ac.signal);
+    });
+
+    it("gives up when its log stops changing for 10 minutes", async () => {
+      vi.mocked(composeUpAsync).mockResolvedValueOnce(false);
+      vi.mocked(getContainerStatus).mockResolvedValue([install("running"), core]);
+      const t0 = Date.now();
+      await failsPolled();
+      expect(Date.now() - t0).toBeGreaterThanOrEqual(10 * 60_000);
+    });
   });
 
   it("never starts an on-demand service a failed `--service` start left Created", async () => {
