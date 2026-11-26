@@ -269,6 +269,8 @@ export interface Deps {
   stop: (ws: string) => Promise<string>;
   /** Whether the `pr watch` schedule is installed. */
   prWatch: () => PrWatchScheduleState;
+  /** After a failed push or `gh pr create`: a line saying GitHub shows an outage, or null. Absent: none. */
+  githubStatus?: () => Promise<string | null>;
   /** A GitHub App installation token for *repo* (`owner/name`), or null to run `gh` as the person. */
   ghToken?: (repo: string) => Promise<string | null>;
   /** `os.loadavg()` and the core count, read before and after each gate check. */
@@ -398,6 +400,8 @@ export function defaultDeps(): Deps {
       })),
     stop: stopWorkspace,
     prWatch: () => prWatchScheduleState(),
+    // A fixture never calls out to githubstatus.com.
+    githubStatus: async () => (isFixture() ? null : githubOutage()),
     ghToken: (repo) => appInstallationToken(repo),
     hostLoad: readHostLoad,
     vmLoad: readVmLoad,
@@ -1098,6 +1102,30 @@ const TRANSIENT_PUSH =
 const PUSH_RETRY_MS = [10_000, 30_000];
 const GITHUB_HINT =
   "if `ssh -T git@github.com` fails too, GitHub may be having trouble (githubstatus.com); rerun `werkmeister pr open` once it passes";
+
+const STATUS_URL = "https://www.githubstatus.com/api/v2/components.json";
+
+/**
+ * SW-1198: a failed push or `gh pr create` during a GitHub incident looks like any error, so the agent retries
+ * at once. Reads githubstatus.com and names a non-operational Pull Requests or Git Operations component; null
+ * when both are operational or the status call fails (network, timeout after 5 s, non-200, bad JSON).
+ */
+export async function githubOutage(fetchFn: typeof fetch = fetch): Promise<string | null> {
+  try {
+    const res = await fetchFn(STATUS_URL, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return null;
+    const { components } = (await res.json()) as {
+      components: { name: string; status: string }[];
+    };
+    const bad = components.filter(
+      (c) => ["Pull Requests", "Git Operations"].includes(c.name) && c.status !== "operational",
+    );
+    if (!bad.length) return null;
+    return `GitHub ${bad.map((c) => `${c.name}: ${c.status}`).join(", ")}; nothing was created; retry when https://www.githubstatus.com shows it operational`;
+  } catch {
+    return null;
+  }
+}
 
 async function pushWithRetry(dir: string, branch: string, deps: Deps) {
   const push = () => deps.run("git", ["-C", dir, "push", "-u", "origin", branch]);
@@ -2621,6 +2649,8 @@ export async function openPrs(
       ok = retryOnly = false;
       lines.push(`${f.stem}: push failed — ${push.stderr.trim()}`);
       if (TRANSIENT_PUSH.test(push.stderr)) lines.push(`  ${GITHUB_HINT}`);
+      const outage = await deps.githubStatus?.();
+      if (outage) lines.push(`  ${outage}`);
       continue;
     }
     const existing = await deps.run(
@@ -2678,6 +2708,8 @@ export async function openPrs(
         lines.push(
           `${f.stem}: gh pr create failed — ${created.stderr.trim() || created.stdout.trim()}`,
         );
+        const outage = await deps.githubStatus?.();
+        if (outage) lines.push(`  ${outage}`);
         continue;
       }
     }
