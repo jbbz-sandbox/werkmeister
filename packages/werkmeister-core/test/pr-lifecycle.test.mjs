@@ -2762,6 +2762,41 @@ test("runGate: keeps the exec marker fresh while a row runs, and stops after", a
   }
 });
 
+// SW-1213: the plugin's Stop guard holds its proposed-item prompt while this marker is fresh.
+for (const outcome of ["pass", "fail", "throw"]) {
+  test(`runGate: gate-running is there and beaten while the gate runs, gone after a ${outcome} (SW-1213)`, async (t) => {
+    const ws = icmWorkspace();
+    const marker = path.join(dotDir(ws), "gate-running");
+    t.mock.timers.enable({ apis: ["setInterval"] });
+    try {
+      const d = deps([DIFF_API]);
+      let execs = 0;
+      const seen = {};
+      const run = d.run;
+      d.run = async (cmd, args, ...rest) => {
+        if (cmd === "docker" && args[0] === "exec" && !execs++) {
+          // Recorded, not asserted here: a throw from this stub is the gate's own failure.
+          seen.written = fs.existsSync(marker);
+          fs.rmSync(marker, { force: true });
+          t.mock.timers.tick(60_000);
+          seen.beaten = fs.existsSync(marker);
+          if (outcome === "fail") return { code: 1, stdout: "", stderr: "boom" };
+          if (outcome === "throw") throw new Error("boom");
+        }
+        return run(cmd, args, ...rest);
+      };
+      const r = await gate(ws, d).catch((e) => e);
+      assert.ok(execs > 0, d.calls.join("\n"));
+      assert.deepEqual(seen, { written: true, beaten: true });
+      if (outcome === "pass") assert.equal(r.ok, true, JSON.stringify(r.checks));
+      if (outcome === "fail") assert.equal(r.ok, false);
+      assert.equal(fs.existsSync(marker), false, "removed when the gate ends");
+    } finally {
+      clean(ws);
+    }
+  });
+}
+
 test("openPrs: nothing approved is refused and stops nothing (SW-39)", async () => {
   const ws = icmWorkspace({ files: { app: prFile({ status: "draft" }) } });
   try {

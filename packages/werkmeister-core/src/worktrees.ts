@@ -39,6 +39,8 @@ const _RUNTIME_FILES = [
   ".werkmeister/sessions/",
   ".werkmeister/notices.json",
   ".werkmeister/last-exec",
+  // SW-1213: there only while a gate runs.
+  ".werkmeister/gate-running",
   ".werkmeister/starts.json",
   // SW-777: which stages already have their stage.done event.
   ".werkmeister/stage-done/",

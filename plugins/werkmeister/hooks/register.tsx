@@ -21,6 +21,7 @@ import {
   type Tone,
   type WorkspaceDisplay,
 } from "./display-model";
+import { gateRunning } from "./gate-running";
 import { stopGuard } from "./stop-guard";
 
 export const PLUGIN = "werkmeister";
@@ -1892,7 +1893,8 @@ export const register: Register = (on) => {
   });
   // A guard that fails lets the stop through: it must never trap a session.
   on("classic.Stop", async ($, e, next) => {
-    const block = await stopGuard($, e, await workspaceRoot($, e.cwd));
+    const root = await workspaceRoot($, e.cwd);
+    const block = root && (await gateRunning($, root)) ? null : await stopGuard($, e, root);
     return block ? { block } : next(e);
   }).catch(() => ({}));
   on("tool.call", { tool: WRAP_UP_TOOL }, async ($, e, next) => {

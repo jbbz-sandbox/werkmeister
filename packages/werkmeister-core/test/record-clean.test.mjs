@@ -41,6 +41,7 @@ test("compose and runtime state are ignored; the record's own files are not", ()
       ".werkmeister/sessions/s-1.json",
       ".werkmeister/notices.json",
       ".werkmeister/last-exec",
+      ".werkmeister/gate-running",
       ".werkmeister/starts.json",
       // SW-777: the stage.done marker.
       ".werkmeister/stage-done/02_spec",
