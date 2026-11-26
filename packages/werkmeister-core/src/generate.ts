@@ -414,6 +414,17 @@ function quoted(value: string): string {
   return `'${value}'`;
 }
 
+/** `<SVC>_URL` / `_HOST` / `_PORT` pointing at *svcName*'s container on the feature network. */
+function containerUrlVars(svcName: string, svcDef: ServiceEntry): Record<string, string> {
+  const envPrefix = svcName.toUpperCase().replace(/-/g, "_");
+  const internalPort = svcDef["internal_port"] ?? 3000;
+  return {
+    [`${envPrefix}_URL`]: `http://${svcName}:${internalPort}`,
+    [`${envPrefix}_HOST`]: svcName,
+    [`${envPrefix}_PORT`]: String(internalPort),
+  };
+}
+
 /**
  * `<SVC>_URL` / `_HOST` / `_PORT` for every service a feature can reach: a
  * local sibling by its Docker DNS alias, else its `baseline_upstream`, else its
@@ -432,10 +443,7 @@ function serviceUrlVars(
     }
     const envPrefix = svcName.toUpperCase().replace(/-/g, "_");
     if (localServices.includes(svcName)) {
-      const internalPort = svcDef["internal_port"] ?? 3000;
-      urls[`${envPrefix}_URL`] = `http://${svcName}:${internalPort}`;
-      urls[`${envPrefix}_HOST`] = svcName;
-      urls[`${envPrefix}_PORT`] = String(internalPort);
+      Object.assign(urls, containerUrlVars(svcName, svcDef));
       continue;
     }
     const baseline = baselineUpstream(svcName, svcDef);
@@ -735,10 +743,14 @@ function renderFeatureCompose(
       setdefault(svcObj, "extra_volumes", []);
       svcObj["dev_links"] = devLinks[svcName] ?? [];
       setdefault(svcObj, "environment", {});
-      // Resolve {service-name} placeholders in env values
+      // Resolve {service-name} placeholders in env values; an on-demand service's checked-out deps start with it (SW-956).
+      const reachable = [
+        ...localServices,
+        ...withLocalDeps([svcName], servicesConfig, workspaceRoot).slice(1),
+      ];
       const resolvedEnv: Record<string, string> = {};
       for (const [k, v] of Object.entries(svcObj["environment"] as Record<string, string>)) {
-        resolvedEnv[k] = resolveServiceRefs(v, localServices, servicesConfig, portsConfig);
+        resolvedEnv[k] = resolveServiceRefs(v, reachable, servicesConfig, portsConfig);
       }
       svcObj["environment"] = resolvedEnv;
       setdefault(svcObj, "command", null);
@@ -1297,6 +1309,10 @@ export function generateFeatureEnv(
  * service declares, as plain `KEY=value`. Secrets stay out of the shared `.env`
  * so each container sees only its own and two services can differ on one KEY.
  * Written even when empty because compose fails on a missing `env_file`.
+ *
+ * Also the URL vars of the service's own checked-out `depends_on`, at their containers: compose starts
+ * those with it, but `.env` points an on-demand one at the cluster (SW-956). Loaded after `.env`, so
+ * these win; a workspace's own `env_vars` still win over both.
  */
 export function writeServiceSecretEnvs(
   workspaceRoot: string,
@@ -1304,13 +1320,19 @@ export function writeServiceSecretEnvs(
   servicesConfig: ServicesConfig,
 ): void {
   ensureGeneratedIgnored(workspaceRoot);
+  const workspaceEnv = loadWorkspaceEnvVars(workspaceRoot);
   const { byService } = resolveSecrets(
     loadSecrets(getSecretsPath()),
     servicesConfig,
     withLocalDeps(requested, servicesConfig, workspaceRoot),
-    loadWorkspaceEnvVars(workspaceRoot),
+    workspaceEnv,
   );
-  for (const [svcName, secrets] of Object.entries(byService)) {
+  for (const [svcName, secretVars] of Object.entries(byService)) {
+    const secrets: Record<string, string> = {};
+    for (const dep of withLocalDeps([svcName], servicesConfig, workspaceRoot).slice(1))
+      for (const [k, v] of Object.entries(containerUrlVars(dep, servicesConfig[dep] ?? {})))
+        if (!(k in workspaceEnv)) secrets[k] = v;
+    Object.assign(secrets, secretVars);
     const body = Object.keys(secrets)
       .sort()
       .map((key) => `${key}=${secrets[key]}\n`)
