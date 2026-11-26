@@ -214,6 +214,8 @@ const reviewStep = (rerun: string, { group, questionTool }: IcmVars) =>
   'If the change adds or widens an allow rule or another pre-approved command, add to the brief: "this change pre-approves a command: list every file, env var, network address or process it can reach from its arguments, and treat each that leaves the workspace or its temp HOME as Must fix". ' +
   // SW-479: an exercise script that could restart the host daemon was rated Should fix and left open (sw-439).
   'Always add: "any finding where the change can restart or write the host daemon, the real `~/.werkmeister` or another workspace, whether through an allow rule, a script or a test, is Must fix". ' +
+  // SW-1188: sw-1158's reviewer read the real ~/.werkmeister metrics to size a finding; the brief only forbade writes.
+  'Also add: "never read, list or write the real `~/.werkmeister`, the host daemon or another workspace; anything you need from them, ask for or reproduce under a temp HOME". ' +
   // SW-449: a left Should fix shipped a false "every key is checked" in a changeset (sw-412).
   "Fix every **Must fix** finding in place, and any **Should fix** finding that shows the change's own docs, comments, help text or release entry state something false (fix the code, or reword that text so it is true), " +
   `${group.length ? `fold each fix into the commit of the ticket it belongs to (${FOLD}), ` : ""}then ${rerun}. Leave the other **Should fix** and **Nice to have** findings as they are. ` +
