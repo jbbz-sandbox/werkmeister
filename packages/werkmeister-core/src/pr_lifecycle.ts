@@ -716,8 +716,16 @@ function followUpsCheck(ws: string): GateCheck | null {
     if (!fs.existsSync(p)) continue;
     let heading = "";
     let body: string[] = [];
+    let optionLines: string[] = [];
     const flush = () => {
-      const text = body.join("\n");
+      // The option the answer names ("option B") still speaks for it.
+      const chosen = /\boption ([A-Z])\b/i.exec(body.join("\n"))?.[1];
+      const picked = chosen
+        ? optionLines.filter((l) =>
+            new RegExp(`^\\s*(?:[-*+]|\\d+[.)])\\s+\\**${chosen}\\b`, "i").test(l),
+          )
+        : [];
+      const text = [...body, ...picked].join("\n");
       if (
         /status:\s*decided/i.test(text) &&
         /follow-?ups?\b/i.test(text) &&
@@ -728,12 +736,22 @@ function followUpsCheck(ws: string): GateCheck | null {
       )
         unnamed.push(`${d}: ${heading || "(no heading)"}`);
     };
+    // SW-1192: an `Options:` list holds every option, chosen or not; only the decided answer promises.
+    let options = false;
     for (const line of fs.readFileSync(p, "utf8").split("\n")) {
       if (HEADING.test(line.trim())) {
         flush();
         heading = line.trim();
         body = [];
-      } else body.push(line);
+        optionLines = [];
+        options = false;
+      } else if (/^\s*(\*\*)?options:?(\*\*)?:?\s*$/i.test(line)) options = true;
+      else if (options && (!line.trim() || /^\s+\S|^\s*([-*+]|\d+[.)])\s/.test(line)))
+        optionLines.push(line);
+      else {
+        options = false;
+        body.push(line);
+      }
     }
     flush();
   }
