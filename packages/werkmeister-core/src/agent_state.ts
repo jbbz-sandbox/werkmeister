@@ -1164,12 +1164,38 @@ export function serviceWaitContext(input: Record<string, any>, root: string): st
   );
 }
 
-/** *wake*'s UserPromptSubmit output with *context* in front: the hook prints one JSON object. */
-function withContext(wake: object | null, context: string): object {
+/**
+ * A grant's (or Resume's) "continue" the session never got as a prompt, as context for its next prompt or for
+ * the answer to its question (SW-1246): a grant 21 s into an open question waited 5.5 h behind the running turn,
+ * and the next prompt deleted it as stale. Claimed by rename, as {@link deliverWake}, so the band can't send it too.
+ */
+export function deliverResumeNudge(input: Record<string, any>, root: string): string | null {
+  const event = input["hook_event_name"];
+  const answered = event === "PostToolUse" && input["tool_name"] === "AskUserQuestion";
+  if ((event !== "UserPromptSubmit" && !answered) || input["agent_id"]) return null;
+  const file = nudgePath(root);
+  const claimed = `${file}.${process.pid}-${Date.now()}.claimed`;
+  try {
+    fs.renameSync(file, claimed);
+  } catch {
+    return null; // none, or another hook or the band claimed it
+  }
+  try {
+    const o = JSON.parse(fs.readFileSync(claimed, "utf8"));
+    return typeof o?.message === "string" ? o.message : null;
+  } catch {
+    return null;
+  } finally {
+    fs.rmSync(claimed, { force: true });
+  }
+}
+
+/** *wake*'s output for *event* with *context* in front: the hook prints one JSON object. */
+function withContext(wake: object | null, context: string, event = "UserPromptSubmit"): object {
   const prior = (wake as { hookSpecificOutput?: { additionalContext?: string } } | null)
     ?.hookSpecificOutput?.additionalContext;
   const additionalContext = prior ? `${context}\n\n${prior}` : context;
-  return { hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext } };
+  return { hookSpecificOutput: { hookEventName: event, additionalContext } };
 }
 
 /** Apply one hook event to its session's record in the workspace holding its cwd. Returns the file written, or null. */
@@ -1214,12 +1240,10 @@ export function main(): void {
       console.log(JSON.stringify(gate));
       return;
     }
-    // The session got a prompt, so a "continue" still waiting for it is stale.
-    if (root && parsed["hook_event_name"] === "UserPromptSubmit")
-      fs.rmSync(nudgePath(root), { force: true });
+    const nudge = root ? deliverResumeNudge(parsed, root) : null;
     const wake = root ? deliverWake(parsed, root) : null;
-    const wait = root ? serviceWaitContext(parsed, root) : null;
-    if (wait) console.log(JSON.stringify(withContext(wake, wait)));
+    const wait = [nudge, root && serviceWaitContext(parsed, root)].filter(Boolean).join("\n\n");
+    if (wait) console.log(JSON.stringify(withContext(wake, wait, parsed["hook_event_name"])));
     else if (wake) console.log(JSON.stringify(wake));
     // A blocked Stop isn't the end of the turn, so it records nothing, like the pause gate.
     if (wake && parsed["hook_event_name"] === "Stop") return;
