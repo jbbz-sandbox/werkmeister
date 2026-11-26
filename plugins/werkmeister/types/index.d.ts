@@ -238,6 +238,8 @@ declare module "claude-code" {
       wrapUpOpen: boolean;
       /** The `at` of the held wake the band last prompted this session for; '' when none. */
       wakePrompted: string;
+      /** How many proposed items the Stop guard last blocked on; 0 once a stop went through (SW-1185). */
+      stopBlocked: number;
     };
   }
 }
