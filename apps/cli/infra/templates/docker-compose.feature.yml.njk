@@ -25,6 +25,27 @@ networks:
 {% endif %}
 {% endfor %}
 
+{# SW-954: one copy of the volume rules for setup services, services and sidecars. #}
+{# Adds each named volume in *vols* to *names* once; a "/" on the left is a bind mount. #}
+{% macro collect_volumes(vols, names) %}
+{% for vol in vols %}
+{% set vol_name = vol.split(':')[0] %}
+{% if '/' not in vol_name and vol_name not in names %}
+{% do names.append(vol_name) %}
+{% endif %}
+{% endfor %}
+{% endmacro %}
+{# One `volumes:` entry: a bind mount with its ${...} resolved, a `^` shared volume, or <feature>-<name>. #}
+{% macro render_volume(vol, repo) %}
+{% if '/' in vol.split(':')[0] %}
+      - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + repo) | replace('${WERKMEISTER_ROOT}', werkmeister_root) }}
+{% elif vol[0] == '^' %}
+      - {{ vol | replace('^', '') }}
+{% else %}
+      - {{ feature_name }}-{{ vol }}
+{% endif %}
+{% endmacro %}
+
 {# Collect all named volumes and prefix with feature name for isolation; #}
 {# a `^name` volume is shared by every feature, so it stays unprefixed and external #}
 {% set volume_names = [] %}
@@ -33,31 +54,16 @@ networks:
 {% if setup.node_modules_volume and setup.node_modules_volume not in volume_names %}
 {% do volume_names.append(setup.node_modules_volume) %}
 {% endif %}
-{% for vol in setup.extra_volumes %}
-{% set vol_name = vol.split(':')[0] %}
-{% if '/' not in vol_name and vol_name not in volume_names %}
-{% do volume_names.append(vol_name) %}
-{% endif %}
-{% endfor %}
+{{ collect_volumes(setup.extra_volumes, volume_names) }}
 {% endfor %}
 {% for svc in local_services %}
 {% if svc.node_modules_volume and svc.node_modules_volume not in volume_names %}
 {% do volume_names.append(svc.node_modules_volume) %}
 {% endif %}
-{% for vol in svc.get('extra_volumes', []) %}
-{% set vol_name = vol.split(':')[0] %}
-{% if '/' not in vol_name and vol_name not in volume_names %}
-{% do volume_names.append(vol_name) %}
-{% endif %}
-{% endfor %}
+{{ collect_volumes(svc.get('extra_volumes', []), volume_names) }}
 {% if svc.extra_services %}
 {% for _extra_name, extra in svc.extra_services.items() %}
-{% for vol in extra.get('extra_volumes', []) %}
-{% set vol_name = vol.split(':')[0] %}
-{% if '/' not in vol_name and vol_name not in volume_names %}
-{% do volume_names.append(vol_name) %}
-{% endif %}
-{% endfor %}
+{{ collect_volumes(extra.get('extra_volumes', []), volume_names) }}
 {% endfor %}
 {% endif %}
 {% endfor %}
@@ -107,14 +113,7 @@ services:{% if not local_services | length %} {}{% endif %}
       - {{ feature_name }}-{{ setup.node_modules_volume }}:/app/node_modules
 {% endif %}
 {% for vol in setup.extra_volumes %}
-{% set vol_parts = vol.split(':') %}
-{% if '/' in vol_parts[0] %}
-      - {{ vol | replace('${REPO}', workspace_path + '/' + setup.repo) | replace('${WERKMEISTER_ROOT}', werkmeister_root) }}
-{% elif vol[0] == '^' %}
-      - {{ vol | replace('^', '') }}
-{% else %}
-      - {{ feature_name }}-{{ vol }}
-{% endif %}
+{{ render_volume(vol, setup.repo) }}
 {% endfor %}
 {# Opt-in: no `*-startup.sh` ships in infra/compose/scripts/, and bind-mounting #}
 {# a host path that does not exist makes Docker silently create an empty        #}
@@ -198,14 +197,7 @@ services:{% if not local_services | length %} {}{% endif %}
       - {{ feature_name }}-{{ svc.node_modules_volume }}:/app/node_modules
 {% endif %}
 {% for vol in svc.get('extra_volumes', []) %}
-{% set vol_parts = vol.split(':') %}
-{% if '/' in vol_parts[0] %}
-      - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + svc.repo) | replace('${WERKMEISTER_ROOT}', werkmeister_root) }}
-{% elif vol[0] == '^' %}
-      - {{ vol | replace('^', '') }}
-{% else %}
-      - {{ feature_name }}-{{ vol }}
-{% endif %}
+{{ render_volume(vol, svc.repo) }}
 {% endfor %}
 {# Per-workspace dev-links (note 008): always host bind mounts, so no named-volume branch #}
 {% for vol in svc.get('dev_links', []) %}
@@ -330,13 +322,7 @@ services:{% if not local_services | length %} {}{% endif %}
 {% if extra.extra_volumes %}
     volumes:
 {% for vol in extra.extra_volumes %}
-{% if '/' in vol.split(':')[0] %}
-      - {{ vol | replace('${WORKSPACE}', workspace_path) | replace('${REPO}', workspace_path + '/' + svc.repo) | replace('${WERKMEISTER_ROOT}', werkmeister_root) }}
-{% elif vol[0] == '^' %}
-      - {{ vol | replace('^', '') }}
-{% else %}
-      - {{ feature_name }}-{{ vol }}
-{% endif %}
+{{ render_volume(vol, svc.repo) }}
 {% endfor %}
 {% endif %}
     restart: unless-stopped
