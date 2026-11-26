@@ -458,7 +458,17 @@ async function prepareSlot(
   info("Allocating feature slot...");
   const preferredSlot = readSlotFromWorkspace(workspace);
   // Never moves a leased slot (SW-169); SLOT_ALLOC names whoever sits on it.
-  const slot = await requireLeasedSlot(feature, workspace, preferredSlot);
+  const slot = await requireLeasedSlot(feature, workspace, preferredSlot).catch(async (e) => {
+    // SW-1170: on a fresh workspace this read as a failure while its install ran; why the daemon stalls is SW-1235.
+    const busy =
+      e instanceof SandboxError && e.code === "DAEMON_TIMEOUT" ? await runningSetups(feature) : [];
+    if (!busy.length) throw e;
+    throw new SandboxError(
+      `${e.message} ${busy.join(", ")} is still installing dependencies (\`docker logs -f ${busy[0]}\`); ` +
+        "run `werkmeister feature up` again once it exits.",
+      "DAEMON_TIMEOUT",
+    );
+  });
 
   const [portStart, portEnd] = getPortRange(slot);
   info(`Slot ${slot} -> port range ${portStart}-${portEnd}`);
@@ -577,7 +587,36 @@ export async function startService(
 
 /** One `docker compose up` of *feature* at a time: two on one project SIGTERM each other's containers (SW-1110). */
 function oneStartAt<T>(feature: string, start: () => Promise<T>): Promise<T> {
-  return sandboxLock(`start-${feature}`, start);
+  return sandboxLock(`start-${feature}`, () => withInstallNotice(feature, start));
+}
+
+const INSTALL_NOTICE_MS = 30_000;
+
+/**
+ * Runs *start*, saying once which setup container it waits on when one is still installing after
+ * INSTALL_NOTICE_MS: a fresh worktree's install takes 10-25 min, and a silent wait read as a hang (SW-1170).
+ */
+async function withInstallNotice<T>(feature: string, start: () => Promise<T>): Promise<T> {
+  const timer = setTimeout(async () => {
+    const busy = await runningSetups(feature);
+    if (busy.length)
+      info(
+        `Installing dependencies in ${busy.join(", ")} (a fresh worktree takes 10-25 min); ` +
+          `\`docker logs -f ${busy[0]}\` follows it`,
+      );
+  }, INSTALL_NOTICE_MS);
+  try {
+    return await start();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** The names of *feature*'s setup containers still running; empty when Docker can't say. */
+async function runningSetups(feature: string): Promise<string[]> {
+  return (await getContainerStatus(feature).catch(() => []))
+    .filter((c) => isOneShotService(c.service, c.role) && c.status === "running")
+    .map((c) => c.name);
 }
 
 /**
