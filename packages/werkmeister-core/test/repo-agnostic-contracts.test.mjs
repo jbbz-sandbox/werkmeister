@@ -44,6 +44,8 @@ const QUALIFIED = [
   "`none` for a merged skip_release PR with no changeset (changesets repos)",
   "`pr status` writes `release: none` (changesets repos only; elsewhere set it yourself beside `skip_release`)",
   "written by werkmeister pr status at merge (changesets repos only)",
+  // SW-1210
+  "When the repo's `Release check:` in `../../.werkmeister/werkmeister-context.md` is `changeset status`, a question on whether the change needs a release entry offers two answers, an empty changeset (`changeset add --empty`: no release) or a patch or minor entry, never none: that check fails on a changed package with no changeset.",
 ];
 const unqualified = (text) =>
   QUALIFIED.reduce((t, s) => t.split(s).join(""), text.replace(/\s+/g, " "));
