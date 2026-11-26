@@ -963,21 +963,23 @@ test("pause gate: the hook entry prints it from the code worktree and records no
   assert.deepEqual(readSessions(dir), {}, "a blocked call must not read as working");
 });
 
-test("pause gate: an unblocked prompt clears a stale resume nudge", () => {
+// SW-1246: the prompt carries the nudge as context; deleting it as stale lost a grant's "continue".
+test("pause gate: an unblocked prompt takes a pending resume nudge as context", () => {
   const dir = workspace("l-nudge", null);
   writeNudge(dir, "continue");
-  assert.equal(hook({ hook_event_name: "UserPromptSubmit", cwd: dir, session_id: "s" }), null);
+  const out = hook({ hook_event_name: "UserPromptSubmit", cwd: dir, session_id: "s" });
+  assert.equal(out.hookSpecificOutput.additionalContext, "continue");
   assert.equal(fs.existsSync(path.join(dir, ".werkmeister", "resume-nudge.json")), false);
   assert.equal(badge(dir).agent, "working");
 });
 
-// SW-545: the entry prints the wait as context, and the prompt still clears the nudge and is recorded.
+// SW-545: the entry prints the wait as context, after a pending nudge (SW-1246), and the prompt is recorded.
 test("service-start wait: the hook entry adds context and records the prompt", async () => {
   const dir = workspace("l-wait-svc", null);
   writeWaiting(dir, { position: 3, reason: "waiting for capacity", services: ["lib"] });
   writeNudge(dir, "continue");
   const out = hook({ hook_event_name: "UserPromptSubmit", cwd: dir, session_id: "s" });
-  assert.match(out.hookSpecificOutput.additionalContext, /position 3\): lib\./);
+  assert.match(out.hookSpecificOutput.additionalContext, /^continue\n\n[\s\S]*position 3\): lib\./);
   assert.equal(fs.existsSync(path.join(dir, ".werkmeister", "resume-nudge.json")), false);
   assert.equal(readSessions(dir).s.status, "busy", "an unblocked prompt is recorded");
   assert.equal(
