@@ -28,7 +28,7 @@ Object.assign(env, {
   GIT_SEQUENCE_EDITOR: "true",
   GIT_EDITOR: "true",
 });
-// The snapshot's shape: one key per line, and one key holds every ticket's source text on one line.
+// A model of the conflict: one key per line, and one line every ticket changes (the snapshot now stores files as lines, SW-1199).
 const GEN =
   'const fs = require("node:fs"); const src = fs.readFileSync("src.txt", "utf8").trim().split("\\n").filter((l) => l !== "-");' +
   `fs.writeFileSync(${JSON.stringify(SNAP)}, JSON.stringify({ "pr-rules.md": src.join(" | "), "other.md": "x" }, null, 2) + "\\n");`;

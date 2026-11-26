@@ -75,7 +75,9 @@ test("jit init writes the same files, byte for byte", async () => {
             .replace(REPO_PATH, "<REPO>")
             .replace(/jit-snap-ws-[a-zA-Z0-9]+/g, "<WORKSPACE>")
             // The run id is random by design (SW-1140).
-            .replace(/^run_id: .*$/m, "run_id: <RUN>");
+            .replace(/^run_id: .*$/m, "run_id: <RUN>")
+            // One array element per line, so git merges two edits to one file line by line (SW-1199).
+            .split("\n");
         }
         return out;
       },
@@ -86,6 +88,7 @@ test("jit init writes the same files, byte for byte", async () => {
     }
     const raw = fs.readFileSync(SNAPSHOT, "utf8");
     // SW-895: `merge=union` keeps both sides of a conflicting line; only a regenerated file has the writer's exact format.
+    // A duplicated key fails it too: the reparse keeps one (SW-1199).
     assert.equal(
       raw,
       JSON.stringify(JSON.parse(raw), null, 2) + "\n",
