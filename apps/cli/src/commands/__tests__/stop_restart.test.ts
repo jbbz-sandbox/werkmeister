@@ -26,6 +26,7 @@ vi.mock("../../lib/dotenv.js", () => ({
   findDotenv: vi.fn(() => null),
 }));
 vi.mock("node:child_process", () => ({ spawn: vi.fn(() => ({ unref: vi.fn() })) }));
+vi.mock("werkmeister-core/infra", () => ({ stop: vi.fn(), restart: vi.fn() }));
 vi.mock("werkmeister-core/daemon_client", async (orig) => ({
   ...(await orig<typeof import("werkmeister-core/daemon_client")>()),
   callTool: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock("werkmeister-core/daemon_client", async (orig) => ({
 
 import { spawn } from "node:child_process";
 import { callTool, DaemonUnavailable } from "werkmeister-core/daemon_client";
+import { restart as infraRestart, stop as infraStop } from "werkmeister-core/infra";
 import {
   idleStopFeature,
   restart as restartFeature,
@@ -68,6 +70,26 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 const go = (run: () => Promise<void>) => withReporter(recorder, run);
+
+// SW-950: infraStop/infraRestart resolve false on a Docker failure (SW-841); the CLI exited 0 anyway.
+describe("infra stop / restart", () => {
+  it.each([
+    ["stop", () => runStop({ feature: "infra" }), infraStop],
+    ["restart", () => runRestart({ feature: "infra" }), infraRestart],
+  ] as const)("%s exits 1 when the SDK call resolves false", async (_name, run, sdk) => {
+    vi.mocked(sdk).mockResolvedValue(false);
+    await expect(go(run)).rejects.toEqual(new Exited(1));
+  });
+
+  it.each([
+    ["stop", () => runStop({ feature: "infra" }), infraStop],
+    ["restart", () => runRestart({ feature: "infra" }), infraRestart],
+  ] as const)("%s exits 0 when it resolves true", async (_name, run, sdk) => {
+    vi.mocked(sdk).mockResolvedValue(true);
+    await go(run);
+    expect(process.exit).not.toHaveBeenCalled();
+  });
+});
 
 describe("sandbox stop", () => {
   it("prints the start-it hint after the error, then exits 1", async () => {

@@ -27,7 +27,9 @@ vi.mock("werkmeister-core/graduate", () => ({
 }));
 vi.mock("../notes.js", () => ({ graduateOne: vi.fn(), input: vi.fn() }));
 vi.mock("../../lib/dotenv.js", () => ({ loadDotenv: () => ({}) }));
+vi.mock("werkmeister-core/infra", () => ({ down: vi.fn() }));
 
+import { down as infraDown } from "werkmeister-core/infra";
 import { down as downFeature, reloadProxy, teardownNotes } from "werkmeister-core/lifecycle";
 import { getAllSlots } from "werkmeister-core/slots";
 import { run as runDown } from "../down.js";
@@ -60,6 +62,20 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 const go = (args: Record<string, unknown>) => withReporter(recorder, () => runDown(args));
+
+// SW-950: infra.down resolves false on a compose failure (SW-841); the CLI exited 0 anyway.
+describe("sandbox down infra", () => {
+  it("exits 1 when infra.down resolves false, 0 when true", async () => {
+    vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
+      throw new Error(`exit ${code ?? 0}`);
+    }) as never);
+    vi.mocked(infraDown).mockResolvedValue(false);
+    await expect(go({ feature: "infra" })).rejects.toThrow("exit 1");
+    vi.mocked(infraDown).mockResolvedValue(true);
+    await go({ feature: "infra" });
+    expect(process.exit).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("sandbox down", () => {
   it("passes --volumes through and renders the slot the library released", async () => {

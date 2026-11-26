@@ -22,7 +22,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(`\n${Colors.BOLD}=== werkmeister restart: ${feature} ===${Colors.RESET}\n`);
 
   if (feature === "infra") {
-    await infraRestart();
+    // False is a Docker failure infraRestart already logged; scripts read the exit code (SW-950).
+    if (!(await infraRestart())) process.exit(1);
     console.log();
     return;
   }
