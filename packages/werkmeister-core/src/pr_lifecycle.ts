@@ -1667,7 +1667,7 @@ async function gateChecks(
           : generated.length
             ? `rebased onto origin/${base} (was ${commits}); both sides changed generated ${generated.join(", ")}: regenerate it with the repo's generator (\`.werkmeister/werkmeister-context.md\` names it), amend it into its ticket's commit, then rerun (rule 5)`
             : rebased?.code === 0
-              ? `rebased onto origin/${base} (was ${commits}); the tests below run on the rebased branch${changedToo && `${changedToo}recheck the spec and tests that name them`}`
+              ? `rebased onto origin/${base} (was ${commits}); the tests below run on the rebased branch${changedToo && `${changedToo}recheck the spec and tests that name them`}${relocked(theirs, base)}`
               : conflict ||
                 (count
                   ? `${commits} — \`git -C ${file.dir} rebase origin/${base}\` (keeps one commit per ticket), rerun the tests, then rerun; \`werkmeister pr open\` does this rebase by itself when it applies cleanly${also}`
@@ -2297,6 +2297,20 @@ async function gateChecks(
   }
 
   return done(release ? { release } : {});
+}
+
+const LOCKFILES =
+  /(^|\/)(pnpm-lock\.yaml|package-lock\.json|yarn\.lock|bun\.lockb?|Gemfile\.lock|poetry\.lock|uv\.lock|Cargo\.lock|go\.sum|composer\.lock)$/;
+
+/**
+ * SW-1181: the gate's own rows reinstall after its rebase (the setup one-shot re-checks the lockfile,
+ * SW-362, SW-541), but a row run by hand afterwards would use the old dependencies.
+ */
+function relocked(theirs: Set<string>, base: string): string {
+  const locks = [...theirs].filter((f) => LOCKFILES.test(f));
+  return locks.length
+    ? `; origin/${base} changed ${locks.join(", ")}: reinstall in the container before running a test row by hand (\`werkmeister feature up\` reruns the install)`
+    : "";
 }
 
 /** Files changed since the merge-base *mb*, committed or not, plus untracked ones, as one `git diff --name-only`-shaped result. */

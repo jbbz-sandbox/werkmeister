@@ -2368,6 +2368,27 @@ test("gate: a branch up to date with origin/<base> passes the base row (SW-669)"
   }
 });
 
+test("openPrs: an auto-rebase that brings a lockfile change says to reinstall before a row by hand (SW-1181)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const d = deps([
+      DIFF_API,
+      BEHIND,
+      UNPUSHED,
+      ON_BRANCH,
+      [/diff --name-only HEAD\.\.\.origin\/main$/, { stdout: "pnpm-lock.yaml\nREADME.md\n" }],
+      [/^gh pr create/, { stdout: "https://github.com/o/app/pull/9\n" }],
+    ]);
+    const r = await open(ws, d);
+    assert.match(
+      r.lines.join("\n"),
+      /rebased onto origin\/main .*; origin\/main changed pnpm-lock\.yaml: reinstall in the container before running a test row by hand \(`werkmeister feature up` reruns the install\)/,
+    );
+  } finally {
+    clean(ws);
+  }
+});
+
 test("openPrs: an unpushed branch behind origin/<base> rebases, then tests and opens (SW-857)", async () => {
   const ws = icmWorkspace();
   try {
