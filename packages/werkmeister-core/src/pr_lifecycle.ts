@@ -104,6 +104,7 @@ import {
   // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 } from "./sandbox.js";
 import {
+  loadNow,
   lowMemory,
   portHolders,
   readHostLoad,
@@ -1413,6 +1414,8 @@ async function gateChecks(
     tail: number,
     // The host's failure, not the change's: names it so the row runs once more (SW-739).
     retryIf: (r: Awaited<ReturnType<Run>>) => string | null = () => null,
+    // A test row: timeouts alone under host load over the limit are the host's, so the gate exits 75 (SW-1184).
+    loadAware = false,
   ) => {
     touchExecMarker(ws);
     // `docker ps` lists paused containers, and exec into one fails: that is no lint/test verdict (SW-391).
@@ -1485,7 +1488,19 @@ async function gateChecks(
       capacityShort = true;
       lines.push(gone);
       push({ name, ok: false, detail: lines.join("\n"), retry: true });
-    } else add(name, res.code === 0, lines.join("\n"));
+    } else {
+      const { load, limit } =
+        res.code && loadAware && loadOnlyFailure(res.stdout + res.stderr)
+          ? await loadNow(deps, process.platform)
+          : { load: 0, limit: 0 };
+      // shortcut: a change that makes a test hang reads as load while the host stays over the limit; count
+      // load retries per PR file (as gate.start's retry does) if a run ever loops on it.
+      if (limit && load > limit) {
+        // Before the load note, which stays last (SW-209).
+        lines.splice(-1, 0, `failed under host load ${load.toFixed(1)} (over ${limit}): rerun`);
+        push({ name, ok: false, detail: lines.join("\n"), retry: true });
+      } else add(name, res.code === 0, lines.join("\n"));
+    }
     return res;
   };
   /** Who stopped *container* during a row that *began* then, from werkmeister's stop record; null while it runs. */
@@ -2252,7 +2267,7 @@ async function gateChecks(
       );
       continue;
     }
-    await execCheck(`test ${svc}`, container, cmd, 15, hostFailure);
+    await execCheck(`test ${svc}`, container, cmd, 15, hostFailure, true);
   }
   for (const [svc, by] of Object.entries(covers).sort()) {
     const row = checks.find((c) => c.name === `test ${by}`);
@@ -2357,6 +2372,29 @@ export function failedRowExcerpt(output: string, tail: number): string {
     .filter((l) => FAILING_TEST.test(l))
     .slice(0, 20);
   return [...failing, ...lines.slice(-tail)].join("\n");
+}
+
+/**
+ * SW-1184: a red test row whose failures are all timeouts: vitest's worker RPC timeout or a test's
+ * own (vitest `Test timed out in`, node:test `test timed out after`), with no more failed tests than timeouts.
+ */
+function loadOnlyFailure(out: string): boolean {
+  const timeouts = (
+    out.match(/\[vitest-worker\]: Timeout calling "|timed out (?:in|after) \d+ ?ms/gi) ?? []
+  ).length;
+  let failedTests = 0;
+  let failedFiles = 0;
+  // vitest's `Tests  N failed`, node:test's `# fail N` (TAP) or `ℹ fail N` (spec), after turbo's prefix;
+  // vitest's `Test Files  N failed` too: a file that fails to import has no failed test.
+  for (const m of out.matchAll(
+    /^\s*(?:\S+:\s+)?(?:Tests\s+(\d+) failed|[#ℹ] fail (\d+)|Test Files\s+(\d+) failed)/gm,
+  )) {
+    failedTests += Number(m[1] ?? m[2] ?? 0);
+    failedFiles += Number(m[3] ?? 0);
+  }
+  return (
+    timeouts > 0 && failedTests <= timeouts && failedFiles <= timeouts && !/error TS\d+/.test(out)
+  );
 }
 
 export function formatGate(dir: string, g: GateResult): string[] {

@@ -368,7 +368,7 @@ const realHostLoad: HostLoadDeps = {
 };
 
 /** The 1-min load and its limit: the Docker VM's on macOS and Windows (whose loadavg is always 0), the host's elsewhere; unreadable is limit 0 (not busy). */
-async function loadNow(deps: HostLoadDeps, platform: NodeJS.Platform) {
+export async function loadNow(deps: HostLoadDeps, platform: NodeJS.Platform) {
   const vm = platform === "darwin" || platform === "win32";
   const r = vm ? await deps.vmLoad() : deps.hostLoad();
   return r ? { load: r.load[0], limit: hostLoadLimit(r.cores) } : { load: 0, limit: 0 };
