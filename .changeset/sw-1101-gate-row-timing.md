@@ -1,5 +1,0 @@
----
-"werkmeister": minor
----
-
-`pr gate` now times its rows and tests so a slow suite can be told apart from a slow gate or a capacity wait (SW-1101). Each `gate.row` in the metrics event log carries a `row_kind` (setup, lint, test, release or checks). A container start that passes now writes its own `start <service>` row, so its capacity wait no longer counts in the next row, and the load wait before a row's one retry is recorded as `wait_ms` instead of row time. The gate runs each row with `TURBO_RUN_SUMMARY=true` and writes one `test.run` event per turbo task: package, task, `duration_ms`, `cached`, and the test and failure counts from the package's `coverage/run.json`, which `scripts/coverage-run.mjs` now gives a `failures` count. The `metrics-trends` MCP tool adds gate minutes by row kind, test minutes per package (p50, p90) and range-wide `suites`. The dashboard's Metrics tab charts gate minutes by row kind, test time per package, the five slowest suites and the gate first-pass rate, and flags a suite whose p50 rose 25 % and 30 s over its previous three weeks.
