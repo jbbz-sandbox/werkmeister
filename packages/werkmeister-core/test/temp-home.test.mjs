@@ -532,3 +532,33 @@ test("--clean-home fails a passing command that wrote $HOME/.werkmeister, listin
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// SW-1202: the core row run by hand in the 1-CPU dashboard container took 16 min, against 4–6 in its own 3-CPU one.
+test("WERKMEISTER_ROW warns when this container has fewer CPUs than the row's own (SW-1202)", () => {
+  const { root, bin } = wrapper();
+  try {
+    const cpuMax = path.join(root, "cpu.max");
+    const run = (max, row = "ws-werkmeister-core:3") => {
+      fs.writeFileSync(cpuMax, `${max}\n`);
+      const env = { ...process.env, WERKMEISTER_ROW: row, WERKMEISTER_CGROUP_CPU_MAX: cpuMax };
+      return spawnSync(bin, ["--no-wait", "true"], { encoding: "utf8", env });
+    };
+    const small = run("100000 100000");
+    assert.equal(small.status, 0, small.stderr);
+    assert.match(
+      small.stderr,
+      /with-temp-home: warning: this container has 1 CPUs; this row's own container ws-werkmeister-core has 3: run it there/,
+    );
+    for (const [max, row] of [
+      ["300000 100000", undefined],
+      ["max 100000", undefined],
+      ["100000 100000", ""],
+    ]) {
+      const r = run(max, row);
+      assert.equal(r.status, 0, r.stderr);
+      assert.doesNotMatch(r.stderr, /warning/, `${max} ${row}`);
+    }
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

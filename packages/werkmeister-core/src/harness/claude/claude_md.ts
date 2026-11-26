@@ -342,7 +342,7 @@ function testCommandLine(
   const noTests = serviceNoTests(servicesConfig[svc]);
   if (noTests) return `- \`${svc}\`: no tests (registry: ${noTests})`;
   return cmd
-    ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, lint ? `${lint} && ${cmd}` : cmd, withTempHome(servicesConfig[svc], tempHome))}\``
+    ? `- \`${svc}\`: \`${containerTestCommand(feature, svc, lint ? `${lint} && ${cmd}` : cmd, withTempHome(servicesConfig[svc], tempHome), servicesConfig[svc]?.["cpus"])}\``
     : `- \`${svc}\`: no test command registered (add \`test:\` to its registry entry)`;
 }
 
@@ -578,7 +578,7 @@ docker compose restart ${sampleSvc}
 
 ### Test commands
 
-The registry's \`test:\` for each service (or its archetype's), run in its container — the worktree is mounted at \`/app\` with its \`node_modules\`; the host checkout has none. The pre-PR gate runs these (\`werkmeister pr gate\`). Stopping a background \`docker exec\` run (TaskStop, Ctrl-C) ends only the client: the run goes on in the container, since \`docker exec\` without \`-t\` forwards no signal (SW-968). End it there before a rerun, so two runs don't race on one container: find the wrapper's pid with \`docker exec <container> ps -eo pid,etime,args\`, then \`docker exec <container> kill -TERM -- -<pid>\` (the wrapper leads its process group, so this ends everything under it). A run that ends with exit 137 and a log that stops mid-step, without the wrapper's closing \`exit <n>\` line, was killed with its container (a restart, a recreate, an out-of-memory kill), not failed: check the container's uptime in \`docker ps\`, start it again if it is down, then rerun (SW-995).${
+The registry's \`test:\` for each service (or its archetype's), run in its container — the worktree is mounted at \`/app\` with its \`node_modules\`; the host checkout has none. The pre-PR gate runs these (\`werkmeister pr gate\`). Stopping a background \`docker exec\` run (TaskStop, Ctrl-C) ends only the client: the run goes on in the container, since \`docker exec\` without \`-t\` forwards no signal (SW-968). End it there before a rerun, so two runs don't race on one container: find the wrapper's pid with \`docker exec <container> ps -eo pid,etime,args\`, then \`docker exec <container> kill -TERM -- -<pid>\` (the wrapper leads its process group, so this ends everything under it). A run that ends with exit 137 and a log that stops mid-step, without the wrapper's closing \`exit <n>\` line, was killed with its container (a restart, a recreate, an out-of-memory kill), not failed: check the container's uptime in \`docker ps\`, start it again if it is down, then rerun (SW-995). Each line runs in the container it names, sized for that row: another container of the repo runs it too, slower (a 1-CPU one took 16 min for a 4-min row); a line that sets \`WERKMEISTER_ROW\` warns there (SW-1202).${
       svcLint.some(Boolean)
         ? " A line starting with `<lint> &&` first runs the repo's lint, the PR gate's lint row, so a `docs:check` or format failure shows here, before the tests, and not first at the gate."
         : ""
