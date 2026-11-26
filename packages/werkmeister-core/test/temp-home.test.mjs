@@ -418,23 +418,25 @@ test("WERKMEISTER_TEMP_HOME is the temp HOME itself, whatever the caller exporte
   }
 });
 
+// A zombie answers kill(pid, 0) until init reaps it, so `ps` decides.
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+  } catch {
+    return false;
+  }
+  const stat = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout;
+  return stat.trim() !== "" && !stat.trim().startsWith("Z");
+};
+// SW-507: wall-clock headroom for a loaded host, far under the command's 300 s.
+const until = async (ok) => {
+  for (const end = Date.now() + 60_000; !ok() && Date.now() < end; )
+    await new Promise((r) => setTimeout(r, 100));
+  return ok();
+};
+
 test("SIGTERM to the wrapper ends its command and what it started, and removes the temp HOME (SW-1149)", async () => {
   const { root, bin } = wrapper();
-  const alive = (pid) => {
-    try {
-      process.kill(pid, 0);
-    } catch {
-      return false;
-    }
-    const stat = spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout;
-    return stat.trim() !== "" && !stat.trim().startsWith("Z");
-  };
-  // SW-507: wall-clock headroom for a loaded host, far under the command's 300 s.
-  const until = async (ok) => {
-    for (const end = Date.now() + 60_000; !ok() && Date.now() < end; )
-      await new Promise((r) => setTimeout(r, 100));
-    return ok();
-  };
   // The sleep is the command's own child, as `pnpm build` is under `sh -c 'pnpm build && pnpm test'`.
   const child = spawn(bin, ["sh", "-c", 'sleep 300 & echo "$! $HOME"; wait'], {
     stdio: ["ignore", "pipe", "ignore"],
@@ -454,6 +456,35 @@ test("SIGTERM to the wrapper ends its command and what it started, and removes t
     assert.equal(fs.existsSync(home), false, "temp HOME left behind");
   } finally {
     if (cmdPid && alive(cmdPid)) process.kill(cmdPid);
+    child.kill("SIGKILL");
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a command that ignores SIGTERM is killed after a grace, and the temp HOME removed (SW-1193)", async () => {
+  const { root, bin } = wrapper();
+  const child = spawn(bin, ["sh", "-c", 'trap "" TERM; sleep 300 & echo "$! $HOME"; wait'], {
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  const exited = new Promise((r) => child.on("exit", (code, signal) => r(code ?? signal)));
+  let out = "";
+  child.stdout.on("data", (d) => (out += d));
+  let cmdPid = 0;
+  try {
+    assert.ok(await until(() => out.includes("\n")), "command started");
+    const [pid, home] = out.trim().split(" ");
+    cmdPid = Number(pid);
+    child.kill("SIGTERM");
+    // SW-507: the grace is 5 s; the rest is headroom for a loaded host.
+    const code = await Promise.race([
+      exited,
+      new Promise((r) => setTimeout(() => r("hung"), 60_000).unref()),
+    ]);
+    assert.equal(code, 137, "the wrapper should end its TERM-ignoring command with KILL");
+    assert.ok(await until(() => !alive(cmdPid)), `command's child ${cmdPid} still running`);
+    assert.equal(fs.existsSync(home), false, "temp HOME left behind");
+  } finally {
+    if (cmdPid && alive(cmdPid)) process.kill(cmdPid, "SIGKILL");
     child.kill("SIGKILL");
     fs.rmSync(root, { recursive: true, force: true });
   }
