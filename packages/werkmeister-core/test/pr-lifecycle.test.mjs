@@ -1298,12 +1298,35 @@ test("gate: a decided follow-up with no issue key fails, naming it; a key or a p
     q("proposed", "Defer to a follow-up."),
     q("decided", "No follow-up needed: the snapshot file is regenerated."),
     q("decided", "The PR file covers it; the follow-up PR comes from pr new."),
+    // SW-1192: SW-584 § 3, "follow-up" only in option B, which nobody chose.
+    q(
+      "decided (approved in chat 2026-11-24)",
+      "**Decided (option A):** defer, no ticket. The App is installed on **All repositories**.\n\nEvidence:\n- `gh api user/installations` → 403.\n\nOptions:\n- A (recommended) — defer, no ticket.\n- B — defer, file an SW follow-up for device-flow installation management.\n- C — build it now: widens this ticket a lot.",
+    ),
   ]) {
     const ws = withDecisions(text);
     try {
       assert.deepEqual(failed(await gate(ws, deps([DIFF_API]))), [], text);
     } finally {
       clean(ws);
+    }
+  }
+  // SW-1192: the chosen answer still counts when an options list follows it, as does the option it names.
+  for (const answer of [
+    "**Decided (option B):** defer; file a follow-up after the PR.",
+    "**Decided:** option B.",
+  ]) {
+    const chosen = withDecisions(
+      `# d\n\n${q("decided", `${answer}\n\nOptions:\n- A — no ticket.\n- B — defer, file a follow-up.`)}`,
+    );
+    try {
+      assert.match(
+        (await gate(chosen, deps([DIFF_API]))).checks.find((c) => c.name === "follow-ups").detail,
+        /no issue key: 01_research: ## 11\. Codex resume/,
+        answer,
+      );
+    } finally {
+      clean(chosen);
     }
   }
 });
