@@ -3944,7 +3944,19 @@ export async function watchPrs(
     }
   }
   // A pushed pass is for one repo; reaping every workspace stays with the scheduled pass.
-  if (repo) return { ok: true, lines, desktop };
+  if (repo) {
+    if (!opts.desktop && paths.some((ws) => hasDesktopCallback(ws, repo))) {
+      // SW-272: only the mod inside the desktop app reaches these sessions; leave it a stamp.
+      try {
+        if (writePushStamp(opts.repo as string))
+          lines.push(`github ingest: desktop pass owed for ${opts.repo}`);
+      } catch (e) {
+        // The terminal side is done: a throw here would make SQS redeliver an event already handled.
+        lines.push(`github ingest: could not leave a desktop stamp: ${(e as Error).message}`);
+      }
+    }
+    return { ok: true, lines, desktop };
+  }
   // Its own lock: every desktop session's timer runs this pass, and two reapers would race compose.
   fs.mkdirSync(path.dirname(idleLock), { recursive: true });
   if (takeLock(idleLock)) {
@@ -3954,6 +3966,140 @@ export async function watchPrs(
       fs.rmSync(idleLock, { force: true });
     }
   } else lines.push("another idle-stop pass is running");
+  return { ok: true, lines, desktop };
+}
+
+// GitHub's owner/name charset; owners have no `_`, so `__` splits a stamp name unambiguously.
+const GITHUB_REPO = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/;
+const CLAIMED = ".claimed-";
+const PARTIAL = ".tmp-";
+// A stamp claim left this long belongs to a mod child that was killed mid-pass.
+const LEFTOVER_MS = 10 * 60_000;
+
+/**
+ * The folder where a pushed GitHub event leaves one stamp per repo for the desktop
+ * sessions: only the werkmeister mod inside the Claude desktop app can message them.
+ * A file there with no `.claimed-` or `.tmp-` in its name means {@link watchPushedPrs}
+ * has a pass to run.
+ *
+ * @returns The folder's path, under `~/.werkmeister`. It may not exist yet.
+ *
+ * @example
+ * ```ts
+ * import { readdirSync } from "node:fs";
+ * import { prPushDir } from "werkmeister-core/sdk";
+ *
+ * const owed = readdirSync(prPushDir()).filter((n) => !/\.(claimed|tmp)-/.test(n));
+ * console.log(owed);
+ * ```
+ */
+export function prPushDir(): string {
+  return path.join(sandboxHome(), "pr-push");
+}
+
+function hasDesktopCallback(ws: string, repo: string): boolean {
+  try {
+    return readPrFiles(ws).some(
+      (f) =>
+        String(f.fm.repo ?? "").toLowerCase() === repo && f.fm["session"] && f.fm["host_session"],
+    );
+  } catch {
+    return false; // a malformed PR file: the gate and `pr status` report it
+  }
+}
+
+/** Writes `repo`'s stamp; false, writing nothing, for a repo name GitHub could not have sent. */
+function writePushStamp(repo: string): boolean {
+  if (!GITHUB_REPO.test(repo)) return false;
+  const dir = prPushDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const stamp = path.join(dir, repo.toLowerCase().replace("/", "__"));
+  // Renamed into place, so a session listing the folder never takes half a file.
+  const partial = `${stamp}${PARTIAL}${process.pid}`;
+  fs.writeFileSync(partial, repo);
+  fs.renameSync(partial, stamp);
+  return true;
+}
+
+/**
+ * Runs the desktop pass for each repo a pushed GitHub event left a stamp for, the pass the
+ * werkmeister mod otherwise runs every 10 minutes. Each stamp is claimed by renaming it, so
+ * of several desktop sessions checking at once exactly one runs the pass for it.
+ *
+ * @param deps - The services it uses; leave it at its default.
+ * @param send - How a message reaches a terminal session; leave it at its default.
+ * @returns `ok` (always true), `lines` (what the passes did) and `desktop` (each message
+ * for the caller to send to a desktop session), as {@link watchPrs} returns them.
+ *
+ * @example
+ * ```ts
+ * import { watchPushedPrs } from "werkmeister-core/sdk";
+ *
+ * const { desktop } = await watchPushedPrs();
+ * for (const cb of desktop) console.log(cb.hostSession, cb.message);
+ * ```
+ */
+export async function watchPushedPrs(
+  deps: Deps = defaultDeps(),
+  send: (cb: PrCallback) => Promise<string[] | void> = deliverHeadless,
+): Promise<{
+  /** Always true: a failing pass is reported in `lines`, not here. */
+  ok: boolean;
+  /** What the passes did, one line per event. */
+  lines: string[];
+  /** The messages for the caller to send to desktop sessions. */
+  desktop: PrCallback[];
+}> {
+  const lines: string[] = [];
+  const desktop: PrCallback[] = [];
+  const dir = prPushDir();
+  let names: string[];
+  try {
+    names = fs.readdirSync(dir);
+  } catch {
+    return { ok: true, lines, desktop }; // no event pushed yet
+  }
+  for (const name of names) {
+    const file = path.join(dir, name);
+    if (name.includes(CLAIMED) || name.includes(PARTIAL)) {
+      try {
+        if (Date.now() - fs.statSync(file).mtimeMs > LEFTOVER_MS) fs.rmSync(file, { force: true });
+      } catch {
+        /* taken meanwhile */
+      }
+      continue;
+    }
+    const claimed = `${file}${CLAIMED}${process.pid}`;
+    try {
+      fs.renameSync(file, claimed);
+    } catch {
+      continue; // another session took it
+    }
+    try {
+      // A rename keeps the stamp's mtime: restart it, or a stamp older than LEFTOVER_MS is swept mid-pass.
+      const now = new Date();
+      fs.utimesSync(claimed, now, now);
+      const repo = fs.readFileSync(claimed, "utf8").trim();
+      // An empty repo would make this the scheduled pass, reaper and all.
+      if (!GITHUB_REPO.test(repo)) {
+        fs.rmSync(claimed, { force: true });
+        continue;
+      }
+      const r = await watchPrs({ desktop: true, repo }, deps, send);
+      lines.push(...r.lines);
+      desktop.push(...r.desktop);
+      fs.rmSync(claimed, { force: true });
+    } catch (e) {
+      lines.push((e as Error).message);
+      // Put it back for the next check, unless a newer event already left a fresh stamp.
+      try {
+        if (fs.existsSync(file)) fs.rmSync(claimed, { force: true });
+        else fs.renameSync(claimed, file);
+      } catch {
+        /* swept meanwhile: the next event leaves a new stamp, and the 10-minute pass covers it */
+      }
+    }
+  }
   return { ok: true, lines, desktop };
 }
 

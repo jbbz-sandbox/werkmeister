@@ -109,7 +109,9 @@ export {
   openPrs,
   type PrCallback,
   type PrView,
+  prPushDir,
   pushPrs,
+  watchPushedPrs,
 } from "./pr_lifecycle.js";
 export type { RunResult } from "./proc.js";
 export { type SyncRegistryOptions, syncRegistry } from "./registry_sync.js";

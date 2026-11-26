@@ -118,7 +118,9 @@ try {
     'workspace-path': async () => ({ path: await core.resolveWorkspaceDir(args.name) }),
     'start-args': () => core.startArgs(args.path),
     'pr-status': async () => ({ command: (await core.refreshPrStatus(args.path)).lines.join('\\n') || 'no PR files' }),
-    'pr-watch': () => core.watchPrs({ desktop: true }),
+    // A core older than SW-272 has neither push call: the 10-minute pass alone then, as before.
+    'pr-watch': async () => ({ ...(await core.watchPrs({ desktop: true })), pushDir: core.prPushDir?.() ?? null }),
+    'pr-push': async () => (await core.watchPushedPrs?.()) ?? { ok: true, lines: [], desktop: [] },
     'close-out': () => core.closeOut(args.name, args.abandon !== undefined ? { abandon: args.abandon } : {}),
     'claude-resume': () => core.resumeClaudeInTerminal(args.name),
     'follow-logs': () => core.followLogsInTerminal(args.name),
@@ -184,6 +186,8 @@ export const PR_POLL_MS = 60000;
 export const RESOURCE_POLL_MS = 30000;
 /** PR callbacks (#236): every desktop session runs a pass this often; the core's lock lets one through. */
 export const CALLBACK_POLL_MS = 600000;
+/** Pushed-event stamps (SW-272): one local folder listing per check, no `gh`; a pass runs only on a stamp. */
+export const PUSH_POLL_MS = 15000;
 // The AbovePrompt band runs in every workspace session, and each core read covers all workspaces,
 // so it polls slower than the one root pane.
 // shortcut: each band reads every workspace's rows and PRs; scope the core reads to one workspace if gh rate limits bite.
@@ -1617,14 +1621,18 @@ type PrCallback = { dir: string; url: string; hostSession: string; message: stri
 let callbackTicking = false;
 
 /**
- * One `pr-watch` pass: the core resumes terminal sessions itself and hands back the desktop ones,
+ * One callback pass (`pr-watch`; `pr-push` for pushed-event stamps): the core resumes terminal sessions itself and hands back the desktop ones,
  * which only the app's messaging reaches. The core already marked them sent, so a failure is logged, not retried.
  */
-async function callbackTick($: EngineInterface): Promise<void> {
+async function callbackTick(
+  $: EngineInterface,
+  op: "pr-watch" | "pr-push" = "pr-watch",
+): Promise<void> {
   if (callbackTicking) return;
   callbackTicking = true;
   try {
-    const r = await core<{ desktop: PrCallback[] }>($, "pr-watch", {}, 120000);
+    const r = await core<{ desktop: PrCallback[]; pushDir?: string | null }>($, op, {}, 120000);
+    if (op === "pr-watch") pushDir = r.pushDir ?? null;
     if (!r.desktop.length) return;
     const self = payload<{ sessionId: string }>(
       await $.mcp.call("ccd_session_mgmt", "get_session", { session_id: "self" }),
@@ -1654,11 +1662,28 @@ async function callbackTick($: EngineInterface): Promise<void> {
   }
 }
 
-let callbackTimer: { cancel: () => void } | null = null;
+let callbackTimers: { cancel: () => void }[] = [];
+// Where the core leaves pushed-event stamps; null until a pass reports it, or on a core without push.
+let pushDir: string | null = null;
+
+/** A stamp in the push folder: the 10-minute pass need not wait (SW-272). */
+async function pushTick($: EngineInterface): Promise<void> {
+  if (!pushDir || callbackTicking) return;
+  const entries = await $.fs.list(pushDir).catch(() => []);
+  if (
+    entries.some(
+      (e) => e.kind === "file" && !e.name.includes(".claimed-") && !e.name.includes(".tmp-"),
+    )
+  )
+    await callbackTick($, "pr-push");
+}
 
 function startCallbacks($: EngineInterface): void {
-  callbackTimer?.cancel();
-  callbackTimer = $.clock.every(CALLBACK_POLL_MS, () => void callbackTick($));
+  for (const t of callbackTimers) t.cancel();
+  callbackTimers = [
+    $.clock.every(CALLBACK_POLL_MS, () => void callbackTick($)),
+    $.clock.every(PUSH_POLL_MS, () => void pushTick($)),
+  ];
   void callbackTick($);
 }
 

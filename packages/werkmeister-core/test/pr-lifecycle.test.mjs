@@ -38,6 +38,7 @@ import {
   openPrs,
   openTerminalSessions,
   prFileDir,
+  prPushDir,
   pushPrs,
   readPrFiles,
   refreshPrStatus,
@@ -48,6 +49,7 @@ import {
   waitForHostLoadNow,
   wakeMessage,
   watchPrs,
+  watchPushedPrs,
   writePrFields,
 } from "../dist/pr_lifecycle.js";
 import { syncRegistry } from "../dist/registry_sync.js";
@@ -5825,6 +5827,184 @@ test("watchPrs({repo}): only that repo's workspaces are claimed; an unmanaged re
     else process.env.WERKMEISTER_WORKSPACES_ROOT = prev;
     clean(root);
   }
+});
+
+// ---- Pushed passes (SW-272) ----
+
+/** Workspaces `{ name: prFileText }` under a temp workspaces root, inside a temp HOME. */
+async function withPushRoot(files, fn) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pr-push-"));
+  const prev = process.env.WERKMEISTER_WORKSPACES_ROOT;
+  process.env.WERKMEISTER_WORKSPACES_ROOT = root;
+  for (const [name, text] of Object.entries(files))
+    fs.renameSync(icmWorkspace({ files: { app: text } }), path.join(root, name));
+  try {
+    await withSandboxHome(() => fn((name) => path.join(root, name)));
+  } finally {
+    if (prev === undefined) delete process.env.WERKMEISTER_WORKSPACES_ROOT;
+    else process.env.WERKMEISTER_WORKSPACES_ROOT = prev;
+    clean(root);
+  }
+}
+const FAILED = openView({ statusCheckRollup: [run("test", "FAILURE")] });
+const sender = () => {
+  const sent = [];
+  const send = async (cb) => {
+    sent.push(cb.session);
+  };
+  return { sent, send };
+};
+const stamps = () => (fs.existsSync(prPushDir()) ? fs.readdirSync(prPushDir()) : []);
+
+test("a pushed failed check wakes a terminal session once; the next tick doesn't wake it again (SW-272)", async () => {
+  await withPushRoot({ "a-ws": openFile() }, async (wsPath) => {
+    const d = deps([FAILED, JOB_LOG]);
+    d.reapIdle = async () => ({ lines: ["reaper ran"] });
+    const { sent, send } = sender();
+    await watchPrs({ desktop: false, repo: "o/app" }, d, send);
+    assert.deepEqual(sent, ["s-1"]);
+    assert.equal(readPrFiles(wsPath("a-ws"))[0].fm.notified_checks, `${SHA1}: test`);
+    assert.deepEqual(stamps(), [], "no desktop session: no stamp");
+
+    const tick = await watchPrs({ desktop: false }, d, send);
+    assert.ok(tick.lines.includes("reaper ran"), "the tick ran to its end");
+    assert.deepEqual(sent, ["s-1"], "one wake across push and tick");
+  });
+});
+
+test("a pushed review wakes once; the tick after it doesn't (SW-272)", async () => {
+  const view = openView({
+    reviewDecision: "CHANGES_REQUESTED",
+    reviews: [
+      {
+        author: { login: "ann" },
+        state: "CHANGES_REQUESTED",
+        body: "rename it",
+        submittedAt: "2026-10-31T10:00:00Z",
+      },
+    ],
+  });
+  await withPushRoot({ "a-ws": openFile() }, async (wsPath) => {
+    const d = deps([view]);
+    d.reapIdle = async () => ({ lines: [] });
+    const { sent, send } = sender();
+    await watchPrs({ desktop: false, repo: "o/app" }, d, send);
+    assert.equal(readPrFiles(wsPath("a-ws"))[0].fm.notified_review, "2026-10-31T10:00:00Z");
+    await watchPrs({ desktop: false }, d, send);
+    assert.deepEqual(sent, ["s-1"]);
+  });
+});
+
+test("a pushed event for a desktop PR leaves a stamp under HOME; one pushed pass delivers it, the 10-min pass doesn't again (SW-272)", async () => {
+  await withPushRoot({ "a-ws": openFile("host_session: local_h1\n") }, async (wsPath) => {
+    const home = path.dirname(process.env.WERKMEISTER_CONFIG_FILE);
+    const d = deps([FAILED, JOB_LOG]);
+    const { sent, send } = sender();
+    const pushed = await watchPrs({ desktop: false, repo: "O/App" }, d, send);
+    assert.deepEqual(sent, [], "the daemon can't reach a desktop session");
+    assert.ok(pushed.lines.includes("github ingest: desktop pass owed for O/App"));
+    assert.deepEqual(stamps(), ["o__app"]);
+    assert.ok(prPushDir().startsWith(home + path.sep), "the stamp is under the temp HOME");
+    assert.equal(fs.readFileSync(path.join(prPushDir(), "o__app"), "utf8"), "O/App");
+
+    const r = await watchPushedPrs(d, send);
+    assert.deepEqual(
+      r.desktop.map((c) => c.hostSession),
+      ["local_h1"],
+    );
+    assert.equal(readPrFiles(wsPath("a-ws"))[0].fm.notified_checks, `${SHA1}: test`);
+    assert.deepEqual(stamps(), [], "the stamp is used up");
+
+    const tick = await watchPrs({ desktop: true }, d, send);
+    assert.deepEqual(tick.desktop, [], "the mod's 10-minute pass sends nothing again");
+    assert.deepEqual((await watchPushedPrs(d, send)).desktop, [], "no stamp: no pass");
+  });
+});
+
+test("four desktop sessions checking one stamp at once run one pass between them (SW-272)", async () => {
+  await withPushRoot({ "a-ws": openFile("host_session: local_h1\n") }, async () => {
+    const d = deps([FAILED, JOB_LOG]);
+    const { send } = sender();
+    await watchPrs({ desktop: false, repo: "o/app" }, d, send);
+    const before = d.calls.filter((c) => c.startsWith("gh pr view")).length;
+    const runs = await Promise.all([1, 2, 3, 4].map(() => watchPushedPrs(d, send)));
+    assert.equal(runs.flatMap((r) => r.desktop).length, 1);
+    assert.equal(d.calls.filter((c) => c.startsWith("gh pr view")).length - before, 1);
+  });
+});
+
+test("a pushed pass that finds the lock busy puts its stamp back for the next check (SW-272)", async () => {
+  await withPushRoot({ "a-ws": openFile("host_session: local_h1\n") }, async () => {
+    const d = deps([FAILED, JOB_LOG]);
+    const { send } = sender();
+    await watchPrs({ desktop: false, repo: "o/app" }, d, send);
+    const lock = path.join(path.dirname(process.env.WERKMEISTER_CONFIG_FILE), "pr-callbacks.lock");
+    fs.writeFileSync(lock, "");
+    // A stamp that waited past the leftover limit (the app was closed): its claim must not read as one.
+    const stamp = path.join(prPushDir(), "o__app");
+    const old = new Date(Date.now() - 11 * 60_000);
+    fs.utimesSync(stamp, old, old);
+    const busy = await watchPushedPrs(d, send);
+    assert.deepEqual(busy.desktop, []);
+    assert.match(busy.lines.join("\n"), /another PR watch pass is running/);
+    assert.deepEqual(stamps(), ["o__app"]);
+    assert.ok(Date.now() - fs.statSync(stamp).mtimeMs < 60_000, "the claim restarted its age");
+
+    fs.rmSync(lock);
+    assert.equal((await watchPushedPrs(d, send)).desktop.length, 1);
+  });
+});
+
+test("a pass that fails after a newer stamp landed keeps the fresh stamp and drops its claim (SW-272)", async () => {
+  await withPushRoot({ "a-ws": openFile("host_session: local_h1\n") }, async () => {
+    const { send } = sender();
+    await watchPrs({ desktop: false, repo: "o/app" }, deps([FAILED, JOB_LOG]), send);
+    const stamp = path.join(prPushDir(), "o__app");
+    const failing = deps([FAILED, JOB_LOG]);
+    failing.commitRecord = async () => {
+      fs.writeFileSync(stamp, "o/app");
+      throw new Error("record push failed");
+    };
+    const failed = await watchPushedPrs(failing, send);
+    assert.match(failed.lines.join("\n"), /record push failed/, "the failing path ran");
+    assert.deepEqual(stamps(), ["o__app"], "one stamp, the fresh one; no claim left behind");
+  });
+});
+
+test("no stamp for a terminal-only PR or a repo name GitHub can't send; a missing folder is no work (SW-272)", async () => {
+  await withPushRoot({ "a-ws": openFile() }, async () => {
+    assert.deepEqual(await watchPushedPrs(deps([]), sender().send), {
+      ok: true,
+      lines: [],
+      desktop: [],
+    });
+    const d = deps([FAILED, JOB_LOG]);
+    const r = await watchPrs({ desktop: false, repo: "o/app" }, d, sender().send);
+    assert.match(r.lines.join("\n"), /resumed session s-1/, "the pass ran");
+    assert.deepEqual(stamps(), []);
+  });
+  const evil = openFile("host_session: local_h1\n").replace("repo: o/app", "repo: o/a/b");
+  await withPushRoot({ "a-ws": evil }, async () => {
+    const r = await watchPrs({ desktop: false, repo: "o/a/b" }, deps([FAILED]), sender().send);
+    assert.ok(r.ok);
+    assert.doesNotMatch(r.lines.join("\n"), /desktop pass owed/);
+    assert.deepEqual(stamps(), []);
+  });
+});
+
+test("a stamp claim left by a killed pass is cleared after 10 minutes, kept before (SW-272)", async () => {
+  await withPushRoot({}, async () => {
+    fs.mkdirSync(prPushDir(), { recursive: true });
+    const old = path.join(prPushDir(), "o__app.claimed-1");
+    const fresh = path.join(prPushDir(), "o__lib.claimed-2");
+    fs.writeFileSync(old, "o/app");
+    fs.writeFileSync(fresh, "o/lib");
+    const back = (min) => new Date(Date.now() - min * 60_000);
+    fs.utimesSync(old, back(11), back(11));
+    fs.utimesSync(fresh, back(1), back(1));
+    await watchPushedPrs(deps([]), sender().send);
+    assert.deepEqual(stamps(), ["o__lib.claimed-2"]);
+  });
 });
 
 test("watchPrs: headless claims are sent, desktop ones returned, a failed send is reported", async () => {
