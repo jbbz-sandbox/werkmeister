@@ -135,9 +135,17 @@ const TEST_STEP =
   "Once it passes, run `werkmeister pr gate --tests` (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows) and fix what it fails; record both exit codes. " +
   TEST_TAIL;
 const HOST_TEST_STEP = `${HOST_TESTS}Record its exit code. ${TEST_TAIL}`;
+// SW-825: sw-798's check after the gate hit "container … is not running". SW-1046: a passing gate keeps its starts.
+const GATE_CONTAINERS =
+  "a failing `werkmeister pr gate --tests` stops the containers it started (a passing one leaves them running for `pr open`), and the idle reaper stops containers left idle past `idle_stop_minutes`: before testing anything after the gate, check `docker ps` and start the service's container with `werkmeister feature up --service <name>` if it is not running.";
+// SW-1203: sw-1099's idle containers held 5 of 8 budgeted CPUs for 6.5 h, mostly during reviews.
+const IDLE_STOP =
+  "Before the review below, and before a browser check that doesn't use the test containers, run `werkmeister feature stop`: nothing tests meanwhile, and idle containers hold CPUs that other workspaces wait for. The gate starts the containers it needs itself; before any other test, start the container again as the gate step says.";
 // SW-430: the gate runs once, on reviewed code; a Must fix found after it forced a rerun (SW-344).
+// SW-1203: sw-1099 started six gates in implement; one ran beside a review whose fix then changed the code.
 const GATE_STEP =
-  "Once the review's fixes are in, run `werkmeister pr gate --tests` (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows) and fix what it fails; record its exit code. A fix here reruns the host test step first.";
+  "Run `werkmeister pr gate --tests` once, after the last review round has no open finding the person wants fixed (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows), and never while a review runs: a fix the review then finds wastes the run. Fix what it fails; record its exit code. A fix here reruns the host test step first. " +
+  `Then: ${GATE_CONTAINERS}`;
 
 // SW-534: sw-385's exercise on the real harness fixed ~40 lines after the review; they shipped unreviewed.
 // SW-678: a docs fix rerun with one service's tests skipped docs-site's, and the first `pr open` failed on it.
@@ -213,7 +221,11 @@ const reviewStep = (rerun: string, { group, questionTool }: IcmVars) =>
   "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
   `${REVIEW_FORMAT}, with one row per worktree (\`PASS\` means no Must fix left open). ` +
   "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`; a file of prose alone fails with `has no PASS row`.";
-const implementReview = (v: IcmVars) => reviewStep("rerun the host test step above", v);
+const implementReview = (v: IcmVars) =>
+  reviewStep(
+    "rerun only the test files the fix reaches and the cheap rows (the repo's lint chain, a service's test row that runs in about a minute or less), not the full gate, which runs once below",
+    v,
+  );
 
 // SW-687: sw-634 decided a blocklist for a pre-approved wrapper's input; one key it let through sent auth to any host.
 const PREAPPROVED_INPUT =
@@ -333,9 +345,9 @@ const exerciseFormat = (col: string) =>
   `a \`| check | result | ${col} |\` table whose result cell is exactly \`PASS\` or \`FAIL\` — nothing else in the cell — with the captured output in the ${col} column. The rule holds for every table in \`exercise.md\`; describe a superseded run in prose, not as a \`FAIL\` row. A run before the fix that records the bug goes under a heading that starts \`Baseline\` (e.g. \`## Baseline before the fix\`): the gate skips that section, down to the next heading of its level or higher`;
 
 // SW-736: `changeset status --since` reads git history, so before the commit it failed on an entry just written (sw-699, sw-755).
-// SW-825: the gate stops what it started (SW-34), so sw-798's check hit "container … is not running".
 const RELEASE_AFTER_COMMIT =
-  "Run the repo's release check (the `Release check:` command in `werkmeister-context.md`) after the commit, not before: a check that compares the branch with its base in git history does not see an uncommitted release entry. When it runs in a service's container, an earlier `werkmeister pr gate --tests` stopped the containers it started: start the one it runs in with `werkmeister feature up --service <name>` first.";
+  "Run the repo's release check (the `Release check:` command in `werkmeister-context.md`) after the commit, not before: a check that compares the branch with its base in git history does not see an uncommitted release entry. " +
+  `When it runs in a service's container: ${GATE_CONTAINERS}`;
 
 const LINT =
   "the repo's lint command (the `<lint> &&` head of the test command in `werkmeister-context.md`, when it has one, which the PR gate's lint row runs) and fix what it fails, release entry included.";
@@ -519,6 +531,7 @@ const feature: Stage[] = [
         BASE_BUILD_RED,
         diffCheck("spec.md"),
         HOST_TEST_STEP,
+        IDLE_STOP,
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
@@ -741,6 +754,7 @@ const refactor: Stage[] = [
         PREAPPROVED_IN_STAGE,
         // SW-460: groupStep commits per ticket; say how scope.md's steps nest so no step gets its own commit.
         `${v.group.length ? "For each ticket, take its `scope.md` steps in order, then commit it before the next ticket; do not commit after every step. After each step" : "Take the steps in order. After each one"}: ${diffCheck("scope.md")} ${HOST_TEST_STEP}`,
+        IDLE_STOP,
         implementReview(v),
         GATE_STEP,
         REVIEW_DELTA,
