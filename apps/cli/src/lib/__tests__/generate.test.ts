@@ -378,6 +378,73 @@ describe("extra_services sidecars", () => {
     expect(services.tcp.healthcheck.test[1]).toContain("nc -z 127.0.0.1 11211");
   });
 
+  // SW-955: bare names are per feature, so two sidecars naming `pgdata` shared one data dir.
+  const pg = (volume: string) => ({
+    image: "postgres:16",
+    health_endpoint: "postgres",
+    extra_volumes: [`${volume}:/var/lib/postgresql/data`],
+  });
+  const twoSidecars = (a: string, b: string) => {
+    const doc = YAML.parse(fixtureServicesYaml());
+    doc.services.backend.extra_services = { "backend-db": pg(a) };
+    doc.services.frontend.extra_services = { "frontend-db": pg(b) };
+    home.write("services.yaml", YAML.stringify(doc));
+    return () => generateFeatureCompose("f", 1, ["backend", "frontend"], null, tmp);
+  };
+
+  it("refuses two sidecars mounting one named volume, naming the volume and both", () => {
+    expect(twoSidecars("pgdata", "pgdata")).toThrow(/pgdata.*backend-db.*frontend-db/s);
+  });
+
+  it("gives each sidecar its own volume when the names differ", () => {
+    const { volumes, services } = YAML.parse(
+      fs.readFileSync(twoSidecars("backend-pgdata", "frontend-pgdata")(), "utf8"),
+    );
+    expect(Object.keys(volumes)).toEqual(
+      expect.arrayContaining(["f-backend-pgdata", "f-frontend-pgdata"]),
+    );
+    expect(services["backend-db"].volumes).toEqual(["f-backend-pgdata:/var/lib/postgresql/data"]);
+    expect(services["frontend-db"].volumes).toEqual(["f-frontend-pgdata:/var/lib/postgresql/data"]);
+  });
+
+  it("refuses a sidecar sharing its named volume with a service or a setup service", () => {
+    expect(() =>
+      composeServices((doc) => {
+        doc.services.backend.extra_services = { db: pg("pgdata") };
+        doc.services.backend.extra_volumes = ["pgdata:/data"];
+      }),
+    ).toThrow(/pgdata.*backend, db \(sidecar of backend\)/s);
+    expect(() =>
+      composeServices((doc) => {
+        doc.services.backend.extra_services = { db: pg("pgdata") };
+        doc.setup_services["demo-install"].extra_volumes = ["pgdata:/data"];
+      }),
+    ).toThrow(/pgdata.*demo-install, db \(sidecar of backend\)/s);
+  });
+
+  it("lets a sidecar mount another container's named volume read-only", () => {
+    const services = composeServices((doc) => {
+      doc.services.backend.extra_volumes = ["static:/app/dist"];
+      doc.services.backend.extra_services = {
+        web: { image: "nginx", extra_volumes: ["static:/usr/share/nginx/html:ro"] },
+      };
+    });
+    expect(services.web.volumes).toEqual(["f-static:/usr/share/nginx/html:ro"]);
+  });
+
+  it("still lets services and setup services share a named volume, as werkmeister's `tools` does", () => {
+    const services = composeServices((doc) => {
+      doc.services.backend.extra_volumes = ["tools:/opt/tools"];
+      doc.setup_services["demo-install"].extra_volumes = ["tools:/opt/tools"];
+      // Shared (`^`) and bind mounts are never a sidecar's per-feature volume.
+      doc.services.backend.extra_services = {
+        db: { image: "postgres:16", extra_volumes: ["^tools:/t", "${REPO}/tools:/t2"] },
+      };
+    });
+    expect(services.backend.volumes).toContain("f-tools:/opt/tools");
+    expect(services["demo-install"].volumes).toContain("f-tools:/opt/tools");
+  });
+
   it("probes a postgres sidecar with no internal_port on 5432, where a bare pg_isready did", () => {
     const services = composeServices((doc) => {
       doc.services.backend.extra_services = {

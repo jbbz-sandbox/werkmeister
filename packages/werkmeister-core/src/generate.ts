@@ -635,6 +635,52 @@ export function repoScopedNodeModules(
 }
 
 /**
+ * SW-955: a bare `extra_volumes` name is one `<feature>-<name>` volume for every container naming it.
+ * Caches share one on purpose (`tools`, `node-modules`), but a sidecar's is its data dir, and two
+ * servers on one data dir corrupt it: so a sidecar's named volume may not be mounted by anything else,
+ * unless the sidecar only reads it (`:ro`).
+ */
+function refuseSharedSidecarVolumes(services: ServiceEntry[], setups: ServicesConfig): void {
+  const mounters = new Map<string, Set<string>>();
+  const sidecarOf = new Map<string, string>();
+  const add = (
+    container: string,
+    def: { extra_volumes?: unknown; node_modules_volume?: unknown },
+    sidecar = false,
+  ) => {
+    const vols = [...(Array.isArray(def.extra_volumes) ? def.extra_volumes : [])];
+    if (typeof def.node_modules_volume === "string") vols.push(def.node_modules_volume);
+    for (const vol of vols) {
+      const name = String(vol).split(":")[0] ?? "";
+      if (!name || name.includes("/") || name.startsWith(SHARED_VOLUME_MARKER)) continue;
+      // A sidecar that only reads it (nginx serving a build) can't corrupt the writer's data.
+      if (sidecar && String(vol).endsWith(":ro")) continue;
+      mounters.set(name, (mounters.get(name) ?? new Set()).add(container));
+    }
+  };
+  for (const svc of services) {
+    add(String(svc["name"]), svc);
+    const setup = svc["setup_service"];
+    if (typeof setup === "string" && isDict(setups[setup])) add(setup, setups[setup]);
+    for (const [name, extra] of Object.entries(svc["extra_services"] ?? {})) {
+      sidecarOf.set(name, String(svc["name"]));
+      if (isDict(extra)) add(name, extra, true);
+    }
+  }
+  for (const [vol, who] of mounters) {
+    if (who.size < 2 || ![...who].some((c) => sidecarOf.has(c))) continue;
+    const named = [...who].map((c) =>
+      sidecarOf.has(c) ? `${c} (sidecar of ${sidecarOf.get(c)})` : c,
+    );
+    throw new Error(
+      `Named volume ${quoted(vol)} is mounted by ${named.join(", ")}: a bare extra_volumes name is ` +
+        `one <feature>-${vol} volume for every container that names it, so they would share one data dir. ` +
+        "Give each sidecar's volume its own name in services.yaml.",
+    );
+  }
+}
+
+/**
  * Render the compose file for *feature* without writing it.
  *
  * Split out from `generateFeatureCompose` so a caller can compare the current
@@ -759,6 +805,7 @@ function renderFeatureCompose(
         },
       ]),
     );
+    refuseSharedSidecarVolumes(svcObjects, setupConfigs);
     let rendered = template.render(
       jinjaContext({
         feature_name: feature,
