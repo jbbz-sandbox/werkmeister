@@ -34,10 +34,20 @@ fi
 [ "$(head_of)" = "$head" ] || { echo "ERROR #$PR moved during its checks; run again"; exit 1; }
 
 id="$(gh pr view "$PR" -R "$R" --json id -q .id)"
-gh api graphql -f id="$id" \
-  -f query='mutation($id:ID!){enqueuePullRequest(input:{pullRequestId:$id}){mergeQueueEntry{position}}}' \
-  >/dev/null || { echo "ERROR #$PR could not be queued"; exit 1; }
-echo "QUEUED #$PR"
+if out="$(gh api graphql -f id="$id" \
+  -f query='mutation($id:ID!){enqueuePullRequest(input:{pullRequestId:$id}){mergeQueueEntry{position}}}' 2>&1)"; then
+  echo "QUEUED #$PR"
+elif [[ "$out" == *"already in the queue"* ]]; then
+  # Queued by something else (pr watch, a person in the UI): wait for that entry (SW-1214).
+  pos="$(gh api graphql -F n="$PR" -f o="${R%/*}" -f r="${R#*/}" \
+    -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){mergeQueueEntry{position}}}}' \
+    -q '.data.repository.pullRequest.mergeQueueEntry.position // "?"' 2>/dev/null)"
+  echo "#$PR already queued (position ${pos:-?})"
+else
+  echo "$out" >&2
+  echo "ERROR #$PR could not be queued"
+  exit 1
+fi
 
 for _ in $(seq 1 "$TRIES"); do
   sleep "$EVERY"

@@ -204,7 +204,10 @@ test("--pull off main pulls and builds nothing", () => {
   assert.ok(!fs.existsSync(path.join(repo, "apps/werkmeister-mcp/src/x.ts")));
 });
 
-/** A fake gh: checks pass unless CHECKS_RC says otherwise, the queue reports QUEUE_STATE. */
+/**
+ * A fake gh: checks pass unless CHECKS_RC says otherwise, the queue reports QUEUE_STATE.
+ * ENQUEUE_ERR makes the enqueue fail with that message, as gh prints a GraphQL error.
+ */
 function fakeGh() {
   write(
     path.join(bin, "gh"),
@@ -214,7 +217,11 @@ case "$*" in
   "pr checks"*) echo "test	pass" ;;
   *headRefOid*) echo abc123 ;;
   "pr view"*"--json id"*) echo PR_ID ;;
-  *enqueuePullRequest*) echo "enqueue $*" >>"${log}"; echo '{}' ;;
+  *enqueuePullRequest*)
+    echo "enqueue $*" >>"${log}"
+    [ -z "\${ENQUEUE_ERR:-}" ] || { echo "gh: \${ENQUEUE_ERR}" >&2; exit 1; }
+    echo '{}' ;;
+  *mergeQueueEntry*) echo 1 ;;
   "api graphql"*) echo "\${QUEUE_STATE:-MERGED false}" ;;
 esac
 `,
@@ -254,4 +261,21 @@ test("queue-pr never queues a PR whose checks failed, and reports one that left 
   const dropped = queue({ QUEUE_STATE: "OPEN false" });
   assert.equal(dropped.status, 1);
   assert.match(dropped.stdout, /^ERROR #7 left the queue unmerged/m);
+});
+
+// SW-1214: pr watch or a person in the UI may have queued it already; wait for that entry instead.
+test("queue-pr waits on a PR already in the queue, and still fails on any other enqueue error", () => {
+  fakeGh();
+  const already = "Pull request is already in the queue";
+  const merged = queue({ ENQUEUE_ERR: already });
+  assert.equal(merged.status, 0, merged.stdout + merged.stderr);
+  assert.match(merged.stdout, /^#7 already queued \(position 1\)\nMERGED #7$/m);
+  const dropped = queue({ ENQUEUE_ERR: already, QUEUE_STATE: "OPEN false" });
+  assert.equal(dropped.status, 1);
+  assert.match(dropped.stdout, /^ERROR #7 left the queue unmerged/m);
+  const refused = queue({ ENQUEUE_ERR: "Resource not accessible by integration" });
+  assert.equal(refused.status, 1);
+  assert.match(refused.stdout, /^ERROR #7 could not be queued/m);
+  assert.match(refused.stdout + refused.stderr, /Resource not accessible/, "gh's reason is kept");
+  assert.doesNotMatch(refused.stdout, /MERGED/);
 });
