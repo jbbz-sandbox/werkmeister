@@ -5,7 +5,8 @@
  */
 
 import * as fs from "node:fs";
-import * as os from "node:os";
+import { syncBuiltinESMExports } from "node:module";
+import nodeOs, * as os from "node:os";
 import * as path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -49,7 +50,7 @@ vi.mock("werkmeister-core/reporter", async (orig) => ({
   info: vi.fn(),
 }));
 
-import { readLastStop, readWaiting } from "werkmeister-core/agent_state";
+import { readLastStop, readWaiting, writeWaiting } from "werkmeister-core/agent_state";
 import {
   composeStop,
   composeUpServiceAsync,
@@ -61,6 +62,7 @@ import {
   admitServiceStart,
   capacityWait,
   GATE_CAPACITY_WAIT_MS,
+  grantAfterLoadDrop,
   restart,
   startsAsPerson,
   stop,
@@ -225,6 +227,99 @@ it("with no budget.cpus, the queue's needs/free line names memory only", async (
   vi.mocked(run).mockImplementation(() => ({ status: 0, stdout: "", stderr: "" }));
   const text = await capacityWait("mine", 1, true, { cpus: 3, memory: G });
   expect(text).toContain("this start needs 1.0 GiB; free 2.0 GiB of the budget's 2.0 GiB");
+});
+
+// SW-1236: at a Mac load of 309 the scheduler still admitted starts, by CPU and memory alone.
+describe("the Mac's load (budget.host_load_mac)", () => {
+  /** os.loadavg() as core reads it: its `import * as os` sees a spy only after syncBuiltinESMExports. */
+  let spy: ReturnType<typeof vi.spyOn> | undefined;
+  const setLoad = (one: number) => {
+    spy ??= vi.spyOn(nodeOs, "loadavg");
+    spy.mockReturnValue([one, one, one]);
+    syncBuiltinESMExports();
+  };
+  const platform = (p: NodeJS.Platform) => Object.defineProperty(process, "platform", { value: p });
+  const realPlatform = process.platform;
+  beforeEach(() => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 2G\n  host_load_mac: 4\n");
+    vi.mocked(run).mockImplementation(() => ({ status: 0, stdout: "", stderr: "" }));
+    platform("darwin");
+  });
+  afterEach(() => {
+    platform(realPlatform);
+    spy?.mockRestore();
+    spy = undefined;
+    syncBuiltinESMExports();
+  });
+
+  it("holds a start that fits the budget while it is over the limit, says why, and admits it once it falls", async () => {
+    const mine = workspace("mine", { autonomous: true });
+    setLoad(50);
+    expect(await admitOrQueue("mine", mine, false)).toBe(1);
+    expect(readQueue()).toEqual(["mine"]);
+    expect(readWaiting(mine)).toMatchObject({ position: 1, reason: "waiting for host load" });
+    expect(await capacityWait("mine", 1, true, { cpus: 0, memory: G })).toContain(
+      "host load 50.0 is over 4 (budget.host_load_mac): every start waits for it to fall; budget.host_load_mac: 0 turns it off",
+    );
+    setLoad(2);
+    expect(await admitOrQueue("mine", mine, false)).toBeNull();
+    expect(readQueue()).toEqual([]);
+    expect(readWaiting(mine)).toBeNull();
+  });
+
+  it("holds a person's start too, without preempting anyone", async () => {
+    const victim = workspace("victim", { autonomous: true });
+    const mine = workspace("mine", { autonomous: false });
+    writeLeases({ victim: { slot: 1, workspace: victim } });
+    vi.mocked(run).mockImplementation((cmd: string[]) =>
+      cmd[1] === "ps"
+        ? { status: 0, stdout: "id1\n", stderr: "" }
+        : {
+            status: 0,
+            stdout: `victim\t${victim}\t2026-10-30T10:00:00Z\t${1.5 * G}\t0\n`,
+            stderr: "",
+          },
+    );
+    vi.mocked(composeStop).mockClear();
+    setLoad(50);
+    expect(await admitOrQueue("mine", mine, true)).toBe(1);
+    expect(composeStop).not.toHaveBeenCalled();
+  });
+
+  it("admits at the limit itself, with budget.host_load_mac 0, and off macOS", async () => {
+    const mine = workspace("mine", { autonomous: true });
+    setLoad(4);
+    expect(await admitOrQueue("mine", mine, false)).toBeNull();
+    setLoad(50);
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 2G\n  host_load_mac: 0\n");
+    expect(await admitOrQueue("mine", mine, false)).toBeNull();
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 2G\n  host_load_mac: 4\n");
+    platform("linux");
+    expect(await admitOrQueue("mine", mine, false)).toBeNull();
+  });
+
+  it("defaults to 4 × cores", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 2G\n");
+    const mine = workspace("mine", { autonomous: true });
+    setLoad(4 * os.availableParallelism() + 1);
+    expect(await admitOrQueue("mine", mine, false)).toBe(1);
+  });
+
+  it("the daemon's tick grants a waiter held by load once the load falls, and no other", async () => {
+    const mine = workspace("mine", { autonomous: true });
+    writeLeases({ mine: { slot: 1, workspace: mine } });
+    const grant = vi.fn(() => 1);
+    setLoad(50);
+    expect(await admitOrQueue("mine", mine, false)).toBe(1);
+    expect(grantAfterLoadDrop(grant)).toBe(false);
+    setLoad(2);
+    expect(grantAfterLoadDrop(grant)).toBe(true);
+    expect(grant).toHaveBeenCalledTimes(1);
+    // A wait for CPUs or memory is a release's to grant, not the tick's.
+    writeWaiting(mine, { position: 1, reason: "waiting for capacity" });
+    expect(grantAfterLoadDrop(grant)).toBe(false);
+    expect(grant).toHaveBeenCalledTimes(1);
+  });
 });
 
 // SW-831: a queued victim whose containers still ran had its agent's commands held over them.

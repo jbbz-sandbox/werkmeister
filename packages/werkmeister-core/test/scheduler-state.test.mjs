@@ -1120,7 +1120,8 @@ test("enqueue: a preempted feature keeps its place ahead of later waiters (SW-10
 });
 
 // SW-1028: the budget tool ran a `docker run` per call (one per pane poll) only to learn the VM's cores.
-test("vmCores: two reads in one process run docker once (SW-1028)", async () => {
+// SW-1236: it now reads the VM's load too, still at most once a minute.
+test("hostLoads: two reads within a minute run docker once (SW-1028, SW-1236)", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vm-cores-"));
   const calls = path.join(dir, "calls");
   const bin = path.join(dir, "docker");
@@ -1130,9 +1131,12 @@ test("vmCores: two reads in one process run docker once (SW-1028)", async () => 
   const prev = process.env.WERKMEISTER_DOCKER_BIN;
   process.env.WERKMEISTER_DOCKER_BIN = bin;
   try {
-    const { vmCores } = await import("../dist/budget_status.js");
-    assert.equal(await vmCores(), 6);
-    assert.equal(await vmCores(), 6);
+    const { hostLoads } = await import("../dist/budget_status.js");
+    for (let i = 0; i < 2; i++) {
+      const { vm } = await hostLoads("darwin");
+      assert.equal(vm.load, 0.5);
+      assert.equal(vm.limit, hostLoadLimit(6));
+    }
     assert.equal(fs.readFileSync(calls, "utf8").split("\n").filter(Boolean).length, 1);
   } finally {
     if (prev === undefined) delete process.env.WERKMEISTER_DOCKER_BIN;

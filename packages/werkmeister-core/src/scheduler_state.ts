@@ -234,12 +234,43 @@ export async function loadBudget(
   return { memory, cpus, preempt: b["preempt"] !== false };
 }
 
-/** 1-min host load (on macOS and Windows, of the Docker VM) above which with-temp-home and a setup start wait (SW-209, SW-542, SW-630, SW-888): `budget.host_load`, else 2 × cores; 0 is off. */
-export function hostLoadLimit(cores: number): number {
+/** `budget.<key>` when it is a number ≥ 0, else *fallback*. */
+function budgetNumber(key: string, fallback: number): number {
   const cfg = loadGlobalConfig()["budget"];
-  const v = isDict(cfg) ? Number(cfg["host_load"] ?? Number.NaN) : Number.NaN;
-  return Number.isFinite(v) && v >= 0 ? v : 2 * cores;
+  const v = isDict(cfg) ? Number(cfg[key] ?? Number.NaN) : Number.NaN;
+  return Number.isFinite(v) && v >= 0 ? v : fallback;
 }
+
+/**
+ * 1-min load of the Docker VM (on Linux, of the host) above which with-temp-home and a setup start wait
+ * (SW-209, SW-542, SW-630, SW-888): `budget.host_load`, else 2 × cores; 0 is off. Admission waits on the
+ * Mac's own load instead, {@link hostLoadMacLimit} (SW-1236).
+ */
+export function hostLoadLimit(cores: number): number {
+  return budgetNumber("host_load", 2 * cores);
+}
+
+/**
+ * 1-min load of the Mac itself above which every scheduler admission waits (SW-1236): `budget.host_load_mac`,
+ * else 4 × cores; 0 is off. The VM's limit can't see the Mac stall: at Mac load 309 the VM stayed under 24.
+ * Not with-temp-home: macOS's load also counts idle daemons (SW-556), and test runs sit inside admitted containers.
+ */
+export function hostLoadMacLimit(cores: number = os.availableParallelism()): number {
+  return budgetNumber("host_load_mac", 4 * cores);
+}
+
+/** The Mac's 1-min load and its limit when the load is over it, else null; off macOS null (SW-1236). Exported for `budget fits` (SW-1220). */
+export function macLoadOver(
+  platform: NodeJS.Platform = process.platform,
+): { load: number; limit: number } | null {
+  if (platform !== "darwin") return null;
+  const limit = hostLoadMacLimit();
+  const load = os.loadavg()[0];
+  return limit && load > limit ? { load, limit } : null;
+}
+
+/** waiting.json's reason for a start held by {@link macLoadOver}: the daemon's tick grants these once the load falls. */
+export const LOAD_WAIT_REASON = "waiting for host load";
 
 /** % of memory available under which the gate and with-temp-home hold off (SW-620): `budget.free_memory`, else 15; 0 is off. */
 export function freeMemoryLimit(): number {
@@ -688,7 +719,9 @@ export function requestAdmission(
             upServices(workspace).filter((s) => !own.services?.includes(s)),
           )
         : undefined;
-      const d = admit(budget, held, waiters(queue, held), {
+      const loadOver = !!macLoadOver();
+      const reason = loadOver ? LOAD_WAIT_REASON : "waiting for capacity";
+      const d = admit({ ...budget, loadOver }, held, waiters(queue, held), {
         feature,
         cost,
         byPerson,
@@ -709,7 +742,7 @@ export function requestAdmission(
         // waiting.json first: if it can't be written, the queue must not move (SW-246).
         writeWaiting(workspace, {
           position: d.position,
-          reason: "waiting for capacity",
+          reason,
           ...starting,
           since: prev?.since ?? new Date().toISOString(),
         });
@@ -719,7 +752,7 @@ export function requestAdmission(
             workspace: name,
             feature,
             position: d.position,
-            reason: "waiting for capacity",
+            reason,
             ...runTag(workspace),
           });
         if (!queue.includes(feature)) next = [...queue, feature];

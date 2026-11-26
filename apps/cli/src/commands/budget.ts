@@ -6,18 +6,23 @@
  * The read itself is werkmeister-core's `budgetStatus`, shared with the `budget` tool.
  */
 
-import { budgetStatus } from "werkmeister-core/budget_status";
+import { budgetStatus, type hostLoads, type LoadReading } from "werkmeister-core/budget_status";
 import { describeLease } from "werkmeister-core/lifecycle";
 
 const GIB = 2 ** 30;
 const limit = (n: number, unit: string) =>
   Number.isFinite(n) ? `${Number(n.toFixed(1))}${unit}` : "no limit";
 
-/** The host-load *limit* (a ceiling, not a reading), and that macOS and Windows apply it to the Docker VM (SW-728, SW-888). */
-export function hostLoadText(limit: number, platform: NodeJS.Platform = process.platform): string {
-  if (!limit) return "host load limit off";
-  const vm = { darwin: " (Docker VM load on macOS)", win32: " (Docker VM load on Windows)" };
-  return `host load limit ${limit}${vm[platform as keyof typeof vm] ?? ""}`;
+/** Each load *reading* beside its *limit*, so neither reads as the other (SW-728, SW-1236); macOS and Windows read the Docker VM (SW-888). */
+export function hostLoadText(
+  { vm, mac }: Awaited<ReturnType<typeof hostLoads>>,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  const one = (name: string, r: LoadReading) =>
+    `${name} load ${r.load === null ? "unknown" : Number(r.load.toFixed(1))} (limit ${r.limit || "off"})`;
+  const parts = [one(platform === "linux" ? "host" : "Docker VM", vm)];
+  if (mac) parts.push(one("Mac", mac));
+  return parts.join(", ");
 }
 
 export async function run(args: Record<string, unknown>): Promise<void> {

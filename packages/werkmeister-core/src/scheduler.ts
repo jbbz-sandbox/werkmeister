@@ -14,6 +14,8 @@ export interface Cost {
 export interface Budget extends Cost {
   /** A start that doesn't fit may stop features nobody is in; a person's may also stop working ones. */
   preempt: boolean;
+  /** The Mac's load is over `budget.host_load_mac` (SW-1236): every start waits, fit or not. */
+  loadOver?: boolean;
 }
 
 /** Victim order, lowest first. A "person" feature is never preempted. */
@@ -164,6 +166,8 @@ export function admit(budget: Budget, running: Lease[], queue: Waiter[], req: Re
   const self = { feature: req.feature, waitedMs: queued?.waitedMs ?? 0, gate };
   const order = queueOrder(queued ? queue.map((w) => (w === queued ? self : w)) : [...queue, self]);
   const position = order.indexOf(self) + 1;
+  // Preempting would not help: the load is the Mac's whole, not this budget's (SW-1236).
+  if (budget.loadOver) return { kind: "wait", position };
   const isHead = position === 1;
   // Backfill: what fits starts past a head that doesn't, unless the head is a gate (it frees its whole
   // feature soonest) or has waited STARVE_MS (SW-675). Never against a service start of a busy

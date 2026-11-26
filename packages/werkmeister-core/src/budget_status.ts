@@ -12,32 +12,59 @@ import { waitingQueue } from "./scheduler_client.js";
 import {
   featureCost,
   hostLoadLimit,
+  hostLoadMacLimit,
   loadBudget,
   readLeases,
   readVmLoad,
   waiters,
 } from "./scheduler_state.js";
 
-let cores: Promise<number | undefined> | undefined;
+const VM_READ_MS = 60_000;
+let vmRead: { at: number; read: Promise<{ load: number[]; cores: number } | null> } | undefined;
+let vmCores: number | undefined;
 
 /**
- * The Docker VM's core count, read once per process: `readVmLoad` runs a container, and the pane polls
- * the `budget` tool every 30 s (SW-1028). A failed read is not kept, so the next call tries again.
- * shortcut: a VM resized while the daemon runs keeps its old count until the daemon restarts.
+ * The Docker VM's load and cores, read at most once a minute: `readVmLoad` runs a container, and the pane
+ * polls the `budget` tool every 30 s (SW-1028). A failed read keeps the last good core count.
  */
-export function vmCores(): Promise<number | undefined> {
-  cores ??= readVmLoad().then((r) => {
-    if (!r) cores = undefined;
-    return r?.cores;
-  });
-  return cores;
+function vmReading(): Promise<{ load: number[]; cores: number } | null> {
+  if (!vmRead || Date.now() - vmRead.at > VM_READ_MS)
+    vmRead = {
+      at: Date.now(),
+      read: readVmLoad().then((r) => {
+        if (r) vmCores = r.cores;
+        return r;
+      }),
+    };
+  return vmRead.read;
+}
+
+/** A 1-min load reading (null: unreadable) beside its limit (0: off). */
+export interface LoadReading {
+  load: number | null;
+  limit: number;
+}
+
+/**
+ * The limits and the loads they gate (SW-1236): *vm* is the Docker VM's (the host's on Linux), which
+ * with-temp-home and setup starts wait on; *mac* the Mac's own, which admission waits on, null off macOS.
+ */
+export async function hostLoads(
+  platform: NodeJS.Platform = process.platform,
+): Promise<{ vm: LoadReading; mac: LoadReading | null }> {
+  // macOS and Windows read the Docker VM and scale its limit by the VM's cores, as the wait does (SW-888).
+  const inVm = platform === "darwin" || platform === "win32";
+  const r = inVm ? await vmReading() : { load: os.loadavg(), cores: os.availableParallelism() };
+  const cores = (inVm ? (r?.cores ?? vmCores) : r?.cores) || os.availableParallelism();
+  return {
+    vm: { load: r ? r.load[0] : null, limit: hostLoadLimit(cores) },
+    mac: platform === "darwin" ? { load: os.loadavg()[0], limit: hostLoadMacLimit() } : null,
+  };
 }
 
 export async function budgetStatus() {
   const budget = await loadBudget();
-  // macOS and Windows scale the limit by the Docker VM's cores, as the wait does (SW-888).
-  const vm = process.platform === "darwin" || process.platform === "win32";
-  const hostLoad = hostLoadLimit((vm && (await vmCores())) || os.availableParallelism());
+  const hostLoad = await hostLoads();
   // A snapshot for display: no `allocate` lock, so a lease taken mid-read shows next time.
   const leases = readLeases();
   const waiting = await waitingQueue();

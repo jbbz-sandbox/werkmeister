@@ -19,6 +19,7 @@ The defaults come from `docker info`, so a new machine needs no setup:
 | `cpus` | the engine's CPU count |
 | `preempt` | `true`: a start that doesn't fit may stop features whose session is idle or waiting on a person (a question or plan, not a permission prompt mid-turn); a person's `up` may also stop a working autonomous one |
 | `host_load` | twice the host's CPU count (on macOS and Windows, the Docker VM's): while the host's 1-minute load is above it, `with-temp-home` waits up to 90 s before its command, and `feature up` and the gate's container starts wait up to 90 s before a setup service (the install) starts, then fail with the load (`HOST_LOAD`); on macOS and Windows the load is the Docker VM's (`/proc/loadavg` from a one-shot `alpine:3` container), since the host's own load average never sees the VM, and an unreadable VM counts as not busy; `0` turns the wait off |
+| `host_load_mac` | four times the Mac's CPU count, macOS only: while the Mac's own 1-minute load (`os.loadavg`, which counts OrbStack or Docker Desktop and every Claude, node and editor process) is above it, every start the scheduler admits waits in the queue, fit or not, and preempts nobody: `feature up`, `feature up --service`, the gate's container starts and the queue's grants. `budget status` shows each reading beside its limit (`host_load.vm`, `host_load.mac`), and the wait says `host load N is over L (budget.host_load_mac)`. The daemon checks each minute and starts a waiter held by load once the load falls. `with-temp-home` and setup starts don't read it: the Mac's load also counts idle daemons, which once read 450-550 on a quiet Mac; `0` turns it off |
 | `free_memory` | `15`: while available memory is under this percentage of the total (macOS: `kern.memorystatus_level`; Linux: MemAvailable), `with-temp-home` and a setup start wait up to 90 s as for `host_load`, then exit 75 or fail `HOST_LOAD`, on macOS too; `pr gate` and `pr open` don't wait, they exit 75 with `low memory` before starting a container. Claude Code stops an idle background shell when the Mac runs low; `0` turns it off |
 
 Override any of them in `~/.werkmeister/config.yaml`:
@@ -29,6 +30,7 @@ budget:
   cpus: 8
   preempt: false
   host_load: 24
+  host_load_mac: 48
   free_memory: 10
 ```
 
