@@ -17,6 +17,8 @@ const h = vi.hoisted(() => ({
 
 // proc is mocked, so nothing runs: name a binary to get past the test-runner refusal (SW-1153).
 vi.stubEnv("WERKMEISTER_TELEPRESENCE_BIN", "/mocked/telepresence");
+// Under with-temp-home, HOME = WERKMEISTER_TEMP_HOME skips telepresence before the mock runs (SW-1200).
+vi.stubEnv("WERKMEISTER_TEMP_HOME", "");
 
 vi.mock("werkmeister-core/proc", async (importOriginal) => {
   const actual = await importOriginal<typeof import("werkmeister-core/proc")>();
