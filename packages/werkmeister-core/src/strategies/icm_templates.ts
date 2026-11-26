@@ -233,6 +233,10 @@ const implementReview = (v: IcmVars) =>
 const PREAPPROVED_INPUT =
   "When the change adds or widens an input to a pre-approved command (an allow rule, or a wrapper an allow rule covers), the decision defaults to an allowlist of accepted values and lists what each accepted value can reach: files, env vars, network addresses, processes. A blocklist needs a stated reason.";
 
+// SW-1208: sw-1156 carried auto mode into headless turns with no deny list; only the 03 review caught it.
+const UNATTENDED_PATH =
+  " Does the widened path run with no person present (headless, unattended, a relay or callback)? If so, it gets the unattended deny floor (the deny list an autonomous run gets) unless the design says why not.";
+
 // SW-853: sw-843 probed only the rule it changed; the kept `feature up <own-feature> --service:*` still let `-w <other workspace>` through.
 const KEPT_RULE_PROBES =
   "Every rule the fix keeps on the same command gets the same trailing-argument probes as the changed one (another feature or workspace name, `-w`/`--workspace <path>`, extra positional args), and the failing test covers them.";
@@ -454,6 +458,7 @@ const feature: Stage[] = [
           // SW-765: sw-753's host scratch probe got npm's .gitignore handling and the turbo cache dir wrong for the real repo.
           "A probe of tool behaviour runs in the service's container, with the repo's own layout; starting it with `werkmeister feature up --service <svc>` is allowed for that. A probe in a host scratch project is marked `host scratch` beside the fact, and re-checked in the container before a decision rests on it. " +
           PREAPPROVED_INPUT +
+          UNATTENDED_PATH +
           " " +
           CPU_PROFILE +
           " " +
@@ -592,7 +597,7 @@ const bugfix: Stage[] = [
           GATE_ROUTES +
           SHARED_WRITER_CALLERS,
         // SW-442: sessionBusy had two true cases; stage 01 listed callers, so only review caught the second (sw-418).
-        `When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test. ${PREAPPROVED_INPUT}${STATE_CLEAR_POINTS}`,
+        `When the proposed fix branches on a predicate, list each condition that makes it true and give each one a test. ${PREAPPROVED_INPUT}${UNATTENDED_PATH}${STATE_CLEAR_POINTS}`,
         NAME_HISTORY_STEP,
         // SW-564: sw-521's root cause was a permission rule; step 4 listed the callers of one builder and missed two other sources of a matching rule.
         "When the root cause is a permission rule (allow, deny, ask), step 4 lists every source of a matching rule: each builder, each rule derived from a registered command (its `&&` segments included), rules recorded in existing workspaces and how a refresh or migrate removes them, and the list a headless wake passes (`--allowedTools` / `--disallowedTools`). The failing test probes each source. Also `git grep -F` the exact old rule text across the whole repo, tests and `apps/` included, and list each hit as a site the fix must update (SW-820). " +
