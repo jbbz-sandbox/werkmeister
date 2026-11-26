@@ -570,6 +570,67 @@ describe("admitServiceStart", () => {
     expect(composeStop).not.toHaveBeenCalledWith("mine");
   });
 
+  // SW-741: which of a waiting workspace's own containers run, per wait.
+  it("a gate's wait stops only its own set, never the holder's, and brings back only what ran (SW-741)", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other);
+    const mine = workspace("mine", { autonomous: true });
+    // worker starts on `up` but had exited before the wait: it must stay stopped.
+    fs.writeFileSync(
+      path.join(mine, "compose.yml"),
+      `${CORE_AND_API}  worker:\n    deploy:\n      resources:\n        limits: { cpus: '1' }\n`,
+    );
+    writeLeases({ mine: { slot: 2, workspace: mine } });
+    let mineCpus = 3;
+    both(other, mine, 3, () => mineCpus);
+    vi.mocked(getContainerStatus).mockResolvedValueOnce([
+      { name: "mine-core", status: "running", service: "core" } as never,
+      { name: "mine-worker", status: "exited", service: "worker" } as never,
+    ]);
+    vi.mocked(composeStop).mockClear();
+    vi.mocked(composeStop).mockImplementation(async (f: string) => {
+      if (f === "mine") mineCpus = 0;
+      return true;
+    });
+    vi.mocked(composeUpServiceAsync).mockClear();
+    started.length = 0;
+    let polls = 0;
+    const sleep = async () => {
+      polls++;
+      both(other, mine, 0, () => mineCpus);
+    };
+    await admitServiceStart("mine", mine, "api", { sleep, waitMs: GATE_CAPACITY_WAIT_MS });
+    expect(polls).toBe(1); // the wait ran
+    expect(vi.mocked(composeStop).mock.calls).toEqual([["mine"]]);
+    expect(composeUpServiceAsync).toHaveBeenCalledTimes(1);
+    expect(composeUpServiceAsync).toHaveBeenCalledWith(
+      "mine",
+      ["core"],
+      path.join(mine, "compose.yml"),
+      true,
+    );
+    expect(started).toEqual([]);
+  });
+
+  it("a whole up queued for capacity, with nothing of its own running, stops and starts nothing (SW-741)", async () => {
+    fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
+    const other = workspace("other", { autonomous: true });
+    session(other); // working: never preempted
+    const mine = workspace("mine", { autonomous: true });
+    fs.writeFileSync(path.join(mine, "compose.yml"), CORE_AND_API);
+    writeLeases({ mine: { slot: 2, workspace: mine } });
+    both(other, mine, 6, () => 0);
+    vi.mocked(composeStop).mockClear();
+    vi.mocked(composeUpServiceAsync).mockClear();
+    started.length = 0;
+    expect(await admitOrQueue("mine", mine, false)).toBe(1);
+    expect(readWaiting(mine)).toMatchObject({ position: 1 }); // the wait ran: it is queued
+    expect(composeStop).not.toHaveBeenCalled();
+    expect(composeUpServiceAsync).not.toHaveBeenCalled();
+    expect(started).toEqual([]);
+  });
+
   it("a timed-out wait names the holders, says it stayed stopped, and that a rerun needs no person", async () => {
     fs.writeFileSync(path.join(tmp, "config.yaml"), "budget:\n  memory: 8G\n  cpus: 6\n");
     const other = workspace("other", { autonomous: true });
