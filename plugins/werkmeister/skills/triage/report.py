@@ -1,6 +1,6 @@
 """Read-only backlog health report for a Jira or GitHub project. Prints Markdown.
 
-  python3 -I report.py --project KEY --board ID [--epic-steps] [--out FILE] [--notify]
+  python3 -I report.py --project KEY --board ID [--epic-steps [EPIC]] [--details] [--verify] [--out FILE] [--notify]
   python3 -I report.py --tracker github --owner ORG --board N --project NAME --components a,b [--out FILE] [--notify]
   python3 -I report.py --project KEY --mark   # record that triage was just done (new = created after this)
   python3 -I report.py --self-test            # check the placement rules on fixtures, no Jira or GitHub
@@ -13,8 +13,11 @@ ap.add_argument('--project', help='Jira: the project key. GitHub: the werkmeiste
 ap.add_argument('--board', type=int, help='Jira: the board id. GitHub: the Projects (v2) number')
 ap.add_argument('--owner', help='GitHub: the org that owns the Projects board (tracker.org)')
 ap.add_argument('--components', default='', help='GitHub: repo.components names, comma-separated; a label with one of these names is the component')
-ap.add_argument('--epic-steps', action='store_true',
-                help='check the step rule: each child of an epic sits just above the tickets it "relates to"')
+ap.add_argument('--epic-steps', nargs='?', const='*', metavar='EPIC',
+                help='check the step rule: each child of EPIC (bare: of any epic) sits just above the tickets it "relates to"')
+ap.add_argument('--details', action='store_true',
+                help='also print the whole board order with links, the open groups, and each new ticket in full (triage step 2 reads these)')
+ap.add_argument('--verify', action='store_true', help='exit 1 on order problems or unlinked dependencies, else record the last-triage mark')
 ap.add_argument('--out')
 ap.add_argument('--notify', action='store_true', help='macOS notification with the counts')
 ap.add_argument('--mark', action='store_true')
@@ -43,7 +46,10 @@ def placement(keys, f, epic_steps):
     for k in cards:
         above = [j for j in cards[:pos[k]] if wip(j) > wip(k)]
         if above: out.append(f"- {k} ({f[k]['status']['name']}) is ranked below {above[0]} ({f[above[0]]['status']['name']}): work in progress goes first")
-    steps = [k for k in cards if epic_steps and (f[k].get('parent') or {}).get('fields', {}).get('issuetype', {}).get('name') == 'Epic']
+    def is_step(k):  # a child of the step epic; '*' or True: of any epic
+        p = f[k].get('parent') or {}
+        return p.get('fields', {}).get('issuetype', {}).get('name') == 'Epic' and epic_steps in (True, '*', p.get('key'))
+    steps = [k for k in cards if epic_steps and is_step(k)]
     rel = lambda k: {(l.get('inwardIssue') or l.get('outwardIssue'))['key'] for l in f[k]['issuelinks'] if l['type']['name'] == 'Relates'}
     for t in cards:
         if t in steps or wip(t) < 2: continue  # work in progress outranks the step rule
@@ -84,6 +90,19 @@ def code_named(desc):
     return list(dict.fromkeys(x.strip() for x in found if x.strip()))
 
 code_lines = lambda keys, f, url: [f"- [{k}]({url(k)}): {', '.join(c)}" for k in keys if (c := code_named(f[k].get('description')))]
+
+def group_of(comments, lead, ref_re):
+    """Members named by the lead's newest group comment (SKILL.md step 5), or None when it leads no group.
+    A newer "Superseded (triage …)" comment ends the group."""
+    marks = [t for c in comments if (t := text(c.get('body') or '').strip()).startswith(('Grouped PR (', 'Superseded ('))]
+    if not marks or marks[-1].startswith('Superseded'): return None
+    members = marks[-1].split(' for ', 1)[-1].split('One commit per ticket')[0]  # a note after the template text names no members
+    return list(dict.fromkeys(m for m in re.findall(ref_re, members) if m != lead))
+
+def link_text(l, open_keys):
+    o = l.get('outwardIssue') or l.get('inwardIssue')
+    verb = l['type'].get('outward' if 'outwardIssue' in l else 'inward') or ('blocked by' if l['type']['name'] == 'Blocks' else l['type']['name'])
+    return f"{verb} {o['key']}" + ('' if o['key'] in open_keys else ' (closed)')
 
 def checks(keys, f, epic_steps, ref_re):
     """Order problems (blocked above its open blocker, plus placement()) and "Depends on" refs with no "blocks" link."""
@@ -147,6 +166,18 @@ if a.self_test:
         assert want in got, f'missing {want!r} in:\n{got}'
     for unwanted in steps:
         assert unwanted not in got, f'step rule ran without --epic-steps: {unwanted!r} in:\n{got}'
+    for s in ('S1', 'S2'): bad[s]['parent']['key'] = 'STEPS'
+    assert '\n'.join(placement(list(bad), bad, 'STEPS')) == '\n'.join(placement(list(bad), bad, True))
+    got = '\n'.join(placement(list(bad), bad, 'OTHER'))  # children of another epic aren't steps (SW-1122 under SW-1076 read as a SW-179 step)
+    for unwanted in steps:
+        assert unwanted not in got, f'a child of another epic read as a step: {unwanted!r} in:\n{got}'
+    ref = r'\bSW-\d+\b'
+    say = lambda t: {'body': t}
+    assert group_of([say('Grouped PR (triage 1): SW-1 leads one workspace and one PR for SW-2, SW-3.'), say('noise SW-9'),
+                     say('Grouped PR (triage 2): SW-1 leads one workspace and one PR for [https://x/browse/SW-2|https://x/browse/SW-2|smart-link], SW-4.')], 'SW-1', ref) == ['SW-2', 'SW-4']
+    assert group_of([say('Grouped PR (triage 1): SW-1 leads … for SW-2.'), say('Superseded (triage 2): no longer leads; see the newest Grouped PR comment on SW-5')], 'SW-1', ref) is None
+    assert group_of([], 'SW-1', ref) is None
+    assert group_of([say('Grouped PR (triage 3): SW-1 leads one workspace and one PR for SW-2. One commit per ticket so each can be reverted alone. (SW-7 shipped in PR #9.)')], 'SW-1', ref) == ['SW-2']
 
     # GitHub: a canned `gh api graphql` page in board order, through the same checks
     def item(n, labels=(), blocked=(), subs=0, state='OPEN', body=''):
@@ -220,7 +251,7 @@ else:
     get = lambda p: json.load(urllib.request.urlopen(urllib.request.Request(BASE + p, headers=H), timeout=30))
 
     # Open issues in board order (board order = rank)
-    F = 'summary,status,priority,issuetype,created,updated,statuscategorychangedate,issuelinks,description,parent,components'
+    F = 'summary,status,priority,issuetype,created,updated,statuscategorychangedate,issuelinks,description,parent,components' + (',comment' if a.details else '')
     jql = urllib.parse.quote('statusCategory != Done')
     issues, start = [], 0
     while True:
@@ -257,10 +288,31 @@ md = (f"# {a.project} backlog check, {now:%Y-%m-%d}\n\n{len(rank)} open issues. 
       + lst('Dependencies written in the description but not linked', unlinked)
       + sec(f'In Review for over {a.review_days} days', review)
       + sec(f'To Do with no update for {a.stale_days}+ days', stale))
+if a.details:
+    open_keys = set(rank)
+    board = [f"| {n} | [{k}]({link(k)}) | {f[k]['issuetype']['name']} | {f[k]['priority']['name']} | {f[k]['status']['name']} | {comp(k)} | {f[k]['summary'][:90]} | "
+             + '; '.join(link_text(l, open_keys) for l in f[k]['issuelinks']) + ' |' for n, k in enumerate(rank, 1)]
+    md += (f"\n## Board order ({len(board)})\n\n| # | Key | Type | Priority | Status | Component | Summary | Links |\n|---|---|---|---|---|---|---|---|\n"
+           + '\n'.join(board) + '\n')
+    groups = []
+    for k in rank:
+        m = group_of((f[k].get('comment') or {}).get('comments', []), k, ref_re)
+        if m is None: continue
+        shipped = [x for x in m if x not in open_keys]
+        groups.append(f"- {k} ({comp(k)}, {len(m) + 1} tickets) ← {', '.join(m)}" + (f"; closed, drop from the group: {', '.join(shipped)}" if shipped else ''))
+    md += lst('Open groups (newest Grouped PR comment on each lead)', groups)
+    md += f"\n## New tickets in full ({len(new)})\n" + ''.join(
+        f"\n### [{k}]({link(k)}) {f[k]['summary']}\n\n{f[k]['issuetype']['name']}, {f[k]['priority']['name']}, {f[k]['status']['name']}, component: {comp(k) or 'none'}. "
+        f"Links: {'; '.join(link_text(l, open_keys) for l in f[k]['issuelinks']) or 'none'}.\n\n{text(f[k]['description'] or '').strip()[:6000]}\n" for k in new)
 if a.out:
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     open(a.out, 'w').write(md)
 print(md)
+if a.verify:
+    if order or unlinked: sys.exit(f'not marked: {len(order)} order problems, {len(unlinked)} unlinked dependencies')
+    os.makedirs(os.path.dirname(MARK), exist_ok=True)
+    open(MARK, 'w').write(now.isoformat())
+    print(f'clean; triage marked done at {now:%Y-%m-%d %H:%M} UTC')
 if a.notify:
     n = len(new) + len(order) + len(unlinked) + len(review) + len(stale)
     msg = f'{len(new)} new, {len(order)} order, {len(unlinked)} unlinked, {len(review)} review, {len(stale)} stale'
