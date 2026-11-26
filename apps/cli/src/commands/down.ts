@@ -152,7 +152,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (feature === "infra") {
     console.log(`\n${Colors.BOLD}=== werkmeister down: ${feature} ===${Colors.RESET}\n`);
     const infra = await import("werkmeister-core/infra");
-    await infra.down(removeVolumes);
+    // False is a compose failure infra.down already logged; scripts read the exit code (SW-950).
+    if (!(await infra.down(removeVolumes))) process.exit(1);
     console.log();
     return;
   }

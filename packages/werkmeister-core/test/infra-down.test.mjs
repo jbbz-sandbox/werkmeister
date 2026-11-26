@@ -68,6 +68,13 @@ test("down resolves false when docker compose down fails, so an SDK caller can t
   assert.equal(await withReporter(collectingReporter(), () => down()), false);
 });
 
+// SW-950: the CLI's exit code reads these booleans; nothing covered stop's and restart's false.
+test("stop and restart resolve false when Docker can't be reached", async () => {
+  process.env.DOCKER_HOST = `unix://${path.join(dir, "no.sock")}`;
+  for (const call of [() => stop(), () => restart()])
+    assert.equal(await withReporter(collectingReporter(), call), false);
+});
+
 test("under a with-temp-home HOME, infra up/down/stop/restart and the k8s-forwards repair leave the shared containers alone (SW-1054)", async () => {
   process.env.WERKMEISTER_TEMP_HOME = dir;
   // Never the machine's engine: a stop or restart that got past the guard fails here instead.

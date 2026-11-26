@@ -102,7 +102,8 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(`\n${Colors.BOLD}=== werkmeister stop: ${feature} ===${Colors.RESET}\n`);
 
   if (feature === "infra") {
-    await infraStop();
+    // False is a Docker failure infraStop already logged; scripts read the exit code (SW-950).
+    if (!(await infraStop())) process.exit(1);
     console.log();
     return;
   }
