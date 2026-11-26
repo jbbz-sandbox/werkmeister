@@ -6927,6 +6927,28 @@ test("runGate: a real failure beside vitest's RPC timeout fails the row with no 
   }
 });
 
+test("runGate: a passing node:test name holding 'not ok' beside the RPC timeout is still retried (SW-1230)", async () => {
+  const ws = icmWorkspace();
+  try {
+    const stdout = `werkmeister-core:test: ok 571 - stopIdle: a failed stop is reported and not ok\n${VITEST_RPC_TIMEOUT}`;
+    const d = answer(deps([DIFF_API]), API_EXEC, [{ code: 1, stdout }, {}]);
+    const g = await gate(ws, d);
+    assert.equal(execs(d), 2);
+    assert.equal(testRow(g).ok, true, testRow(g).detail);
+  } finally {
+    clean(ws);
+  }
+  const ws2 = icmWorkspace();
+  try {
+    const stdout = `werkmeister-core:test: not ok 12 - a real failure\n${VITEST_RPC_TIMEOUT}`;
+    const d = answer(deps([DIFF_API]), API_EXEC, [{ code: 1, stdout }, {}]);
+    assert.equal(testRow(await gate(ws2, d)).ok, false);
+    assert.equal(execs(d), 1, "a real node:test failure is not retried");
+  } finally {
+    clean(ws2);
+  }
+});
+
 test("gate: a diff touching the fragment and the lockfile runs merge-base once (SW-724)", async () => {
   const ws = icmWorkspace();
   try {

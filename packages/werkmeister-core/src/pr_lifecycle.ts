@@ -2320,7 +2320,8 @@ async function uncommittedDiff(
   return { ...changed, stdout: [...files].join("\n") };
 }
 
-const FAILING_TEST = /\bnot ok\b|✖|×|\bFAIL\b/;
+// node:test by line shape, turbo's `<pkg>:<task>: ` prefix allowed: a passing name can hold "not ok" (SW-1230).
+const FAILING_TEST = /^\s*(?:\S+:\s+)?not ok \d+\b|✖|×|\bFAIL\b/m;
 
 /** Why a failed test row is the host's doing, so the gate runs it once more; null when it may be the change's. */
 function hostFailure(r: { code: number; stdout: string; stderr: string }): string | null {
