@@ -32,6 +32,7 @@ import {
 } from "werkmeister-core/daemon_client";
 import { SandboxError } from "werkmeister-core/errors";
 import { githubIngestConfig } from "werkmeister-core/github_ingest";
+import { grantAfterLoadDrop } from "werkmeister-core/lifecycle";
 import { createLogger } from "werkmeister-core/logger";
 import { watchPrs } from "werkmeister-core/pr_lifecycle";
 import { ownScheduler } from "werkmeister-core/scheduler_client";
@@ -122,6 +123,7 @@ async function startHttp(): Promise<void> {
     log: (msg) => console.error(`[werkmeister-mcp] ${msg}`),
   });
   setInterval(() => guard.check(), 5000).unref();
+  setInterval(() => grantAfterLoadDrop(), 60_000).unref();
 
   // Lifecycle notices stay on stderr, launchd's mcp-server.log: the daemon logs at error, which would drop them.
   const log = (msg: string) => console.error(`[werkmeister-mcp] ${msg}`);

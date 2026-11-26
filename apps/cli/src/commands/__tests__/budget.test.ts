@@ -104,10 +104,16 @@ it("the budget MCP tool returns the same data as budget status --json", async ()
   ]);
   expect(cli.status, cli.stderr).toBe(0);
   expect(tool.status, tool.stderr).toBe(0);
-  // waited_ms ticks between the two reads; every other field must match exactly.
-  const steady = (o: { waiters: { waited_ms: number }[] }) => ({
+  // waited_ms ticks and the load readings move between the two reads; every other field must match exactly.
+  type Reading = { load: number | null; limit: number } | null;
+  const live = (r: Reading) => r && { ...r, load: typeof r.load };
+  const steady = (o: {
+    waiters: { waited_ms: number }[];
+    host_load: { vm: Reading; mac: Reading };
+  }) => ({
     ...o,
     waiters: o.waiters.map((w) => ({ ...w, waited_ms: Math.round(w.waited_ms / 60_000) })),
+    host_load: { vm: live(o.host_load.vm), mac: live(o.host_load.mac) },
   });
   const fromTool = JSON.parse(tool.stdout.trim().split("\n").at(-1) ?? "");
   expect(steady(fromTool)).toEqual(steady(JSON.parse(cli.stdout)));
@@ -120,7 +126,7 @@ it("prints the budget, leases and Waiting queue as JSON", async () => {
   const out = JSON.parse(res.stdout);
   expect(out).toMatchObject({
     budget: { memory: 8 * 2 ** 30, cpus: 4, preempt: false },
-    host_load: 6,
+    host_load: { vm: { limit: 6 }, mac: null },
     leases: { beta: { slot: 2, workspace: "/ws/beta" }, alpha: { slot: 1, workspace: "" } },
     waiting: ["gamma", "delta", "eps"],
     running: null,
@@ -141,7 +147,9 @@ it("prints the budget, leases and Waiting queue as JSON", async () => {
 it("lists slots in slot order and the queue in start order", async () => {
   const res = await budget();
   expect(res.status, res.stderr).toBe(0);
-  expect(res.stdout).toContain(`Budget: 8 GiB memory, 4 CPUs, ${hostLoadText(6)}, preemption off`);
+  expect(res.stdout).toMatch(
+    /Budget: 8 GiB memory, 4 CPUs, host load [\d.]+ \(limit 6\), preemption off/,
+  );
   expect(res.stdout).toMatch(/Slots:\n {2}1 {2}alpha\n {2}2 {2}beta {2}\/ws\/beta\n/);
   expect(res.stdout).toContain("Running: docker unavailable");
   expect(res.stdout).toMatch(
@@ -149,10 +157,43 @@ it("lists slots in slot order and the queue in start order", async () => {
   );
 });
 
-// SW-728: the line showed the limit as `host load 24`, a reading. SW-888: macOS and Windows apply it to the Docker VM.
-it("labels the host-load limit as a limit, and says where macOS and Windows read it", () => {
-  expect(hostLoadText(24, "linux")).toBe("host load limit 24");
-  expect(hostLoadText(24, "darwin")).toBe("host load limit 24 (Docker VM load on macOS)");
-  expect(hostLoadText(24, "win32")).toBe("host load limit 24 (Docker VM load on Windows)");
-  expect(hostLoadText(0, "darwin")).toBe("host load limit off");
+// SW-728: the line showed the limit as `host load 24`, a reading. SW-888: macOS and Windows read the Docker VM.
+// SW-1236: each reading sits beside its own limit, and macOS adds the Mac's.
+it("prints each load reading beside its limit, and names where it was read", () => {
+  const vm = { load: 3.14, limit: 24 };
+  expect(hostLoadText({ vm, mac: null }, "linux")).toBe("host load 3.1 (limit 24)");
+  expect(hostLoadText({ vm, mac: { load: 309, limit: 48 } }, "darwin")).toBe(
+    "Docker VM load 3.1 (limit 24), Mac load 309 (limit 48)",
+  );
+  expect(hostLoadText({ vm: { load: null, limit: 0 }, mac: null }, "win32")).toBe(
+    "Docker VM load unknown (limit off)",
+  );
+});
+
+// SW-1236: `host_load: 24` was the limit, read for hours as the load while the Mac sat at 309.
+it("--json gives each load's reading apart from its limit", async () => {
+  const res = await budget("--json");
+  expect(res.status, res.stderr).toBe(0);
+  const { host_load } = JSON.parse(res.stdout);
+  expect(host_load).toEqual({ vm: { load: expect.any(Number), limit: 6 }, mac: null });
+});
+
+it("on macOS --json adds the Mac's own load and budget.host_load_mac's default, 4 × cores", async () => {
+  // The CLI as macOS runs it: process.platform darwin, set before main.js loads.
+  const darwin = 'data:text/javascript,Object.defineProperty(process,"platform",{value:"darwin"})';
+  const res = await execAsync(
+    process.execPath,
+    ["--import", darwin, MAIN, "budget", "status", "--json"],
+    {
+      cwd: home,
+      env: env(),
+    },
+  );
+  expect(res.status, res.stderr).toBe(0);
+  const { host_load } = JSON.parse(res.stdout);
+  // No docker: the VM's reading is unknown, never a number that could pass for it.
+  expect(host_load).toEqual({
+    vm: { load: null, limit: 6 },
+    mac: { load: expect.any(Number), limit: 4 * os.availableParallelism() },
+  });
 });

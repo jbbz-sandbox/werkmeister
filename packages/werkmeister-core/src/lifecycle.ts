@@ -124,7 +124,9 @@ import {
   dequeue,
   enqueue,
   featureCost,
+  LOAD_WAIT_REASON,
   loadBudget,
+  macLoadOver,
   readLeases,
   readQueue,
   requestAdmission,
@@ -287,14 +289,19 @@ async function upUntimed(
     );
     if (waiting !== null) {
       // Unqueued: a re-up of a running feature, which keeps running and is rerun, not granted (SW-909).
-      const queued = readWaiting(workspace) !== null;
+      const queued = readWaiting(workspace);
+      // A load wait ends when the load falls, not when a feature stops (SW-1236).
+      const until =
+        queued?.reason === LOAD_WAIT_REASON
+          ? "it starts once the Mac's load falls"
+          : "it starts when another feature stops";
       warn(
         queued
-          ? `Waiting for capacity, position ${waiting} — it starts when another feature stops`
+          ? `Waiting for capacity, position ${waiting} — ${until}`
           : `'${feature}' keeps running; no capacity yet to start the rest of its set`,
       );
       return {
-        waitingNote: await capacityWait(feature, waiting, queued, featureCost(workspace)),
+        waitingNote: await capacityWait(feature, waiting, !!queued, featureCost(workspace)),
         feature,
         slot,
         portRange: [portStart, portEnd],
@@ -970,6 +977,11 @@ export async function capacityWait(
         `of the budget's ${capped ? `${cpus(budget.cpus)}, ` : ""}${gib(budget.memory)}`,
     );
   }
+  const load = macLoadOver();
+  if (load)
+    lines.push(
+      `host load ${load.load.toFixed(1)} is over ${load.limit} (budget.host_load_mac): every start waits for it to fall; budget.host_load_mac: 0 turns it off`,
+    );
   const head = position > 1 ? queueOrder(waiters(readQueue(), running))[0] : undefined;
   if (head && head.feature !== feature) {
     const ws = readLeases()[head.feature]?.workspace;
@@ -1619,6 +1631,21 @@ export function grantInBackground(): number {
   const queued = readQueue().length;
   if (queued) void grantHere().catch((e: Error) => warn(`Waiting queue: ${e.message}`));
   return queued;
+}
+
+/**
+ * The daemon's minute tick (SW-1236): a grant pass once the Mac's load is under its limit and a waiter was
+ * queued for that load. No release comes to start such a waiter, and grants otherwise run only on a release.
+ * Returns whether it granted.
+ */
+export function grantAfterLoadDrop(grant: () => number = grantInBackground): boolean {
+  if (macLoadOver()) return false;
+  const held = readQueue().some((f) => {
+    const ws = readLeases()[f]?.workspace;
+    return !!ws && readWaiting(ws)?.reason === LOAD_WAIT_REASON;
+  });
+  if (held) grant();
+  return held;
 }
 
 async function grantWaitersNow(): Promise<string[]> {

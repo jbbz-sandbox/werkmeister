@@ -43,7 +43,7 @@ export function gateRowKind(row: string): GateRowKind {
 export type MetricsEvent = EventBody & { run_id?: string };
 
 type EventBody =
-  /** *reason*: which writer queued it, "preempted", "requeued" or "waiting for capacity" (SW-991). */
+  /** *reason*: which writer queued it, "preempted", "requeued", "waiting for capacity" (SW-991) or "waiting for host load" (SW-1236). */
   | { event: "queue.wait"; workspace: string; feature: string; position: number; reason?: string }
   | { event: "queue.admit"; workspace: string; feature: string; waited_s: number }
   /** *feature* was stopped to make room for *for*; *rank* is what admission read it as (SW-989). */
