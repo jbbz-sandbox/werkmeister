@@ -42,7 +42,7 @@ class GitHubRank(unittest.TestCase):
             gh.chmod(0o755)
             board = pathlib.Path(d, 'board.json')
             board.write_text(json.dumps({'items': items, 'drop': drop, 'calls': []}))
-            env = {**os.environ, 'PATH': f'{d}{os.pathsep}{os.environ["PATH"]}', 'FAKE_BOARD': str(board)}
+            env = {**os.environ, 'RANK_RETRY_DELAY': '0', 'PATH': f'{d}{os.pathsep}{os.environ["PATH"]}', 'FAKE_BOARD': str(board)}
             r = subprocess.run([sys.executable, '-I', str(RANK), '--tracker', 'github', '--owner', 'o', '--board', '1', *keys],
                                capture_output=True, text=True, env=env, timeout=60)
             return r, json.loads(board.read_text())
