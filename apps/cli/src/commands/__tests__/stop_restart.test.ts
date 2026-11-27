@@ -91,6 +91,14 @@ describe("infra stop / restart", () => {
   });
 });
 
+// SW-1215: bare `feature stop` is pre-approved, and the nearest .env may be one the agent wrote below the workspace.
+it("bare stop refuses FEATURE=infra from a .env", async () => {
+  vi.mocked(infraStop).mockClear();
+  vi.mocked(loadDotenv).mockReturnValueOnce({ FEATURE: "infra" });
+  await expect(go(() => runStop({ feature: null }))).rejects.toEqual(new Exited(1));
+  expect(infraStop).not.toHaveBeenCalled();
+});
+
 describe("sandbox stop", () => {
   it("prints the start-it hint after the error, then exits 1", async () => {
     vi.mocked(stopFeature).mockRejectedValue(
