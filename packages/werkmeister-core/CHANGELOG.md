@@ -1,5 +1,12 @@
 # sandbox-core
 
+## 0.115.1
+
+### Patch Changes
+
+- a581131: SW-1225: rule 5 of the generated `pr-rules.md` and the `pr watch` conflict wake now say to run `werkmeister pr push <repo>` as a plain command from the workspace root, with no `cd … &&`, pipe or redirect, and why: a Claude Code allow rule matches only when every segment of the line does, so any extra segment sends the line to auto mode's classifier, which can refuse it as a force-push.
+- 14c6b16: `werkmeister-core/worktrees` exports `RUNTIME_FILES`, the runtime files a workspace's `.gitignore` carries, so tests build their expected ignore lines from it (SW-1237).
+
 ## 0.115.0
 
 ### Minor Changes
