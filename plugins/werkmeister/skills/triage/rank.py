@@ -9,6 +9,7 @@ On GitHub the order is the Projects (v2) board's item order; each move is checke
 """
 import argparse, base64, json, os, re, subprocess, sys, time, urllib.parse, urllib.request
 
+DELAY = float(os.environ.get('RANK_RETRY_DELAY', '1'))  # seconds; tests set 0
 ap = argparse.ArgumentParser()
 ap.add_argument('keys', nargs='+')
 ap.add_argument('--tracker', choices=('jira', 'github'), default='jira')
@@ -20,7 +21,7 @@ def retry(k, do, placed):
     for t in range(4):
         if placed(): return
         do()
-        time.sleep(1 + t)
+        time.sleep(DELAY * (1 + t))
     if not placed(): sys.exit(f'{k} did not move after 4 tries')
 
 if a.tracker == 'github':
@@ -82,7 +83,7 @@ def move(k, body, placed):
             call('PUT', '/rest/agile/1.0/issue/rank', body)
         except urllib.error.HTTPError as e:
             sys.exit(f'rank {k} failed ({e.code}): {e.read().decode()[:300]}')
-        time.sleep(1 + t)
+        time.sleep(DELAY * (1 + t))
     if not placed(): sys.exit(f'{k} did not move after 4 tries: {json.dumps(body)}')
 
 t = top()
