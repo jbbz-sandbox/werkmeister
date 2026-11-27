@@ -1202,7 +1202,7 @@ Backfill the metrics event log from record branches, GitHub and transcripts
 5. Writes `coverage` rows from the CI `coverage-summary` artifacts of each GitHub repo those PRs are in (through `gh`), one per package per run: `ci-pr` for a pull request run, `ci-main` for a merge-queue run
 6. Appends each new line to `~/.werkmeister/metrics/events-YYYY-MM.jsonl`, the month of the event's own time
 
-Re-running adds nothing: a stage, a PR event, a transcript session, a slice line or a CI run already in the log is skipped.
+Re-running adds nothing: a stage, a PR event, a transcript session, a slice line or a CI run already in the log is skipped. A stage or PR line an earlier rebuild logged without its run's `run_id` gets the `run_id` in place.
 
 For a run closed out before its slice was pushed, it cannot rebuild `queue.*`, `gate.*`, `release` or wrap-up asks: nothing on disk holds them.
 

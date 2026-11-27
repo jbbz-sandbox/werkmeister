@@ -1,7 +1,8 @@
 /**
  * `werkmeister metrics rebuild` (SW-780, design SW-772 § Q4): backfill the metrics event log from
  * record branches (`usage.json`, stage commits), GitHub PR times, CI coverage artifacts (SW-405) and the transcripts still on disk.
- * Re-running adds nothing; the shared workspace repo is only read, through a temporary bare clone.
+ * Re-running adds nothing, but tags in place a stage or PR line logged without the run_id it now has (SW-1182);
+ * the shared workspace repo is only read, through a temporary bare clone.
  */
 import { spawnSync } from "node:child_process";
 import * as fs from "node:fs";
@@ -84,8 +85,12 @@ function loggedKeys(): {
   sessions: Set<string>;
   lines: Set<string>;
   runs: Set<string>;
+  /** Keyed lines with no run_id, by key, with their month file: a rebuild that has the run_id tags them (SW-1182). */
+  untagged: Map<string, Untagged>;
 } {
   const keys = new Set<string>();
+  const untagged = new Map<string, Untagged>();
+  const tagged = new Set<string>();
   const sessions = new Set<string>();
   const lines = new Set<string>();
   // CI runs whose coverage is logged: each run's artifact is read once (SW-405).
@@ -106,10 +111,57 @@ function loggedKeys(): {
       lines.add(line);
       const k = keyOf(e);
       if (k) keys.add(k);
+      if (k && e["run_id"] === undefined)
+        untagged.set(k, {
+          file: path.join(dir, f),
+          line,
+          workspace: e["workspace"],
+          tagged: false,
+        });
+      else if (k) tagged.add(k);
       if (e["event"] === "ask" || e["event"] === "answer") sessions.add(String(e["session"]));
       if (e["event"] === "coverage" && e["run"]) runs.add(String(e["run"]));
     }
-  return { keys, sessions, lines, runs };
+  for (const k of tagged) {
+    const u = untagged.get(k);
+    if (u) u.tagged = true;
+  }
+  return { keys, sessions, lines, runs, untagged };
+}
+
+/** An untagged keyed line; *tagged*: the log also holds a tagged copy, so the untagged one is dropped, not tagged. */
+type Untagged = { file: string; line: string; workspace: unknown; tagged: boolean };
+
+/**
+ * Rewrites *file* with each line in *runIds* tagged with its run_id, or dropped for `null`, through a temp file
+ * and a rename so a crash never leaves half a log. A live line appended meanwhile changes the size: retry, then leave the file.
+ */
+function retag(file: string, runIds: Map<string, string | null>): void {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    for (let tries = 0; tries < 3; tries++) {
+      const text = fs.readFileSync(file, "utf8");
+      const next = text
+        .split("\n")
+        .flatMap((l) => {
+          const run_id = runIds.get(l);
+          if (run_id === undefined) return [l];
+          return run_id === null ? [] : [JSON.stringify({ ...JSON.parse(l), run_id })];
+        })
+        .join("\n");
+      fs.writeFileSync(tmp, next);
+      // shortcut: a line appended between this size check and the rename is lost; lock the log if live writers ever race rebuild often.
+      if (fs.statSync(file).size === Buffer.byteLength(text)) {
+        fs.renameSync(tmp, file);
+        return;
+      }
+      fs.rmSync(tmp, { force: true });
+    }
+    warn(`metrics rebuild: ${file} kept growing; its untagged lines stay untagged`);
+  } catch (err) {
+    fs.rmSync(tmp, { force: true });
+    warn(`metrics rebuild: could not tag lines in ${file}: ${(err as Error).message}`);
+  }
 }
 
 function git(dir: string, ...args: string[]): string | null {
@@ -249,7 +301,9 @@ async function ciCoverage(repos: Set<string>, runs: Set<string>): Promise<TimedE
 
 /** Backfills the event log; throws when the workspace repo can't be found or cloned. */
 export async function rebuildMetrics(): Promise<RebuildResult> {
-  const { keys, sessions, lines, runs } = loggedKeys();
+  const { keys, sessions, lines, runs, untagged } = loggedKeys();
+  /** Month file → untagged line → the run_id its rebuilt copy carries, or null to drop it beside a tagged copy. */
+  const retags = new Map<string, Map<string, string | null>>();
   const usages: string[] = [];
   const url = originUrl();
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "werkmeister-records-"));
@@ -288,8 +342,17 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
     /** *line*: a slice line, appended as is (SW-1116); re-serialised, a later `v` or key order would miss `lines` next run. */
     const log = ({ e, at }: TimedEvent, line?: string) => {
       const k = keyOf(e);
-      // shortcut: a line an earlier rebuild logged without run_id keeps it (SW-1158); rewrite the log if old leaks matter.
-      if (k && keys.has(k)) return;
+      if (k && keys.has(k)) {
+        // Tagged in place, not added beside: the untagged line would still match a same-named run by name.
+        // Same workspace only: two branches can name one PR, and a wrong tag can't be told from a right one.
+        const old = untagged.get(k);
+        if (old && e.run_id && old.workspace === e.workspace) {
+          untagged.delete(k);
+          const m = retags.get(old.file) ?? new Map<string, string | null>();
+          retags.set(old.file, m.set(old.line, old.tagged ? null : e.run_id));
+        }
+        return;
+      }
       if (k) keys.add(k);
       const ok = line === undefined ? recordEvent(e, at) : appendLogLine(line, at, e.event);
       if (ok) added[e.event] = (added[e.event] ?? 0) + 1;
@@ -316,6 +379,7 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
         usages.push(JSON.stringify({ ...usage, by }));
       }
     }
+    for (const [file, runIds] of retags) retag(file, runIds);
     if (usageFiles) {
       fs.mkdirSync(path.dirname(usageCachePath()), { recursive: true });
       fs.writeFileSync(usageCachePath(), usages.map((u) => `${u}\n`).join(""));

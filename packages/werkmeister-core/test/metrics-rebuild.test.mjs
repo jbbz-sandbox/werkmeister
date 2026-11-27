@@ -332,6 +332,99 @@ test("rebuilt events carry the record branch's run_id; a same-named run's pr.mer
   );
 });
 
+// SW-1182: a rebuild from before SW-1158 logged these lines untagged; the next rebuild tags them in place.
+test("rebuild tags the lines an earlier rebuild logged without run_id, and touches nothing else", async () => {
+  await withSandboxHome(
+    async (home) => {
+      const fx = seed({ runId: "run-a" });
+      const prevGh = process.env.WERKMEISTER_GH_BIN;
+      process.env.WERKMEISTER_GH_BIN = fx.gh;
+      try {
+        await rebuildMetrics();
+        const dir = path.join(sandboxHome(), "metrics");
+        assert.ok(dir.startsWith(home + path.sep), dir);
+        // The log a pre-SW-1158 rebuild left: no run_id, except one line another run tagged.
+        const keyed = new Set(["stage.done", "pr.open", "pr.merged"]);
+        const old = (o) =>
+          o.workspace === "ws-a" && o.event === "pr.open"
+            ? { ...o, run_id: "run-other" }
+            : (({ run_id: _r, ...rest }) => rest)(o);
+        for (const [f, text] of Object.entries(logBytes()))
+          if (f.startsWith("events-"))
+            fs.writeFileSync(
+              path.join(dir, f),
+              text.replace(/^.+$/gm, (l) => JSON.stringify(old(JSON.parse(l)))),
+            );
+        const before = logBytes();
+
+        await rebuildMetrics();
+        const want = Object.fromEntries(
+          Object.entries(before).map(([f, text]) => [
+            f,
+            f.startsWith("events-")
+              ? text.replace(/^.+$/gm, (l) => {
+                  const o = JSON.parse(l);
+                  return o.workspace === "ws-a" && keyed.has(o.event) && o.run_id === undefined
+                    ? JSON.stringify({ ...o, run_id: "run-a" })
+                    : l;
+                })
+              : text,
+          ]),
+        );
+        assert.notDeepEqual(want, before, "the fixture holds untagged ws-a lines");
+        assert.deepEqual(logBytes(), want);
+        assert.ok(
+          logLines().some((e) => e.event === "pr.merged" && e.run_id === "run-a"),
+          "the untagged pr.merged is now tagged",
+        );
+
+        await rebuildMetrics();
+        assert.deepEqual(logBytes(), want, "a third rebuild changes nothing");
+
+        // The pr.open another run had tagged, now untagged: tagged with ws-a's run too.
+        const open = (l) => l.includes('"event":"pr.open"') && l.includes('"run_id":"run-other"');
+        const untag = (text) =>
+          text.replace(/^.+$/gm, (l) => (open(l) ? l.replace(',"run_id":"run-other"', "") : l));
+        for (const [f, text] of Object.entries(want))
+          fs.writeFileSync(path.join(dir, f), untag(text));
+        await rebuildMetrics();
+        const retagged = Object.fromEntries(
+          Object.entries(want).map(([f, t]) => [
+            f,
+            t.replace('"run_id":"run-other"', '"run_id":"run-a"'),
+          ]),
+        );
+        assert.notDeepEqual(retagged, want);
+        assert.deepEqual(logBytes(), retagged, "an untagged pr.open is tagged too");
+
+        // An untagged copy beside the tagged pr.merged (a live poll after an old rebuild): dropped.
+        const merged = /^.*"event":"pr\.merged".*$/m;
+        const [f1, t1] = Object.entries(retagged).find(([, t]) => merged.test(t));
+        const tagLine = merged.exec(t1)[0];
+        const bare = tagLine.replace(',"run_id":"run-a"', "");
+        fs.writeFileSync(path.join(dir, f1), `${t1}${bare}\n`);
+        await rebuildMetrics();
+        assert.deepEqual(logBytes(), retagged, "the untagged duplicate is dropped");
+
+        // An untagged line of another workspace naming the same PR: never given ws-a's run.
+        const other = `${t1.replace(tagLine, bare.replace('"workspace":"ws-a"', '"workspace":"ws-x"'))}`;
+        fs.writeFileSync(path.join(dir, f1), other);
+        await rebuildMetrics();
+        assert.equal(
+          fs.readFileSync(path.join(dir, f1), "utf8"),
+          other,
+          "ws-x's line is left as is",
+        );
+      } finally {
+        if (prevGh === undefined) delete process.env.WERKMEISTER_GH_BIN;
+        else process.env.WERKMEISTER_GH_BIN = prevGh;
+        fs.rmSync(fx.root, { recursive: true, force: true });
+      }
+    },
+    { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
+  );
+});
+
 // SW-1104: two people's close-outs against one workspace repo show up in one report.
 test("rebuild brings in every teammate's slice and usage, and the report covers both people", async () => {
   await withSandboxHome(
