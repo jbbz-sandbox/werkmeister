@@ -102,6 +102,11 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   console.log(`\n${Colors.BOLD}=== werkmeister stop: ${feature} ===${Colors.RESET}\n`);
 
   if (feature === "infra") {
+    // SW-1215: the bare form is pre-approved, and the nearest `.env` can be an agent-written one below the workspace.
+    if (!args.feature) {
+      error("FEATURE=infra from a .env: run `werkmeister infra stop` to stop shared infra.");
+      process.exit(1);
+    }
     // False is a Docker failure infraStop already logged; scripts read the exit code (SW-950).
     if (!(await infraStop())) process.exit(1);
     console.log();

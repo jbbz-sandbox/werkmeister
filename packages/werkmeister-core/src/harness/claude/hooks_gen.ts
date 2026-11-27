@@ -425,6 +425,10 @@ export const READ_ONLY_GIT_RULES = [
 // the shared proxy, other features and the linked CLI. The PR guard is a
 // PreToolUse deny, so `gh pr create` stays blocked.
 const WHOLE_FEATURE_STARTS = ["up", "restart", "feature up", "feature restart"];
+// SW-1215: a stop runs no `command:` and keeps the slot, so host mounts don't drop it. Like `feature up`, it
+// frees capacity, so a waiting workspace may start (lifecycle.ts grantWaiters). Exact, since
+// `stop infra` or another feature's name reaches shared infra or another workspace.
+const FEATURE_STOPS = ["stop", "feature stop"];
 
 // SW-626: the git a run needs, not `git:*`, which ran commands through `rebase -x`, `bisect run`,
 // `submodule foreach`, `difftool -x` and `-C <other workspace>`. Push is `werkmeister pr open`'s.
@@ -485,6 +489,7 @@ export const AUTONOMOUS_RULES = [
   // No-arg forms act on the cwd's FEATURE; `autonomousRules` adds the named ones.
   // Each pre-SW-186 spelling keeps its rule until the CLI drops it, beside its new one.
   ...WHOLE_FEATURE_STARTS.flatMap(cli),
+  ...FEATURE_STOPS.flatMap(cli),
   ...[
     "status",
     "feature status",
@@ -552,6 +557,7 @@ export function autonomousRules(
     ...base,
     // Exact: `werkmeister feature restart <f> infra` and `docker restart <f>-a <other>` stay out.
     ...(wholeFeature ? WHOLE_FEATURE_STARTS.flatMap((cmd) => cli(`${cmd} ${feature}`)) : []),
+    ...FEATURE_STOPS.flatMap((cmd) => cli(`${cmd} ${feature}`)),
     // SW-132: one of its own services, the way the PR gate starts them. SW-843: exact, since a
     // trailing `<other>` or `-w <path>` would start another workspace's container.
     ...[...services, ...repoServices]
