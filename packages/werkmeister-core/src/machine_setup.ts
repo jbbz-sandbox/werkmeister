@@ -1509,16 +1509,36 @@ export const PR_WATCH_CRON_MARKER = "# werkmeister pr watch";
 const PR_WATCH_INTERVAL_S = 600;
 const PR_WATCH_REMOVE_HINT = "Remove with: werkmeister pr watch --uninstall";
 
+/**
+ * Where and how the scheduled PR watch is installed: launchd on macOS, crontab elsewhere.
+ * {@link MigrateOptions} `prWatch` takes it so tests can swap the install out.
+ *
+ * @example
+ * ```ts
+ * import { migrate, type PrWatchScheduleOptions } from "werkmeister-core/sdk";
+ *
+ * const prWatch: PrWatchScheduleOptions = {
+ *   platform: "linux",
+ *   home: "/tmp/home",
+ *   runner: () => [0, ""],
+ * };
+ * console.log(await migrate({ checkOnly: true, prWatch }));
+ * ```
+ */
 export interface PrWatchScheduleOptions {
   /** `darwin` → launchd; anything else → crontab. */
   platform?: NodeJS.Platform;
+  /** The home folder the job and its files go under; your home directory by default. */
   home?: string;
+  /** Where the job writes its output. */
   logFile?: string;
   /** The `werkmeister` wrapper the job runs; baked in as an absolute path. */
   wrapper?: string;
   /** Baked into the job: launchd and cron start with a PATH that lacks node, gh and docker. */
   pathEnv?: string;
+  /** The user id launchd runs the job as; the current user's by default. */
   uid?: number;
+  /** Runs `launchctl` or `crontab`; tests swap it. */
   runner?: Runner;
 }
 

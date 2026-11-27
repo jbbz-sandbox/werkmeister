@@ -3,7 +3,7 @@
  * @module
  */
 
-export { clearNotice } from "./agent_state.js";
+export { type AgentState, clearNotice } from "./agent_state.js";
 export {
   type CacheSnapshot,
   type PruneDeps,
@@ -11,7 +11,7 @@ export {
   type PruneResult,
   pruneCaches,
 } from "./build_caches.js";
-export type { LogTail } from "./compose.js";
+export type { ContainerStatus, LogTail } from "./compose.js";
 export type { CacheEntry, CacheRegistry } from "./config.js";
 // The daemon's HTTP API.
 export {
@@ -26,7 +26,7 @@ export {
 export { type ContainerStat, containerStats } from "./docker.js";
 export { SandboxError, WorkspaceError } from "./errors.js";
 export type { HostLookup } from "./feature_routing.js";
-export type { FormBundle } from "./form_schema.js";
+export type { FormBundle, SchemaProp } from "./form_schema.js";
 export { portsPerSlot } from "./fragment_detect/allocate.js";
 export type { QuestionKind } from "./fragment_detect/assist.js";
 export { stdoutRunner } from "./fragment_detect/files.js";
@@ -43,22 +43,36 @@ export {
   validateFragment,
   writeFragment,
 } from "./fragment_detect/index.js";
-export type { Plan, PlanOptions } from "./fragment_detect/plan.js";
-export type { ResolvedInfra, ResolvedService } from "./fragment_detect/precedence.js";
+export type { Plan, PlanOptions, SetupPlan } from "./fragment_detect/plan.js";
+export type {
+  Conflict,
+  ResolvedInfra,
+  ResolvedService,
+} from "./fragment_detect/precedence.js";
 export type { Rendered } from "./fragment_detect/render.js";
-export type { Confidence, FieldValue, Skipped } from "./fragment_detect/types.js";
+export type {
+  Confidence,
+  FieldValue,
+  Finding,
+  FindingKind,
+  Skipped,
+} from "./fragment_detect/types.js";
 export { type GraduateNoteOptions, GraduationError, graduateNote } from "./graduate.js";
-export { relayPickedUp } from "./harness/claude/session.js";
+export { type ClaudeSessionSignal, relayPickedUp } from "./harness/claude/session.js";
 export { harnessLayoutFor } from "./harness/layout.js";
 export type {
   HarnessId,
   HarnessLayout,
   HooksSupport,
+  ModelUsage,
   SessionMessage,
+  SessionSignal,
   SessionTranscript,
+  SessionUsage,
   TurnOptions,
   TurnResult,
   TurnStatus,
+  UsageTotals,
   WorkspaceUsage,
 } from "./harness/types.js";
 // The shared infrastructure (Caddy, k8s port-forwards), not a workspace's own stack.
@@ -71,9 +85,19 @@ export {
   up as infraUp,
 } from "./infra.js";
 export type { IssueSnapshot } from "./issue_snapshot.js";
-export { type IssueStatuses, startIssue } from "./issue_status.js";
+export { type IssuePoint, type IssueStatuses, startIssue } from "./issue_status.js";
 export { issueTracker, type TrackerAt } from "./issue_tracker.js";
-export type { Issue, IssueTrackerStrategy } from "./issue_trackers/types.js";
+export type {
+  Board,
+  Issue,
+  IssueComment,
+  IssueKind,
+  IssueParent,
+  IssueTrackerStrategy,
+  IssueUpdate,
+  NewIssue,
+  TrackerAuth,
+} from "./issue_trackers/types.js";
 export type { ForwardStatus } from "./k8s.js";
 export type { Launcher } from "./launcher.js";
 export {
@@ -89,14 +113,38 @@ export {
   removeService,
   runClean,
 } from "./lifecycle.js";
-export type { Runner, Step } from "./machine_setup.js";
+export type { PrWatchScheduleOptions, Runner, Step } from "./machine_setup.js";
+export type { GateRowKind } from "./metrics.js";
 export {
+  type AbandonedSpend,
+  type CostlyTicket,
+  type CountedPercentiles,
+  type FlowCard,
+  type FlowColumn,
+  type FlowColumnReport,
+  type MetricsRange,
   type MetricsReport,
   type MetricsTrends,
+  type ModelRollup,
   metricsReport,
   metricsTrends,
+  type Percentiles,
+  type SlowTicket,
+  type StageTrend,
+  type SuiteTrend,
+  type TicketCost,
+  type TicketTimes,
+  type TimelineEvent,
+  type TrendBucket,
+  type TrendRow,
+  type TrendSlice,
+  type UsageRollup,
+  type WaitCause,
+  type WaitSeconds,
+  type WorkTypeColumn,
+  type WorkTypeSlice,
 } from "./metrics_report.js";
-export { type MigrateOptions, migrate } from "./migrate.js";
+export { type MigrateOptions, migrate, type RunningContainer } from "./migrate.js";
 export { listNotes, type Note, parseNote } from "./notes.js";
 export {
   adoptPr,
@@ -115,7 +163,14 @@ export {
 } from "./pr_lifecycle.js";
 export type { RunResult } from "./proc.js";
 export { type SyncRegistryOptions, syncRegistry } from "./registry_sync.js";
-export type { HostSummary, Usage, WorkspaceResources } from "./resources.js";
+export type {
+  CrashLoop,
+  HostSummary,
+  Started,
+  StartedBy,
+  Usage,
+  WorkspaceResources,
+} from "./resources.js";
 export type { StartArgs } from "./run_start.js";
 // Workspaces: list, read state, create, close.
 export {
@@ -123,6 +178,7 @@ export {
   approvePr,
   buildIssueFormRequest,
   buildRefinePrompt,
+  type CheckInRow,
   type CheckInTriage,
   type CreateOptions,
   type CreateResult,
@@ -130,6 +186,7 @@ export {
   claimResumeNudge,
   closeOut,
   createWorkspace,
+  type Distiller,
   type FormSchemaBundle,
   fetchIssueCard,
   fetchIssueFormData,
@@ -157,10 +214,13 @@ export {
   listSessions,
   listWorkspaces,
   mergeFormData,
+  type OpenPr,
   type OpenPrsResult,
   openFeatureBrowser,
   openWorkspace,
   postSlackReviewRequest,
+  type RepoPr,
+  type ReviewStatus,
   refinePrompt,
   refreshPrStatus,
   resolveWorkspaceDir,
@@ -168,6 +228,7 @@ export {
   resumeAndNudge,
   resumeClaudeInTerminal,
   runWorkspaceAction,
+  type ServiceHealth,
   sendToClaudeSession,
   startArgs,
   switchKubeContext,
@@ -190,6 +251,7 @@ export {
   type Recommendation,
   runCollection,
   type ServiceUsage,
+  type UsageStatus,
 } from "./stats.js";
 export {
   type FeatureSnapshot,
@@ -205,6 +267,7 @@ export type {
   ContextStrategy,
   DecisionSource,
   InitContext,
+  IssueRef,
   StrategyId,
 } from "./strategies/types.js";
 export {
@@ -217,4 +280,17 @@ export {
 export { runFeatureTests, type TestRunArgs, type TestRunResult } from "./test_run.js";
 export type { WebServerStatus } from "./web_servers.js";
 export { type InitWorkspaceOptions, initWorkspace } from "./workspace_init.js";
+export type {
+  Activity,
+  ActivityId,
+  AgentChip,
+  NeedItem,
+  NeedKind,
+  NeedSource,
+  Phase,
+  PhaseId,
+  Stalled,
+  StalledReason,
+  WorkspaceState,
+} from "./workspace_state.js";
 export { revokeWorkspaceToken, staleTokens } from "./workspace_token.js";

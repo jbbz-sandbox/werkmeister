@@ -24,17 +24,57 @@ import {
 import { dotDir } from "./dot_dir.js";
 import { labelOf } from "./slots.js";
 
+/**
+ * What started a workspace's containers: `werkmeister feature up`, a gate run, a restart, or a person.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceStatuses, type StartedBy } from "werkmeister-core/sdk";
+ *
+ * const { statuses } = await getWorkspaceStatuses();
+ * const byGate: StartedBy = "gate";
+ * console.log(statuses.filter((s) => s.started?.by === byGate).map((s) => s.name));
+ * ```
+ */
 export type StartedBy = "up" | "gate" | "restart" | "person";
 
+/**
+ * When a workspace's earliest running container started, and what started it.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceStatuses, type Started } from "werkmeister-core/sdk";
+ *
+ * const { statuses } = await getWorkspaceStatuses();
+ * const started: Started | null = statuses[0]?.started ?? null;
+ * if (started) console.log(`started by ${started.by} at ${started.at}`);
+ * ```
+ */
 export interface Started {
   /** ISO time the earliest running container started. */
   at: string;
+  /** What started it. */
   by: StartedBy;
 }
 
+/**
+ * A container stuck restarting under its restart policy, with its last log line.
+ *
+ * @example
+ * ```ts
+ * import { type CrashLoop, getWorkspaceStatuses } from "werkmeister-core/sdk";
+ *
+ * const { statuses } = await getWorkspaceStatuses();
+ * const loops: CrashLoop[] = statuses.flatMap((s) => s.crashLoops);
+ * for (const l of loops) console.log(l.service, l.restarts, l.lastLog);
+ * ```
+ */
 export interface CrashLoop {
+  /** The Compose service name. */
   service: string;
+  /** How many times it has restarted. */
   restarts: number;
+  /** Its last log line; null when it logged nothing. */
   lastLog: string | null;
 }
 

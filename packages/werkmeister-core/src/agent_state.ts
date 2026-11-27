@@ -18,6 +18,18 @@ import { type MetricsEvent, recordEvent, recordStageDone, runTag } from "./metri
 import { findRecordRoot } from "./pr_guard.js";
 import { childEnv, dockerBin } from "./tool_bins.js";
 
+/**
+ * The agent's one word for a workspace: working, needs you (a question or permission prompt), done, or idle.
+ *
+ * @example
+ * ```ts
+ * import { type AgentState, getWorkspaceStatuses } from "werkmeister-core/sdk";
+ *
+ * const { statuses } = await getWorkspaceStatuses();
+ * const waiting: AgentState = "needs-you";
+ * console.log(statuses.filter((s) => s.workspaceState.agent.id === waiting).map((s) => s.name));
+ * ```
+ */
 export type AgentState = "working" | "needs-you" | "done" | "idle";
 
 // Tools that block on the person even though PreToolUse fired for them.

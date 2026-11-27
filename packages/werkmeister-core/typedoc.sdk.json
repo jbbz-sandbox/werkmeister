@@ -4,6 +4,17 @@
   "tsconfig": "tsconfig.json",
   "emit": "none",
   "excludePrivate": true,
-  "validation": { "invalidLink": true, "notExported": false, "notDocumented": true },
+  "validation": { "invalidLink": true, "notExported": true, "notDocumented": true },
+  "intentionallyNotExported": [
+    "Run",
+    "ServicesConfig",
+    "ArchetypeRegistry",
+    "ReposConfig",
+    "MergedRegistry",
+    "PrWatchScheduleState",
+    "HARNESS_IDS",
+    "STRATEGY_IDS",
+    "ISSUE_POINTS"
+  ],
   "treatValidationWarningsAsErrors": true
 }

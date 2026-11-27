@@ -33,8 +33,27 @@ import {
 } from "./types.js";
 import { detectWorkspace } from "./workspace.js";
 
+/**
+ * The shared install service a repo's Node services run first, as {@link Plan} `setup` plans it.
+ *
+ * @example
+ * ```ts
+ * import { planFragment, portsPerSlot, type SetupPlan, stdoutRunner } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: stdoutRunner,
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: portsPerSlot(),
+ * });
+ * const setup: SetupPlan | null = plan.setup;
+ * if (setup) console.log(setup.name, Object.keys(setup.fields));
+ * ```
+ */
 export interface SetupPlan {
+  /** The install service's name. */
   name: string;
+  /** One value per registry field, each with where it came from. */
   fields: Record<string, FieldValue>;
 }
 

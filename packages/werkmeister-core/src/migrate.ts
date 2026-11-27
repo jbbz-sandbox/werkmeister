@@ -70,8 +70,21 @@ import { readModel, readWorkspaceField } from "./workspace_prompts.js";
 
 export const LEGACY_DOT_DIR = ".sandbox";
 
-/** A running container, as far as the refusal needs to know. */
+/**
+ * A running container, as far as the refusal needs to know. {@link MigrateOptions} `running`
+ * returns a list of them in tests.
+ *
+ * @example
+ * ```ts
+ * import { migrate, type RunningContainer } from "werkmeister-core/sdk";
+ *
+ * const none: RunningContainer[] = [];
+ * const steps = await migrate({ checkOnly: true, running: async () => none });
+ * console.log(steps.map((s) => s.label));
+ * ```
+ */
 export interface RunningContainer {
+  /** The container name. */
   name: string;
   /** Host paths it bind-mounts. */
   mounts: string[];

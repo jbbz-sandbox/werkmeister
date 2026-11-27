@@ -1227,6 +1227,19 @@ async function openInVscode(target: string): Promise<{ opened: boolean; note?: s
   }
 }
 
+/**
+ * A model call that takes a prompt and returns its answer, or null when the call fails.
+ * {@link CreateOptions} `distill` takes one to rewrite an issue into form fields.
+ *
+ * @example
+ * ```ts
+ * import { createWorkspace, type Distiller } from "werkmeister-core/sdk";
+ *
+ * declare function askModel(prompt: string): Promise<string>; // your own model call
+ * const distill: Distiller = (prompt) => askModel(prompt).catch(() => null);
+ * await createWorkspace({ issue_id: "PROJ-12" }, { open: false, distill });
+ * ```
+ */
 export type Distiller = (prompt: string) => Promise<string | null>;
 
 /**
@@ -1814,6 +1827,16 @@ export interface ComposeProjectTally {
  * container state. `unhealthy` (a failing healthcheck) is kept distinct from
  * `running` (up, no healthcheck) so the UI can flag it red while a plain
  * running container reads as good.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceStatuses, type ServiceHealth } from "werkmeister-core/sdk";
+ *
+ * const bad: ServiceHealth[] = ["unhealthy", "down"];
+ * const { statuses } = await getWorkspaceStatuses();
+ * for (const s of statuses)
+ *   for (const svc of s.services) if (bad.includes(svc.state)) console.log(s.name, svc.name);
+ * ```
  */
 export type ServiceHealth = "healthy" | "starting" | "unhealthy" | "running" | "down";
 function serviceHealthState(s: { state: string; health: string }): ServiceHealth {
@@ -2057,12 +2080,28 @@ const working = (r: CheckInRow) =>
   r.workspaceState?.agent.id === "working" ||
   BUSY_ACTIVITY.has(r.workspaceState?.activity.id ?? "");
 
-/** One workspace in a check-in sweep: the facts that decide whether a courier goes to it. */
+/**
+ * One workspace in a check-in sweep: the facts that decide whether a courier goes to it.
+ *
+ * @example
+ * ```ts
+ * import { type CheckInRow, checkInTriage } from "werkmeister-core/sdk";
+ *
+ * const { workspaces } = await checkInTriage();
+ * const gated: CheckInRow[] = workspaces.filter((w) => w.gates.length > 0);
+ * for (const w of gated) console.log(w.name, w.issueId, w.gates.join(", "));
+ * ```
+ */
 export interface CheckInRow {
+  /** The workspace folder name. */
   name: string;
+  /** The workspace's issue key; null when it has none. */
   issueId: string | null;
+  /** The workspace's labels, e.g. `focus` or `skip`. */
   labels: string[];
+  /** The workspace's container state, as {@link WorkspaceStatus} `state` reads it. */
   containers: WorkspaceStatus["state"];
+  /** The turn state of a `claude-send` turn this server runs. */
   claude: WorkspaceStatus["claude"];
   /** `stages/<stage>/output/*.md` files (relative to the workspace) with a line starting `status: proposed`, or a `pr-*.md` at `status: draft`. */
   gates: string[];
@@ -2076,7 +2115,16 @@ export interface CheckInRow {
   /** Held by Pause: never a candidate or ready to close, whatever its agent state. */
   paused: boolean;
   /** One per PR file; `repo` is its worktree dir, `release` the tag that shipped it. */
-  prs: Array<{ repo: string; url: string | null; status: string; release: string | null }>;
+  prs: Array<{
+    /** The PR file's worktree dir. */
+    repo: string;
+    /** The PR's URL; null before it is opened. */
+    url: string | null;
+    /** The PR file's `status`, e.g. `draft` or `open`. */
+    status: string;
+    /** The release tag that shipped it; null until one has. */
+    release: string | null;
+  }>;
   // SW-487.
   /** The status sweep's state model, read before merged PRs were shipped. */
   workspaceState: WorkspaceState | null;
@@ -2342,6 +2390,18 @@ export function interceptsFromSnapshot(parsed: InterceptsSnapshot): InterceptsRe
 
 // --- Repos & pull requests --------------------------------------------------
 
+/**
+ * One code worktree in a workspace and the PR for its branch, with review and CI state.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspacePRs, type RepoPr } from "werkmeister-core/sdk";
+ *
+ * const all = await getWorkspacePRs();
+ * const repos: RepoPr[] = all.flatMap((ws) => ws.repos);
+ * for (const r of repos) if (r.url) console.log(r.repo, r.state, r.ci, r.url);
+ * ```
+ */
 export interface RepoPr {
   /** Repo worktree subdir name, e.g. `werkmeister`. */
   repo: string;
@@ -2589,22 +2649,46 @@ export async function postSlackReviewRequest(text: string): Promise<string> {
   return channel;
 }
 
-/** A PR as shown in the Open Pull Requests tab. */
+/**
+ * A PR as shown in the Open Pull Requests tab.
+ *
+ * @example
+ * ```ts
+ * import { getOpenPrs, type OpenPr } from "werkmeister-core/sdk";
+ *
+ * const { mine } = await getOpenPrs();
+ * const first: OpenPr | undefined = mine[0];
+ * if (first) console.log(`#${first.number} ${first.title}`, first.reviewStatus);
+ * ```
+ */
 export interface OpenPr {
+  /** The PR's URL. */
   url: string;
+  /** The repo name, without its owner. */
   repo: string;
+  /** The PR number. */
   number: number;
+  /** The PR title. */
   title: string;
+  /** The author's GitHub login. */
   author: string;
+  /** The PR description. */
   body: string;
+  /** The PR's label names. */
   labels: string[];
+  /** Where its review stands. */
   reviewStatus: ReviewStatus;
+  /** How many checks fail. */
   failingChecks: number;
+  /** The branch is behind its base. */
   outOfDate: boolean;
+  /** It has the `ready-for-human-approval` label. */
   hasApprovalLabel: boolean;
   /** The issue ref in the PR's title, body or branch, in the configured tracker's form. */
   issueId: string | null;
+  /** A link to that issue; null when there is none. */
   issueUrl: string | null;
+  /** It is a draft PR. */
   isDraft: boolean;
 }
 
@@ -2612,6 +2696,15 @@ export interface OpenPr {
  * The GitHub review state we surface per PR. GitHub's `reviewDecision` only
  * yields APPROVED / CHANGES_REQUESTED / (null → REVIEW_REQUIRED), so DISMISSED
  * is recovered from `latestReviews` — see `reviewStatusOf`.
+ *
+ * @example
+ * ```ts
+ * import { getOpenPrs, type ReviewStatus } from "werkmeister-core/sdk";
+ *
+ * const { mine } = await getOpenPrs();
+ * const blocked: ReviewStatus = "CHANGES_REQUESTED";
+ * for (const pr of mine) if (pr.reviewStatus === blocked) console.log(pr.url);
+ * ```
  */
 export type ReviewStatus = "APPROVED" | "CHANGES_REQUESTED" | "DISMISSED" | "PENDING";
 

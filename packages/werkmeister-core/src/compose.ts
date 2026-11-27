@@ -21,11 +21,28 @@ import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 // biome-ignore lint/suspicious/noImportCycles: compose↔slots; SW-411
 import { getSlot, LABEL_FEATURE, LEGACY_LABEL_FEATURE, labelOf } from "./slots.js";
 
+/**
+ * One container in a feature's Compose project, as `docker compose ps` reports it.
+ *
+ * @example
+ * ```ts
+ * import { type ContainerStatus, statusSnapshot } from "werkmeister-core/sdk";
+ *
+ * const { features } = await statusSnapshot();
+ * const containers: ContainerStatus[] = features.flatMap((f) => f.containers);
+ * for (const c of containers) console.log(c.service, c.status, c.health || "no healthcheck");
+ * ```
+ */
 export interface ContainerStatus {
+  /** The container name. */
   name: string;
+  /** The container state, e.g. `running` or `exited`. */
   status: string;
+  /** The healthcheck verdict, e.g. `healthy`; empty when the container has none. */
   health: string;
+  /** The published ports, as Docker prints them. */
   ports: string;
+  /** The Compose service name. */
   service: string;
   /** `com.werkmeister.role` — `"setup"` marks a one-shot container. Empty when unlabelled. */
   role: string;

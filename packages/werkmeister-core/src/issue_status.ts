@@ -22,6 +22,25 @@ import { recordEvent, runTag } from "./metrics.js";
 import { loadConfigFile } from "./workspace_prompts.js";
 
 export const ISSUE_POINTS = ["in_progress", "in_review", "merged", "done", "abandoned"] as const;
+/**
+ * A point in a workspace's life where its issue's status can move: `in_progress`, `in_review`,
+ * `merged`, `done` or `abandoned`. {@link IssueStatuses} maps each to a tracker status. The list of points behind it is internal.
+ *
+ * @example
+ * ```ts
+ * import { type IssuePoint, type IssueStatuses } from "werkmeister-core/sdk";
+ *
+ * const point: IssuePoint = "in_review";
+ * const statuses: IssueStatuses = {
+ *   in_progress: "Doing",
+ *   in_review: "Code Review",
+ *   merged: null,
+ *   done: "Done",
+ *   abandoned: null,
+ * };
+ * console.log(statuses[point]);
+ * ```
+ */
 export type IssuePoint = (typeof ISSUE_POINTS)[number];
 /**
  * The tracker status to use at each point of a workspace's life: `in_progress`,

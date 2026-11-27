@@ -48,10 +48,45 @@ export interface FieldValue {
   confidence: Confidence;
 }
 
+/**
+ * Which kind of file a {@link Finding} came from: a package manifest, a Dockerfile, k8s
+ * manifests or a Compose file.
+ *
+ * @example
+ * ```ts
+ * import { type FindingKind, planFragment, portsPerSlot, stdoutRunner } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: stdoutRunner,
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: portsPerSlot(),
+ * });
+ * const kind: FindingKind = "k8s";
+ * console.log(plan.unmatched.filter((f) => f.kind === kind).map((f) => f.file));
+ * ```
+ */
 export type FindingKind = "package" | "dockerfile" | "k8s" | "compose";
 
-/** What one file says about one would-be service, before correlation. */
+/**
+ * What one file says about one would-be service, before correlation.
+ *
+ * @example
+ * ```ts
+ * import { type Finding, planFragment, portsPerSlot, stdoutRunner } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: stdoutRunner,
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: portsPerSlot(),
+ * });
+ * const unmatched: Finding[] = plan.unmatched;
+ * for (const f of unmatched) console.log(f.kind, f.name, f.file);
+ * ```
+ */
 export interface Finding {
+  /** Which kind of file it came from. */
   kind: FindingKind;
   /** Candidate service name: package dir basename, Deployment/release name or compose service name. */
   name: string;
@@ -63,6 +98,7 @@ export interface Finding {
   image?: string;
   /** Package findings only: has a `dev` or `start` script. */
   runnable?: boolean;
+  /** The registry fields this file sets, each with where it came from. */
   fields: Record<string, FieldValue>;
 }
 

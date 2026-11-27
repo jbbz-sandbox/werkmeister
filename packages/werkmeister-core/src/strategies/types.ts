@@ -134,12 +134,38 @@ export interface DecisionSource {
   cite(workspaceRoot: string, note: Note): string;
 }
 
-/** The workspace's issue as the context layer renders it; `fetchedAt` null = no stored copy. */
+/**
+ * The workspace's issue as the context layer renders it; `fetchedAt` null = no stored copy.
+ *
+ * @example
+ * ```ts
+ * import { type IssueRef } from "werkmeister-core/sdk";
+ *
+ * const issue: IssueRef = {
+ *   ref: "PROJ-42",
+ *   url: "https://example.atlassian.net/browse/PROJ-42",
+ *   title: "Add a rating field",
+ *   fetchedAt: null,
+ * };
+ * console.log(issue.fetchedAt ? `${issue.ref} (stored)` : `${issue.ref} (no stored copy)`);
+ * ```
+ */
 export interface IssueRef {
+  /** The issue key, e.g. `PROJ-42`. */
   ref: string;
+  /** The issue's web page; null when it can't be built. */
   url: string | null;
+  /** The issue's summary line. */
   title: string;
+  /** When the stored copy was fetched (ISO); null when there is none. */
   fetchedAt: string | null;
-  /** The parent epic from the stored copy (SW-633). */
-  parent?: { ref: string; title: string; url: string | null };
+  /** The parent epic from the stored copy (`SW-633`). */
+  parent?: {
+    /** The parent's key. */
+    ref: string;
+    /** The parent's summary line. */
+    title: string;
+    /** The parent's web page; null when it can't be built. */
+    url: string | null;
+  };
 }

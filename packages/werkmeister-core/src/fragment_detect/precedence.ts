@@ -9,10 +9,31 @@ import {
   stated,
 } from "./types.js";
 
+/**
+ * A field two detected files disagree on: the value chosen and the ones it beat.
+ *
+ * @example
+ * ```ts
+ * import { type Conflict, planFragment, portsPerSlot, stdoutRunner } from "werkmeister-core/sdk";
+ *
+ * const plan = planFragment("/home/me/repos/my-app", {
+ *   reposRoot: "/home/me/repos",
+ *   runner: stdoutRunner,
+ *   localPath: "/home/me/.werkmeister/services.local.yaml",
+ *   portsPerSlot: portsPerSlot(),
+ * });
+ * const conflicts: Conflict[] = plan.services.flatMap((s) => s.conflicts);
+ * for (const c of conflicts) console.log(c.service, c.key, c.chosen.value, c.also.length);
+ * ```
+ */
 export interface Conflict {
+  /** The service the field belongs to. */
   service: string;
+  /** The registry field, e.g. `internal_port`. */
   key: string;
+  /** The value that won. */
   chosen: FieldValue;
+  /** The values it beat, each with its source. */
   also: FieldValue[];
 }
 

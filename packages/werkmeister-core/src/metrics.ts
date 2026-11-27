@@ -27,7 +27,18 @@ export type TimedEvent =
 export type SlowCall = "docker build" | "install" | "git fetch" | "tracker";
 type Result = "ok" | "error";
 
-/** What a gate row does, for the Metrics tab's stacked gate minutes (SW-1101). */
+/**
+ * What a gate row does, for the Metrics tab's stacked gate minutes (`SW-1101`).
+ *
+ * @example
+ * ```ts
+ * import { type GateRowKind, metricsTrends } from "werkmeister-core/sdk";
+ *
+ * const { rows } = await metricsTrends();
+ * const kind: GateRowKind = "test";
+ * for (const r of rows) console.log(r.bucket, r.gate.byKind[kind]);
+ * ```
+ */
 export type GateRowKind = "setup" | "lint" | "test" | "release" | "checks";
 
 /** *row*'s kind from its name; also read-side for `gate.row` lines from before `row_kind`. */

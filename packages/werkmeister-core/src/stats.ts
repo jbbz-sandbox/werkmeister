@@ -484,7 +484,18 @@ export function cpuLimitOf(container: string, cpus: Record<string, string>): str
   return service ? cpus[service] : null;
 }
 
-/** How one container's observed peak compares to the limit it was given. */
+/**
+ * How one container's observed peak compares to the limit it was given.
+ *
+ * @example
+ * ```ts
+ * import { optimizeReport, type UsageStatus } from "werkmeister-core/sdk";
+ *
+ * const watch: UsageStatus[] = ["risk", "moderate"];
+ * const { usage } = await optimizeReport();
+ * for (const u of usage) if (watch.includes(u.status)) console.log(u.container, u.status);
+ * ```
+ */
 export type UsageStatus = "risk" | "moderate" | "over_provisioned" | "ok" | "no_limit";
 
 /**
