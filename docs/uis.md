@@ -16,6 +16,7 @@ Follow this and a refresh needs no retakes for size, width, theme or browser chr
 - Cut the hero out of that capture with `sips -c`.
 - To resample a capture to 1280 px, render it in an `<img>` through the same headless Chrome. Do not re-encode it with `sips`: that made a PNG larger (412 KB to 427 KB), and no PNG optimizer is installed.
 - The pane render's `.png` needs Chrome. It takes `CHROME` if set, else Playwright's chrome-headless-shell from `PLAYWRIGHT_BROWSERS_PATH`, else from the Playwright cache in your real home (`~/Library/Caches/ms-playwright` or `~/.cache/ms-playwright`), even under a workspace's `.werkmeister/bin/with-temp-home`, whose temporary HOME would hide it. Its `.ans` writes the same pane as ANSI text anywhere.
+- A PR that changes what the Claude Code pane draws re-renders `claude-code-pane.png` in the same PR, with the `render-pane.mjs` command above. The werkmeister-core container has no Chrome, so render it on the host.
 - Never screenshot a live session that lists real workspaces. Capture only the demo seed above.
 
 ## Workspaces dashboard
