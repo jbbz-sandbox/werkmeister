@@ -1,4 +1,16 @@
+import fs from "node:fs";
 import { defineConfig } from "vitest/config";
+
+// SW-1242: resolve werkmeister-core to its source, so a test never passes against a stale dist.
+// Built from core's exports map ("./x": "./dist/<p>.js" is src/<p>.ts) so it tracks new entry points.
+const coreDir = new URL("../../packages/werkmeister-core/", import.meta.url);
+const coreExports: Record<string, string> = JSON.parse(
+  fs.readFileSync(new URL("package.json", coreDir), "utf8"),
+).exports;
+const coreAliases = Object.entries(coreExports).map(([sub, target]) => ({
+  find: new RegExp(`^werkmeister-core${sub === "." ? "" : sub.slice(1)}$`),
+  replacement: new URL(target.replace(/^\.\/dist\/(.*)\.js$/, "src/$1.ts"), coreDir).pathname,
+}));
 
 // Cases spawn processes and do heavy fs work, and their wall time scales with host load: next to other
 // workspaces' suites a 1 s case takes 10-50 s, so vitest's 5 s/10 s defaults fail whichever case starves (#178, #206).
@@ -11,6 +23,7 @@ import { defineConfig } from "vitest/config";
 for (const v of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]) delete process.env[v];
 
 export default defineConfig({
+  resolve: { alias: coreAliases },
   test: {
     testTimeout: 180_000,
     hookTimeout: 60_000,
