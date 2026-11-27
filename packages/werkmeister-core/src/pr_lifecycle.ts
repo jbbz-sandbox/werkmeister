@@ -5228,7 +5228,8 @@ async function closeOutLocked(
     return { command, output: lines.join("\n"), path: ws, terminals: [] };
   }
   const branches: Array<{ src: string; branch: string }> = [];
-  // An adopted PR's branch was never this workspace's to delete; an abandoned workspace keeps them all.
+  // An adopted PR's branch was never this workspace's to delete; an abandoned one keeps them on origin
+  // (removal deletes the local copies only where origin has their tip).
   for (const f of abandoned
     ? []
     : files.filter(
@@ -5242,12 +5243,8 @@ async function closeOutLocked(
   const terminals = await deps.terminals(ws);
   lines.push((await deps.remove(name, abandoned)).output);
 
-  // After removal: a branch checked out in a worktree can't be deleted.
+  // After removal, which already deleted the local branches (SW-1134): only origin's are left.
   for (const { src, branch } of branches) {
-    const local = await deps.run("git", ["-C", src, "branch", "-D", branch]);
-    lines.push(
-      local.code === 0 ? `deleted local ${branch}` : `local ${branch}: ${local.stderr.trim()}`,
-    );
     const remote = await deps.run("git", [
       "-C",
       src,
