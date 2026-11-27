@@ -203,7 +203,7 @@ export type Run = (
  * ```
  */
 export interface Deps {
-  /** Runs a host command and resolves with its output and exit code; never rejects. */
+  /** Runs a host command and resolves with its output and exit code; never rejects. The process runner; tests swap it, and its type is internal. */
   run: Run;
   /** Runs the probe a `health_endpoint` names on a host port: a path, `redis`/`postgres`, or `""` for TCP. */
   probe: (
@@ -215,11 +215,11 @@ export interface Deps {
     /** What it saw, for the gate's row. */
     detail: string;
   }>;
-  /** The machine's service registry (`~/.werkmeister/services.yaml`). */
+  /** The machine's service registry (`~/.werkmeister/services.yaml`). The registry as loaded from services.yaml; its shape is internal. */
   services: ServicesConfig;
-  /** The archetypes services build on. */
+  /** The archetypes services build on. The archetypes as loaded from their files; their shape is internal. */
   archetypes: ArchetypeRegistry;
-  /** The registry's `repos:`, keyed by code worktree directory name. */
+  /** The registry's `repos:`, keyed by code worktree directory name. The repos as loaded from services.yaml; their shape is internal. */
   repos: ReposConfig;
   /** Fixed tracker and statuses (tests); absent: the workspace's own, through its project. */
   tracker?: IssueTrackerStrategy;
@@ -255,7 +255,7 @@ export interface Deps {
    * A headless resume beside an open session forks its history: the open one never shows the turn.
    */
   sessionBusy: (ws: string, session: string, cwd: string | null) => Promise<boolean>;
-  /** The registry as built from *worktree*'s own fragment for *repo* (registry_sync.ts), or null. */
+  /** The registry as built from *worktree*'s own fragment for *repo* (registry_sync.ts), or null. The merged registry's shape is internal. */
   branchRegistry: (repo: string, worktree: string) => MergedRegistry | null;
   /** Regenerate the machine registry (registry_sync.ts); never throws. */
   syncRegistry: () => Step[];
@@ -268,7 +268,7 @@ export interface Deps {
   }[];
   /** Stop the workspace's feature containers; one line, never throws. */
   stop: (ws: string) => Promise<string>;
-  /** Whether the `pr watch` schedule is installed. */
+  /** Whether the `pr watch` schedule is installed. Its state type is internal; only the CLI reads it. */
   prWatch: () => PrWatchScheduleState;
   /** After a failed push or `gh pr create`: a line saying GitHub shows an outage, or null. Absent: none. */
   githubStatus?: () => Promise<string | null>;

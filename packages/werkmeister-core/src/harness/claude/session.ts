@@ -21,6 +21,22 @@ import type {
 import { resolveClaudeBin } from "./cli.js";
 import { findClaudeProjectDir, parseSessionLines, sessionPermissionMode } from "./transcript.js";
 
+/**
+ * The Claude harness's {@link SessionSignal}: the turn state, the agent's word, since when, and its question.
+ *
+ * @example
+ * ```ts
+ * import { type ClaudeSessionSignal } from "werkmeister-core/sdk";
+ *
+ * const signal: ClaudeSessionSignal = {
+ *   state: "running",
+ *   agent: "working",
+ *   at: null,
+ *   question: null,
+ * };
+ * console.log(signal.state, signal.agent);
+ * ```
+ */
 export type ClaudeSessionSignal = SessionSignal;
 export type ClaudeTurnState = TurnState;
 

@@ -28,18 +28,71 @@ import {
 } from "./sandbox.js";
 import type { UsageSnapshot } from "./usage_snapshot.js";
 
-/** A `metrics` range: the last 7, 30 or 90 days, or everything logged. */
+/**
+ * A `metrics` range: the last 7, 30 or 90 days, or everything logged.
+ *
+ * @example
+ * ```ts
+ * import { type MetricsRange, metricsReport } from "werkmeister-core/sdk";
+ *
+ * const range: MetricsRange = "30d";
+ * console.log((await metricsReport({ range })).tickets.length);
+ * ```
+ */
 export type MetricsRange = "7d" | "30d" | "90d" | "all";
 /** Every `MetricsRange`, in the order the Flow tab shows them. */
 export const METRICS_RANGES: readonly MetricsRange[] = ["7d", "30d", "90d", "all"];
-/** What work waited on: a person's answer, host capacity, PR open → merge, gate exit-75 retries, or a release. */
+/**
+ * What work waited on: a person's answer, host capacity, PR open → merge, gate exit-75 retries, or a release.
+ *
+ * @example
+ * ```ts
+ * import { metricsReport, type WaitCause } from "werkmeister-core/sdk";
+ *
+ * const { waits } = await metricsReport();
+ * const cause: WaitCause = "person";
+ * console.log(`${waits[cause]}s waiting on a person`);
+ * ```
+ */
 export type WaitCause = "person" | "capacity" | "pr" | "gateRetry" | "release";
-/** A flow-board column: working (with its ICM stage), ready, pr-open, or merged and awaiting release. */
+/**
+ * A flow-board column: working (with its ICM stage), ready, pr-open, or merged and awaiting release.
+ *
+ * @example
+ * ```ts
+ * import { type FlowColumn, metricsReport } from "werkmeister-core/sdk";
+ *
+ * const column: FlowColumn = "pr-open";
+ * const { board } = await metricsReport();
+ * console.log(board.find((c) => c.column === column)?.wip);
+ * ```
+ */
 export type FlowColumn = "working" | "ready" | "pr-open" | "awaiting-release";
-/** Seconds waited, per cause. */
+/**
+ * Seconds waited, per cause.
+ *
+ * @example
+ * ```ts
+ * import { metricsReport, type WaitSeconds } from "werkmeister-core/sdk";
+ *
+ * const waits: WaitSeconds = (await metricsReport({ range: "7d" })).waits;
+ * console.log(waits.person, waits.capacity, waits.pr, waits.gateRetry, waits.release);
+ * ```
+ */
 export type WaitSeconds = Record<WaitCause, number>;
 
-/** One open workspace on the flow board. */
+/**
+ * One open workspace on the flow board.
+ *
+ * @example
+ * ```ts
+ * import { type FlowCard, metricsReport } from "werkmeister-core/sdk";
+ *
+ * const { board } = await metricsReport();
+ * const red: FlowCard[] = board.flatMap((col) => col.cards.filter((c) => c.overP90));
+ * for (const c of red) console.log(c.workspace, c.ageMinutes, c.wait?.cause);
+ * ```
+ */
 export interface FlowCard {
   /** The workspace folder name. */
   workspace: string;
@@ -53,9 +106,9 @@ export interface FlowCard {
   ageMinutes: number | null;
   /** Older than its work type's column p90 (the pooled one when `p90Pooled`): the red card. */
   overP90: boolean;
-  /** The run's work type, `unknown` when nothing recorded it (SW-1212). */
+  /** The run's work type, `unknown` when nothing recorded it (`SW-1212`). */
   workType: string;
-  /** `overP90` read the pooled column p90: its type has fewer than {@link WORK_TYPE_MIN_RUNS} completed visits of the column in range. */
+  /** `overP90` read the pooled column p90: its type has fewer than `WORK_TYPE_MIN_RUNS` (5) completed visits of the column in range. */
   p90Pooled: boolean;
   /** The wait open now, or null when nothing is waited on. */
   wait: {
@@ -67,7 +120,17 @@ export interface FlowCard {
     minutes: number;
   } | null;
 }
-/** One flow-board column with its cards and its past age percentiles. */
+/**
+ * One flow-board column with its cards and its past age percentiles.
+ *
+ * @example
+ * ```ts
+ * import { type FlowColumnReport, metricsReport } from "werkmeister-core/sdk";
+ *
+ * const board: FlowColumnReport[] = (await metricsReport()).board;
+ * for (const col of board) console.log(col.column, col.wip, col.p90Minutes);
+ * ```
+ */
 export interface FlowColumnReport {
   /** Which column. */
   column: FlowColumn;
@@ -82,7 +145,17 @@ export interface FlowColumnReport {
   /** Its open cards, oldest first. */
   cards: FlowCard[];
 }
-/** Summed usage of some `usage.json` snapshots. */
+/**
+ * Summed usage of some `usage.json` snapshots.
+ *
+ * @example
+ * ```ts
+ * import { metricsReport, type UsageRollup } from "werkmeister-core/sdk";
+ *
+ * const usage: UsageRollup = (await metricsReport({ range: "30d" })).usage;
+ * console.log(usage.workspaces, usage.estUsd, usage.turns);
+ * ```
+ */
 export interface UsageRollup {
   /** How many snapshots. */
   workspaces: number;
@@ -102,10 +175,38 @@ export interface UsageRollup {
   turns: number;
 }
 
-/** Tokens and estimated cost per model. */
-export type ModelRollup = Record<string, { tokens: UsageTotals; estUsd: number | null }>;
+/**
+ * Tokens and estimated cost per model.
+ *
+ * @example
+ * ```ts
+ * import { metricsReport, type ModelRollup } from "werkmeister-core/sdk";
+ *
+ * const byModel: ModelRollup = (await metricsReport()).usage.byModel;
+ * for (const [model, m] of Object.entries(byModel)) console.log(model, m.tokens.output, m.estUsd);
+ * ```
+ */
+export type ModelRollup = Record<
+  string,
+  {
+    /** That model's summed tokens. */
+    tokens: UsageTotals;
+    /** Its summed estimated cost in USD, or null when no snapshot priced it. */
+    estUsd: number | null;
+  }
+>;
 
-/** Cycle and lead time of one ticket whose PR merged in the range. */
+/**
+ * Cycle and lead time of one ticket whose PR merged in the range.
+ *
+ * @example
+ * ```ts
+ * import { metricsReport, type TicketTimes } from "werkmeister-core/sdk";
+ *
+ * const tickets: TicketTimes[] = (await metricsReport({ range: "30d" })).tickets;
+ * for (const t of tickets) console.log(t.ticket, t.cycleMinutes, t.leadMinutes);
+ * ```
+ */
 export interface TicketTimes {
   /** The tracker key, or the workspace name when there is none. */
   ticket: string;
@@ -123,10 +224,20 @@ export interface TicketTimes {
   cycleMinutes: number;
   /** Minutes from the first turn to the release, or to the merge when the repo ships with no tag. */
   leadMinutes: number;
-  /** The run's work type, `unknown` when nothing recorded it (SW-1212). */
+  /** The run's work type, `unknown` when nothing recorded it (`SW-1212`). */
   workType: string;
 }
-/** Nearest-rank percentiles, null with no values. */
+/**
+ * Nearest-rank percentiles, null with no values.
+ *
+ * @example
+ * ```ts
+ * import { metricsReport, type Percentiles } from "werkmeister-core/sdk";
+ *
+ * const cycle: Percentiles = (await metricsReport()).cycle;
+ * console.log(cycle.p50Minutes, cycle.p90Minutes);
+ * ```
+ */
 export interface Percentiles {
   /** The median, in minutes. */
   p50Minutes: number | null;
@@ -135,18 +246,40 @@ export interface Percentiles {
 }
 /** Below this many values a work type's column p90 falls back to the pooled one, and its bar is drawn faded (SW-1212). */
 export const WORK_TYPE_MIN_RUNS = 5;
-/** One column's segment of a work type's "where the time goes" bar. */
+/**
+ * One column's segment of a work type's "where the time goes" bar.
+ *
+ * @example
+ * ```ts
+ * import { metricsReport, type WorkTypeColumn } from "werkmeister-core/sdk";
+ *
+ * const { byWorkType } = await metricsReport();
+ * const columns: WorkTypeColumn[] = byWorkType.feature?.columns ?? [];
+ * for (const c of columns) console.log(c.column, c.p50Minutes, c.count);
+ * ```
+ */
 export interface WorkTypeColumn extends Percentiles {
   /** Which column. */
   column: FlowColumn;
   /** Completed visits of the column in range. */
   count: number;
 }
-/** Every flow metric over one work type's runs alone (SW-1212). */
+/**
+ * Every flow metric over one work type's runs alone (`SW-1212`).
+ *
+ * @example
+ * ```ts
+ * import { metricsReport, type WorkTypeSlice } from "werkmeister-core/sdk";
+ *
+ * const { byWorkType } = await metricsReport();
+ * const slices: [string, WorkTypeSlice][] = Object.entries(byWorkType);
+ * for (const [type, s] of slices) console.log(type, s.runs, s.fewRuns, s.cycle.p50Minutes);
+ * ```
+ */
 export interface WorkTypeSlice {
   /** Runs of this type whose last PR merged in range: the bar's `n`. */
   runs: number;
-  /** `runs` below {@link WORK_TYPE_MIN_RUNS}: drawn faded with a "few runs" note. */
+  /** `runs` below `WORK_TYPE_MIN_RUNS` (5): drawn faded with a "few runs" note. */
   fewRuns: boolean;
   /** Percentiles of its tickets' cycle minutes. */
   cycle: Percentiles;
@@ -252,7 +385,18 @@ export interface MetricsReport {
   };
 }
 
-/** One event of a workspace's current run, for its Flow timeline. */
+/**
+ * One event of a workspace's current run, for its Flow timeline.
+ *
+ * @example
+ * ```ts
+ * import { metricsReport, type TimelineEvent } from "werkmeister-core/sdk";
+ *
+ * const { timeline } = await metricsReport({ workspace: "my-workspace" });
+ * const events: TimelineEvent[] = timeline ?? [];
+ * for (const e of events) console.log(e.at, e.event, e.stage ?? e.pr ?? "");
+ * ```
+ */
 export interface TimelineEvent {
   /** When it happened. */
   at: string;
@@ -1030,23 +1174,67 @@ async function flowInput(now: Date): Promise<FlowInput> {
   return { events: readMetricsEvents(), open, usages };
 }
 
-/** A `metrics-trends` bucket size. */
+/**
+ * A `metrics-trends` bucket size.
+ *
+ * @example
+ * ```ts
+ * import { metricsTrends, type TrendBucket } from "werkmeister-core/sdk";
+ *
+ * const bucket: TrendBucket = "week";
+ * console.log((await metricsTrends({ bucket })).rows.length);
+ * ```
+ */
 export type TrendBucket = "day" | "week";
 /** Every `TrendBucket`. */
 export const TREND_BUCKETS: readonly TrendBucket[] = ["day", "week"];
-/** Nearest-rank percentiles and how many values they came from. */
+/**
+ * Nearest-rank percentiles and how many values they came from.
+ *
+ * @example
+ * ```ts
+ * import { type CountedPercentiles, metricsTrends } from "werkmeister-core/sdk";
+ *
+ * const { suites } = await metricsTrends();
+ * const slowest: [string, CountedPercentiles][] = Object.entries(suites);
+ * for (const [pkg, p] of slowest) console.log(pkg, p.p90Minutes, p.count);
+ * ```
+ */
 export interface CountedPercentiles extends Percentiles {
   /** How many values. */
   count: number;
 }
-/** One package's test minutes in a bucket. */
+/**
+ * One package's test minutes in a bucket.
+ *
+ * @example
+ * ```ts
+ * import { metricsTrends, type SuiteTrend } from "werkmeister-core/sdk";
+ *
+ * const { rows } = await metricsTrends();
+ * const tests: Record<string, SuiteTrend> = rows.at(-1)?.tests ?? {};
+ * for (const [pkg, t] of Object.entries(tests)) console.log(pkg, t.p50Minutes, t.cached, t.failed);
+ * ```
+ */
 export interface SuiteTrend extends CountedPercentiles {
   /** Runs turbo replayed from its cache, left out of the percentiles. */
   cached: number;
   /** Runs whose tests failed. */
   failed: number;
 }
-/** One ICM stage's minutes in a bucket: percentiles over runs, and sums split by what it waited on. */
+/**
+ * One ICM stage's minutes in a bucket: percentiles over runs, and sums split by what it waited on.
+ *
+ * @example
+ * ```ts
+ * import { metricsTrends, type StageTrend } from "werkmeister-core/sdk";
+ *
+ * const { rows } = await metricsTrends();
+ * const stages: Record<string, StageTrend> = rows.at(-1)?.stages ?? {};
+ * for (const [stage, s] of Object.entries(stages))
+ *   console.log(stage, s.totalMinutes, s.personMinutes);
+ * ```
+ */
 export interface StageTrend extends CountedPercentiles {
   /** Summed wall minutes, the previous stage's end → this stage's end. */
   totalMinutes: number;
@@ -1058,10 +1246,21 @@ export interface StageTrend extends CountedPercentiles {
   workingMinutes: number;
   /** Summed tokens of the turns in the stage's window, over the runs whose `usage.json` has them. */
   tokens: UsageTotals;
-  /** How many runs had stage tokens (snapshots closed before SW-1100 have none). */
+  /** How many runs had stage tokens (snapshots closed before `SW-1100` have none). */
   tokenRuns: number;
 }
-/** Tokens and cost of the shipped tickets closed in a bucket, each ticket's snapshots summed. */
+/**
+ * Tokens and cost of the shipped tickets closed in a bucket, each ticket's snapshots summed.
+ *
+ * @example
+ * ```ts
+ * import { metricsTrends, type TicketCost } from "werkmeister-core/sdk";
+ *
+ * const { rows } = await metricsTrends();
+ * const cost: TicketCost | undefined = rows.at(-1)?.perTicket;
+ * if (cost) console.log(cost.tickets, cost.p50Usd, cost.p90Usd);
+ * ```
+ */
 export interface TicketCost {
   /** Shipped tickets. */
   tickets: number;
@@ -1076,7 +1275,18 @@ export interface TicketCost {
   /** Tickets with any workspace lacking a cost estimate, left out of the USD percentiles. */
   unpriced: number;
 }
-/** A shipped ticket's summed tokens and cost. */
+/**
+ * A shipped ticket's summed tokens and cost.
+ *
+ * @example
+ * ```ts
+ * import { type CostlyTicket, metricsTrends } from "werkmeister-core/sdk";
+ *
+ * const { rows } = await metricsTrends();
+ * const costliest: CostlyTicket[] = rows.flatMap((r) => r.costliest);
+ * for (const t of costliest) console.log(t.ticket, t.tokens, t.estUsd);
+ * ```
+ */
 export interface CostlyTicket {
   /** The tracker key, or the workspace name when there is none. */
   ticket: string;
@@ -1087,7 +1297,18 @@ export interface CostlyTicket {
   /** Summed estimated USD, or null when none is priced. */
   estUsd: number | null;
 }
-/** Tokens and cost of the abandoned snapshots closed in a bucket. */
+/**
+ * Tokens and cost of the abandoned snapshots closed in a bucket.
+ *
+ * @example
+ * ```ts
+ * import { type AbandonedSpend, metricsTrends } from "werkmeister-core/sdk";
+ *
+ * const { rows } = await metricsTrends();
+ * const spend: AbandonedSpend | undefined = rows.at(-1)?.abandonedSpend;
+ * if (spend) console.log(spend.workspaces, spend.estUsd, spend.costUnknown);
+ * ```
+ */
 export interface AbandonedSpend {
   /** Abandoned workspaces. */
   workspaces: number;
@@ -1098,7 +1319,18 @@ export interface AbandonedSpend {
   /** Abandoned workspaces with no cost estimate. */
   costUnknown: number;
 }
-/** A ticket whose lead time ends in a bucket. */
+/**
+ * A ticket whose lead time ends in a bucket.
+ *
+ * @example
+ * ```ts
+ * import { metricsTrends, type SlowTicket } from "werkmeister-core/sdk";
+ *
+ * const { rows } = await metricsTrends();
+ * const slowest: SlowTicket[] = rows.flatMap((r) => r.slowest);
+ * for (const t of slowest) console.log(t.ticket, t.leadToReleaseMinutes ?? t.leadToMergeMinutes);
+ * ```
+ */
 export interface SlowTicket {
   /** The tracker key, or the workspace name when there is none. */
   ticket: string;
@@ -1109,7 +1341,18 @@ export interface SlowTicket {
   /** First turn → last `release`, when that release is in the bucket. */
   leadToReleaseMinutes: number | null;
 }
-/** One bucket's numbers, for every version or for one. */
+/**
+ * One bucket's numbers, for every version or for one.
+ *
+ * @example
+ * ```ts
+ * import { metricsTrends, type TrendSlice } from "werkmeister-core/sdk";
+ *
+ * const { rows } = await metricsTrends();
+ * const byVersion: Record<string, TrendSlice> = rows.at(-1)?.byVersion ?? {};
+ * for (const [version, s] of Object.entries(byVersion)) console.log(version, s.shipped, s.estUsd);
+ * ```
+ */
 export interface TrendSlice {
   /** `usage.json` snapshots with outcome shipped, closed in the bucket. */
   shipped: number;
@@ -1171,7 +1414,17 @@ export interface TrendSlice {
   /** Test minutes per package: percentiles over uncached test-task runs, from `test.run` (else a `test <svc>` gate row). */
   tests: Record<string, SuiteTrend>;
 }
-/** One bucket of {@link MetricsTrends}. */
+/**
+ * One bucket of {@link MetricsTrends}.
+ *
+ * @example
+ * ```ts
+ * import { metricsTrends, type TrendRow } from "werkmeister-core/sdk";
+ *
+ * const rows: TrendRow[] = (await metricsTrends({ bucket: "day" })).rows;
+ * for (const r of rows) console.log(r.bucket, r.shipped, r.abandoned);
+ * ```
+ */
 export interface TrendRow extends TrendSlice {
   /** `week`: its Monday (UTC); `day`: the UTC date; `YYYY-MM-DD`. */
   bucket: string;

@@ -243,10 +243,27 @@ export interface SessionSource {
   updatedAt: string | null;
 }
 
+/**
+ * A session's state as the harness reads it: the turn this server runs, the agent's word,
+ * since when, and the question it waits on.
+ *
+ * @example
+ * ```ts
+ * import { type SessionSignal } from "werkmeister-core/sdk";
+ *
+ * const signal: SessionSignal = {
+ *   state: "idle",
+ *   agent: "needs-you",
+ *   at: "2026-11-27T09:00:00Z",
+ *   question: "Which port should the API use?",
+ * };
+ * if (signal.agent === "needs-you") console.log(signal.question);
+ * ```
+ */
 export interface SessionSignal {
   /** Most recent turn state this server tracked (idle = none / after restart). */
   state: "running" | "done" | "failed" | "idle";
-  /** Working, needs you (a question or permission prompt), done or idle (SW-46). */
+  /** Working, needs you (a question or permission prompt), done or idle (`SW-46`). */
   agent: AgentState;
   /** When `agent` began, or the transcript's mtime when it is inferred from the tail; null with no session. */
   at: string | null;
@@ -254,27 +271,76 @@ export interface SessionSignal {
   question: string | null;
 }
 
+/**
+ * Token counts, split the way the model bills them.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceUsage, type UsageTotals } from "werkmeister-core/sdk";
+ *
+ * const totals: UsageTotals = (await getWorkspaceUsage("my-workspace")).totals;
+ * console.log(totals.input + totals.output + totals.cacheCreation + totals.cacheRead);
+ * ```
+ */
 export interface UsageTotals {
+  /** Input tokens not read from or written to the cache. */
   input: number;
+  /** Output tokens. */
   output: number;
+  /** Input tokens written to the cache. */
   cacheCreation: number;
+  /** Input tokens read from the cache. */
   cacheRead: number;
 }
+/**
+ * One model's token totals and estimated cost.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceUsage, type ModelUsage } from "werkmeister-core/sdk";
+ *
+ * const { byModel } = await getWorkspaceUsage("my-workspace");
+ * const top: ModelUsage | undefined = byModel[0];
+ * if (top) console.log(top.model, top.totals.output, top.estUsd);
+ * ```
+ */
 export interface ModelUsage {
+  /** The model id. */
   model: string;
+  /** Its token totals. */
   totals: UsageTotals;
+  /** Estimated cost in USD; null when the model has no known price. */
   estUsd: number | null;
 }
+/**
+ * One session's token totals, models and estimated cost.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceUsage, type SessionUsage } from "werkmeister-core/sdk";
+ *
+ * const sessions: SessionUsage[] = (await getWorkspaceUsage("my-workspace")).sessions;
+ * for (const s of sessions) console.log(s.title, s.turns, s.estUsd);
+ * ```
+ */
 export interface SessionUsage {
+  /** The session id. */
   sessionId: string;
+  /** The session's title. */
   title: string;
+  /** When the session file was last written (ISO). */
   updatedAt: string;
+  /** When the first turn ran (ISO); null when unknown. */
   firstTurn: string | null;
+  /** When the last turn ran (ISO); null when unknown. */
   lastTurn: string | null;
   /** Assistant lines with usage: the lines the token totals count. */
   turns: number;
+  /** The models the session used. */
   models: string[];
+  /** Its token totals over every model. */
   totals: UsageTotals;
+  /** Estimated cost in USD over the models with a known price; null when none has one. */
   estUsd: number | null;
   /** Minutes between messages less than 5 min apart; null when the harness reads no timestamps. */
   activeMinutes: number | null;

@@ -17,6 +17,19 @@ import type { Lifecycle } from "./pr_lifecycle.js";
 import type { CrashLoop, Started } from "./resources.js";
 import type { IcmStage, RepoPr, ServiceHealth } from "./sandbox.js";
 
+/**
+ * Where a workspace is in its life, as {@link Phase} `id` holds it: still building, a PR open,
+ * merged, released, ready to close, closed or abandoned.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceStatuses, type PhaseId } from "werkmeister-core/sdk";
+ *
+ * const { statuses } = await getWorkspaceStatuses();
+ * const open: PhaseId = "pr-open";
+ * console.log(statuses.filter((s) => s.workspaceState.phase.id === open).map((s) => s.name));
+ * ```
+ */
 export type PhaseId =
   | "building"
   | "pr-open"
@@ -25,13 +38,38 @@ export type PhaseId =
   | "ready-to-close"
   | "closed"
   | "abandoned";
+/**
+ * A workspace's phase: its id, a label to show, and the current stage while it is building.
+ *
+ * @example
+ * ```ts
+ * import { type Phase } from "werkmeister-core/sdk";
+ *
+ * const phase: Phase = { id: "building", label: "Building", stage: "Stage 2 of 4 · spec" };
+ * console.log(phase.stage ?? phase.label);
+ * ```
+ */
 export interface Phase {
+  /** Which phase it is. */
   id: PhaseId;
+  /** The phase as a short label to show, e.g. `PR open`. */
   label: string;
   /** "Stage 2 of 4 · spec" or "JIT · test" while building; else null. */
   stage: string | null;
 }
 
+/**
+ * What a workspace's agent is doing right now, as {@link Activity} `id` holds it.
+ *
+ * @example
+ * ```ts
+ * import { type ActivityId, getWorkspaceStatuses } from "werkmeister-core/sdk";
+ *
+ * const busy: ActivityId[] = ["testing", "tool", "subagent", "thinking"];
+ * const { statuses } = await getWorkspaceStatuses();
+ * console.log(statuses.filter((s) => busy.includes(s.workspaceState.activity.id)).length);
+ * ```
+ */
 export type ActivityId =
   | "paused"
   | "queued"
@@ -42,13 +80,42 @@ export type ActivityId =
   | "thinking"
   | "gone"
   | "idle";
+/**
+ * A workspace's current activity, with a label, since when, and the session doing it.
+ *
+ * @example
+ * ```ts
+ * import { type Activity } from "werkmeister-core/sdk";
+ *
+ * const activity: Activity = { id: "tool", label: "Running Bash", since: null, session: null };
+ * console.log(activity.label);
+ * ```
+ */
 export interface Activity {
+  /** Which activity it is. */
   id: ActivityId;
+  /** The activity as a short label to show. */
   label: string;
+  /** When it started (ISO); null when unknown. */
   since: string | null;
+  /** The session id doing it; null when it isn't one session's. */
   session: string | null;
 }
 
+/**
+ * What kind of thing a {@link NeedItem} asks of a person: a question, a gate to approve,
+ * a failing check, a merge, a crash loop and so on.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceStatuses, type NeedKind } from "werkmeister-core/sdk";
+ *
+ * const asks: NeedKind[] = ["question", "permission", "plan", "gate"];
+ * const { statuses } = await getWorkspaceStatuses();
+ * for (const s of statuses)
+ *   for (const n of s.workspaceState.needs) if (asks.includes(n.kind)) console.log(s.name, n.what);
+ * ```
+ */
 export type NeedKind =
   | "question"
   | "permission"
@@ -63,41 +130,129 @@ export type NeedKind =
   | "crash-loop"
   | "session-died"
   | "notice";
+/**
+ * Where a {@link NeedItem} came from: a session, a stage gate, a PR, the workspace's
+ * lifecycle, its containers, a stored notice, or the transcript text.
+ *
+ * @example
+ * ```ts
+ * import { type NeedSource } from "werkmeister-core/sdk";
+ *
+ * const source: NeedSource = "pr";
+ * console.log(source);
+ * ```
+ */
 export type NeedSource = "session" | "gate" | "pr" | "lifecycle" | "containers" | "notice" | "text";
+/**
+ * One thing a workspace needs from a person, with what to do about it.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceStatuses, type NeedItem } from "werkmeister-core/sdk";
+ *
+ * const { statuses } = await getWorkspaceStatuses();
+ * const needs: NeedItem[] = statuses.flatMap((s) => s.workspaceState.needs);
+ * for (const n of needs) console.log(`${n.what}: ${n.action}`);
+ * ```
+ */
 export interface NeedItem {
   /** `<kind>:<session, file, repo or notice id>`: a UI key, and what a dismiss names. */
   id: string;
+  /** What kind of ask it is. */
   kind: NeedKind;
+  /** What is needed, in one line. */
   what: string;
+  /** When it started waiting (ISO); null when unknown. */
   since: string | null;
+  /** What the person should do about it. */
   action: string;
+  /** Where the item came from. */
   source: NeedSource;
+  /** The session that asked, when a session did. */
   session?: string;
+  /** The file waiting on the person, e.g. a stage output, relative to the workspace. */
   file?: string;
+  /** A link to act on, e.g. the PR. */
   url?: string;
   /** A stored notice's id, for `clearNotice`: set only on items the person can dismiss. */
   dismiss?: string;
 }
 
-/** The card's one word for the agent (`◌ Working`, `● Needs you`, `✓ Done`, `Idle`) and since when. */
+/**
+ * The card's one word for the agent (`◌ Working`, `● Needs you`, `✓ Done`, `Idle`) and since when.
+ *
+ * @example
+ * ```ts
+ * import { type AgentChip } from "werkmeister-core/sdk";
+ *
+ * const chip: AgentChip = { id: "needs-you", since: "2026-11-27T09:00:00Z" };
+ * console.log(chip.id, chip.since);
+ * ```
+ */
 export interface AgentChip {
+  /** The agent's word. */
   id: AgentState;
+  /** When it took that word (ISO); null when unknown. */
   since: string | null;
 }
 
+/**
+ * Why a workspace is {@link Stalled}: idle too long, waiting too long for capacity, a crash loop,
+ * or a session that died.
+ *
+ * @example
+ * ```ts
+ * import { type StalledReason } from "werkmeister-core/sdk";
+ *
+ * const reason: StalledReason = "crash-loop";
+ * console.log(reason);
+ * ```
+ */
 export type StalledReason = "idle" | "capacity-wait" | "crash-loop" | "session-died";
-/** Why a workspace stopped making progress without asking a person (SW-1007), and since when. */
+/**
+ * Why a workspace stopped making progress without asking a person (`SW-1007`), and since when.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceStatuses, type Stalled } from "werkmeister-core/sdk";
+ *
+ * const { statuses } = await getWorkspaceStatuses();
+ * for (const s of statuses) {
+ *   const stalled: Stalled | null = s.workspaceState.stalled;
+ *   if (stalled) console.log(`${s.name} stalled: ${stalled.reason}`);
+ * }
+ * ```
+ */
 export interface Stalled {
+  /** Why it stalled. */
   reason: StalledReason;
+  /** When it stalled (ISO); null when unknown. */
   since: string | null;
 }
 export const STALLED_DEFAULT_MS = 30 * 60_000;
 export { STALLED_TOOL_DEFAULT_MS };
 
+/**
+ * A workspace's state as every UI shows it: its phase, current activity, agent word,
+ * and the list of things it needs from a person.
+ *
+ * @example
+ * ```ts
+ * import { getWorkspaceStatuses, type WorkspaceState } from "werkmeister-core/sdk";
+ *
+ * const { statuses } = await getWorkspaceStatuses();
+ * const state: WorkspaceState | undefined = statuses[0]?.workspaceState;
+ * if (state) console.log(state.phase.label, state.activity.label, state.needs.length);
+ * ```
+ */
 export interface WorkspaceState {
+  /** Where the workspace is in its life. */
   phase: Phase;
+  /** What its agent is doing now. */
   activity: Activity;
+  /** What it needs from a person. */
   needs: NeedItem[];
+  /** The agent's one word and since when. */
   agent: AgentChip;
   /** Working with no session write past the idle limit, queued for capacity past the wait limit, a crash loop or a dead session; else null. A need for a person is not stalled. */
   stalled: Stalled | null;

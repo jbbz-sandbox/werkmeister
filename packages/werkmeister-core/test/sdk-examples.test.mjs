@@ -29,8 +29,8 @@ function examples() {
 
 test("every SDK example imports werkmeister-core/sdk and type-checks against the built SDK", async () => {
   const found = examples();
-  // 45 SDK exports, one example each at least: fewer means the extraction broke or one was dropped.
-  assert.ok(found.length >= 45, `found ${found.length} examples, expected at least 45`);
+  // 280 SDK examples, at least one per SDK export: fewer means the extraction broke or one was dropped.
+  assert.ok(found.length >= 280, `found ${found.length} examples, expected at least 280`);
   assert.deepEqual(
     found.filter(([, c]) => !c.includes('from "werkmeister-core/sdk"')).map(([l]) => l),
     [],

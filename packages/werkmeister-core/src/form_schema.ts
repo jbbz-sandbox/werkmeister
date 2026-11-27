@@ -65,15 +65,39 @@ export interface PromptSpecJson {
   prompts?: PromptEntry[];
 }
 
-/** One field's JSON Schema. */
+/**
+ * One field's JSON Schema.
+ *
+ * @example
+ * ```ts
+ * import { type FormBundle, getFormSchema, type SchemaProp } from "werkmeister-core/sdk";
+ *
+ * const form: FormBundle = await getFormSchema();
+ * const feature: SchemaProp | undefined = form.schema.properties.feature;
+ * console.log(feature?.title, feature?.pattern);
+ * ```
+ */
 export interface SchemaProp {
+  /** The field's label. */
   title?: string;
+  /** Help text shown under the field. */
   description?: string;
+  /** The JSON type, e.g. `string`, `boolean` or `array`. */
   type?: string;
+  /** The allowed values, for a choice. */
   enum?: string[];
-  items?: { type: string; enum?: string[] };
+  /** For an array, its items' schema. */
+  items?: {
+    /** The items' JSON type. */
+    type: string;
+    /** The allowed item values, for a multiple choice. */
+    enum?: string[];
+  };
+  /** An array may not hold the same value twice. */
   uniqueItems?: boolean;
+  /** A regular expression the value must match. */
   pattern?: string;
+  /** The shortest value allowed. */
   minLength?: number;
 }
 

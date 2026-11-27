@@ -22,17 +22,42 @@ export interface TrackerScope {
   repos?: string[];
 }
 
-/** A board inside the project's tracker: Jira board id, or GitHub Projects number under the scope's org. */
+/**
+ * A board inside the project's tracker: Jira board id, or GitHub Projects number under the scope's org.
+ *
+ * @example
+ * ```ts
+ * import { type Board, issueTracker } from "werkmeister-core/sdk";
+ *
+ * const board: Board = { id: "1", ready: "To Do" };
+ * for (const issue of await issueTracker().listReady(board)) console.log(issue.ref, issue.title);
+ * ```
+ */
 export interface Board {
+  /** The Jira board id, or the GitHub Projects number. */
   id: string;
   /** The column whose items are ready to start; board rank orders them. */
   ready: string;
 }
 
+/**
+ * One comment on an issue.
+ *
+ * @example
+ * ```ts
+ * import { type IssueComment, issueTracker } from "werkmeister-core/sdk";
+ *
+ * const issue = await issueTracker().fetchIssue("PROJ-42");
+ * const comments: IssueComment[] = issue?.comments ?? [];
+ * for (const c of comments) console.log(c.author, c.created ?? "", c.body);
+ * ```
+ */
 export interface IssueComment {
+  /** Who wrote it, as the tracker names them. */
   author: string;
   /** ISO date, when the tracker gives one. */
   created?: string;
+  /** The comment text. */
   body: string;
 }
 
@@ -73,7 +98,18 @@ export interface Issue {
   parent?: IssueParent;
 }
 
-/** An issue's parent, where a child's context often lives (an epic's linked review). */
+/**
+ * An issue's parent, where a child's context often lives (an epic's linked review).
+ *
+ * @example
+ * ```ts
+ * import { type IssueParent, issueTracker } from "werkmeister-core/sdk";
+ *
+ * const issue = await issueTracker().fetchIssue("PROJ-42");
+ * const parent: IssueParent | undefined = issue?.parent;
+ * if (parent) console.log(`part of ${parent.ref}: ${parent.title ?? ""}`);
+ * ```
+ */
 export interface IssueParent {
   /** The parent's ref, e.g. `PROJ-1`. */
   ref: string;
@@ -85,6 +121,17 @@ export interface IssueParent {
   description?: string;
 }
 
+/**
+ * A change to make to an issue: a new status, a comment, or both.
+ *
+ * @example
+ * ```ts
+ * import { type IssueUpdate, issueTracker } from "werkmeister-core/sdk";
+ *
+ * const update: IssueUpdate = { status: "In Review", comment: "PR opened." };
+ * await issueTracker().updateIssue("PROJ-42", update);
+ * ```
+ */
 export interface IssueUpdate {
   /** The status to move the issue to, by name. */
   status?: string;
@@ -92,22 +139,61 @@ export interface IssueUpdate {
   comment?: string;
 }
 
+/**
+ * The kind of issue to file: a bug, a feature or a task. Each tracker maps it to its own type.
+ *
+ * @example
+ * ```ts
+ * import { type IssueKind, issueTracker } from "werkmeister-core/sdk";
+ *
+ * const kind: IssueKind = "bug";
+ * console.log(issueTracker().issueTypes?.[kind] ?? kind);
+ * ```
+ */
 export type IssueKind = "bug" | "feature" | "task";
 
-/** An issue to file: `type` is the issues guide's type, mapped to the tracker's own. */
+/**
+ * An issue to file: `type` is the issues guide's type, mapped to the tracker's own.
+ *
+ * @example
+ * ```ts
+ * import { issueTracker, type NewIssue } from "werkmeister-core/sdk";
+ *
+ * const issue: NewIssue = { project: "PROJ", type: "bug", title: "Login fails", body: "Steps..." };
+ * const filed = await issueTracker().createIssue?.(issue);
+ * if (filed) console.log(filed.ref, filed.url);
+ * ```
+ */
 export interface NewIssue {
   /** Where to file it, in the tracker's terms (a Jira project key). */
   project: string;
+  /** What kind of issue it is. */
   type: IssueKind;
+  /** The summary line. */
   title: string;
+  /** The description. */
   body: string;
 }
 
-/** Whether this machine can read issues; `fix` is the one command or doc that repairs it. */
+/**
+ * Whether this machine can read issues; `fix` is the one command or doc that repairs it.
+ *
+ * @example
+ * ```ts
+ * import { issueTracker, type TrackerAuth } from "werkmeister-core/sdk";
+ *
+ * const auth: TrackerAuth = await issueTracker().checkAuth();
+ * console.log(auth.ok ? `signed in as ${auth.who}` : `${auth.reason}: run ${auth.fix}`);
+ * ```
+ */
 export interface TrackerAuth {
+  /** The tracker can be read from this machine. */
   ok: boolean;
+  /** Who is signed in, when `ok`. */
   who?: string;
+  /** Why it can't be read, when not `ok`. */
   reason?: string;
+  /** The command or doc that repairs it. */
   fix: string;
 }
 
