@@ -299,12 +299,13 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
     holds: (ref) => !key || ref.toUpperCase().startsWith(`${key}-`),
     url: jiraBrowseUrl,
 
-    async fetchIssue(ref, why) {
+    async fetchIssue(ref, why, opts) {
       const rest = await fetchIssueRest(ref, why);
       if (rest) {
         const issue = fromRest(rest);
-        // The `parent` field carries no description; one more GET, and a failure keeps key + summary.
-        const p = issue.parent && (await fetchIssueRest(issue.parent.ref))?.fields;
+        // The `parent` field carries no description; one more GET where it is shown (SW-1014), and a failure keeps key + summary.
+        const p =
+          opts?.withParent && issue.parent && (await fetchIssueRest(issue.parent.ref))?.fields;
         if (issue.parent && p) {
           issue.parent.title = str(p.summary) ?? issue.parent.title;
           if (p.description) issue.parent.description = wikiToMarkdown(String(p.description));

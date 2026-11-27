@@ -400,7 +400,7 @@ async function buildRefineContext(formData?: Record<string, unknown>): Promise<s
     // "fetched-but-empty"); only fetch on a cold miss. Persisted across
     // processes so form-open and later refine clicks share it.
     const briefing = await withCache(`briefing:${ref}`, BRIEFING_TTL_MS, async () => {
-      const issue = await tracker.fetchIssue(ref);
+      const issue = await tracker.fetchIssue(ref, undefined, { withParent: true });
       return issue ? issueBriefing(issue) : null;
     });
     if (briefing) {
@@ -638,7 +638,7 @@ export async function buildIssueFormRequest(text: string): Promise<{
   if (!ref) return { base: {}, prompt: null };
   const base: Record<string, unknown> = { issue_id: ref };
 
-  const issue = await tracker.fetchIssue(ref);
+  const issue = await tracker.fetchIssue(ref, undefined, { withParent: true });
   if (!issue) return { base, prompt: null };
   // Cache the briefing up front so refine reuses it even if the distillation
   // fails, and pre-fill `task` from the title as a floor.

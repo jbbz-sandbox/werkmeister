@@ -231,8 +231,11 @@ export interface IssueTrackerStrategy {
   holds(ref: string): boolean;
   /** The issue's web page, or null when it cannot be built from config. */
   url(ref: string): string | null;
-  /** One issue with its description and comments. Null when it cannot be read, with the reasons pushed onto `why`. Never throws. */
-  fetchIssue(ref: string, why?: string[]): Promise<Issue | null>;
+  /**
+   * One issue with its description and comments. Null when it cannot be read, with the reasons pushed onto `why`. Never throws.
+   * `withParent` also reads the parent's description (one more request): only where the parent is shown.
+   */
+  fetchIssue(ref: string, why?: string[], opts?: { withParent?: boolean }): Promise<Issue | null>;
   /** Many issues at once (title, status, url at least). Refs it cannot read are left out; never throws. */
   fetchIssues(refs: string[]): Promise<Record<string, Issue>>;
   /**

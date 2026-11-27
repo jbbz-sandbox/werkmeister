@@ -80,7 +80,7 @@ export async function fetchIssueSnapshot(
   now: () => Date = () => new Date(),
   tracker: IssueTrackerStrategy = issueTracker({ text: ref }),
 ): Promise<IssueSnapshot> {
-  const issue = await tracker.fetchIssue(ref);
+  const issue = await tracker.fetchIssue(ref, undefined, { withParent: true });
   if (!issue) throw new IssueFetchError(`couldn't read ${ref} from ${tracker.label}`);
   return {
     ref: issue.ref,
