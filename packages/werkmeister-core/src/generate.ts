@@ -647,10 +647,19 @@ export function repoScopedNodeModules(
  * Caches share one on purpose (`tools`, `node-modules`), but a sidecar's is its data dir, and two
  * servers on one data dir corrupt it: so a sidecar's named volume may not be mounted by anything else,
  * unless the sidecar only reads it (`:ro`).
+ *
+ * SW-1233: a sidecar is also a `services:` key and a container_name, so its name may be neither another
+ * service's sidecar nor a rendered service or setup service.
  */
 function refuseSharedSidecarVolumes(services: ServiceEntry[], setups: ServicesConfig): void {
   const mounters = new Map<string, Set<string>>();
   const sidecarOf = new Map<string, string>();
+  const rendered = new Map<string, string>();
+  for (const svc of services) {
+    rendered.set(String(svc["name"]), "service");
+    if (typeof svc["setup_service"] === "string")
+      rendered.set(svc["setup_service"], "setup service");
+  }
   const add = (
     container: string,
     def: { extra_volumes?: unknown; node_modules_volume?: unknown },
@@ -671,7 +680,18 @@ function refuseSharedSidecarVolumes(services: ServiceEntry[], setups: ServicesCo
     const setup = svc["setup_service"];
     if (typeof setup === "string" && isDict(setups[setup])) add(setup, setups[setup]);
     for (const [name, extra] of Object.entries(svc["extra_services"] ?? {})) {
-      sidecarOf.set(name, String(svc["name"]));
+      const of = String(svc["name"]);
+      if (rendered.has(name))
+        throw new Error(
+          `Sidecar ${quoted(name)} of ${of} has the name of ${rendered.get(name)} ${name}: each sidecar ` +
+            "is its own compose service and container. Rename the sidecar in services.yaml.",
+        );
+      if (sidecarOf.has(name))
+        throw new Error(
+          `Sidecar ${quoted(name)} is declared by ${sidecarOf.get(name)} and ${of}: each sidecar is ` +
+            "its own compose service and container. Give each service's sidecar its own name in services.yaml.",
+        );
+      sidecarOf.set(name, of);
       if (isDict(extra)) add(name, extra, true);
     }
   }
