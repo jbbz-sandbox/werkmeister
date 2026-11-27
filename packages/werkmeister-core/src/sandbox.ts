@@ -650,10 +650,15 @@ export async function buildIssueFormRequest(text: string): Promise<{
 }
 
 /** The distillation prompt for one fetched issue's briefing. */
-async function issueExtractPrompt(label: string, ref: string, briefing: string): Promise<string> {
+async function issueExtractPrompt(
+  label: string,
+  ref: string,
+  briefing: string,
+  group: string[] = [],
+): Promise<string> {
   const registry = await readServicesRegistry();
   const serviceNames = registry ? parseServiceNames(registry) : [];
-  return buildIssueExtractPrompt(label, ref, registry, serviceNames, briefing);
+  return buildIssueExtractPrompt(label, ref, registry, serviceNames, briefing, group);
 }
 
 // The second half of fetchIssueFormData.
@@ -744,6 +749,7 @@ function buildIssueExtractPrompt(
   registry: string | null,
   serviceNames: string[],
   issueText: string,
+  group: string[] = [],
 ): string {
   const backgroundContext = registry
     ? "Background context — the werkmeister service registry " +
@@ -777,6 +783,14 @@ function buildIssueExtractPrompt(
     "agent, reflecting the latest direction in the comments. " +
     STARTING_PROMPT_FORMAT +
     "\n" +
+    // SW-1060: a grouped PR covers every member, so none is out of scope.
+    (group.length
+      ? `This issue leads one grouped PR for ${[ref, ...group].join(", ")} (one commit per ticket); each ` +
+        "grouped ticket follows the lead's, marked 'Grouped ticket <KEY>'. In the Goal, name the grouped " +
+        "PR in one line. Under Acceptance criteria, give a `### <KEY>` subsection per ticket, the lead " +
+        "first, each from that ticket. Never list a grouped ticket as a non-goal ('not in the lead's " +
+        "commit' is fine).\n"
+      : "") +
     servicesLine +
     "Write no prose outside the tags.\n" +
     "If the content is unusable, output <result>{}</result> and nothing else.\n" +
@@ -1286,19 +1300,31 @@ const DISTILLED = ["feature", "task", "description", "starting_prompt", "service
 export async function distillIssue(
   issue: IssueSnapshot,
   distill: Distiller = (p) => harness().ask(p),
+  members: IssueSnapshot[] = [],
 ): Promise<{ fields: Record<string, string>; warning: string | null }> {
-  const briefing = issueBriefing({
-    ref: issue.ref,
-    title: issue.title,
-    status: issue.status,
-    description: issue.body,
-    url: issue.url ?? undefined,
-    comments: issue.comments,
-  });
+  const brief = (i: IssueSnapshot) =>
+    issueBriefing({
+      ref: i.ref,
+      title: i.title,
+      status: i.status,
+      description: i.body,
+      url: i.url ?? undefined,
+      comments: i.comments,
+    });
+  // SW-1060: each grouped member after the lead, so the brief covers the whole PR.
+  const briefing = [
+    brief(issue),
+    ...members.map((m) => `Grouped ticket ${m.ref}\n${brief(m)}`),
+  ].join("\n\n---\n");
   let answer: string | null = null;
   try {
     answer = await distill(
-      await issueExtractPrompt(trackerById(issue.tracker).label, issue.ref, briefing),
+      await issueExtractPrompt(
+        trackerById(issue.tracker).label,
+        issue.ref,
+        briefing,
+        members.map((m) => m.ref),
+      ),
     );
   } catch (e) {
     return { fields: {}, warning: (e as Error).message };
@@ -1350,6 +1376,50 @@ function servicesNamedIn(text: string, repos: string[]): string[] {
     .sort();
 }
 
+/** A ticket body's acceptance items as `- [ ]` lines: the list under its "Acceptance criteria" / "Done when" heading. */
+function criteriaOf(body: string): string[] {
+  const lines = body.split("\n");
+  const start = lines.findIndex((l) => /acceptance criteria|done when|^\W*accept\b/i.test(l));
+  if (start < 0) return [];
+  const out: string[] = [];
+  for (const l of lines.slice(start + 1)) {
+    if (/^\s*(#{1,6}\s|h[1-6]\.\s)/.test(l)) break;
+    const item = /^\s*(?:[-*+]|\d+\.)\s+(?:\[[ xX]\]\s*)?(.+)$/.exec(l)?.[1];
+    if (item) out.push(`- [ ] ${item.trim()}`);
+  }
+  return out;
+}
+
+/**
+ * SW-1060: *prompt* with a `### <KEY> <title>` criteria subsection for each grouped member it lacks,
+ * from that member's ticket, and without a non-goal line that names a member (the PR covers them all).
+ */
+function withGroupCriteria(prompt: string, lead: string, members: IssueSnapshot[]): string {
+  const keys = members.map((m) => m.ref);
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const names = new RegExp(`(?<![\\w-])(${keys.map(esc).join("|")})(?![\\w-])`);
+  const kept = prompt
+    .split("\n")
+    .filter((l) => !(/non-goal|out[- ]of[- ]scope/i.test(l) && names.test(l)))
+    .join("\n");
+  const missing = members.filter((m) => !kept.includes(`### ${m.ref}`));
+  if (!missing.length) return kept;
+  const sections = missing.map((m) => {
+    const items = criteriaOf(m.body);
+    return [
+      `### ${m.ref} ${m.title}`.trimEnd(),
+      ...(items.length
+        ? items
+        : [`- [ ] Done as ${m.ref} asks (its ticket lists no criteria; read it).`]),
+    ].join("\n");
+  });
+  return (
+    `${kept.trim() ? `${kept.trimEnd()}\n\n` : ""}## Acceptance criteria: grouped tickets\n\n` +
+    `One PR for ${lead} and ${keys.join(", ")}, one commit per ticket. Each member's criteria, from its ticket:\n\n` +
+    `${sections.join("\n\n")}\n`
+  );
+}
+
 /** Resolve inputs, fetch the issue (failing the create), then fill an empty task, services, description and starting_prompt from it. */
 export async function prepareCreate(
   formData: Record<string, unknown>,
@@ -1395,10 +1465,23 @@ export async function prepareCreate(
     rawServices !== null &&
     rawServices !== undefined &&
     (Array.isArray(rawServices) ? rawServices : [rawServices]).every((v) => !String(v).trim());
+  // SW-1060: a grouped workspace's brief covers each member; one that can't be read is named, not fatal.
+  const members: IssueSnapshot[] = [];
+  for (const key of (resolved.group ?? "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean)) {
+    try {
+      members.push(await fetchIssueSnapshot(key, undefined, tracker));
+    } catch (e) {
+      warn(`Grouped ticket ${key} not read, so the brief leaves it out: ${(e as Error).message}`);
+    }
+  }
   if (opts.distill !== false && (!resolved.description || !resolved.starting_prompt)) {
     const { fields, warning } = await distillIssue(
       issue,
       opts.distill ?? ((p) => harness().ask(p)),
+      members,
     );
     // Only the prose, never a model-picked feature or services list; the services step below may
     // still match names in this starting prompt when the issue text names none (SW-707).
@@ -1406,6 +1489,9 @@ export async function prepareCreate(
       if (!resolved[k] && fields[k]) resolved[k] = fields[k];
     if (warning) warn(`description/starting_prompt not filled from the issue: ${warning}`);
   }
+  // Also with no distill: the members must reach BRIEF.md even when no model wrote a prompt.
+  if (members.length)
+    resolved.starting_prompt = withGroupCriteria(resolved.starting_prompt ?? "", ref, members);
 
   if (!resolved.services && resolved.repos && !blankOnPurpose) {
     const repos = resolved.repos.split(",");
