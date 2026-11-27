@@ -194,7 +194,9 @@ string in `result` and is parsed from there.
    the binary lands in `~/.opencode/bin/opencode`). The opencode.ai/install script installs 1.x,
    and `brew install opencode` builds from source where no bottle exists. Then log in to a model
    provider once with `opencode auth login`, run in a real terminal: it is an interactive picker and
-   saves nothing when run without a TTY (an agent's shell, a `!` prompt).
+   saves nothing when run without a TTY (an agent's shell, a `!` prompt). Then check the login
+   with one turn: `opencode run --standalone --model <provider/model> "say ok"`. `opencode auth list`
+   can show a provider as stored while every turn fails with 401.
 2. Create the workspace for it: `werkmeister workspace new my-feature --harness opencode …`
    (or `harness: opencode` in `workspace.yml`, or `WERKMEISTER_HARNESS=opencode`). `workspace init`
    writes `AGENTS.md`, `.agents/skills/`, the plugin `.opencode/plugins/werkmeister.js` and the
