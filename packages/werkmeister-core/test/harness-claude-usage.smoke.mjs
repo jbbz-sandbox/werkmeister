@@ -80,6 +80,16 @@ assert.deepStrictEqual(reduceSession(gappy).activeSpans, [
 // A line with no timestamp leaves the spans alone.
 assert.deepStrictEqual(reduceSession(text).activeSpans, []);
 
+// SW-1100: each counted turn with a timestamp keeps its time and tokens; lines without one don't.
+const timed = JSON.stringify({
+  type: "assistant",
+  timestamp: "2026-11-01T10:00:00.000Z",
+  message: { model: "claude-opus-5-5", usage: { input_tokens: 3, output_tokens: 4 } },
+});
+assert.deepStrictEqual(reduceSession(`${text}${timed}\n`).turnTokens, [
+  [Date.parse("2026-11-01T10:00:00.000Z"), { input: 3, output: 4, cacheCreation: 0, cacheRead: 0 }],
+]);
+
 // --- getWorkspaceUsage end-to-end over a fabricated workspace + pricing file ---
 import fs from "node:fs";
 import os from "node:os";

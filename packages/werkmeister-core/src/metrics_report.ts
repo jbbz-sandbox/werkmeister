@@ -260,7 +260,12 @@ export type UsageRow = Pick<
   | "wallClockMinutes"
   | "turns"
 > &
-  Partial<Pick<UsageSnapshot, "outcome" | "stages" | "byModel" | "werkmeister" | "sessions">> & {
+  Partial<
+    Pick<
+      UsageSnapshot,
+      "outcome" | "stages" | "byModel" | "werkmeister" | "sessions" | "unstagedTokens"
+    >
+  > & {
     /** The record branch's git author email, from the `metrics rebuild` cache (SW-1104). */
     by?: string;
   };
@@ -901,6 +906,47 @@ export interface StageTrend extends CountedPercentiles {
   capacityMinutes: number;
   /** Summed minutes of each run's stage with no wait of any cause (a person and a capacity wait at once count once). */
   workingMinutes: number;
+  /** Summed tokens of the turns in the stage's window, over the runs whose `usage.json` has them. */
+  tokens: UsageTotals;
+  /** How many runs had stage tokens (snapshots closed before SW-1100 have none). */
+  tokenRuns: number;
+}
+/** Tokens and cost of the shipped tickets closed in a bucket, each ticket's snapshots summed. */
+export interface TicketCost {
+  /** Shipped tickets. */
+  tickets: number;
+  /** Nearest-rank p50 of each ticket's tokens (all four kinds), or null with none. */
+  p50Tokens: number | null;
+  /** Nearest-rank p90 of each ticket's tokens. */
+  p90Tokens: number | null;
+  /** p50 of each priced ticket's estimated USD, or null with none priced. */
+  p50Usd: number | null;
+  /** p90 of each priced ticket's estimated USD. */
+  p90Usd: number | null;
+  /** Tickets with any workspace lacking a cost estimate, left out of the USD percentiles. */
+  unpriced: number;
+}
+/** A shipped ticket's summed tokens and cost. */
+export interface CostlyTicket {
+  /** The tracker key, or the workspace name when there is none. */
+  ticket: string;
+  /** Its workspaces closed in the bucket. */
+  workspaces: string[];
+  /** Summed tokens, all four kinds. */
+  tokens: number;
+  /** Summed estimated USD, or null when none is priced. */
+  estUsd: number | null;
+}
+/** Tokens and cost of the abandoned snapshots closed in a bucket. */
+export interface AbandonedSpend {
+  /** Abandoned workspaces. */
+  workspaces: number;
+  /** Their summed tokens. */
+  tokens: UsageTotals;
+  /** Their summed estimated USD, or null when none is priced. */
+  estUsd: number | null;
+  /** Abandoned workspaces with no cost estimate. */
+  costUnknown: number;
 }
 /** A ticket whose lead time ends in a bucket. */
 export interface SlowTicket {
@@ -945,6 +991,14 @@ export interface TrendSlice {
   >;
   /** Cache reads ÷ (input + cache creation + cache reads), or null with no input tokens. */
   cacheReadShare: number | null;
+  /** Summed tokens of the turns after each snapshot's last finished stage. */
+  unstagedTokens: UsageTotals;
+  /** Per shipped ticket: tokens and cost percentiles. */
+  perTicket: TicketCost;
+  /** Up to 5 shipped tickets, highest cost (then tokens) first. */
+  costliest: CostlyTicket[];
+  /** Spend on abandoned workspaces. */
+  abandonedSpend: AbandonedSpend;
   /** Summed active minutes. */
   activeMinutes: number;
   /** Summed wall-clock minutes. */
@@ -1011,6 +1065,7 @@ type TrendItem = { at: string; version: string } & (
       person: number;
       capacity: number;
       working: number;
+      tokens: UsageTotals | null;
     }
   | {
       kind: "leadToMerge" | "leadToRelease";
@@ -1035,6 +1090,54 @@ const counted = (values: number[]): CountedPercentiles => ({
 
 const slowLead = (t: SlowTicket) => t.leadToReleaseMinutes ?? t.leadToMergeMinutes ?? 0;
 const sortSlowest = (ts: SlowTicket[]) => ts.sort((a, b) => slowLead(b) - slowLead(a)).slice(0, 5);
+// Optional: a hand-written or older usage.json can lack totals, as addTokens allows.
+const tokenSum = (t: UsageTotals | undefined) =>
+  t ? t.input + t.output + t.cacheCreation + t.cacheRead : 0;
+
+/** *rows*' shipped snapshots summed per ticket (workspace name when none). */
+function shippedTickets(rows: UsageRow[]): { tickets: CostlyTicket[]; partial: Set<string> } {
+  const byTicket = new Map<string, CostlyTicket>();
+  // A ticket with any unpriced workspace counts as unpriced, so a partial cost never reads as the whole (SW-1100 Q3).
+  const partial = new Set<string>();
+  for (const u of rows) {
+    if (u.outcome !== "shipped") continue;
+    const key = u.ticket ?? u.workspace;
+    const t = byTicket.get(key) ?? { ticket: key, workspaces: [], tokens: 0, estUsd: null };
+    t.workspaces.push(u.workspace);
+    t.tokens += tokenSum(u.totals);
+    if (u.estUsd != null) t.estUsd = (t.estUsd ?? 0) + u.estUsd;
+    else partial.add(key);
+    byTicket.set(key, t);
+  }
+  return { tickets: [...byTicket.values()], partial };
+}
+
+function ticketCost({ tickets, partial }: ReturnType<typeof shippedTickets>): TicketCost {
+  const tokens = tickets.map((t) => t.tokens);
+  const usd = tickets.flatMap((t) => (t.estUsd == null || partial.has(t.ticket) ? [] : [t.estUsd]));
+  return {
+    tickets: tickets.length,
+    p50Tokens: percentile(tokens, 0.5),
+    p90Tokens: percentile(tokens, 0.9),
+    p50Usd: percentile(usd, 0.5),
+    p90Usd: percentile(usd, 0.9),
+    unpriced: tickets.length - usd.length,
+  };
+}
+
+const sortCostliest = (ts: CostlyTicket[]) =>
+  [...ts].sort((a, b) => (b.estUsd ?? 0) - (a.estUsd ?? 0) || b.tokens - a.tokens).slice(0, 5);
+
+function stageTokenSum(runs: Extract<TrendItem, { kind: "stage" }>[]) {
+  const tokens = zeroTokens();
+  let tokenRuns = 0;
+  for (const r of runs)
+    if (r.tokens) {
+      addTokens(tokens, r.tokens);
+      tokenRuns++;
+    }
+  return { tokens, tokenRuns };
+}
 
 function trendSlice(items: TrendItem[]): TrendSlice {
   const closed = items.flatMap((i) => (i.kind === "closed" ? [i.usage] : []));
@@ -1062,6 +1165,10 @@ function trendSlice(items: TrendItem[]): TrendSlice {
   const firstGates = items.flatMap((i) => (i.kind === "firstGate" ? [i.passed] : []));
   const passed = firstGates.filter(Boolean).length;
   const gateMinutes = minutesOf("gate");
+  const tickets = shippedTickets(closed);
+  const abandoned = usageRollup(closed.filter((u) => u.outcome === "abandoned"));
+  const unstagedTokens = zeroTokens();
+  for (const u of closed) addTokens(unstagedTokens, u.unstagedTokens);
   return {
     shipped: closed.filter((u) => u.outcome === "shipped").length,
     abandoned: closed.filter((u) => u.outcome === "abandoned").length,
@@ -1074,6 +1181,7 @@ function trendSlice(items: TrendItem[]): TrendSlice {
           personMinutes: sumOf(runs.map((r) => r.person)),
           capacityMinutes: sumOf(runs.map((r) => r.capacity)),
           workingMinutes: sumOf(runs.map((r) => r.working)),
+          ...stageTokenSum(runs),
         },
       ]),
     ),
@@ -1085,6 +1193,15 @@ function trendSlice(items: TrendItem[]): TrendSlice {
     costUnknown,
     byModel: modelRollup(closed),
     cacheReadShare,
+    unstagedTokens,
+    perTicket: ticketCost(tickets),
+    costliest: sortCostliest(tickets.tickets),
+    abandonedSpend: {
+      workspaces: abandoned.workspaces,
+      tokens: abandoned.tokens,
+      estUsd: abandoned.estUsd,
+      costUnknown: abandoned.costUnknown,
+    },
     activeMinutes,
     wallClockMinutes,
     gate: {
@@ -1216,6 +1333,7 @@ export function trendSeries(
         person: waited.person,
         capacity: waited.capacity,
         working: Math.max(0, s.minutes - waited.any),
+        tokens: s.tokens ?? null,
       });
     }
   }
@@ -1347,7 +1465,8 @@ export function trendSeries(
 /**
  * Daily or weekly series over *range* (default `30d`, bucket `week`): shipped and abandoned
  * workspaces, ICM stage minutes p50/p90, lead time from the first turn to merge and to release,
- * tokens and cost by model, cache-read share, active and wall minutes, gate runs, minutes (also by
+ * tokens and cost by model, cache-read share, tokens per ICM stage and after the last stage, tokens
+ * and cost per shipped ticket (p50, p90) with the five costliest, abandoned spend, active and wall minutes, gate runs, minutes (also by
  * row kind) and first-pass rate, and test minutes per package, each row also split by werkmeister
  * version; `suites` holds the per-package test minutes over the whole range. Reads what {@link metricsReport}
  * reads; never fetches.

@@ -12,7 +12,7 @@ import {
   type ModelUsage,
   type SessionUsage,
   type UsageTotals,
-  usageForDir,
+  usageAndTurnsForDir,
   type WorkspaceUsage,
   // biome-ignore lint/suspicious/noImportCycles: pr_lifecycle↔sandbox.ts↔usage_snapshot; SW-411
 } from "./sandbox.js";
@@ -23,6 +23,8 @@ export interface StageTiming {
   stage: string;
   finishedAt: string | null;
   minutes: number | null;
+  /** Tokens of the turns in the stage's window; null for a stage never reached. Absent before SW-1100. */
+  tokens?: UsageTotals | null;
 }
 
 export interface UsageSnapshot {
@@ -44,6 +46,8 @@ export interface UsageSnapshot {
   byModel: ModelUsage[];
   sessions: SessionUsage[];
   stages: StageTiming[];
+  /** Tokens of the turns after the last finished stage (PR, post-mortem): stages' tokens plus these are `totals`. */
+  unstagedTokens?: UsageTotals;
   note?: string;
 }
 
@@ -117,6 +121,30 @@ export function stageTimings(ws: string, firstTurn: string | null): StageTiming[
   });
 }
 
+const zeroTotals = (): UsageTotals => ({ input: 0, output: 0, cacheCreation: 0, cacheRead: 0 });
+
+/**
+ * Split *turns* (`[ms, tokens]`) over *stages* (from {@link stageTimings}): each turn counts in the
+ * first reached stage ending at or after it; turns after the last end are `unstaged`. Ends never run
+ * back, as in `stageTimings`, so a stage committed before the one ahead of it gets zero.
+ */
+export function stageTokens(
+  stages: StageTiming[],
+  turns: Array<[number, UsageTotals]>,
+): { stages: StageTiming[]; unstaged: UsageTotals } {
+  let end = -Infinity;
+  const windows = stages.map((s) => {
+    if (s.finishedAt) end = Math.max(end, Date.parse(s.finishedAt));
+    return { stage: { ...s, tokens: s.finishedAt ? zeroTotals() : null }, end };
+  });
+  const unstaged = zeroTotals();
+  for (const [at, t] of turns) {
+    const into = windows.find((w) => w.stage.tokens && at <= w.end)?.stage.tokens ?? unstaged;
+    for (const k of Object.keys(into) as (keyof UsageTotals)[]) into[k] += t[k];
+  }
+  return { stages: windows.map((w) => w.stage), unstaged };
+}
+
 async function werkmeisterBuild(): Promise<{ version: string | null; commit: string | null }> {
   let root: string;
   try {
@@ -143,14 +171,15 @@ export async function buildUsageSnapshot(
   closedAt = new Date().toISOString(),
 ): Promise<UsageSnapshot> {
   let usage: WorkspaceUsage;
+  let turns: Array<[number, UsageTotals]> = [];
   let note: string | undefined;
   try {
-    usage = await usageForDir(name, ws);
+    ({ usage, turns } = await usageAndTurnsForDir(name, ws));
   } catch (e) {
     // Close-out must not fail over a report.
     usage = {
       name,
-      totals: { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 },
+      totals: zeroTotals(),
       estUsd: null,
       activeMinutes: null,
       byModel: [],
@@ -166,6 +195,7 @@ export async function buildUsageSnapshot(
       .sort()[0] ?? null;
   // Catches stage commits no hook saw (made by hand, or with hooks off) before stage times are read.
   recordStageDone(ws);
+  const split = stageTokens(stageTimings(ws, firstTurn), turns);
   const model =
     typeof cfg["model"] === "string" && cfg["model"].trim() ? cfg["model"].trim() : null;
   return {
@@ -186,7 +216,8 @@ export async function buildUsageSnapshot(
     estUsd: usage.estUsd,
     byModel: usage.byModel,
     sessions: usage.sessions,
-    stages: stageTimings(ws, firstTurn),
+    stages: split.stages,
+    unstagedTokens: split.unstaged,
     ...(note ? { note } : {}),
   };
 }
@@ -244,10 +275,15 @@ export function renderUsageMd(s: UsageSnapshot): string {
     "",
     "## Stages (from each stage's stage.done event, else its first output commit)",
     "",
-    ...table(
-      "| stage | finished | minutes |\n|---|---|---|",
-      s.stages.map((t) => `| ${t.stage} | ${t.finishedAt ?? "not reached"} | ${cell(t.minutes)} |`),
-    ),
+    ...table("| stage | finished | minutes | tokens |\n|---|---|---|---|", [
+      ...s.stages.map(
+        (t) =>
+          `| ${t.stage} | ${t.finishedAt ?? "not reached"} | ${cell(t.minutes)} | ${t.tokens ? formatTokens(tokensOf(t.tokens)) : "—"} |`,
+      ),
+      ...(s.unstagedTokens
+        ? [`| after stages | — | — | ${formatTokens(tokensOf(s.unstagedTokens))} |`]
+        : []),
+    ]),
     "",
   ].join("\n");
 }

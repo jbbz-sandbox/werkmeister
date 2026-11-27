@@ -311,6 +311,11 @@ test("the daemon tools are listed, and clean/cache prune default to a dry run", 
     "leadToRelease",
     "gate",
     "tests",
+    // SW-1100: tokens after the stages, per-ticket cost, the costliest tickets, abandoned spend.
+    "unstagedTokens",
+    "perTicket",
+    "costliest",
+    "abandonedSpend",
   ])
     assert.ok(row?.properties?.[k], `rows[] has ${k}`);
   assert.equal(row?.properties?.byVersion?.type, "object");

@@ -137,6 +137,8 @@ test("stage and lead-time percentiles by the bucket each one ended in", () => {
     personMinutes: 0,
     capacityMinutes: 0,
     workingMinutes: total,
+    tokens: tok(0, 0, 0, 0),
+    tokenRuns: 0,
   });
   assert.deepEqual(w1.stages, {
     "01_research": { p50Minutes: 120, p90Minutes: 240, count: 2, ...noWait(360) },
@@ -257,6 +259,87 @@ test("tokens and cost in total and per model, cache-read share and minutes by cl
   assert.deepEqual(w3.tokens, tok(20, 1, 0, 0));
 });
 
+test("SW-1100: stage tokens, tokens after the stages, per-ticket cost, the costliest tickets and abandoned spend", () => {
+  const run = (workspace, ticket, outcome, totals, estUsd, more = {}) =>
+    usage(workspace, "1.4.0", outcome, "2026-11-16T08:00:00Z", "2026-11-18T12:00:00Z", {
+      ticket,
+      totals,
+      estUsd,
+      byModel: [],
+      activeMinutes: 1,
+      wallClockMinutes: 1,
+      stages: [],
+      ...more,
+    });
+  const usages = [
+    run("a-1", "SW-1", "shipped", tok(10, 0, 0, 0), 1, {
+      stages: [
+        {
+          stage: "01_research",
+          finishedAt: "2026-11-16T10:00:00Z",
+          minutes: 120,
+          tokens: tok(4, 0, 0, 0),
+        },
+        {
+          stage: "02_spec",
+          finishedAt: "2026-11-16T11:00:00Z",
+          minutes: 60,
+          tokens: tok(5, 0, 0, 0),
+        },
+      ],
+      unstagedTokens: tok(1, 0, 0, 0),
+    }),
+    // A second workspace of SW-1 sums into its ticket; a stage from before SW-1100 has no tokens.
+    run("a-2", "SW-1", "shipped", tok(30, 0, 0, 0), 2, {
+      stages: [{ stage: "01_research", finishedAt: "2026-11-16T12:00:00Z", minutes: 60 }],
+    }),
+    run("b", "SW-2", "shipped", tok(100, 0, 0, 0), 5),
+    // SW-2's second workspace has no price: the ticket counts as unpriced, not as $5.
+    run("b-2", "SW-2", "shipped", tok(0, 0, 0, 0), null),
+    run("c", "SW-3", "shipped", tok(70, 0, 0, 0), null),
+    ...["d", "e", "f", "g"].map((w, i) =>
+      run(w, `SW-${10 + i}`, "shipped", tok(1, 0, 0, 0), 0.1 * (i + 1)),
+    ),
+    run("x", "SW-9", "abandoned", tok(50, 0, 0, 7), 4),
+    run("y", null, "abandoned", tok(5, 0, 0, 0), null),
+  ];
+  const [w] = trendSeries({ events: [], open: [], usages }, "7d", "week", NOW).rows.slice(-1);
+
+  assert.deepEqual(
+    [w.stages["01_research"].tokens, w.stages["01_research"].tokenRuns],
+    [tok(4, 0, 0, 0), 1],
+  );
+  assert.deepEqual(w.stages["02_spec"].tokens, tok(5, 0, 0, 0));
+  assert.deepEqual(w.unstagedTokens, tok(1, 0, 0, 0));
+
+  // Tickets: SW-1 40 tokens $3, SW-2 100 $5 but partly unpriced, SW-3 70 unpriced, SW-10..13 1 token each $0.1..$0.4.
+  assert.deepEqual(w.perTicket, {
+    tickets: 7,
+    p50Tokens: 1,
+    p90Tokens: 100,
+    p50Usd: 0.30000000000000004,
+    p90Usd: 3,
+    unpriced: 2,
+  });
+  assert.deepEqual(
+    w.costliest.map((t) => [t.ticket, t.workspaces, t.tokens, t.estUsd]),
+    [
+      ["SW-2", ["b", "b-2"], 100, 5],
+      ["SW-1", ["a-1", "a-2"], 40, 3],
+      ["SW-13", ["g"], 1, 0.4],
+      ["SW-12", ["f"], 1, 0.30000000000000004],
+      ["SW-11", ["e"], 1, 0.2],
+    ],
+    "highest cost first, at most 5; abandoned work is not a shipped ticket",
+  );
+  assert.deepEqual(w.abandonedSpend, {
+    workspaces: 2,
+    tokens: tok(55, 0, 0, 7),
+    estUsd: 4,
+    costUnknown: 1,
+  });
+});
+
 test("gate runs and minutes leave out exit 75; first-pass rate is each workspace's first finished run", () => {
   const [w1, w2, w3] = trendSeries(INPUT, "all", "week", NOW).rows;
   assert.deepEqual(w1.gate, {
@@ -343,21 +426,25 @@ test("every row has the same fields, test minutes per package (SW-1101) among th
   for (const row of trendSeries(INPUT, "all", "week", NOW).rows)
     assert.deepEqual(Object.keys(row).sort(), [
       "abandoned",
+      "abandonedSpend",
       "activeMinutes",
       "bucket",
       "byModel",
       "byVersion",
       "cacheReadShare",
       "costUnknown",
+      "costliest",
       "estUsd",
       "gate",
       "leadToMerge",
       "leadToRelease",
+      "perTicket",
       "shipped",
       "slowest",
       "stages",
       "tests",
       "tokens",
+      "unstagedTokens",
       "wallClockMinutes",
     ]);
 });
