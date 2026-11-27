@@ -3293,8 +3293,8 @@ async function keepUntracked(dir: string, tarball: string): Promise<string[] | s
  * the workspace directory, and `git worktree prune` each source clone.
  *
  * If ANY push fails the workspace is left untouched (nothing deleted) so no work
- * is lost — the caller surfaces the per-branch detail. The `<user>/<workspace>`
- * branches are deliberately kept: they hold the pushed work / open PRs.
+ * is lost — the caller surfaces the per-branch detail. After the delete each source
+ * clone's local `<user>/<workspace>` branch goes too (SW-1134): its work is on origin.
  * Destructive once it proceeds — the caller (the table's ✕ button) confirms first.
  *
  * Refuses while a PR is open or a code branch holds commits no merged PR
@@ -3387,6 +3387,20 @@ export async function removeWorkspace(
     }
   }
 
+  // SW-1134: each worktree's own branch, read before its folder goes. Only this workspace's names
+  // (<user>/<name>, or a `pr new` follow-up <user>/<name>-*): another branch someone switched to stays.
+  const own = `${os.userInfo().username}/${name}`;
+  const branches: Array<{ src: string; branch: string }> = [];
+  for (const wt of worktrees) {
+    const [src] = await worktreeSources([wt]);
+    const head = await runCapture("git", ["-C", wt, "rev-parse", "--abbrev-ref", "HEAD"]).catch(
+      () => null,
+    );
+    const branch = head?.code === 0 ? stripAnsi(head.stdout).trim() : "";
+    if (src && src !== target && (branch === own || branch.startsWith(`${own}-`)))
+      branches.push({ src, branch });
+  }
+
   // 3. Delete the directory, then prune the now-dangling worktree registrations.
   await fs.rm(target, { recursive: true, force: true });
   revokeWorkspaceToken(name);
@@ -3394,6 +3408,35 @@ export async function removeWorkspace(
     await runCapture("git", ["-C", src, "worktree", "prune"]).catch(() => {});
   }
   parts.push(`Deleted ${target} and pruned ${sources.length} source repo(s).`);
+  // Deleted only when origin, asked now (a tracking ref goes stale when the remote branch is deleted),
+  // holds the tip: as that branch, or inside its default branch (abandoned with no commits of its own).
+  const out = async (...args: string[]) => {
+    const r = await runCapture("git", args).catch(() => null);
+    return r?.code === 0 ? stripAnsi(r.stdout).trim() : null;
+  };
+  for (const { src, branch } of branches) {
+    const tip = await out("-C", src, "rev-parse", "--verify", `refs/heads/${branch}`);
+    const remote = await out("-C", src, "ls-remote", "origin", `refs/heads/${branch}`, "HEAD");
+    const shas = (remote ?? "")
+      .split("\n")
+      .map((l) => l.split("\t")[0])
+      .filter(Boolean);
+    // A merged or shipped close-out: the work is on the base (a rebase merge rewrote its SHAs).
+    let safe = !!opts.closedOut && !opts.abandon;
+    for (const s of tip && !safe ? shas : [])
+      if ((await out("-C", src, "merge-base", "--is-ancestor", tip as string, s)) !== null)
+        safe = true;
+    if (!safe) {
+      parts.push(`Local ${branch} in ${src} kept: origin does not have its tip.`);
+      continue;
+    }
+    const del = await runCapture("git", ["-C", src, "branch", "-D", branch]).catch(() => null);
+    parts.push(
+      del?.code === 0
+        ? `Deleted local ${branch} in ${src}.`
+        : `Local ${branch} in ${src} kept: ${stripAnsi(del?.stderr ?? "").trim() || "git failed"}`,
+    );
+  }
 
   return {
     command: `handoff + werkmeister down + remove ${name}`,

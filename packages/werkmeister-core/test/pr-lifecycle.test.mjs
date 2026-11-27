@@ -3949,7 +3949,7 @@ test("closeOut: closes the issue, records, removes, then deletes merged branches
     });
     const origRun = d.run;
     d.run = async (bin, args) => {
-      if (args.includes("branch")) order.push("branch -D");
+      if (args.includes("ls-remote")) order.push("ls-remote");
       return origRun(bin, args);
     };
     const r = await inWorkspacesRoot(ws, (name) => closeOut(name, {}, d));
@@ -3958,8 +3958,9 @@ test("closeOut: closes the issue, records, removes, then deletes merged branches
       fs.readFileSync(path.join(ws, "closeout.md"), "utf8"),
       /^Post-mortem: postmortem\.md$/m,
     );
-    assert.deepEqual(order, ["remove", "branch -D"]);
-    assert.ok(d.calls.includes("git -C /src/app branch -D me/ws"));
+    assert.deepEqual(order, ["remove", "ls-remote"]);
+    // SW-1134: the removal deletes the local branch; close-out only checks origin's.
+    assert.ok(!d.calls.some((c) => c.includes("branch -D")), d.calls.join("\n"));
     assert.ok(
       !d.calls.some((c) => c.includes("push origin --delete")),
       "remote already gone (ls-remote exit 2)",
@@ -5164,7 +5165,10 @@ test("spike close-out: with a PR file it waits for ship then takes the PR path; 
       fs.readFileSync(path.join(shipped, "closeout.md"), "utf8"),
       /\| o\/app \| https:\/\/x\/pr\/9 \| shipped \| abc \|/,
     );
-    assert.ok(d.calls.includes("git -C /src/app branch -D me/ws"), "merged branch deleted");
+    assert.ok(
+      d.calls.some((c) => c.startsWith("git -C /src/app ls-remote") && c.endsWith(" me/ws")),
+      "merged branch's origin copy checked",
+    );
   } finally {
     clean(shipped);
   }
