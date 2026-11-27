@@ -501,11 +501,12 @@ export const AUTONOMOUS_RULES = [
     "pr new",
     "pr adopt",
     "issue view",
-    "issue start",
     "skills",
     "standards",
     "notes context",
   ].flatMap((cmd) => cli(`${cmd}:*`)),
+  // SW-1085: exact: a ref would move any ticket, and --attach rewrites the issue_id the --relates rule keys on.
+  ...cli("issue start"),
   // SW-625: exact; `--feature <other>` repoints .env at another workspace's containers, `--repos`/`--force`/`--autonomous` reshape it.
   ...["init-workspace", "workspace init"].flatMap((cmd) =>
     ["", " --refresh-issue", " --prune-context", " --labels focus"].flatMap((flag) =>

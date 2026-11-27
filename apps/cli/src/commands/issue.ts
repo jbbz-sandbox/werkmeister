@@ -200,8 +200,26 @@ export async function run(args: Record<string, unknown>): Promise<void> {
     const workspace = findWorkspaceRoot(process.cwd(), candidateWorkspaceRoots());
     if (workspace === null)
       fail("Not inside a workspace — run this from a workspace folder or below.");
-    const line = (await startIssue(workspace)) || "left as is (no in_progress status configured)";
-    (line.includes("not moved") ? warn : success)(`Issue: ${line}`);
+    // SW-1085: a ref starts that issue; --attach first records it as the workspace's own, with no init rerun.
+    const ref = args.ref
+      ? (issueTracker({ text: String(args.ref) }).parseRef(String(args.ref)) ?? String(args.ref))
+      : null;
+    if (args.attach && !ref)
+      fail("--attach needs the issue to attach: werkmeister issue start <ref> --attach");
+    if (ref && args.attach) {
+      // Loaded here: the other issue actions never need init's module.
+      const { writeWorkspaceConfig } = await import("werkmeister-core/workspace_init");
+      writeWorkspaceConfig(workspace, { issue_id: ref });
+      success(`Attached ${ref} as this workspace's issue (.werkmeister/workspace.yml).`);
+    }
+    const line =
+      (await startIssue(
+        workspace,
+        undefined,
+        undefined,
+        ref && !args.attach ? [ref] : undefined,
+      )) || "left as is (no in_progress status configured)";
+    (line.includes("not moved") || line === "no issue" ? warn : success)(`Issue: ${line}`);
     for (const r of syncToBase(await listRepoWorktrees(workspace)))
       (r.ok ? success : warn)(`Worktree: ${r.text}`);
     const cli = checkCliCurrent();

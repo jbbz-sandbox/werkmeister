@@ -216,6 +216,7 @@ function currentStage(ws: string): string {
  * @param tracker - The tracker to use. Defaults to the one {@link issueTracker} picks for the workspace.
  * @param statuses - The status names to use. Defaults to the configured ones
  *   (Jira: `In Progress`; GitHub: the `status: in progress` label).
+ * @param only - Start these refs instead of the workspace's issue and its `group:` members.
  * @returns One line per issue, joined with `; `, e.g. `PROJ-12 → In Progress`;
  *   `no issue` when the workspace has none. A tracker that refuses the move
  *   gives a line saying so, not an error.
@@ -232,9 +233,11 @@ export async function startIssue(
   ws: string,
   tracker?: IssueTrackerStrategy,
   statuses?: IssueStatuses,
+  only?: string[],
 ): Promise<string> {
   const cfg = loadConfigFile(ws, null);
-  const refs = issueRefsOf(cfg);
+  // SW-1085: `issue start <ref>` starts that one; otherwise the workspace's issue and its group.
+  const refs = only?.length ? only : issueRefsOf(cfg);
   if (!refs.length) return "no issue";
   const comment = `Work started: ${currentStage(ws)} in workspace ${path.basename(ws)}.`;
   return eachIssue(refs, async (ref) => {
