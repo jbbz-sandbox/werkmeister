@@ -14,7 +14,7 @@ const { issueBriefing } = await import("../dist/issue_tracker.js");
 const { fetchIssueSnapshot, renderIssueCopy } = await import("../dist/issue_snapshot.js");
 
 test("fetchIssue reads the parent, then the parent's description", async () => {
-  const issue = await jiraTracker().fetchIssue("SW-595");
+  const issue = await jiraTracker().fetchIssue("SW-595", undefined, { withParent: true });
   assert.equal(issue.parent.ref, "SW-585");
   assert.equal(issue.parent.title, "Werkmeister docs overhaul");
   assert.match(issue.parent.description, /\[review doc\]\(https:\/\/example\.invalid\/review\)/);
