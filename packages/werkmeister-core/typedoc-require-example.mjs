@@ -22,6 +22,24 @@ export function jiraKeyProblems(comments) {
   });
 }
 
+/**
+ * SW-947: note numbers, PR numbers, internal entry points and CLI internals mean nothing to an SDK reader.
+ * docs-render.test.mjs checks the built SDK pages with this same regex, so the two can't drift.
+ * The lookbehinds let a path through ("Defined in: packages/werkmeister-core/src/…", "a/#12").
+ */
+export const INTERNAL_REF =
+  /\b[Nn]ote \d+\b|(?<![\w/])#\d+\b|(?<![\w/])werkmeister-core\/(?!sdk\b)\w|\bmain\.ts\b|proposal §/;
+
+/** `comments`: `{ id, text }` per SDK comment, code spans included, as the docs-site test reads them. */
+export function internalRefProblems(comments) {
+  return comments.flatMap(({ id, text }) => {
+    const m = text.match(INTERNAL_REF);
+    return m
+      ? [`${id}: internal reference "${m[0]}" in an SDK comment; SDK readers can't follow it`]
+      : [];
+  });
+}
+
 export function load(app) {
   app.on(Application.EVENT_VALIDATE_PROJECT, (project) => {
     const exports = (project.children ?? []).map((r) => ({
@@ -48,5 +66,6 @@ export function load(app) {
           .join("\n"),
       }));
     for (const p of jiraKeyProblems(comments)) app.logger.validationWarning(p);
+    for (const p of internalRefProblems(comments)) app.logger.validationWarning(p);
   });
 }
