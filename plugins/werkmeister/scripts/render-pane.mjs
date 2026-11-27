@@ -308,22 +308,21 @@ export function chrome(env = process.env, caches = browserCaches(env)) {
   return null;
 }
 
-const PLUGIN_FILES = [
-  ".claude-plugin/plugin.json",
-  ".mcp.json",
-  "types/index.d.ts",
-  "hooks/hooks.json",
-  "hooks/register.tsx",
-  "hooks/display-model.ts",
-  "hooks/textarea.tsx",
-  "hooks/demo-fixture.ts",
-];
+const PLUGIN = join(dirname(fileURLToPath(import.meta.url)), "..");
+const PLUGIN_FILES = [".claude-plugin/plugin.json", ".mcp.json", "types/index.d.ts"];
+
+/** SW-1068: every hook module but the tests, so a new one register.tsx imports is copied without a list to update. */
+export function hookFiles(plugin = PLUGIN) {
+  return readdirSync(join(plugin, "hooks"))
+    .filter((f) => !f.endsWith(".test.ts") && f !== "pane-render.ts")
+    .map((f) => `hooks/${f}`);
+}
 
 /** The pane's drawn tree, from `claude plugin test` over a plugin copy whose only test is hooks/pane-render.ts. */
 function drawnTree(tmp) {
-  const plugin = join(dirname(fileURLToPath(import.meta.url)), "..");
+  const plugin = PLUGIN;
   const copy = join(tmp, "plugin");
-  for (const f of [...PLUGIN_FILES, "hooks/pane-render.ts"]) {
+  for (const f of [...PLUGIN_FILES, ...hookFiles(), "hooks/pane-render.ts"]) {
     const to = join(copy, f === "hooks/pane-render.ts" ? "hooks/render.test.ts" : f);
     mkdirSync(dirname(to), { recursive: true });
     copyFileSync(join(plugin, f), to);
