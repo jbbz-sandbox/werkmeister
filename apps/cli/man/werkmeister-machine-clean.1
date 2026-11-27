@@ -14,7 +14,7 @@ Show what would be cleaned without actually removing anything
 .PP
 \fBWhat it does:\fR
 .IP 1. 3
-Identifies per\-feature Docker volumes (node_modules, build caches) that belong to stopped features
+Identifies per\-feature Docker volumes (node_modules, build caches, sidecar data) that belong to stopped features: a volume counts only when the feature's own compose project created it, so another project's \fBmyapp\-pgdata\fR is never touched
 .IP 2. 3
 Removes those orphaned volumes
 .IP 3. 3

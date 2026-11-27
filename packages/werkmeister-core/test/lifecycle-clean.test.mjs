@@ -11,9 +11,10 @@ import { test } from "node:test";
 
 import { withSandboxHome } from "./fixtures.mjs";
 
-const { classifyVolumes, featureFromVolume, volumeBaseNames } = await import(
+const { classifyVolumes, featureFromVolume, isFeatureVolume, volumeBaseNames } = await import(
   "../dist/lifecycle.js"
 );
+const { legacyProjectName } = await import("../dist/compose.js");
 
 test("featureFromVolume extracts the feature from a per-feature volume name", () => {
   assert.equal(featureFromVolume("foo-bar-node-modules", ["node-modules"]), "foo-bar");
@@ -98,4 +99,13 @@ test("a live feature whose name ends in a repo keeps its plain volume next to th
   );
   assert.deepEqual(activeVolumes, ["fix-shop-node-modules"]);
   assert.deepEqual(orphanedVolumes, ["gone-shop-node-modules"]);
+});
+
+// SW-1234: with a sidecar's `pgdata` among the bases, another project's `myapp-pgdata` matched by name alone.
+test("only a volume its own feature's compose project made counts as a feature volume", () => {
+  assert.equal(isFeatureVolume("gone-pgdata", "werkmeister-gone"), true);
+  assert.equal(isFeatureVolume("old-node-modules", legacyProjectName("old")), true);
+  assert.equal(isFeatureVolume("myapp-pgdata", undefined), false);
+  assert.equal(isFeatureVolume("myapp-pgdata", "myapp"), false);
+  assert.equal(isFeatureVolume("myapp-pgdata", "werkmeister-other"), false);
 });
