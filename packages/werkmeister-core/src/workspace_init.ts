@@ -82,7 +82,7 @@ import { timed } from "./metrics.js";
 import { modelTiers } from "./model_tiers.js";
 import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
-import { syncRegistry } from "./registry_sync.js";
+import { syncRegistry, workspaceServices } from "./registry_sync.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
 import { upServices } from "./scheduler_state.js";
 import { repoDirs } from "./standards.js";
@@ -835,7 +835,8 @@ async function initWorkspaceUntimed(
   // 3. Reconcile repo worktrees against workspace.yml. Gated on `repos` being
   //    declared. Desired set = union(repos, repos owning `services`).
   if (inputs["repos"]) {
-    const [servicesConfig] = loadSandboxServiceConfigs();
+    // SW-936: with each worktree's branch fragment over the registry, as compose generation reads it.
+    const servicesConfig = workspaceServices(loadSandboxServiceConfigs()[0], workspaceRoot);
     const [desiredRepos, , unknown] = resolveRepos(
       inputs["repos"],
       inputs["services"],
