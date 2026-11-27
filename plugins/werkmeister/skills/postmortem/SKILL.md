@@ -12,6 +12,8 @@ for them on purpose. `werkmeister workspace close` refuses until `postmortem.md`
 the workspace root, unless the person says to skip it
 (`--skip-postmortem "<reason>"`, MCP `skip_postmortem`). Never skip it on your own.
 
+Do not rebuild the CLI or run `werkmeister registry sync` at close-out, even after the PR merged or shipped: that belongs to the root session at the start of the next wave.
+
 1. **Gather.** List each problem with where you found it. Ask nothing yet.
    - **PRs:** each PR file's `url:` (ICM `stages/*/output/pr-*.md`, JIT
      `.werkmeister/notes/pr-*.md`) → `gh pr checks <url>` and

@@ -22,6 +22,13 @@ bad()  { echo "DRIFT $*"; drift=1; }
 # 0. --pull: main only, nothing uncommitted, fast-forward only; any refusal pulls and builds nothing.
 moved=0
 if [ $PULL = 1 ]; then
+  # SW-1228: a rebuild + registry sync changes contracts under running workspaces; only the root session at a wave's start does it.
+  # shortcut: cwd-based, a symlinked cwd isn't resolved; use pwd -P if it bites
+  d="$PWD"
+  while [ "$d" != / ]; do
+    [ -f "$d/.werkmeister/workspace.yml" ] && { echo "ERROR --pull: run from inside a feature workspace ($d); rebuild and registry sync belong to the root session at the start of the next wave; nothing pulled"; exit 2; }
+    d="$(dirname "$d")"
+  done
   branch="$(git -C "$REPO" symbolic-ref --short HEAD 2>/dev/null)"
   [ "$branch" = main ] || { echo "ERROR --pull: $REPO is on ${branch:-a detached HEAD}, not main; nothing pulled"; exit 2; }
   [ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || { echo "ERROR --pull: $REPO has uncommitted changes; nothing pulled"; exit 2; }

@@ -1,6 +1,6 @@
 ---
 name: install-check
-description: Use when checking or fixing whether the global werkmeister CLI (or w9r), its MCP server or the werkmeister Claude Code plugin runs from the ~/repos/werkmeister checkout - "is the global werkmeister from the repo", "werkmeister drift", werkmeister MCP tools acting like an old version, after `npm i -g werkmeister` or `npx werkmeister setup`, or a repo change that doesn't show up in the CLI; and after a PR merges or a release publishes, to bring the dev link up to main ("upgrade the global werkmeister", "pull and rebuild"), or to merge a PR through the merge queue.
+description: Use when checking or fixing whether the global werkmeister CLI (or w9r), its MCP server or the werkmeister Claude Code plugin runs from the ~/repos/werkmeister checkout - "is the global werkmeister from the repo", "werkmeister drift", werkmeister MCP tools acting like an old version, after `npm i -g werkmeister` or `npx werkmeister setup`, or a repo change that doesn't show up in the CLI; and at the start of the next wave, from the root session only (never from a feature workspace), to bring the dev link up to main ("upgrade the global werkmeister", "pull and rebuild"), or to merge a PR through the merge queue.
 ---
 
 # Werkmeister install check
@@ -14,6 +14,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/skills/install-check/check.sh"         # report only
 bash "${CLAUDE_PLUGIN_ROOT}/skills/install-check/check.sh" --fix   # repair, then run it again to confirm
 bash "${CLAUDE_PLUGIN_ROOT}/skills/install-check/check.sh" --pull  # fast-forward main, --fix, build every package, reinstall a stale VS Code extension, registry sync, daemon restart
 ```
+
+`--pull` rebuilds the CLI and syncs the registry, which changes contracts under running workspaces: run it only at the start of the next wave, from the root session. Inside a feature workspace (a `.werkmeister/workspace.yml` above the cwd) it refuses and exits 2; the read-only check and `--fix` still run there.
 
 Run the check first and show the person its output. If it finds drift, run `--fix`, then run the check again, and report the final `RESULT` line.
 
@@ -41,12 +43,12 @@ On a machine without the checkout (`$WERKMEISTER_REPO/apps/cli` missing) the scr
 - A settings.json change takes effect in the next session.
 - `npm i -g werkmeister` and `npx werkmeister setup` overwrite the link. Avoid them on this machine.
 
-## After a merge or a release
+## At the start of the next wave (root session only)
 
-The dev link is current when it is built from an up-to-date `main`; this machine doesn't install the npm release (that would overwrite the link).
+The dev link is current when it is built from an up-to-date `main`; this machine doesn't install the npm release (that would overwrite the link). Do this only at the start of the next wave, from the root session: never after a PR merges, mid-wave, or from a feature workspace (`--pull` refuses there).
 
-1. A PR merged: `check.sh --pull`. It pulls, installs, runs the full `turbo run build`, reinstalls the VS Code extension if its source changed, syncs the registry, restarts the daemon, and prints `PULL  main <old> -> <new>`. Note `<old>` for rollback.
-2. A release: the Changesets version PR merged and npm shows the version (`npm view werkmeister version`). Releases are daily (the version PR is queued at 06:00 UTC and carries every merge since the last one); force one with `gh workflow run queue-version-pr.yml`. Then `check.sh --pull`, as above; the pull brings the version commit.
+1. Bring the link up to `main`: `check.sh --pull`. It pulls, installs, runs the full `turbo run build`, reinstalls the VS Code extension if its source changed, syncs the registry, restarts the daemon, and prints `PULL  main <old> -> <new>`. Note `<old>` for rollback.
+2. After a release: the Changesets version PR merged and npm shows the version (`npm view werkmeister version`). Releases are daily (the version PR is queued at 06:00 UTC and carries every merge since the last one); force one with `gh workflow run queue-version-pr.yml`. Then `check.sh --pull`, as above; the pull brings the version commit.
 3. `werkmeister --version` prints no stale-build warning. Running MCP servers keep the old build: `/mcp` to reconnect them.
 
 ## Merging through the merge queue
