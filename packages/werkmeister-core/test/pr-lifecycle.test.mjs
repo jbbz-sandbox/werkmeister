@@ -5430,6 +5430,7 @@ test("wakeMessage: each event opens with the ticket's sentence, all in one messa
         "  A conflict in a generated file (a snapshot, a lockfile): take main's copy and regenerate it; never hand-merge it.",
         "  Then push it (a lease on the PR head this message saw; refuses anything but this workspace's own clean branch):",
         "    werkmeister pr push app",
+        "  Run it exactly like that, from the workspace root: no cd && or pipe. Any extra segment sends the line to auto mode's classifier, which can refuse it as a force-push.",
         "  and rerun the gate's tests.",
       ].join("\n"),
       "Follow the workspace router; push the fix to the PR's branch.",
@@ -5636,6 +5637,11 @@ test("claimCallbacks: a conflict wakes once with the base commits; resolved rese
     );
     // SW-717: the session pushes its own rebased branch; no hand-off to the person.
     assert.ok(wakes(r)[0].includes("    werkmeister pr push app\n"), wakes(r)[0]);
+    // SW-1225: the wake says why the command stays bare.
+    assert.match(
+      wakes(r)[0],
+      /no cd && or pipe\. Any extra segment sends the line to auto mode's classifier/,
+    );
     assert.ok(wakes(r)[0].includes(`git -C ${path.join(ws, "app")} rebase origin/main`));
     assert.equal(readPrFiles(ws)[0].fm.notified_conflict, "true");
     // SW-890: the head the wake saw is what `pr push` leases on.
