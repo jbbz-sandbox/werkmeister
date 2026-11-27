@@ -186,6 +186,7 @@ const JIRA_STATUSES = ["To Do", "In Progress", "In Review", "Done"];
  * `POST …/transitions` moves it, `POST …/comment` is taken. Any other path fails 501, so a path
  * the fake doesn't cover fails loudly. Point JIRA_BASE_URL at `url` with any email and token.
  * Every key is a parentless `fixture issue`, except story SW-595 under epic SW-585 (SW-633).
+ * Story SW-596's parent SW-586 answers 500 (SW-1015).
  */
 export async function startFakeJira(): Promise<FakeDaemon> {
   const calls: string[] = [];
@@ -203,6 +204,12 @@ export async function startFakeJira(): Promise<FakeDaemon> {
       summary: "Docs: Troubleshooting leads with the skills",
       issuetype: { name: "Story" },
       parent: { key: "SW-585", fields: { summary: "Werkmeister docs overhaul" } },
+    },
+    // SW-1015: its parent can't be read.
+    "SW-596": {
+      summary: "Docs: a story whose epic is gone",
+      issuetype: { name: "Story" },
+      parent: { key: "SW-586", fields: { summary: "Deleted epic" } },
     },
   };
   const issue = (key: string) => ({
@@ -228,6 +235,8 @@ export async function startFakeJira(): Promise<FakeDaemon> {
       url.pathname,
     );
     const key = m?.[1] ?? "";
+    if (m && req.method === "GET" && !m[2] && key === "SW-586")
+      return reply(500, { errorMessages: ["fake jira: SW-586 can't be read"] });
     if (m && req.method === "GET" && !m[2]) return reply(200, issue(key));
     if (m?.[2] === "/transitions" && req.method === "GET")
       return reply(200, {
