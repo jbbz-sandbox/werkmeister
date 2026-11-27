@@ -257,6 +257,24 @@ jobs:
           NAME: ${{ github.event.repository.name }}
         run: node scripts/release-plan.mjs
       - uses: ./.github/actions/install
+      # SW-1267: with changesets pending the action below only versions. Hide them so it publishes:
+      # for one extra publish-mode run (same tags and GitHub releases) when main's version isn't on
+      # npm, or for good when none of them would be versioned.
+      - id: publish-plan
+        run: node scripts/publish-first.mjs
+      - name: Hide pending changesets
+        if: steps.publish-plan.outputs.hide == 'true'
+        run: find .changeset -name '*.md' ! -name README.md -delete
+      - id: publish-first
+        if: steps.publish-plan.outputs.restore == 'true'
+        uses: changesets/action@v1
+        with:
+          publish: pnpm run release
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+      - name: Restore the pending changesets
+        if: steps.publish-plan.outputs.restore == 'true'
+        run: git checkout -- .changeset
       # With changesets pending: opens/updates the version PR. With none pending
       # (i.e. that PR just merged): publishes and tags.
       - id: changesets
