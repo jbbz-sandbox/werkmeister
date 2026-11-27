@@ -156,7 +156,10 @@ updates) a **"chore: version packages"** PR carrying the version bumps and
 is empty, `.github/workflows/queue-version-pr.yml` queues it, and its merge
 publishes to npmjs.com and tags the release, so one release carries the day's
 merges. Force one with `gh workflow run queue-version-pr.yml`. To hold a
-release, close that PR or unset the `RELEASE_APP_ID` variable.
+release, close that PR or unset the `RELEASE_APP_ID` variable. While the version
+PR sits in the merge queue GitHub refuses pushes to its branch, so a merge in
+that window skips the version step with a notice; the push that lands the
+version PR versions that merge's changesets (`scripts/release-plan.mjs`, SW-1266).
 
 `release` runs only once the commit is tested: by a green merge-queue run
 of that exact commit (the `queued` job checks, and the push then skips its

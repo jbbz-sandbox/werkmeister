@@ -249,10 +249,19 @@ jobs:
         run: |
           git config --global user.name "CI"
           git config --global user.email "ci@users.noreply.github.com"
+      # Needs only gh and node's built-ins, both on the runner, so it runs before install.
+      - id: plan
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          NAME: ${{ github.event.repository.name }}
+        run: node scripts/release-plan.mjs
       - uses: ./.github/actions/install
       # With changesets pending: opens/updates the version PR. With none pending
       # (i.e. that PR just merged): publishes and tags.
       - id: changesets
+        # != 'false': a plan step that wrote nothing runs this as before.
+        if: steps.plan.outputs.run_changesets != 'false'
         uses: changesets/action@v1
         with:
           version: pnpm run changeset:version
