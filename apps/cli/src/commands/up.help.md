@@ -62,6 +62,6 @@ The local services come from the workspace's `.werkmeister/workspace.yml` (via `
 
 **If every slot is taken** (12 by default, `feature_slots.count`), the command exits with an error. Free a slot by running `werkmeister feature down` on another feature.
 
-**`--service <name>`** starts only that one service, the way the PR gate starts it, and prints `Started <feature>-<name>`.
+**`--service <name>`** starts only that one service, the way the PR gate starts it (one per call: a repeated `--service` is refused), and prints `Started <feature>-<name>`.
 
 **Adding a service to a running feature.** To run another service locally, add it to the `services` field in the workspace's `.werkmeister/workspace.yml`, rerun `werkmeister workspace init` (this also adds the owning repo's worktree if it isn't there yet), then `werkmeister feature up`.

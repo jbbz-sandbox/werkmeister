@@ -37,6 +37,13 @@ describe("sandbox up flags", () => {
     },
   );
 
+  // SW-1252: a single-value option kept only the last --service and started that one alone.
+  it("refuses a repeated --service instead of starting only the last", async () => {
+    const res = await sandbox("feature", "up", "--service", "a", "--service", "b");
+    expect(res.status).not.toBe(0);
+    expect(res.stderr).toContain("--service takes one service");
+  });
+
   it("no longer lists them in --help", async () => {
     const res = await sandbox("up", "--help");
     expect(res.status).toBe(0);
