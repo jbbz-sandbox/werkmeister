@@ -194,6 +194,12 @@ export async function startFakeJira(): Promise<FakeDaemon> {
   const statusOf = (key: string) => status.get(key) ?? "To Do";
   // SW-633: SW-595 is a story under epic SW-585, whose description holds the review link.
   const FIXED: Record<string, Record<string, unknown>> = {
+    // SW-1060: a grouped member whose description lists its own acceptance criteria.
+    "SW-597": {
+      summary: "Docs: a grouped member",
+      description:
+        "Members' work.\n\nh3. Acceptance criteria\n* Member criterion one.\n* Member criterion two.",
+    },
     "SW-585": {
       summary: "Werkmeister docs overhaul",
       issuetype: { name: "Epic" },
