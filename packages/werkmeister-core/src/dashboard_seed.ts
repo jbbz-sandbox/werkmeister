@@ -97,9 +97,19 @@ export function seedDashboardHome(
     prStatus: string | null,
     firstTurnMin: number,
     stagesDone: number,
+    workType = "feature",
   ) => {
     const ws = path.join(root, name);
-    write(path.join(ws, ".werkmeister", "workspace.yml"), `issue_id: ${ticket}\n`);
+    write(
+      path.join(ws, ".werkmeister", "workspace.yml"),
+      `issue_id: ${ticket}\nwork_type: ${workType}\n`,
+    );
+    // SW-1212: the Flow tab's work type selector and "where the time goes" bars.
+    ev(firstTurnMin + 5, "workspace.create", name, {
+      duration_ms: 1200,
+      result: "ok",
+      work_type: workType,
+    });
     STAGES.forEach((s, i) => {
       const out = path.join(ws, "stages", s, "output");
       if (i < stagesDone) write(path.join(out, "done.md"), "done\n");
@@ -157,7 +167,7 @@ export function seedDashboardHome(
   ev(120, "stage.done", "seed-working", { stage: "02_spec", commit: "a2" });
 
   // Ready: the gate has run 20 min, after one exit-75 retry.
-  workspace("seed-ready", "SW-902", "approved", 500, 3);
+  workspace("seed-ready", "SW-902", "approved", 500, 3, "bugfix");
   ev(400, "stage.done", "seed-ready", { stage: "01_research", commit: "b1" });
   ev(300, "stage.done", "seed-ready", { stage: "02_spec", commit: "b2" });
   ev(200, "stage.done", "seed-ready", { stage: "03_implement", commit: "b3" });
@@ -173,7 +183,7 @@ export function seedDashboardHome(
   ev(92, "gate.end", "seed-pr-open", { run: "p2", exit: 0 });
   ev(90, "pr.open", "seed-pr-open", { pr: prUrl(7) });
 
-  workspace("seed-merged", "SW-904", "merged", 1200, 4);
+  workspace("seed-merged", "SW-904", "merged", 1200, 4, "bugfix");
   ev(200, "pr.open", "seed-merged", { pr: prUrl(13) });
   ev(30, "pr.merged", "seed-merged", { pr: prUrl(13) });
 
@@ -211,9 +221,9 @@ export function seedDashboardHome(
     firstTurnMin: number,
     closedMin: number,
     stages: number[],
-    { outcome = "shipped", scale = 1, unpriced = false } = {},
+    { outcome = "shipped", scale = 1, unpriced = false, workType = "feature" } = {},
   ) => {
-    const ws = workspace(name, ticket, null, firstTurnMin, stages.length);
+    const ws = workspace(name, ticket, null, firstTurnMin, stages.length, workType);
     write(path.join(ws, "closeout.md"), "closed\n");
     const models = unpriced ? [UNPRICED_MODEL] : SEED_MODELS;
     const byModel = models.map(([model, t, rate]) => {
@@ -269,9 +279,11 @@ export function seedDashboardHome(
   closedRun("seed-abandoned-spend", "SW-920", "0.111.0", 2400, 1800, [60, 40], {
     outcome: "abandoned",
     scale: 0.5,
+    workType: "refactor",
   });
   closedRun("seed-unpriced", "SW-921", "0.111.0", 1700, 1200, [40, 30, 90, 20], {
     unpriced: true,
+    workType: "bugfix",
   });
 
   // SW-1099: three weekly closed runs on two versions, 03_implement the longest (the seeded
@@ -300,8 +312,15 @@ export function seedDashboardHome(
   ev(2770, "gate.end", "seed-closed-out", { run: "c1", exit: 0 });
   ev(2760, "pr.open", "seed-closed-out", { pr: prUrl(900) });
   ev(2700, "pr.merged", "seed-closed-out", { pr: prUrl(900) });
+  // SW-1212: a fifth merged feature run, so 30d shows a solid feature bar in "where the time goes"
+  // beside a faded bugfix one (seed-merged).
+  closedRun("seed-closed-fast", "SW-922", "0.111.0", 5000, 4400, [30, 20, 60, 15]);
+  ev(4860, "gate.start", "seed-closed-fast", { run: "f1", retry: 0 });
+  ev(4850, "gate.end", "seed-closed-fast", { run: "f1", exit: 0 });
+  ev(4840, "pr.open", "seed-closed-fast", { pr: prUrl(901) });
+  ev(4600, "pr.merged", "seed-closed-fast", { pr: prUrl(901) });
 
-  workspace("seed-abandoned", "SW-906", "abandoned", 4000, 2);
+  workspace("seed-abandoned", "SW-906", "abandoned", 4000, 2, "refactor");
   ev(3900, "stage.done", "seed-abandoned", { stage: "01_research", commit: "d1" });
 
   // SW-1101: seven weeks of gates, three runs a week, for the gate and test charts. pkg-b slows in

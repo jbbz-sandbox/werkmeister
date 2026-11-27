@@ -136,6 +136,38 @@ export function stackedBarView(bars: StackBar[], keys: string[], h: number): Sta
   };
 }
 
+export interface HorizontalStackedBarView {
+  xMax: number;
+  rows: {
+    label: string;
+    y: number;
+    segments: { key: string; x: number; width: number; value: number }[];
+  }[];
+}
+
+/** {@link stackedBarView} on its side: one row per bar, `rowH` apart, segments left to right in *keys* order across *w*. */
+export function horizontalStackedBarView(
+  bars: StackBar[],
+  keys: string[],
+  w: number,
+  rowH: number,
+): HorizontalStackedBarView {
+  const v = stackedBarView(bars, keys, w);
+  return {
+    xMax: v.yMax,
+    rows: v.bars.map((b, i) => ({
+      label: b.label,
+      y: i * rowH,
+      segments: b.segments.map((s) => ({
+        key: s.key,
+        x: r1(w - s.y - s.height),
+        width: s.height,
+        value: s.value,
+      })),
+    })),
+  };
+}
+
 export interface ScatterView {
   yMax: number;
   p50Y: number | null;

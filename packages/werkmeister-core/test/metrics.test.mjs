@@ -18,11 +18,13 @@ import {
   noteSlow,
   recordEvent,
   recordStageDone,
+  recordTimed,
   runTag,
   stageDoneTimes,
   timed,
   workspaceLogSlice,
   workspaceSlice,
+  workTypeOf,
 } from "../dist/metrics.js";
 import { defaultDeps, gatePrs, openPrs, refreshPrStatus } from "../dist/pr_lifecycle.js";
 import { collectingReporter, withReporter } from "../dist/reporter.js";
@@ -1380,4 +1382,36 @@ test("a start's capacity wait is its own setup row, not the next row's time", as
     },
     { gate: true },
   );
+});
+
+test("workspace.create and workspace.init carry the yml's work_type after the step (SW-1212)", async () => {
+  await withFixtureWorkspace(async (fx) => {
+    const ws = workspace(fx, "ws-wt");
+    const yml = path.join(ws, ".werkmeister", "workspace.yml");
+    fs.writeFileSync(yml, "run_id: run-wt\nwork_type: Bugfix\n");
+    recordTimed("workspace.create", ws, Date.now(), "ok");
+    // An init that rewrites the type logs the new one, though timed() reads run_id before the step.
+    await timed("workspace.init", ws, async () =>
+      fs.writeFileSync(yml, "run_id: run-wt\nwork_type: refactor\n"),
+    );
+    await timed("workspace.up", ws, async () => {});
+    fs.writeFileSync(yml, "run_id: run-wt\n");
+    await timed("workspace.init", ws, async () => {});
+    const mine = lines().filter((e) => e.workspace === "ws-wt");
+    assert.ok(
+      metricsPath(new Date().toISOString()).startsWith(fx.root),
+      "written under the temp HOME",
+    );
+    assert.deepEqual(
+      mine.map((e) => [e.event, e.run_id, e.work_type]),
+      [
+        ["workspace.create", "run-wt", "bugfix"],
+        ["workspace.init", "run-wt", "refactor"],
+        ["workspace.up", "run-wt", undefined],
+        ["workspace.init", "run-wt", undefined],
+      ],
+    );
+    assert.equal(workTypeOf("work_type: [x]"), undefined);
+    assert.equal(workTypeOf(":"), undefined);
+  });
 });

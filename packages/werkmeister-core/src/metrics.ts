@@ -57,8 +57,17 @@ type EventBody =
   | { event: "issue.start"; workspace: string; ticket: string }
   | { event: "ask"; workspace: string; session: string; kind: "question" | "plan" | "wrap-up" }
   | { event: "answer"; workspace: string; session: string; waited_s: number }
-  /** SW-404: how long a workspace verb, a gate row or a slow external call took. */
-  | { event: TimedEvent; workspace: string; duration_ms: number; result: Result }
+  /**
+   * SW-404: how long a workspace verb, a gate row or a slow external call took. *work_type*: workspace.create
+   * and workspace.init only, the run's `workspace.yml` value after the step (SW-1212).
+   */
+  | {
+      event: TimedEvent;
+      workspace: string;
+      duration_ms: number;
+      result: Result;
+      work_type?: string;
+    }
   | {
       event: "gate.row";
       workspace: string;
@@ -146,6 +155,30 @@ export function runTagOf(yml: string | undefined): { run_id?: string } {
   return typeof id === "string" && id ? { run_id: id } : {};
 }
 
+/** A run whose work type nothing recorded (SW-1212); never guessed from the branch or the issue. */
+export const WORK_TYPE_UNKNOWN = "unknown";
+
+/** A workspace.yml's `work_type`, trimmed and lowercased, or undefined when it has none. Never throws. */
+export function workTypeOf(yml: string | undefined): string | undefined {
+  let wt: unknown;
+  try {
+    wt = YAML.parse(yml ?? "")?.work_type;
+  } catch {}
+  const t = typeof wt === "string" ? wt.trim().toLowerCase() : "";
+  return t || undefined;
+}
+
+/** `{ work_type }` of the workspace at *ws*, to spread into an event; `{}` with none. Never throws. */
+function workTypeTag(ws: string): { work_type?: string } {
+  if (!ws) return {};
+  let yml: string | undefined;
+  try {
+    yml = fs.readFileSync(path.join(dotDir(ws), "workspace.yml"), "utf8");
+  } catch {}
+  const work_type = workTypeOf(yml);
+  return work_type ? { work_type } : {};
+}
+
 /** The log bindings that name the workspace at *ws* (SW-404): folder name, run id, ticket and current ICM stage. Never throws. */
 export function workspaceBindings(ws: string): {
   workspace: string;
@@ -200,6 +233,8 @@ export function recordTimed(
     duration_ms: Date.now() - startMs,
     result,
     ...tag,
+    // Read now, after the step: an init that changes work_type logs the new one (SW-1212).
+    ...(event === "workspace.create" || event === "workspace.init" ? workTypeTag(ws) : {}),
   });
 }
 

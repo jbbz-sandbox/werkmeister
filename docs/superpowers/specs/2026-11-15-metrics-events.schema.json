@@ -86,6 +86,11 @@
       "type": "string",
       "description": "The writing workspace run's id, `run_id` in its workspace.yml (SW-1140); absent on lines written before it. Same-named runs' lines are told apart by it"
     },
+    "work_type": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "workspace.create, workspace.init: the run's workspace.yml work_type after the step (SW-1212), a built-in (feature, bugfix, refactor, spike, incident) or a workflow type; absent when the yml has none"
+    },
     "ticket": { "type": "string", "description": "Tracker key, e.g. SW-753" },
     "session": { "type": "string", "description": "Claude session id (ask, answer, session.*)" },
     "version": {

@@ -3,7 +3,7 @@
 **What it does:**
 
 1. Clones the workspace repo (the origin of `<repos_root>/sandbox-workspace`, else `overrides.workspace_repo`) into a temporary bare clone, removed when the command ends. The shared checkout is never fetched into or written
-2. On each record branch except the default one, first: copies the lines of its `metrics.jsonl`, the events its close-out pushed (a teammate's too), and caches its `usage.json` with the branch's git author email in `~/.werkmeister/metrics/usage-branches.jsonl`, rewritten each run, for the `metrics` report's per-person rollups
+2. On each record branch except the default one, first: copies the lines of its `metrics.jsonl`, the events its close-out pushed (a teammate's too), and caches its `usage.json` with the branch's git author email and its `.werkmeister/workspace.yml` `work_type` (`unknown` when the file can't be read or has none, never guessed) in `~/.werkmeister/metrics/usage-branches.jsonl`, rewritten each run, for the `metrics` report's per-person and per-work-type rollups
 3. On each record branch: writes `stage.done` for each stage at the commit that first filled its `output/`, and `pr.open` / `pr.merged` at GitHub's `createdAt` / `mergedAt` for each PR file's `url:` (through `gh`). The ticket comes from the branch's `usage.json`
 4. Writes `ask` / `answer` pairs (AskUserQuestion, ExitPlanMode) from the workspace's Claude Code transcripts still on disk
 5. Writes `coverage` rows from the CI `coverage-summary` artifacts of each GitHub repo those PRs are in (through `gh`), one per package per run: `ci-pr` for a pull request run, `ci-main` for a merge-queue run

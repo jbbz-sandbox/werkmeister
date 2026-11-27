@@ -172,6 +172,7 @@ test("cycle runs issue.start (else first turn) → merge, lead first turn → re
       releasedAt: "2026-11-16T11:45:00Z",
       cycleMinutes: 195,
       leadMinutes: 225,
+      workType: "unknown",
     },
     {
       ticket: "ws-b",
@@ -182,6 +183,7 @@ test("cycle runs issue.start (else first turn) → merge, lead first turn → re
       releasedAt: null,
       cycleMinutes: 240,
       leadMinutes: 240,
+      workType: "unknown",
     },
   ]);
   assert.deepEqual(r.cycle, { p50Minutes: 195, p90Minutes: 240 });
@@ -216,6 +218,8 @@ test("the board: four columns, age against each column's past p50/p90, one wait 
     enteredAt: "2026-11-20T06:00:00Z",
     ageMinutes: 360,
     overP90: true,
+    workType: "unknown",
+    p90Pooled: true, // no run has a type: every card reads the pooled p90
     wait: null,
   });
   // No gate run yet: entered ready at the PR-file edit; capacity is its only wait.
@@ -412,7 +416,11 @@ test("metricsReport reads the log, workspace folders and local record branches u
       const ws = path.join(os.homedir(), "ws");
       const open = path.join(ws, "ws-open");
       fs.mkdirSync(path.join(open, ".werkmeister"), { recursive: true });
-      fs.writeFileSync(path.join(open, ".werkmeister", "workspace.yml"), "issue_id: SW-9\n");
+      // SW-1212: a hand-edited capital is the same type as the lowercased event lines.
+      fs.writeFileSync(
+        path.join(open, ".werkmeister", "workspace.yml"),
+        "issue_id: SW-9\nwork_type: Bugfix\n",
+      );
       fs.mkdirSync(path.join(open, "stages", "04_propose", "output"), { recursive: true });
       fs.writeFileSync(
         path.join(open, "stages", "04_propose", "output", "pr-app.md"),
@@ -448,6 +456,9 @@ test("metricsReport reads the log, workspace folders and local record branches u
       fs.mkdirSync(closed, { recursive: true });
       fs.writeFileSync(path.join(closed, "closeout.md"), "closed\n");
       fs.writeFileSync(path.join(closed, "usage.json"), JSON.stringify(closedUsage));
+      // SW-1212: a closed folder still on disk is typed from its own yml, no rebuild needed.
+      fs.mkdirSync(path.join(closed, ".werkmeister"));
+      fs.writeFileSync(path.join(closed, ".werkmeister", "workspace.yml"), "work_type: refactor\n");
 
       // The shared checkout: main has no usage.json; ws-closed's branch duplicates the folder copy.
       const repo = path.join(os.homedir(), "repos", "sandbox-workspace");
@@ -476,6 +487,11 @@ test("metricsReport reads the log, workspace folders and local record branches u
       assert.equal(r.usage.workspaces, 2, "ws-closed once, plus ws-gone from its branch");
       assert.equal(r.usage.estUsd, 5);
       assert.equal((await metricsReport({}, NOW)).range, "7d");
+      assert.equal(prOpen.cards[0].workType, "bugfix");
+      assert.deepEqual(
+        Object.fromEntries(Object.entries(r.byWorkType).map(([t, s]) => [t, s.usage.workspaces])),
+        { bugfix: 0, refactor: 1, unknown: 1 }, // ws-gone has only its branch copy and no cache row
+      );
     },
     { config: "paths:\n  repos_root: ~/repos\n  workspaces_root: ~/ws\n" },
   );
@@ -586,4 +602,143 @@ test("agentByDay buckets session active minutes by their first turn's UTC day (S
   ).agentByDay;
   assert.deepEqual(reused[4], { day: "2026-11-17", activeMinutes: 30 });
   assert.deepEqual(reused[6], { day: "2026-11-19", activeMinutes: 10 });
+});
+
+// SW-1212: slicing by work type. Runs start 2026-11-18, one an hour; *working* minutes to the first
+// gate, then 5 min ready, then *prOpen* minutes to the merge. No release, so awaiting-release is empty.
+const typedRun = (ws, type, i, working, prOpen) => {
+  const first = Date.parse("2026-11-18T00:00:00Z") + i * 3_600_000;
+  const at = (min) => new Date(first + min * 60_000).toISOString();
+  return {
+    events: [
+      ev(at(0), "workspace.create", ws, { duration_ms: 1, result: "ok", work_type: type }),
+      ev(at(working), "gate.start", ws, { run: `${ws}-g`, retry: 0 }),
+      ev(at(working + 1), "gate.end", ws, { run: `${ws}-g`, exit: 0 }),
+      ev(at(working + 5), "pr.open", ws, { pr: PR(ws) }),
+      ev(at(working + 5 + prOpen), "pr.merged", ws, { pr: PR(ws) }),
+    ],
+    usage: usage(ws, at(working + prOpen + 15), at(0), 1, NO_TOKENS, 1, 1, 1),
+  };
+};
+const typedRuns = [
+  ...[0, 1, 2, 3, 4].map((k) => typedRun(`bug-${k}`, "bugfix", k, 20 + 10 * k, 10)), // working 20..60
+  ...[0, 1, 2, 3, 4].map((k) => typedRun(`ref-${k}`, "refactor", 5 + k, 300 + 10 * k, 120)), // 300..340
+  ...[0, 1].map((k) => typedRun(`spk-${k}`, "spike", 10 + k, 100 + 10 * k, 30)),
+];
+const ago = (min) => new Date(NOW.getTime() - min * 60_000).toISOString();
+const TYPED = {
+  events: [
+    ...typedRuns.flatMap((r) => r.events),
+    ev(ago(130), "workspace.create", "open-bug", {
+      duration_ms: 1,
+      result: "ok",
+      work_type: "bugfix",
+    }),
+  ],
+  open: [
+    card({ workspace: "open-bug", lifecycle: "working", firstTurn: ago(120) }), // typed by its create line
+    card({ workspace: "open-spk", lifecycle: "working", firstTurn: ago(200), workType: "spike" }),
+    card({
+      workspace: "open-ref",
+      lifecycle: "working",
+      firstTurn: ago(200),
+      workType: "refactor",
+    }),
+  ],
+  usages: typedRuns.map((r) => r.usage),
+};
+const p = (r, column) => {
+  const c = r.board.find((b) => b.column === column);
+  return [c.p50Minutes, c.p90Minutes, c.count];
+};
+
+test("filtering by work type gives each type's own percentiles (SW-1212)", () => {
+  const all = flowMetrics(TYPED, "7d", NOW);
+  const bug = flowMetrics(TYPED, "7d", NOW, undefined, "bugfix");
+  const ref = flowMetrics(TYPED, "7d", NOW, undefined, "refactor");
+  assert.equal(all.workType, null);
+  assert.equal(bug.workType, "bugfix");
+  assert.deepEqual(p(all, "working"), [100, 330, 12]);
+  assert.deepEqual(p(bug, "working"), [40, 60, 5]);
+  assert.deepEqual(p(ref, "working"), [320, 340, 5]);
+  assert.deepEqual(
+    [bug.cycle, ref.cycle],
+    [
+      { p50Minutes: 55, p90Minutes: 75 },
+      { p50Minutes: 445, p90Minutes: 465 },
+    ],
+  );
+  assert.deepEqual(
+    bug.tickets.map((t) => t.workspace),
+    ["bug-0", "bug-1", "bug-2", "bug-3", "bug-4"],
+  );
+  assert.deepEqual(
+    bug.board[0].cards.map((c) => c.workspace),
+    ["open-bug"],
+    "a filtered board holds only its type's cards",
+  );
+});
+
+test("a card is red against its own type's p90, the pooled one below the minimum (SW-1212)", () => {
+  for (const r of [
+    flowMetrics(TYPED, "7d", NOW),
+    flowMetrics(TYPED, "7d", NOW, undefined, "bugfix"),
+  ]) {
+    const bug = r.board[0].cards.find((c) => c.workspace === "open-bug");
+    // 120 min: past bugfix's 60, under the pooled 330.
+    assert.deepEqual([bug.workType, bug.overP90, bug.p90Pooled], ["bugfix", true, false]);
+  }
+  const cards = Object.fromEntries(
+    flowMetrics(TYPED, "7d", NOW).board[0].cards.map((c) => [c.workspace, c]),
+  );
+  // Two spike runs: under the minimum, so its 200 min reads against the pooled 330.
+  assert.deepEqual([cards["open-spk"].overP90, cards["open-spk"].p90Pooled], [false, true]);
+  assert.deepEqual([cards["open-ref"].overP90, cards["open-ref"].p90Pooled], [false, false]);
+});
+
+test("byWorkType holds every flow metric per type, from all runs whatever the filter (SW-1212)", () => {
+  const r = flowMetrics(TYPED, "7d", NOW, undefined, "refactor");
+  assert.deepEqual(Object.keys(r.byWorkType), ["bugfix", "refactor", "spike"]);
+  const bug = r.byWorkType["bugfix"];
+  assert.deepEqual(
+    bug.columns.map((c) => [c.column, c.p50Minutes, c.p90Minutes, c.count]),
+    [
+      ["working", 40, 60, 5],
+      ["ready", 5, 5, 5],
+      ["pr-open", 10, 10, 5],
+      ["awaiting-release", null, null, 0],
+    ],
+  );
+  assert.equal(bug.sumOfMediansMinutes, 55);
+  assert.deepEqual([bug.runs, bug.fewRuns], [5, false]);
+  assert.deepEqual([r.byWorkType["spike"].runs, r.byWorkType["spike"].fewRuns], [2, true]);
+  assert.deepEqual(bug.cycle, { p50Minutes: 55, p90Minutes: 75 });
+  assert.deepEqual(bug.lead, { p50Minutes: 55, p90Minutes: 75 });
+  assert.deepEqual(bug.waits, { ...zero, pr: 5 * 10 * 60 }); // five PRs open 10 min each
+  assert.equal(bug.usage.workspaces, 5);
+  assert.equal(bug.usage.estUsd, 5);
+});
+
+test("a run's work type is its latest: rebuild cache, then create/init lines, then its open yml (SW-1212)", () => {
+  const typeOf = (input) =>
+    flowMetrics({ events: [], open: [], usages: [], ...input }, "7d", NOW).tickets[0]?.workType;
+  const base = typedRun("w", "bugfix", 0, 30, 10);
+  const merged = base.events.filter((e) => e.event !== "workspace.create");
+  const cached = { ...base.usage, work_type: "feature" };
+  assert.equal(typeOf({ events: merged, usages: [base.usage] }), "unknown");
+  assert.equal(typeOf({ events: merged, usages: [cached] }), "feature");
+  const create = ev("2026-11-18T00:00:00Z", "workspace.create", "w", { work_type: "bugfix" });
+  const init = ev("2026-11-18T00:10:00Z", "workspace.init", "w", { work_type: "refactor" });
+  assert.equal(typeOf({ events: [...merged, create], usages: [cached] }), "bugfix");
+  assert.equal(typeOf({ events: [init, ...merged, create], usages: [cached] }), "refactor");
+  const card0 = flowMetrics(
+    {
+      events: [create, init],
+      open: [card({ workspace: "w", lifecycle: "working", workType: "spike" })],
+      usages: [],
+    },
+    "7d",
+    NOW,
+  ).board[0].cards[0];
+  assert.equal(card0.workType, "spike");
 });
