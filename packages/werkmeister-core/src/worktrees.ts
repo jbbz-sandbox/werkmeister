@@ -31,7 +31,7 @@ const _GITIGNORE_HEADER =
 // container labels — which would otherwise leave the record branch dirty (SW-144).
 // The other generated projections (.claude/, CLAUDE.md, .mcp.json, .werkmeister/*)
 // are deliberately TRACKED — versioned workspace state is the point of the root repo.
-const _RUNTIME_FILES = [
+export const RUNTIME_FILES = [
   "compose.yml",
   "compose.gate.yml",
   ".werkmeister/agent-state.json",
@@ -52,12 +52,12 @@ const _RUNTIME_FILES = [
 const _GITIGNORE_GENERATED = [
   "/.env",
   "/.env.*",
-  ..._RUNTIME_FILES.map((file) => `/${file}`),
+  ...RUNTIME_FILES.map((file) => `/${file}`),
 ] as const;
 
 /** An ignore rule does not untrack a file an older init committed (compose.yml was). */
 function untrackRuntimeFiles(workspaceDir: string): void {
-  const untrack = ["rm", "--cached", "--quiet", "--ignore-unmatch", "--", ..._RUNTIME_FILES];
+  const untrack = ["rm", "--cached", "--quiet", "--ignore-unmatch", "--", ...RUNTIME_FILES];
   run(["git", "-C", workspaceDir, ...untrack], { capture: true });
 }
 
