@@ -49,6 +49,12 @@ test("compose and runtime state are ignored; the record's own files are not", ()
       ".werkmeister/wake-nudge.json",
       ".werkmeister/wake-nudge-s-1.json",
       ".werkmeister/wake-nudge-s-1.json.123-456.claimed",
+      // SW-1137: agent_state runtime files and writeAtomic leftovers.
+      ".werkmeister/last-stop.json",
+      ".werkmeister/paused.json",
+      ".werkmeister/resume-nudge.json",
+      ".werkmeister/waiting.json",
+      ".werkmeister/waiting.json.123.tmp",
     ];
     assert.deepEqual(ignored(generated), generated);
     // SW-401: the gate and pr-open logs belong on the record.

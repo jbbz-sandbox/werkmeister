@@ -48,6 +48,12 @@ export const RUNTIME_FILES = [
   // Held pr watch wakes: SW-418's wake-nudge.json, SW-444's per-session file and its
   // .claimed/.tmp leftovers. A glob; git rm --cached expands it as a pathspec too.
   ".werkmeister/wake-nudge*",
+  // SW-1137: agent_state.ts writes these at runtime (idle stop, pause, capacity queue); *.tmp are writeAtomic leftovers.
+  ".werkmeister/last-stop.json",
+  ".werkmeister/paused.json",
+  ".werkmeister/resume-nudge.json",
+  ".werkmeister/waiting.json",
+  ".werkmeister/*.tmp",
 ];
 const _GITIGNORE_GENERATED = [
   "/.env",
