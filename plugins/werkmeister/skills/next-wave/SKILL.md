@@ -9,6 +9,10 @@ Turn a project's open tickets into a set of workspaces that can run **at the sam
 
 No UI: don't call the werkmeister MCP tools that render the workspaces dashboard (`list-workspaces`, `status`, `open-workspaces-ui`). Everything here comes from Jira, `gh`, `git` and the `werkmeister` CLI.
 
+## 0. Bring the CLI current (wave start, from the root only)
+
+Before any create: bring the CLI to the latest release, or main on the dev link (`install-check`'s `check.sh --pull`), then run `werkmeister registry sync`. Note the old version or commit for rollback. Do it only here, at the start of the wave: never between staggered starts or after a merge mid-wave, and never from a feature workspace session, since it changes contracts under running workspaces.
+
 ## 1. Read the tickets
 
 - Open tickets, in priority order. On a machine with `projects:` in `~/.werkmeister/config.yaml`: `werkmeister issue ready --project <name> --json`, which lists the project's board's ready column in board rank when the project has a board, else the scope's open issues (users guide § Projects). With no projects: Jira REST `search/jql` with `project=<KEY> AND statusCategory != Done ORDER BY priority DESC, rank ASC` and `fields=summary,status,priority,description,issuelinks` (credentials: the `jira:` block in `~/.werkmeister/config.yaml`). Then `werkmeister issue view <ref>` per ticket for its description and links. Read the summary and description of each; the description decides the classification below. Keep this order: it decides who goes first in step 3.

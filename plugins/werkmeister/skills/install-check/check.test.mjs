@@ -55,13 +55,17 @@ beforeEach(() => {
   fs.symlinkSync(path.join(cli, "w9r"), path.join(bin, "w9r"));
   fake("npm", true); // never reached: the binaries resolve into the repo
 });
-afterEach(() => fs.rmSync(t, { recursive: true, force: true }));
+afterEach(() => {
+  cwd = undefined;
+  fs.rmSync(t, { recursive: true, force: true });
+});
 
+let cwd; // SW-1228: `--pull` refuses inside a workspace, so the default cwd is a temp dir, not this checkout
 function run(...args) {
   const env = { ...process.env, HOME: path.join(t, "home"), WERKMEISTER_REPO: repo };
   env.PATH = `${bin}:${process.env.PATH}`;
   delete env.CLAUDE_CODE_PLUGIN_DIRS;
-  const r = spawnSync("bash", [CHECK, ...args], { env, encoding: "utf8" });
+  const r = spawnSync("bash", [CHECK, ...args], { env, encoding: "utf8", cwd: cwd ?? t });
   const calls = fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : [];
   return { ...r, calls };
 }
@@ -191,6 +195,23 @@ test("--fix never installs the extension, syncs the registry or restarts the dae
   );
   const r = run("--fix");
   assert.doesNotMatch(r.calls.join("\n"), /install:local|^werkmeister /m);
+});
+
+test("--pull inside a feature workspace refuses, names the rule, and pulls and builds nothing (SW-1228)", () => {
+  write(path.join(t, "ws/.werkmeister/workspace.yml"), "");
+  fs.mkdirSync(path.join(t, "ws/sub"), { recursive: true });
+  cwd = path.join(t, "ws/sub");
+  behindOrigin("main");
+  fake("pnpm");
+  fake("corepack");
+  const r = run("--pull");
+  assert.equal(r.status, 2);
+  assert.match(
+    r.stdout,
+    /^ERROR --pull: run from inside a feature workspace .*root session at the start of the next wave/m,
+  );
+  assert.equal(r.calls.length, 0, JSON.stringify(r.calls));
+  assert.ok(!fs.existsSync(path.join(repo, "apps/werkmeister-mcp/src/x.ts")));
 });
 
 test("--pull off main pulls and builds nothing", () => {

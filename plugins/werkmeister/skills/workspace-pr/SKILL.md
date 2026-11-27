@@ -13,6 +13,8 @@ skills fail here. The rules are in the workspace's `pr-rules.md`
 (`_shared/pr-rules.md` for ICM, `.werkmeister/pr-rules.md` for JIT); the long form
 is `docs/workspace-lifecycle.md` in the werkmeister repo.
 
+After a PR merges or ships, do not rebuild the CLI or run `werkmeister registry sync` from the workspace: that belongs to the root session at the start of the next wave.
+
 1. **PR file per code repo touched.** ICM: the propose stage writes
    `stages/NN_propose/output/pr-<repo>.md`. JIT: `w9r-pr` writes
    `.werkmeister/notes/pr-<repo>.md`. Never a PR for the workspace (record) branch.
