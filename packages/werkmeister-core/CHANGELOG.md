@@ -1,5 +1,24 @@
 # sandbox-core
 
+## 0.114.0
+
+### Minor Changes
+
+- 3067449: `usage.json` records tokens per ICM stage and after the last stage; `metrics-trends` and the Metrics tab show tokens and cost by model, cache-read share, per-ticket cost with the five costliest tickets, tokens per stage and spend on abandoned work, with how many workspaces had no price (SW-1100).
+- 5fa4338: SW-1236: on macOS every start the scheduler admits (`feature up`, `feature up --service`, the gate's container starts, the queue's grants) waits while the Mac's own 1-minute load is over `budget.host_load_mac` (default 4 × CPUs, `0` off), says `host load N is over L (budget.host_load_mac)`, and preempts nobody; the daemon starts a waiter held by load once the load falls. `budget status` shows each load's reading beside its limit: the JSON's `host_load` is now `{ vm: { load, limit }, mac: { load, limit } | null }` instead of the VM limit alone, and the text reads `Docker VM load 3.1 (limit 24), Mac load 23.5 (limit 48)`.
+
+### Patch Changes
+
+- 70af869: When `pr gate` or `pr open` auto-rebases onto a base that changed a lockfile (`pnpm-lock.yaml`, `yarn.lock`, `Cargo.lock` and other common ones), the `base` row names it and says to reinstall in the container before running a test row by hand: `werkmeister feature up` reruns the install. The gate's own rows already reinstall after the rebase (SW-1181).
+- cbbc304: SW-1182: `werkmeister metrics rebuild` now tags in place a `stage.done`, `pr.open` or `pr.merged` line that an earlier rebuild logged without the record branch's `run_id`, so a same-named run's late `pr.merged` stops leaking into a run's slice on machines that rebuilt before SW-1158. Lines from branches with no `run_id`, and every other event, are left byte for byte.
+- ce87db9: A `pr gate` test row whose only failures are timeouts (vitest's worker RPC timeout, or a test that timed out), and that ends with host load over `budget.host_load` (the Docker VM's on macOS), no longer fails the gate as red. It ends with `failed under host load N (over L): rerun` and the gate exits 75, as for no capacity. An assertion failure, a type error, or the same timeouts at normal load still fail (SW-1184).
+- c3f5eee: SW-1189: `pr status` and each `pr watch` poll check whether a PR head's `ci.result` is already logged by reading only the month file of the last check's end, where that line is written, instead of rereading the whole metrics log (and its git calls) on every poll.
+- 8211f71: The `pr gate` follow-ups check no longer reads a decision's `Options:` list. A decided "defer, no ticket" item whose only "follow-up" wording sits in an option nobody chose now passes. A chosen answer that promises a follow-up with no issue key still fails (SW-1192).
+- f928474: When `gh pr create` or the push fails inside `werkmeister pr open`, it reads githubstatus.com (5 s timeout) and, if Pull Requests or Git Operations is not operational, adds a line naming the component and its status, saying nothing was created and to retry once githubstatus.com shows it operational. If the status call fails, nothing extra is printed (SW-1198).
+- 4af761b: `werkmeister-context.md` § Test commands says each line runs in the container it names, and each `with-temp-home` line sets `WERKMEISTER_ROW=<container>:<cpus>`. `with-temp-home` prints a warning naming the row's own container when it runs in a container with fewer CPUs (cgroup v2 `cpu.max`), as when the core row ran 16 min in a 1-CPU container against 4–6 min in its own. Rerun `werkmeister workspace init` to regenerate the file and the wrapper (SW-1202).
+- dd8f1ab: `pr gate` matches a failed node:test case by its line shape (`not ok N`, with turbo's `<pkg>:<task>: ` prefix), not by the bare words "not ok". A passing test whose name holds "not ok" no longer blocks the SW-744 retry of a row whose only error is vitest's worker RPC timeout, and the failing-test lines above a red row's tail leave such passes out (SW-1230).
+- 0594887: SW-1246: a capacity grant's "continue" (`Capacity freed: … Continue where you left off.`) now reaches a session that was mid-turn when it landed, such as one waiting on its own question: in Claude Code the session hook adds it as context to the question's answer or to the next prompt, instead of deleting it as stale on that prompt. OpenCode's hook passes no context back, so there it is still lost, as before. A grant 21 s into an open question had left a CLI session idle for 5.5 h over a feature that was already up.
+
 ## 0.113.1
 
 ## 0.113.0

@@ -1,5 +1,18 @@
 # @jbbz-sandbox/sandbox-cli
 
+## 0.114.0
+
+### Minor Changes
+
+- 5fa4338: SW-1236: on macOS every start the scheduler admits (`feature up`, `feature up --service`, the gate's container starts, the queue's grants) waits while the Mac's own 1-minute load is over `budget.host_load_mac` (default 4 × CPUs, `0` off), says `host load N is over L (budget.host_load_mac)`, and preempts nobody; the daemon starts a waiter held by load once the load falls. `budget status` shows each load's reading beside its limit: the JSON's `host_load` is now `{ vm: { load, limit }, mac: { load, limit } | null }` instead of the VM limit alone, and the text reads `Docker VM load 3.1 (limit 24), Mac load 23.5 (limit 48)`.
+
+### Patch Changes
+
+- cbbc304: SW-1182: `werkmeister metrics rebuild` now tags in place a `stage.done`, `pr.open` or `pr.merged` line that an earlier rebuild logged without the record branch's `run_id`, so a same-named run's late `pr.merged` stops leaking into a run's slice on machines that rebuilt before SW-1158. Lines from branches with no `run_id`, and every other event, are left byte for byte.
+- f928474: When `gh pr create` or the push fails inside `werkmeister pr open`, it reads githubstatus.com (5 s timeout) and, if Pull Requests or Git Operations is not operational, adds a line naming the component and its status, saying nothing was created and to retry once githubstatus.com shows it operational. If the status call fails, nothing extra is printed (SW-1198).
+- 0d245fc: SW-1235: the daemon logs a scheduler op (lease, allocate, admit, grant, ...) still running after 30 s, with when it started and its op and feature, and again when it ends with how long it took, so a client's 120 s `did not answer in time` can be traced in `~/.werkmeister/sandbox-mcp.log`.
+- 0594887: SW-1246: a capacity grant's "continue" (`Capacity freed: … Continue where you left off.`) now reaches a session that was mid-turn when it landed, such as one waiting on its own question: in Claude Code the session hook adds it as context to the question's answer or to the next prompt, instead of deleting it as stale on that prompt. OpenCode's hook passes no context back, so there it is still lost, as before. A grant 21 s into an open question had left a CLI session idle for 5.5 h over a feature that was already up.
+
 ## 0.113.1
 
 ### Patch Changes

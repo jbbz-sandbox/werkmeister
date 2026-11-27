@@ -1,5 +1,24 @@
 # sandbox-mcp
 
+## 0.10.9
+
+### Patch Changes
+
+- 0d245fc: SW-1235: the daemon logs a scheduler op (lease, allocate, admit, grant, ...) still running after 30 s, with when it started and its op and feature, and again when it ends with how long it took, so a client's 120 s `did not answer in time` can be traced in `~/.werkmeister/sandbox-mcp.log`.
+- Updated dependencies [3067449]
+- Updated dependencies [70af869]
+- Updated dependencies [cbbc304]
+- Updated dependencies [ce87db9]
+- Updated dependencies [c3f5eee]
+- Updated dependencies [8211f71]
+- Updated dependencies [f928474]
+- Updated dependencies [4af761b]
+- Updated dependencies [dd8f1ab]
+- Updated dependencies [5fa4338]
+- Updated dependencies [0594887]
+  - werkmeister-core@0.114.0
+  - werkmeister-ui@0.7.104
+
 ## 0.10.8
 
 ### Patch Changes
