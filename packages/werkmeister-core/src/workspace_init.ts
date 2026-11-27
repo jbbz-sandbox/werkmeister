@@ -84,6 +84,7 @@ import { pluginDriftWarnings } from "./plugin_check.js";
 import { run as procRun } from "./proc.js";
 import { syncRegistry } from "./registry_sync.js";
 import { error, info, passthrough, raw, success, warn } from "./reporter.js";
+import { upServices } from "./scheduler_state.js";
 import { repoDirs } from "./standards.js";
 import { workspaceStageText } from "./strategies/icm.js";
 import { templateFor } from "./strategies/icm_templates.js";
@@ -1001,7 +1002,12 @@ async function initWorkspaceUntimed(
       repos.map(([name]) => name),
     );
     containers = slot !== null;
-    if (slot !== null && opts.build !== false) {
+    // SW-929: with every service behind a profile, `up --build --no-start` selects nothing and exits non-zero.
+    if (slot !== null && opts.build !== false && !upServices(workspaceRoot).length) {
+      info(
+        "No local services: skipping the image build (an on-demand service builds when it starts).",
+      );
+    } else if (slot !== null && opts.build !== false) {
       // 9. Build images (without starting containers)
       info("Building Docker images (--no-start)...");
       // The build is chatty and slow, so a terminal caller watches it live via
