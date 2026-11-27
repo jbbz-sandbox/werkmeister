@@ -1688,7 +1688,10 @@ const SPECS: CommandSpec[] = [
           ],
           type: ["--type <type>", "bug, feature or task (mapped to the tracker's issue type)"],
           title: ["--title <text>", "The issue's summary"],
-          "body-file": ["--body-file <path>", "The issue's description, from a file (- for stdin)"],
+          "body-file": [
+            "--body-file <path>",
+            "The issue's description, from a file (- for stdin, except in an autonomous workspace)",
+          ],
           relates: ["--relates <issue>", "Link the new issue 'relates to' this one (repeatable)"],
         };
         for (const f of flags)
