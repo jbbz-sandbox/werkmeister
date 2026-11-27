@@ -19,7 +19,7 @@ Writes \fBcoverage\fR rows from the CI \fBcoverage\-summary\fR artifacts of each
 .IP 6. 3
 Appends each new line to \fB~/.werkmeister/metrics/events\-YYYY\-MM.jsonl\fR, the month of the event's own time
 .PP
-Re\-running adds nothing: a stage, a PR event, a transcript session, a slice line or a CI run already in the log is skipped.
+Re\-running adds nothing: a stage, a PR event, a transcript session, a slice line or a CI run already in the log is skipped. A stage or PR line an earlier rebuild logged without its run's \fBrun_id\fR gets the \fBrun_id\fR in place.
 .PP
 For a run closed out before its slice was pushed, it cannot rebuild \fBqueue.*\fR, \fBgate.*\fR, \fBrelease\fR or wrap\-up asks: nothing on disk holds them.
 .PP
