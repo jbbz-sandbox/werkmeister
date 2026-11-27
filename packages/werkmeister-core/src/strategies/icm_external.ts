@@ -37,9 +37,22 @@ export const ALLOWED_GRANTS = ["issue start", "issue view", "pr push:*"];
  */
 export const USER_GRANTS = [...ALLOWED_GRANTS, "pr autosquash:*", "workspace serve:*"];
 
+/** *p*'s real path; a missing tail is kept as written under its deepest existing parent's real path. */
+function realPath(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    const parent = path.dirname(p);
+    return parent === p ? p : path.join(realPath(parent), path.basename(p));
+  }
+}
+
 /** The grants a workflow in *dir* may ask for: USER_GRANTS under `~/.werkmeister/workflows/`, else ALLOWED_GRANTS. */
 export function grantsFor(dir: string): string[] {
-  const rel = path.relative(path.join(sandboxHome(), "workflows"), path.resolve(dir));
+  // SW-1122: by real path, so a symlink from there into a repo gets a repo's grants. userDir keeps
+  // `workflows` unresolved, so a root linked into a repo counts as the repo.
+  const userDir = path.join(realPath(path.resolve(sandboxHome())), "workflows");
+  const rel = path.relative(userDir, realPath(path.resolve(dir)));
   return rel && !rel.startsWith("..") && !path.isAbsolute(rel) ? USER_GRANTS : ALLOWED_GRANTS;
 }
 

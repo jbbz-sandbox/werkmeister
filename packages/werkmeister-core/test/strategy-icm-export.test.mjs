@@ -187,3 +187,19 @@ test("grantsFor gives the user grants only inside ~/.werkmeister/workflows/<type
       assert.equal(grantsFor(dir), ALLOWED_GRANTS, dir);
   });
 });
+
+test("SW-1122: a symlink from ~/.werkmeister/workflows into a repo gets a repo's grants", async () => {
+  await withSandboxHome(async () => {
+    const root = path.join(sandboxHome(), "workflows");
+    const repo = path.join(sandboxHome(), "repo", ".werkmeister", "workflows");
+    fs.mkdirSync(path.join(root, "feature"), { recursive: true });
+    fs.mkdirSync(path.join(repo, "feature"), { recursive: true });
+    assert.equal(grantsFor(path.join(root, "feature")), USER_GRANTS);
+    fs.symlinkSync(path.join(repo, "feature"), path.join(root, "linked"));
+    assert.equal(grantsFor(path.join(root, "linked")), ALLOWED_GRANTS, "linked type");
+    // The whole folder linked into a repo: its types are the repo's too.
+    fs.rmSync(root, { recursive: true });
+    fs.symlinkSync(repo, root);
+    assert.equal(grantsFor(path.join(root, "feature")), ALLOWED_GRANTS, "linked root");
+  });
+});
