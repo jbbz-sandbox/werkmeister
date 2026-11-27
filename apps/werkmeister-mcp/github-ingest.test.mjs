@@ -121,3 +121,13 @@ test("sqsSource: 20 s long poll of up to 10, skips handle-less messages, ack del
     ["DeleteMessageCommand", { QueueUrl: "https://sqs/q", ReceiptHandle: "h1" }],
   ]);
 });
+
+// SW-1245: a pass's later lines (SW-272's "desktop pass owed") reached no log when only lines[0] was logged.
+test("every line of a pass reaches the log, the desktop hand-off included", async () => {
+  const h = harness([[msg("d1")]], {
+    watch: async () => ({ lines: ["#7: no change", "github ingest: desktop pass owed for o/app"] }),
+  });
+  await h.done();
+  assert.ok(h.calls.logs.some((l) => l.includes("(d1): #7: no change")));
+  assert.ok(h.calls.logs.some((l) => l.includes("desktop pass owed for o/app")));
+});

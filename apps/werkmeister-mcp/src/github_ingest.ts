@@ -82,7 +82,9 @@ export function startGithubIngest(source: EventSource, deps: IngestDeps): { stop
       for (const [repo, g] of byRepo) {
         try {
           const r = await deps.track(() => deps.watch({ desktop: false, repo }));
-          deps.log(`github ingest: ${g.label}: ${r.lines[0] ?? "pass ran"}`);
+          // Every line: SW-272's "desktop pass owed" is never the first (SW-1245).
+          for (const line of r.lines.length ? r.lines : ["pass ran"])
+            deps.log(`github ingest: ${g.label}: ${line}`);
           await ackAll(g.msgs);
           for (const id of g.ids) remember(id);
         } catch (e) {
