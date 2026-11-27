@@ -484,7 +484,7 @@ Issues about Werkmeister itself go to GitHub (`jbbz-sandbox/werkmeister`) unless
 issues guide then sends them there with `werkmeister issue create`.
 
 For Jira, set `jira.base_url` (e.g. `https://your-org.atlassian.net`) to get issue links in
-CLAUDE.md, the dashboard, and VS Code. Briefings fetched through the Atlassian MCP use
+AGENTS.md, the dashboard, and VS Code. Briefings fetched through the Atlassian MCP use
 `jira.cloud_id` when set, otherwise the `base_url` hostname. The REST token is optional. For
 each tracker's setup (the Jira token, GitHub's `gh auth`), see [Issue trackers](issue-trackers.md).
 

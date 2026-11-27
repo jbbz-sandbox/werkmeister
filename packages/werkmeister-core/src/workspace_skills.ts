@@ -286,7 +286,7 @@ export function resolveWorkspaceActive(
  * Recompute the gate manifest for an already-initialized workspace. The phase
  * gate is recompiled from the work type only when the on-disk manifest already
  * carries one: init-workspace is the only place that introduces the gate (its
- * CLAUDE.md explains it), so the every-session `skills check || sync` never
+ * AGENTS.md explains it), so the every-session `skills check || sync` never
  * adds one mid-work to a workspace created before gates existed.
  */
 export function resolveWorkspaceManifest(

@@ -1,7 +1,7 @@
 /**
  * The `icm` context strategy: a staged-folder pipeline the agent walks by
  * itself (docs/context-strategies.md). Plain files only — no hooks, no notes,
- * no gate manifest. `CLAUDE.md` routes, `CONTEXT.md` shows the pipeline,
+ * no gate manifest. `AGENTS.md` routes, `CONTEXT.md` shows the pipeline,
  * `BRIEF.md` is the operator's, `_shared/standards.md` points at the standards
  * tree, `_shared/issues-report.md` says where to file issues, and each
  * `stages/NN_<name>/CONTEXT.md` is one stage's contract. The one hook it
@@ -581,7 +581,7 @@ function init(ctx: InitContext): void {
   if (foreign.length) {
     warn(
       `stages/ holds ${foreign.join(", ")}, which the current ${ctx.inputs["work_type"] || "feature"} template does not render — ` +
-        "left CLAUDE.md, CONTEXT.md, _shared/ and stages/ as they are so the run keeps its pipeline. " +
+        "left AGENTS.md, CLAUDE.md, CONTEXT.md, _shared/ and stages/ as they are so the run keeps its pipeline. " +
         "To regenerate them from the current template, move stages/ aside and rerun.",
     );
   }
@@ -590,6 +590,7 @@ function init(ctx: InitContext): void {
     ? {}
     : {
         [layout.instructionsFile]: renderClaudeMd(ctx, stages) + layout.notice(),
+        ...(layout.importStub && { [layout.importStub]: `@${layout.instructionsFile}\n` }),
         "CONTEXT.md": renderPipeline(ctx, stages),
         ...render(ctx),
       };
@@ -658,9 +659,12 @@ export function exportWorkflow(
   const names = dirs.map((d) => d.slice(3));
   const ask = askLine(v.questionTool);
   const pipeline = fs.readFileSync(path.join(root, "CONTEXT.md"), "utf8").split("\n");
-  const routes = fs
-    .readFileSync(path.join(root, harnessLayoutFor(root).instructionsFile), "utf8")
-    .split("\n");
+  // A workspace not re-inited since SW-1231 still keeps its router in CLAUDE.md.
+  const router =
+    [harnessLayoutFor(root).instructionsFile, "CLAUDE.md"]
+      .map((f) => path.join(root, f))
+      .find((p) => fs.existsSync(p)) ?? path.join(root, harnessLayoutFor(root).instructionsFile);
+  const routes = fs.readFileSync(router, "utf8").split("\n");
   const reverse = (text: string) => {
     let t = text;
     for (const [value, key] of [

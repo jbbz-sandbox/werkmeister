@@ -3,7 +3,7 @@
 > The `.werkmeister/notes/` layer specced in
 > [jit-context-system.md](jit-context-system.md) (§5.7). This file is
 > the canonical convention reference for anything that reads or writes notes: the
-> generated CLAUDE.md `## Notes` pointer, the `w9r-implement` / `w9r-research` /
+> generated AGENTS.md `## Notes` pointer, the `w9r-implement` / `w9r-research` /
 > `w9r-handoff` skills, subagent return contracts, and `werkmeister feature down` printing.
 
 ## What notes are
@@ -14,7 +14,7 @@ and phase → phase. They live and die with the workspace.
 
 Three rules keep the layer honest:
 
-1. **Generated files point; notes persist.** The workspace CLAUDE.md links to
+1. **Generated files point; notes persist.** The workspace AGENTS.md links to
    `.werkmeister/notes/` and holds no durable state. Generators (`werkmeister workspace init`,
    `werkmeister feature up`) never write into the notes directory — with two one-time, write-once
    exceptions in init-workspace: the salvage of a legacy CLAUDE.md `## Handoff Notes`

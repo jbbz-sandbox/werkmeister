@@ -1,7 +1,7 @@
 /**
  * The workspace's own copy of its issue (`.werkmeister/issue.md`): fetched once at
  * creation, refreshed only by `werkmeister workspace init --refresh-issue`. The
- * source of record the brief and CLAUDE.md point at (docs/context-strategies.md).
+ * source of record the brief and AGENTS.md point at (docs/context-strategies.md).
  */
 import * as fs from "node:fs";
 import * as path from "node:path";

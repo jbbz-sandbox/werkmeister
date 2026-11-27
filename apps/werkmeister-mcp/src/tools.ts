@@ -530,7 +530,7 @@ function registerAuthoringTools(server: McpServer): void {
       annotations: { readOnlyHint: false },
       description:
         "Re-run init-workspace against an existing workspace: reconcile worktrees, regenerate " +
-        `CLAUDE.md, .env, ${COMPOSE_FILE}, skills, agents, hooks and .mcp.json from ` +
+        `AGENTS.md, CLAUDE.md, .env, ${COMPOSE_FILE}, skills, agents, hooks and .mcp.json from ` +
         ".werkmeister/workspace.yml plus any arguments given here.",
       inputSchema: { ...WORKSPACE_ARG, ...WORKSPACE_FIELDS },
     },

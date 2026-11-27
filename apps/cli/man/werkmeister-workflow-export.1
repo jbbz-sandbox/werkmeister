@@ -9,7 +9,7 @@ werkmeister\-workflow\-export \- Write an ICM workspace's stages as a workflow f
 A missing or empty folder to write the workflow into
 .SH DESCRIPTION
 .PP
-Writes an ICM workspace's stages as a workflow folder: \fBworkflow.yaml\fR and one \fBstages/<name>.md\fR per stage, read from the workspace's \fBstages/NN_<name>/CONTEXT.md\fR, the root \fBCONTEXT.md\fR and \fBCLAUDE.md\fR. It drops what werkmeister adds to each contract (the \fB## Pre\-approved\fR section, step \fB0.\fR, the ask\-tool line and the standards line) and turns this workspace's stage paths, worktrees and reload line back into the workflow variables \fBat:<stage>\fR, \fBrepos\fR and \fBrestart\fR (each written in double braces). Hand edits to the contracts are kept.
+Writes an ICM workspace's stages as a workflow folder: \fBworkflow.yaml\fR and one \fBstages/<name>.md\fR per stage, read from the workspace's \fBstages/NN_<name>/CONTEXT.md\fR, the root \fBCONTEXT.md\fR and \fBAGENTS.md\fR. It drops what werkmeister adds to each contract (the \fB## Pre\-approved\fR section, step \fB0.\fR, the ask\-tool line and the standards line) and turns this workspace's stage paths, worktrees and reload line back into the workflow variables \fBat:<stage>\fR, \fBrepos\fR and \fBrestart\fR (each written in double braces). Hand edits to the contracts are kept.
 .PP
 \fB<workspace>\fR is a workspace name, as \fBwerkmeister workspace list\fR prints it, or a path (\fB.\fR or anything with a \fB/\fR). It refuses a workspace that isn't icm, or a \fB\-\-to\fR folder that exists and isn't empty. Before it finishes, it loads the folder as \fBworkspace init\fR would, and removes what it wrote if that fails.
 .PP

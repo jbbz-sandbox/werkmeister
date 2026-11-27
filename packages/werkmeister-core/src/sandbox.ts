@@ -1016,7 +1016,7 @@ async function readWorkspaceConfig(workspaceDir: string): Promise<WorkspaceConfi
  * @param dir - The workspace folder, e.g. from {@link resolveWorkspaceDir}.
  * @returns `title` (the issue key and task, cut to under 60 characters, or the
  *   folder name), `model` (only when the workspace sets one), `prompt` (it differs
- *   for autonomous workspaces) and `background` (points the agent at `CLAUDE.md`
+ *   for autonomous workspaces) and `background` (points the agent at `AGENTS.md`
  *   and the issue copy). A missing or unreadable `workspace.yml` still returns
  *   arguments, built from the folder name.
  *

@@ -27,14 +27,14 @@ Four gating axes, each wired to its natural mechanism:
 
 | Axis | Mechanism | Resolution time |
 |------|-----------|-----------------|
-| **Phase** (research/implement/test/review/pr) | Phase-entry skills (`w9r-implement`, …) + a compiled routing table in the workspace `CLAUDE.md` | runtime, model-invoked |
+| **Phase** (research/implement/test/review/pr) | Phase-entry skills (`w9r-implement`, …) + a compiled routing table in the workspace `AGENTS.md` | runtime, model-invoked |
 | **Domain** (ui/service/data/auth/config/testing/observability) | Generated `w9r-<domain>-standard` skills; `applies_to` globs matched against the files being edited | runtime, model-invoked + hook-enforced (§6) |
 | **Service presence** | `services.yaml` archetypes → standards keys, resolved per workspace at init | init time, deterministic |
 | **Tools / isolation** | Generated subagents with `tools:` allowlists | init time, deterministic |
 
 Governing principles (each anchored to an internal measurement; the harnesses are not published):
 
-- **Map, not territory.** The workspace `CLAUDE.md` carries a compiled routing *table*, never
+- **Map, not territory.** The workspace `AGENTS.md` carries a compiled routing *table*, never
   standard bodies. Bodies live in skills and load on demand. (Harness-1: skill descriptions
   cost ~3–7 standing tokens each; bodies are fully lazy.)
 - **Phase entry beats description-gating.** Model-side description matching collapses for
@@ -256,7 +256,7 @@ Rendered on the fly from the standards tree by `packages/werkmeister-core/src/sk
 | `w9r-handoff` | any boundary | writes the structured handoff note |
 | `w9r-author` | authoring | fills graduation scaffolds in the standards tree |
 
-### 5.3 Workspace `CLAUDE.md` — the compiled routing table
+### 5.3 Workspace `AGENTS.md` — the compiled routing table
 
 `packages/werkmeister-core/src/harness/claude/claude_md.ts::buildStandardsRoutingSection`. The "Standards routing" section
 contains the Active table (`| Standard | Skill | Loads on |`, where "Loads on" = `applies_to`
@@ -274,7 +274,7 @@ the Notes pointer. `.werkmeister/werkmeister-context.md` is written by the compo
 scoped to the workspace: through-Caddy health checks only for its local services' hosts, the
 feature URL and browser cookie, and a Services table carrying each service's path in its repo.
 
-The `CLAUDE.md` is a **compiled projection — never hand-edited**, and it holds no durable
+The `AGENTS.md` is a **compiled projection — never hand-edited**, and it holds no durable
 state: it *points* at `.werkmeister/notes/` rather than containing handoff content, so
 regeneration can never clobber working state.
 
@@ -435,8 +435,8 @@ builtins-only.
 `buildStandardsManifest`/`writeStandardsManifest` emit `.werkmeister/standards.json` (`domain →
 {applies_to, summary}` for every active non-universal standard, the active universal keys, and
 `phase_gate` when the work type has one) from the same `resolveActiveStandards` output that
-produces the CLAUDE.md routing table. It cannot diverge from the table. The one exception is
-`phase_gate`: only `werkmeister workspace init` introduces it, alongside the CLAUDE.md that explains
+produces the AGENTS.md routing table. It cannot diverge from the table. The one exception is
+`phase_gate`: only `werkmeister workspace init` introduces it, alongside the AGENTS.md that explains
 it. `werkmeister skills sync` recompiles `phase_gate` from `.werkmeister/workspace.yml`'s `work_type`
 only when the on-disk manifest already carries one — so a gate survives sync, and a work type
 without a gate (`refactor`) drops it — and never adds one to a workspace whose manifest has
@@ -467,7 +467,7 @@ imported, to keep the import graph light. It carries a `ponytail:` comment sayin
 **Automated test coverage is thin.** `apps/cli/src/lib/__tests__/gate.test.ts` (22 tests) and
 `packages/werkmeister-core/test/gate.test.mjs` (phase gate) cover the gate;
 `packages/werkmeister-core/test/agent-gen.test.mjs`, `harness-claude-md.test.mjs`, and
-`workspace-skills-scope.test.mjs` cover agent generation, CLAUDE.md generation, and skill
+`workspace-skills-scope.test.mjs` cover agent generation, AGENTS.md generation, and skill
 scoping; `apps/cli/src/lib/__tests__/universal_standards.test.ts` covers standards resolution
 and the manifest, `hooks_gen.test.ts` the hooks, `packages/werkmeister-core/test/notes-context.test.mjs`
 notes re-injection, and `mcp-gen-vars.test.mjs` MCP variable handling. Everything else is

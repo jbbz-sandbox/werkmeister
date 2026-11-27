@@ -374,7 +374,7 @@
     "in context before the first generation pass — loading them after code exists is too late",
     "(jit-context-system.md §2).",
     "",
-    "1. **Read the \"Standards routing\" block** in the workspace `CLAUDE.md`. It is the",
+    "1. **Read the \"Standards routing\" block** in the workspace `AGENTS.md`. It is the",
     "   compiled map of which standards are active for this workspace's services.",
     "2. **Load the universal coding base FIRST:**",
     "   - `ponytail` — the decision ladder (does this need to exist? already in the codebase?",
@@ -449,7 +449,7 @@
     "Supersede, don't delete: a revisited decision sets the old note's `status: superseded`",
     "and gets a new note.",
     "",
-    "If the workspace `CLAUDE.md` has no \"Standards routing\" block (not a werkmeister-initialized",
+    "If the workspace `AGENTS.md` has no \"Standards routing\" block (not a werkmeister-initialized",
     "workspace), load `ponytail` + `w9r-comments-standard` + `w9r-engineering-standard` only.",
     "",
     "A standards gate may deny your first edit to a governed path with loading instructions;",
@@ -571,7 +571,7 @@
     "",
     "## Exit by work type",
     "",
-    "Read Work type in CLAUDE.md; none → architectural.",
+    "Read Work type in AGENTS.md; none → architectural.",
     "",
     "- **architectural**: spec deliverable. Present the design in chat (scope,",
     "  approach, what's out); explicit yes → write `NNN-decision-<slug>.md`,",
@@ -598,7 +598,7 @@
     "Run these steps before reading the first line of the diff. A review without the",
     "active standards in context degrades to taste — the checklist has to load first.",
     "",
-    "1. **Read the \"Standards routing\" block** in the workspace `CLAUDE.md`.",
+    "1. **Read the \"Standards routing\" block** in the workspace `AGENTS.md`.",
     "2. **Map the diff to domains:** list the files the diff touches and match them",
     "   against each Active row's \"Loads on\" patterns. Load every matching",
     "   `w9r-*-standard` skill. The inline anti-pattern one-liners in each standard",
@@ -646,7 +646,7 @@
     "",
     "`werkmeister feature down` will offer to graduate it into the standards tree (`overrides.standards_dir`).",
     "",
-    "If the workspace `CLAUDE.md` has no \"Standards routing\" block (not a",
+    "If the workspace `AGENTS.md` has no \"Standards routing\" block (not a",
     "werkmeister-initialized workspace), load `w9r-comments-standard` +",
     "`w9r-engineering-standard` only and review against them.",
     ""
@@ -661,7 +661,7 @@
     "",
     "- **Step 0 — scope the run.** From the change at hand (the diff, or the task if nothing",
     "  is edited yet), identify which services are affected, then read the workspace",
-    "  `CLAUDE.md` \"Standards routing\" block to see which archetypes those services belong",
+    "  `AGENTS.md` \"Standards routing\" block to see which archetypes those services belong",
     "  to. When in doubt, the Services table in `.werkmeister/werkmeister-context.md` maps services",
     "  to repos and paths.",
     "- Do **not** load the code standards yourself — the tester agents carry the pointer to",
@@ -912,7 +912,7 @@
     "",
     "| Issue is about | File at | Command |",
     "|---|---|---|",
-    "| the `werkmeister` tool: CLI, MCP tools, plugin skills, generated files (`.werkmeister/`, `compose.yml`, `.env`, `CLAUDE.md`, context files), containers, ports, Caddy routing, workspace init/teardown | https://github.com/jbbz-sandbox/werkmeister/issues | `gh issue create -R jbbz-sandbox/werkmeister --label <label>` |",
+    "| the `werkmeister` tool: CLI, MCP tools, plugin skills, generated files (`.werkmeister/`, `compose.yml`, `.env`, `AGENTS.md`, `CLAUDE.md`, context files), containers, ports, Caddy routing, workspace init/teardown | https://github.com/jbbz-sandbox/werkmeister/issues | `gh issue create -R jbbz-sandbox/werkmeister --label <label>` |",
     "| app code in a worktree | Jira — ask the person which project | `werkmeister issue create --project <KEY> --type <type> --title \"<title>\" --body-file <file> [--relates <issue>]`; if it fails for want of a Jira API token, the Atlassian MCP tools if connected, otherwise hand the person the title, type and body to file |",
     "",
     "## How",
@@ -1105,11 +1105,11 @@
     "# Edit:    Hand-edit `feature`, `repos`, `services`, `issue_id`, `task`,",
     "#          `test_path`, `description`, `labels`, or `starting_prompt` below; rerun",
     "#          `werkmeister workspace init` to propagate changes into",
-    "#          CLAUDE.md / .env / compose.yml / .werkmeister/*.",
+    "#          AGENTS.md / CLAUDE.md / .env / compose.yml / .werkmeister/*.",
     "#          Adding/removing a repo here reconciles git worktrees on rerun;",
     "#          removing a repo with uncommitted edits needs `--force`.",
     "#          Optional `standards_override: {add: [...], remove: [...]}` tunes",
-    "#          the CLAUDE.md Standards routing block (docs/jit-context-system.md).",
+    "#          the AGENTS.md Standards routing block (docs/jit-context-system.md).",
     "#          To register a brand-new service, edit",
     "#          ~/.werkmeister/services.yaml instead.",
     "# Format:  YAML — line comments (`#`) are supported. The loader also",
@@ -1121,7 +1121,7 @@
     "work_type: feature",
     ""
   ],
-  "CLAUDE.md": [
+  "AGENTS.md": [
     "# Workspace: <WORKSPACE>",
     "",
     "## Current Task",
@@ -1178,6 +1178,10 @@
     "## Issues",
     "",
     "Hit a bug, or need to log a feature or task, in the `werkmeister` tool or a repo's code? If this workspace's changes caused a bug, fix it here; otherwise file an issue (bug | feature | task) where it belongs (the werkmeister repo, or this machine's issue tracker) and report the URL. Rules, labels and templates: [.werkmeister/issues-report.md](.werkmeister/issues-report.md).",
+    ""
+  ],
+  "CLAUDE.md": [
+    "@AGENTS.md",
     ""
   ]
 }

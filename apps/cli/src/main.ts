@@ -208,7 +208,7 @@ function addWorkspaceInitOptions(cmd: Command): void {
     .addOption(
       new Option(
         "--harness <id>",
-        "Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), " +
+        "Agent harness that reads the workspace: claude (AGENTS.md with a one-line CLAUDE.md import, .claude/, hooks), " +
           "mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, " +
           ".codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, " +
           "opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).",
@@ -903,7 +903,7 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "-t, --task <title>",
-          "Task title for the workspace CLAUDE.md; passed through to init-workspace.",
+          "Task title for the workspace AGENTS.md; passed through to init-workspace.",
         )
         .option(
           "--test-path <path>",
@@ -911,7 +911,7 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "--description <text>",
-          "Free-form description for the CLAUDE.md header; passed through to init-workspace.",
+          "Free-form description for the AGENTS.md header; passed through to init-workspace.",
         )
         .option(
           "--starting-prompt <text>",
@@ -1216,7 +1216,7 @@ const SPECS: CommandSpec[] = [
         .description(
           "Reconcile a workspace from .werkmeister/workspace.yml: create/remove " +
             "repo worktrees to match the `repos`/`services` fields, then (re)generate " +
-            `CLAUDE.md / .env / ${COMPOSE_FILE}. Idempotent — edit workspace.yml and ` +
+            `AGENTS.md / CLAUDE.md / .env / ${COMPOSE_FILE}. Idempotent — edit workspace.yml and ` +
             "rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.",
         )
         .option(
@@ -1272,7 +1272,7 @@ const SPECS: CommandSpec[] = [
         )
         .option(
           "--description <text>",
-          "Free-form description for the CLAUDE.md header (env: WERKMEISTER_DESCRIPTION; config: description).",
+          "Free-form description for the AGENTS.md header (env: WERKMEISTER_DESCRIPTION; config: description).",
         )
         .option(
           "--starting-prompt <text>",

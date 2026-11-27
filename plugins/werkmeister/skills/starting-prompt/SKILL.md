@@ -32,5 +32,5 @@ If invoked from outside the workspace root, pass `--start <workspace-dir>`.
 Treat the printed text as the user's instruction and carry it out as a normal task. Begin work immediately:
 
 - Honor any in-task checklists / numbered verification steps in the prompt.
-- Follow the workspace's CLAUDE.md conventions and routing rules while doing the work.
+- Follow the workspace's AGENTS.md conventions and routing rules while doing the work.
 - If the prompt has unmet preconditions (e.g. "after confirming X is resolved"), verify or surface them before taking irreversible actions.

@@ -9,7 +9,7 @@ Run these steps now, before drafting any code. Prevention rules only work if the
 in context before the first generation pass — loading them after code exists is too late
 (jit-context-system.md §2).
 
-1. **Read the "Standards routing" block** in the workspace `CLAUDE.md`. It is the
+1. **Read the "Standards routing" block** in the workspace `AGENTS.md`. It is the
    compiled map of which standards are active for this workspace's services.
 2. **Load the universal coding base FIRST:**
    - `ponytail` — the decision ladder (does this need to exist? already in the codebase?
@@ -84,7 +84,7 @@ status: open
 Supersede, don't delete: a revisited decision sets the old note's `status: superseded`
 and gets a new note.
 
-If the workspace `CLAUDE.md` has no "Standards routing" block (not a werkmeister-initialized
+If the workspace `AGENTS.md` has no "Standards routing" block (not a werkmeister-initialized
 workspace), load `ponytail` + `w9r-comments-standard` + `w9r-engineering-standard` only.
 
 A standards gate may deny your first edit to a governed path with loading instructions;

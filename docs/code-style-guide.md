@@ -34,7 +34,7 @@ standard bodies — they are not loadable standards in their own right.
 
 Which modules apply to a given ephemeral workspace is computed from the archetype of each
 service in `~/.werkmeister/services.yaml` (plus `.werkmeister/workspace.yml` `standards_override`) and
-rendered as a **"Standards routing"** block in the workspace's generated `CLAUDE.md`. The
+rendered as a **"Standards routing"** block in the workspace's generated `AGENTS.md`. The
 universal base is always active.
 
 Full mechanism — resolution, generated skills, entry skills, agents, hooks, the standards

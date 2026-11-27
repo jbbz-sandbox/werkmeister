@@ -6,7 +6,7 @@ Status: option B implemented — spec docs/superpowers/specs/2026-09-27-context-
 
 JIT is experimental; ICM is the supported strategy. Triage: a JIT-only bug is filed but not scheduled unless it also breaks ICM.
 
-Set `context_strategy: jit | icm` in `.werkmeister/workspace.yml`, or pass `--context-strategy <id>` / `WERKMEISTER_CONTEXT_STRATEGY` to `werkmeister workspace new` / `werkmeister workspace init`. Every create writes the key: with no strategy given, a new workspace gets `context_strategy: icm`. A `workspace.yml` without the key (one made before the field existed) reads as `jit`. `jit` generates the w9r-* skills, generated agents, gate manifest and SessionStart/PreToolUse hooks described below; `icm` instead writes a staged-folder pipeline — `CLAUDE.md`, `CONTEXT.md`, `BRIEF.md`, `_shared/standards.md`, `_shared/issues-report.md` and `stages/NN_*/CONTEXT.md` — with no notes, no gate and one hook, the PR guard shared with jit. Both strategies write the issue-filing guide from `issues_report.ts` (type bug | feature | task → label and template; werkmeister issues → `jbbz-sandbox/werkmeister`, app issues → the configured tracker): icm at `_shared/issues-report.md`, routed from `CLAUDE.md`; jit at `.werkmeister/issues-report.md`, linked from `CLAUDE.md`'s `## Issues` section.
+Set `context_strategy: jit | icm` in `.werkmeister/workspace.yml`, or pass `--context-strategy <id>` / `WERKMEISTER_CONTEXT_STRATEGY` to `werkmeister workspace new` / `werkmeister workspace init`. Every create writes the key: with no strategy given, a new workspace gets `context_strategy: icm`. A `workspace.yml` without the key (one made before the field existed) reads as `jit`. `jit` generates the w9r-* skills, generated agents, gate manifest and SessionStart/PreToolUse hooks described below; `icm` instead writes a staged-folder pipeline — `AGENTS.md`, `CONTEXT.md`, `BRIEF.md`, `_shared/standards.md`, `_shared/issues-report.md` and `stages/NN_*/CONTEXT.md` — with no notes, no gate and one hook, the PR guard shared with jit. Both strategies write the issue-filing guide from `issues_report.ts` (type bug | feature | task → label and template; werkmeister issues → `jbbz-sandbox/werkmeister`, app issues → the configured tracker): icm at `_shared/issues-report.md`, routed from `AGENTS.md`; jit at `.werkmeister/issues-report.md`, linked from `AGENTS.md`'s `## Issues` section.
 
 Both strategies share one PR lifecycle — rules file, PR files, pre-PR gate, PR guard hook, close-out: [workspace-lifecycle.md](workspace-lifecycle.md).
 
@@ -16,7 +16,7 @@ In an interactive icm workspace, every stage contract's `## Human check` is a ga
 
 `autonomous: true` in `workspace.yml` (or `--autonomous`, `WERKMEISTER_AUTONOMOUS=1`, or the form's checkbox; off by default) lets a headless session started with `claude-send "start the run"` go from stage 01 to `werkmeister pr open`, stopping once for the person to approve the PR file. The rest of the person's review moves to the PR; `werkmeister pr gate` still applies.
 
-- **icm**: each stage contract ends in `## Self-check` instead of `## Human check` — review `output/` once against `BRIEF.md` and the live issue, flip `status: proposed → decided`, and record each decision under `## Recommendations for reviewer` in the PR body. The propose stage's self-check asks the person to approve the PR file through the question tool (SW-771), then runs `werkmeister pr open`. `CLAUDE.md`'s one rule becomes `## Stop points`: the PR file's approval and then the PR URL, a question only a person can answer, or a gate failure outside the issue's scope. `_shared/pr-rules.md` says the person approves after the agent's self-check.
+- **icm**: each stage contract ends in `## Self-check` instead of `## Human check` — review `output/` once against `BRIEF.md` and the live issue, flip `status: proposed → decided`, and record each decision under `## Recommendations for reviewer` in the PR body. The propose stage's self-check asks the person to approve the PR file through the question tool (SW-771), then runs `werkmeister pr open`. `AGENTS.md`'s one rule becomes `## Stop points`: the PR file's approval and then the PR URL, a question only a person can answer, or a gate failure outside the issue's scope. `_shared/pr-rules.md` says the person approves after the agent's self-check.
 - **both strategies**: `.claude/settings.json` gains `autonomousRules` (`hooks_gen.ts`) in `permissions.allow` and `AUTONOMOUS_DENY` in `permissions.deny`, both recorded in `.werkmeister/claude-permissions.json`, so flipping back to `false` and rerunning `init-workspace` (or `werkmeister feature up`) removes them. Each CLI rule is written for every launcher name (`werkmeister` and `w9r`), since a prefix rule for one never matches a call through another; the lists below say `werkmeister`. The allow rules stop at the workspace: git, read-only `gh`, the CLI commands that act on this feature (its name, or none for the cwd's), its own containers, local build and test, the exact frozen install each repo's root lockfile pins (SW-649: pnpm, npm, yarn v1 or berry, uv; read from the repo's checkout under `repos_root`, never the worktree; none for a repo without one), read-only utilities, and the read-only MCP tools. The deny rules, which outrank any allow including a person's user-level one, cover shared infra, other workspaces, the linked CLI and outward-facing acts. These are prefix rules, a guardrail rather than a boundary: a script the agent adds to `package.json` or a flag after the package (`npm install x -g`) still gets past. The PR guard still denies `gh pr create`. jit's gates are unchanged. Both lists are generated from `hooks_gen.ts` by `pnpm run docs:gen`; `<feature>` and `<svc>` stand for the workspace's feature and each of its services.
 - **icm stage grants (SW-807)**: each stage in `icm_templates.ts` lists the `werkmeister` commands it pre-approves (`grants`), and its contract shows them under `## Pre-approved`. `workspaceAllowRules` writes the union of the work type's stages into `permissions.allow` for the whole run, interactive or autonomous, from the template in code, never from the rendered `CONTEXT.md`, which the agent can edit. Today that is the exact `issue start` and `issue view` of the first stage: both act on this workspace's own issue. `feature up`/`restart`/`stop`, `pr gate` and `pr status` are left out on purpose: a bare form follows `FEATURE` in the agent-editable `.env`, `--service` takes a trailing feature or `infra`, the gate and `feature up` run the branch's own `.werkmeister/services.yaml` (host mounts included), and `pr status` on a merged PR syncs the real registry from the PR file's `url`. `docker exec` into a service's container stays a prompt (SW-560), and a `python3` heredoc is never pre-approved: the contracts say to use Read, Edit and Write.
 - **commit rules in every workspace (SW-912)**: an interactive workspace gets the same `git commit` rules as an autonomous one (message on the line only, bare and `-C <own repo>`, see the threat model) and the one deny they need, `--pathspec-from-file`, so a stage's commit never rests on auto mode's classifier, which refused them mid-stage.
@@ -48,7 +48,7 @@ The "context layer" is four of `initWorkspace`'s steps plus one refresh in `up`,
 | Step | Writes | Code |
 |---|---|---|
 | 5b active standards | `.werkmeister/standards.json` | `strategies/jit.ts:130`, `standards.ts:531` |
-| 6 notes + CLAUDE.md | `.werkmeister/notes/001-handoff-*`, `CLAUDE.md` | `strategies/jit.ts:164`, `harness/claude/claude_md.ts:247` |
+| 6 notes + AGENTS.md | `.werkmeister/notes/001-handoff-*`, `AGENTS.md` | `strategies/jit.ts:164`, `harness/claude/claude_md.ts:247` |
 | 6a skills | `.claude/skills/w9r-*` | `strategies/jit.ts:182`, `workspace_skills.ts:118` |
 | 6b agents | `.claude/agents/w9r-researcher.md`, `w9r-tester-*` | `strategies/jit.ts:187`, `agent_gen.ts:177` |
 | 6c hooks | `.claude/settings.json` | `strategies/jit.ts:197`, `harness/claude/hooks_gen.ts:107` |
@@ -64,7 +64,7 @@ The hand-built `icm-ws2` maps onto existing data with no new inputs:
 
 | ICM file | Source |
 |---|---|
-| `CLAUDE.md` (router, <60 lines) | `feature`, `task`, repo list; static route table |
+| `AGENTS.md` (router, <60 lines) | `feature`, `task`, repo list; static route table |
 | `CONTEXT.md` (pipeline table) | a stage template keyed by `work_type` |
 | `BRIEF.md` | `starting_prompt` verbatim |
 | `_shared/issues-report.md` | `buildIssuesReportMd` (`issues_report.ts`) — shared with jit's `.werkmeister/issues-report.md` |
@@ -76,8 +76,8 @@ With an issue, both strategies also show it. The stored copy is `.werkmeister/is
 
 | | Issue section | Brief / first instruction |
 |---|---|---|
-| ICM | root `CLAUDE.md`, plus a "Where things live" row for `.werkmeister/issue.md` | `BRIEF.md` = issue section, then `description`, then `starting_prompt`. The "No starting prompt was given" note appears only with no issue and no prompt |
-| JIT | `CLAUDE.md` Current Task, replacing the bare link | the starting-prompt handoff note opens with the issue section; written even when `starting_prompt` is empty, if there is an issue |
+| ICM | root `AGENTS.md`, plus a "Where things live" row for `.werkmeister/issue.md` | `BRIEF.md` = issue section, then `description`, then `starting_prompt`. The "No starting prompt was given" note appears only with no issue and no prompt |
+| JIT | `AGENTS.md` Current Task, replacing the bare link | the starting-prompt handoff note opens with the issue section; written even when `starting_prompt` is empty, if there is an issue |
 
 A Jira issue with a parent epic also stores the epic in `issue.md` under `## Parent` (its key, summary, link and description, where an epic keeps the links its stories cite), and the issue section names it in a `Parent:` line. `werkmeister issue view` prints the same (SW-633).
 
@@ -109,7 +109,7 @@ interface ContextStrategy {
 
 ## Option C — Claude Code plugins
 
-The exploration confirms the static parts of JIT could ship in a plugin: the seven entry skills are copied verbatim from `apps/cli/infra/skills/`, and `generateSkills` renders **all** `w9r-<domain>-standard` modules from the machine-global standards dir, not a per-workspace subset. `w9r-researcher` is static too. What is genuinely per-workspace is `CLAUDE.md`, `.werkmeister/standards.json`, `w9r-tester-<archetype>`, `.mcp.json`, and the hook *placement*.
+The exploration confirms the static parts of JIT could ship in a plugin: the seven entry skills are copied verbatim from `apps/cli/infra/skills/`, and `generateSkills` renders **all** `w9r-<domain>-standard` modules from the machine-global standards dir, not a per-workspace subset. `w9r-researcher` is static too. What is genuinely per-workspace is `AGENTS.md`, `.werkmeister/standards.json`, `w9r-tester-<archetype>`, `.mcp.json`, and the hook *placement*.
 
 But a plugin is a delivery vehicle, not a selector:
 

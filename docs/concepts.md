@@ -78,7 +78,7 @@ When you run `werkmeister feature up my-feature`, the CLI:
 
 ## Initializing a Workspace
 
-`werkmeister workspace init` writes the per-feature `CLAUDE.md` and `.env` into the workspace root. Each input resolves in this order (first non-empty wins):
+`werkmeister workspace init` writes the per-feature `AGENTS.md` and `.env` into the workspace root. Each input resolves in this order (first non-empty wins):
 
 1. **CLI flag**: `--feature`, `--services`, `--issue-id`, `--test-path`, `--description`, `--task`
 2. **`WERKMEISTER_*` env var**: `WERKMEISTER_SERVICES`, `WERKMEISTER_ISSUE_ID`, `WERKMEISTER_TEST_PATH`, `WERKMEISTER_DESCRIPTION`, `WERKMEISTER_TASK`. `WERKMEISTER_FEATURE` is not an input: every workspace container exports it as its own feature name.
@@ -158,7 +158,7 @@ No cluster? `infra.baseline` runs the base services you aren't changing from dig
 With an issue ID it fetches the issue (failing if it can't), stores it in
 `.werkmeister/issue.md`, fills the task from the title, and rewrites the issue into a
 description and starting prompt for any you left empty (`--no-distill` to skip).
-Both context strategies show the issue in CLAUDE.md and the brief.
+Both context strategies show the issue in AGENTS.md and the brief.
 
 The copy is frozen at creation. To update it: `werkmeister workspace init --refresh-issue`
 (it leaves the brief alone unless the brief is still the untouched placeholder, which it rebuilds from the issue). `werkmeister infra connect` reports whether this machine can read

@@ -529,7 +529,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     label: "Work type",
     help:
       "What kind of work this is; selects the phase sequence and the " +
-      "pre-implementation gate in CLAUDE.md. Types from `~/.werkmeister/workflows/` and " +
+      "pre-implementation gate in AGENTS.md. Types from `~/.werkmeister/workflows/` and " +
       "repos' `.werkmeister/workflows/` are listed too.",
     acceptEmpty: false,
     // Lowercase-hyphen, not the built-ins: a workflow on a repo branch isn't in the choices (SW-1077).
@@ -553,7 +553,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     key: "harness",
     label: "Harness",
     help:
-      "Which agent harness reads this workspace: claude (Claude Code: CLAUDE.md, .claude/, hooks), " +
+      "Which agent harness reads this workspace: claude (Claude Code: AGENTS.md with a one-line CLAUDE.md import, .claude/, hooks), " +
       "mcp (any harness with MCP and skills: AGENTS.md, .agents/skills, no hooks) " +
       "or codex (Codex CLI: AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml).",
     pattern: "^(" + HARNESS_IDS.join("|") + ")$",
@@ -637,7 +637,7 @@ export const _WIZARD_PROMPTS: readonly PromptSpec[] = [
     label: "Description",
     help:
       "1-2 sentences on what the feature does and the user-visible outcome; " +
-      "rendered under Current Task in CLAUDE.md.",
+      "rendered under Current Task in AGENTS.md.",
     placeholder: "Adds an MDX-powered blog index under /blog.",
   },
   {

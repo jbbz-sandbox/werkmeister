@@ -15,7 +15,7 @@
  *   `.werkmeister/workspace.yml`, hand off to `initWorkspace`, and commit.
  *
  *   {@link initWorkspace} — reconcile the nested per-repo worktrees against
- *   that config and (re)generate CLAUDE.md, .env, compose.yml, the
+ *   that config and (re)generate AGENTS.md, .env, compose.yml, the
  *   projected .claude/ skills+agents, .mcp.json and .werkmeister/*. Idempotent.
  *
  * Nothing here prints or exits: every message goes through the ambient reporter
@@ -276,11 +276,11 @@ const _WORKSPACE_CONFIG_HEADER =
   "# Edit:    Hand-edit `feature`, `repos`, `services`, `issue_id`, `task`,\n" +
   "#          `test_path`, `description`, `labels`, or `starting_prompt` below; rerun\n" +
   "#          `werkmeister workspace init` to propagate changes into\n" +
-  `#          CLAUDE.md / .env / ${COMPOSE_FILE} / .werkmeister/*.\n` +
+  `#          AGENTS.md / CLAUDE.md / .env / ${COMPOSE_FILE} / .werkmeister/*.\n` +
   "#          Adding/removing a repo here reconciles git worktrees on rerun;\n" +
   "#          removing a repo with uncommitted edits needs `--force`.\n" +
   "#          Optional `standards_override: {add: [...], remove: [...]}` tunes\n" +
-  "#          the CLAUDE.md Standards routing block (docs/jit-context-system.md).\n" +
+  "#          the AGENTS.md Standards routing block (docs/jit-context-system.md).\n" +
   "#          To register a brand-new service, edit\n" +
   "#          ~/.werkmeister/services.yaml instead.\n" +
   "# Format:  YAML — line comments (`#`) are supported. The loader also\n" +
@@ -674,16 +674,16 @@ function resolveTask(
 // Entry point
 // ---------------------------------------------------------------------------
 
-/** Log a warning/info message if CLAUDE.md already exists. */
-function warnIfExisting(claudeMdPath: string): void {
-  if (!fs.existsSync(claudeMdPath)) {
+/** Log a warning/info message about the instructions file about to be replaced. */
+function warnIfExisting(file: string): void {
+  if (!fs.existsSync(file)) {
     return;
   }
-  const existing = fs.readFileSync(claudeMdPath, "utf8");
+  const existing = fs.readFileSync(file, "utf8");
   if (existing.includes("## Layout")) {
-    warn("CLAUDE.md already initialised — overwriting with fresh content.");
+    warn(`${path.basename(file)} already initialised — overwriting with fresh content.`);
   } else {
-    info("Replacing stub CLAUDE.md with full workspace context.");
+    info(`Replacing stub ${path.basename(file)} with full workspace context.`);
   }
 }
 
@@ -710,7 +710,7 @@ function logMeta(task: string, meta: Record<string, string>): void {
  * Does what `werkmeister workspace init` does: brings an existing workspace in
  * line with its `.werkmeister/workspace.yml`. It saves the resolved inputs,
  * refreshes the issue copy when asked, adds or removes repo worktrees,
- * rewrites the context layer (`CLAUDE.md` and the rest), mints the
+ * rewrites the context layer (`AGENTS.md` and the rest), mints the
  * workspace's daemon token, generates `compose.yml` with a port slot, and
  * builds the images. Runs in-process; it shells out to git and docker and does
  * not call the werkmeister daemon. Progress is printed through the werkmeister
@@ -854,15 +854,17 @@ async function initWorkspaceUntimed(
     }
   }
 
-  // 4. Check if CLAUDE.md already exists
-  const claudeMdPath = path.join(workspaceRoot, "CLAUDE.md");
-  warnIfExisting(claudeMdPath);
+  // 4. Check if the instructions file already exists (or, before SW-1231, CLAUDE.md held it)
+  const instructionsPath = [harnessLayoutFor(workspaceRoot).instructionsFile, "CLAUDE.md"]
+    .map((f) => path.join(workspaceRoot, f))
+    .find((p) => fs.existsSync(p));
+  if (instructionsPath) warnIfExisting(instructionsPath);
 
   // 5. Discover repos (reflecting the reconciled set)
   info("Scanning for git repos...");
   const repos = discoverRepos(workspaceRoot);
   if (!repos.length) {
-    warn("No git repos found in workspace. CLAUDE.md will have an empty layout.");
+    warn("No git repos found in workspace. AGENTS.md will have an empty layout.");
   } else {
     for (const [name, branch] of repos) {
       info(`  ${name}/ → ${branch}`);
@@ -902,9 +904,9 @@ async function initWorkspaceUntimed(
   // pr-rules.md redirects `pr open` and `pr gate` here, and a shell redirect makes no folder (SW-1091).
   fs.mkdirSync(logsDir(workspaceRoot), { recursive: true });
 
-  // 5b–6c. The context layer — CLAUDE.md and everything the agent reads
+  // 5b–6c. The context layer — AGENTS.md and everything the agent reads
   // beside it — belongs to the workspace's strategy (docs/context-strategies.md).
-  const rerun = fs.existsSync(path.join(workspaceRoot, "CLAUDE.md"));
+  const rerun = instructionsPath !== undefined;
   strategy.init({
     workspaceRoot,
     workspaceName,
@@ -1034,7 +1036,7 @@ async function initWorkspaceUntimed(
 }
 
 export const CONTRACTS_CHANGED_NUDGE =
-  "`werkmeister workspace init` just regenerated this workspace's contracts (CLAUDE.md, CONTEXT.md, `_shared/`, the stage CONTEXT.md files; committed on the record branch as `chore: regenerate workspace contracts`). Re-read CLAUDE.md and the current stage's CONTEXT.md before going on: their rules now govern. An instruction the person gave you in chat still wins; if the two conflict, ask.";
+  "`werkmeister workspace init` just regenerated this workspace's contracts (AGENTS.md, CLAUDE.md, CONTEXT.md, `_shared/`, the stage CONTEXT.md files; committed on the record branch as `chore: regenerate workspace contracts`). Re-read AGENTS.md and the current stage's CONTEXT.md before going on: their rules now govern. An instruction the person gave you in chat still wins; if the two conflict, ask.";
 
 /**
  * SW-760: a rerun rewrites the contracts under any live session. Commit them alone on the record

@@ -98,8 +98,8 @@ test("each template renders with no undefined and a route per stage", async () =
         EXPECTED[wt].map((n, i) => `0${i + 1}_${n}`),
         wt,
       );
-      const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
-      assert.ok(claude.split("\n").length <= 60, `${wt}: CLAUDE.md over 60 lines`);
+      const claude = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
+      assert.ok(claude.split("\n").length <= 60, `${wt}: AGENTS.md over 60 lines`);
       for (const d of dirs) {
         assert.match(claude, new RegExp(`stages/${d}/CONTEXT\\.md`), `${wt}: no route to ${d}`);
         const c = fs.readFileSync(path.join(root, "stages", d, "CONTEXT.md"), "utf8");

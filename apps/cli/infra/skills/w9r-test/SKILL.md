@@ -7,7 +7,7 @@ description: "Begin the test phase in a workspace. Use when running or writing t
 
 - **Step 0 — scope the run.** From the change at hand (the diff, or the task if nothing
   is edited yet), identify which services are affected, then read the workspace
-  `CLAUDE.md` "Standards routing" block to see which archetypes those services belong
+  `AGENTS.md` "Standards routing" block to see which archetypes those services belong
   to. When in doubt, the Services table in `.werkmeister/werkmeister-context.md` maps services
   to repos and paths.
 - Do **not** load the code standards yourself — the tester agents carry the pointer to
