@@ -161,6 +161,12 @@ PR sits in the merge queue GitHub refuses pushes to its branch, so a merge in
 that window skips the version step with a notice; the push that lands the
 version PR versions that merge's changesets (`scripts/release-plan.mjs`, SW-1266).
 
+If main's version is not on npm yet while changesets are pending (a version
+commit that landed alongside one), the job publishes it first, then versions the
+rest. A pending changeset that names only ignored packages is never consumed, so
+when every pending one is like that the job publishes rather than open an empty
+version PR (`scripts/publish-first.mjs`, SW-1267).
+
 `release` runs only once the commit is tested: by a green merge-queue run
 of that exact commit (the `queued` job checks, and the push then skips its
 own test jobs), or else by the push's own `test`, `core-test` and
