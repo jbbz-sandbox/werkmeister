@@ -76,16 +76,38 @@ const USAGE_ROLLUP = z.object({
   wallClockMinutes: z.number(),
   turns: z.number(),
 });
+// The wizard's work_type pattern (SW-1212): built-ins, workflow types and `unknown`. A filter only.
+const WORK_TYPE = z
+  .string()
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/)
+  .optional()
+  .describe(
+    "A work type (feature, bugfix, refactor, spike, incident, a workflow type, or unknown for runs with none): only its runs.",
+  );
+const COLUMN = z.enum(["working", "ready", "pr-open", "awaiting-release"]);
+const WORK_TYPE_SLICE = z.object({
+  runs: z.number(),
+  fewRuns: z.boolean(),
+  cycle: PERCENTILES,
+  lead: PERCENTILES,
+  columns: z.array(PERCENTILES.extend({ column: COLUMN, count: z.number() })),
+  sumOfMediansMinutes: z.number(),
+  waits: WAITS,
+  usage: USAGE_ROLLUP,
+});
 const METRICS_OUTPUT = {
+  workType: z.string().nullable(),
+  byWorkType: z.record(z.string(), WORK_TYPE_SLICE),
   range: z.enum(METRICS_RANGES as [MetricsRange, ...MetricsRange[]]),
   from: z.string().nullable(),
   to: z.string(),
   board: z.array(
     z.object({
-      column: z.enum(["working", "ready", "pr-open", "awaiting-release"]),
+      column: COLUMN,
       wip: z.number(),
       p50Minutes: MINUTES,
       p90Minutes: MINUTES,
+      count: z.number(),
       cards: z.array(
         z.object({
           workspace: z.string(),
@@ -94,6 +116,8 @@ const METRICS_OUTPUT = {
           enteredAt: z.string().nullable(),
           ageMinutes: MINUTES,
           overP90: z.boolean(),
+          workType: z.string(),
+          p90Pooled: z.boolean(),
           wait: z
             .object({
               cause: z.enum(["person", "capacity", "pr", "gateRetry", "release"]),
@@ -118,6 +142,7 @@ const METRICS_OUTPUT = {
       releasedAt: z.string().nullable(),
       cycleMinutes: z.number(),
       leadMinutes: z.number(),
+      workType: z.string(),
     }),
   ),
   cycle: PERCENTILES,
@@ -302,7 +327,9 @@ export function registerDaemonTools(server: McpServer): void {
         "column's age p50/p90, waits by cause per ISO week in seconds (person, capacity, pr open → " +
         "merge, gateRetry, release), cycle and lead time per ticket, and cost, tokens, active and wall " +
         "time, turns and gate first-pass rate for workspaces closed in the range. With a workspace, also " +
-        "that workspace's run as a timeline: stage.done, waits, gate runs, PR open, merge and release. Reads the metrics " +
+        "that workspace's run as a timeline: stage.done, waits, gate runs, PR open, merge and release. With work_type, " +
+        "only that type's runs. byWorkType has cycle and lead time, column p50/p90, waits and cost per work type, and " +
+        "a card is past p90 against its own type's column p90, the pooled one (p90Pooled) below 5 visits. Reads the metrics " +
         "event log, workspace state and usage.json from the record branches on this machine.",
       inputSchema: {
         range: z
@@ -310,12 +337,17 @@ export function registerDaemonTools(server: McpServer): void {
           .optional()
           .describe("7d, 30d, 90d or all. Default 7d."),
         workspace: z.string().optional().describe("A workspace name: adds its run's timeline."),
+        work_type: WORK_TYPE,
       },
       outputSchema: METRICS_OUTPUT,
     },
     async (args): Promise<CallToolResult> =>
       adapt(async () => ({
-        ...(await metricsReport({ range: args.range, workspace: args.workspace })),
+        ...(await metricsReport({
+          range: args.range,
+          workspace: args.workspace,
+          workType: args.work_type,
+        })),
       })),
   );
 
@@ -336,7 +368,7 @@ export function registerDaemonTools(server: McpServer): void {
         "percentiles), with suites: the same per package over the whole range, for the slowest suites. Each item counts in the bucket it ended in: a workspace by " +
         "its close-out, a stage when it finished, a lead time at its merge or release, a gate run at its " +
         "end. Every row also has byVersion: the same numbers per werkmeister version from each " +
-        "workspace's usage.json, `unknown` when it has none. Reads the metrics event log, workspace state " +
+        "workspace's usage.json, `unknown` when it has none. With work_type, only that type's runs. Reads the metrics event log, workspace state " +
         "and usage.json from the record branches on this machine.",
       inputSchema: {
         range: z
@@ -347,11 +379,18 @@ export function registerDaemonTools(server: McpServer): void {
           .enum(TREND_BUCKETS as [TrendBucket, ...TrendBucket[]])
           .optional()
           .describe("day or week. Default week."),
+        work_type: WORK_TYPE,
       },
       outputSchema: TRENDS_OUTPUT,
     },
     async (args): Promise<CallToolResult> =>
-      adapt(async () => ({ ...(await metricsTrends({ range: args.range, bucket: args.bucket })) })),
+      adapt(async () => ({
+        ...(await metricsTrends({
+          range: args.range,
+          bucket: args.bucket,
+          workType: args.work_type,
+        })),
+      })),
   );
 
   server.registerTool(

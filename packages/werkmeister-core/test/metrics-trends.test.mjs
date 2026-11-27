@@ -567,3 +567,30 @@ test("gate rows sum by kind and test runs give per-package weekly p50/p90, cache
   assert.deepEqual(Object.keys(r.suitesByVersion), ["unknown"]);
   assert.deepEqual(w.byVersion.unknown.tests["pkg-a"].count, 4);
 });
+
+test("trendSeries with a work type counts only that type's runs (SW-1212)", () => {
+  const more = { totals: tok(1, 1, 0, 0), estUsd: 1, activeMinutes: 1, wallClockMinutes: 1 };
+  const input = {
+    events: [
+      ev("2026-11-16T08:00:00Z", "workspace.create", "t-bug", {
+        duration_ms: 1,
+        result: "ok",
+        work_type: "bugfix",
+      }),
+    ],
+    open: [],
+    usages: [
+      usage("t-bug", "1.0.0", "shipped", "2026-11-16T08:00:00Z", "2026-11-17T08:00:00Z", more),
+      usage("t-ref", "1.0.0", "shipped", "2026-11-16T09:00:00Z", "2026-11-17T09:00:00Z", {
+        ...more,
+        work_type: "refactor",
+      }),
+      usage("t-none", "1.0.0", "abandoned", "2026-11-16T10:00:00Z", "2026-11-17T10:00:00Z", more),
+    ],
+  };
+  const sum = (r) => r.rows.reduce((a, x) => [a[0] + x.shipped, a[1] + x.abandoned], [0, 0]);
+  assert.deepEqual(sum(trendSeries(input, "7d", "week", NOW)), [2, 1]);
+  assert.deepEqual(sum(trendSeries(input, "7d", "week", NOW, "bugfix")), [1, 0]);
+  assert.deepEqual(sum(trendSeries(input, "7d", "week", NOW, "refactor")), [1, 0]);
+  assert.deepEqual(sum(trendSeries(input, "7d", "week", NOW, "unknown")), [0, 1]);
+});

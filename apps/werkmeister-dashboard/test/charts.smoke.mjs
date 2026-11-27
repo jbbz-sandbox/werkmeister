@@ -11,6 +11,7 @@ const {
   lineBandView,
   multiLineView,
   stackedBarView,
+  horizontalStackedBarView,
   heatmapView,
   scatterView,
   statTile,
@@ -692,5 +693,41 @@ console.log("✓ stageTrend, leadTrend, waitSplit, bottleneck, slowestTickets");
   );
 }
 console.log("✓ gateKindBars, testTrend, slowestSuites, firstPassLine, testRegression (SW-1101)");
+
+// SW-1212: the "where the time goes" bars are stackedBarView on its side.
+{
+  const v = horizontalStackedBarView(
+    [
+      { label: "bugfix", values: { a: 30, b: 0, c: 10 } },
+      { label: "spike", values: { a: 20, b: 20, c: 0 } },
+    ],
+    ["a", "b", "c"],
+    400,
+    24,
+  );
+  assert.equal(v.xMax, 40);
+  assert.deepEqual(
+    v.rows.map((r) => [r.label, r.y, r.segments.map((s) => [s.key, s.x, s.width, s.value])]),
+    [
+      [
+        "bugfix",
+        0,
+        [
+          ["a", 0, 300, 30],
+          ["c", 300, 100, 10],
+        ],
+      ], // a zero segment is left out
+      [
+        "spike",
+        24,
+        [
+          ["a", 0, 200, 20],
+          ["b", 200, 200, 20],
+        ],
+      ],
+    ],
+  );
+  console.log("✓ horizontalStackedBarView");
+}
 
 console.log("charts smoke: OK");

@@ -10,7 +10,13 @@ import * as path from "node:path";
 import { liveWaiting, sessionGone, sessionsDir } from "./agent_state.js";
 import { getReposRoot, sandboxHome } from "./config.js";
 import { WORKSPACE_ROOT_REPO } from "./machine_setup.js";
-import { branchFiles, type GateRowKind, gateRowKind, usageCachePath } from "./metrics.js";
+import {
+  branchFiles,
+  type GateRowKind,
+  gateRowKind,
+  usageCachePath,
+  WORK_TYPE_UNKNOWN,
+} from "./metrics.js";
 import { lifecycleOf } from "./pr_lifecycle.js";
 import { warn } from "./reporter.js";
 import {
@@ -45,8 +51,12 @@ export interface FlowCard {
   enteredAt: string | null;
   /** Minutes since `enteredAt`, or null when that is unknown. */
   ageMinutes: number | null;
-  /** Older than the column's p90: the red card. */
+  /** Older than its work type's column p90 (the pooled one when `p90Pooled`): the red card. */
   overP90: boolean;
+  /** The run's work type, `unknown` when nothing recorded it (SW-1212). */
+  workType: string;
+  /** `overP90` read the pooled column p90: its type has fewer than {@link WORK_TYPE_MIN_RUNS} completed visits of the column in range. */
+  p90Pooled: boolean;
   /** The wait open now, or null when nothing is waited on. */
   wait: {
     /** What it waits on. */
@@ -67,6 +77,8 @@ export interface FlowColumnReport {
   p50Minutes: number | null;
   /** 90th-percentile minutes of those visits, or null with none. */
   p90Minutes: number | null;
+  /** How many completed visits p50/p90 come from. */
+  count: number;
   /** Its open cards, oldest first. */
   cards: FlowCard[];
 }
@@ -111,6 +123,8 @@ export interface TicketTimes {
   cycleMinutes: number;
   /** Minutes from the first turn to the release, or to the merge when the repo ships with no tag. */
   leadMinutes: number;
+  /** The run's work type, `unknown` when nothing recorded it (SW-1212). */
+  workType: string;
 }
 /** Nearest-rank percentiles, null with no values. */
 export interface Percentiles {
@@ -118,6 +132,34 @@ export interface Percentiles {
   p50Minutes: number | null;
   /** The 90th percentile, in minutes. */
   p90Minutes: number | null;
+}
+/** Below this many values a work type's column p90 falls back to the pooled one, and its bar is drawn faded (SW-1212). */
+export const WORK_TYPE_MIN_RUNS = 5;
+/** One column's segment of a work type's "where the time goes" bar. */
+export interface WorkTypeColumn extends Percentiles {
+  /** Which column. */
+  column: FlowColumn;
+  /** Completed visits of the column in range. */
+  count: number;
+}
+/** Every flow metric over one work type's runs alone (SW-1212). */
+export interface WorkTypeSlice {
+  /** Runs of this type whose last PR merged in range: the bar's `n`. */
+  runs: number;
+  /** `runs` below {@link WORK_TYPE_MIN_RUNS}: drawn faded with a "few runs" note. */
+  fewRuns: boolean;
+  /** Percentiles of its tickets' cycle minutes. */
+  cycle: Percentiles;
+  /** Percentiles of its tickets' lead minutes. */
+  lead: Percentiles;
+  /** The four columns in flow order. */
+  columns: WorkTypeColumn[];
+  /** The columns' p50s summed: the bar's end, not the median cycle time. */
+  sumOfMediansMinutes: number;
+  /** Seconds waited, by cause. */
+  waits: WaitSeconds;
+  /** Its runs closed in range. */
+  usage: UsageRollup;
 }
 /**
  * What {@link metricsReport} returns.
@@ -134,6 +176,10 @@ export interface Percentiles {
 export interface MetricsReport {
   /** The range asked for. */
   range: MetricsRange;
+  /** The work type asked for: the report covers only its runs. Null for all. */
+  workType: string | null;
+  /** Each work type with a run in the input, sliced alone; from every run whatever `workType` is. */
+  byWorkType: Record<string, WorkTypeSlice>;
   /** The range's start, or null for `all`. */
   from: string | null;
   /** The range's end: now. */
@@ -245,6 +291,8 @@ export interface OpenWorkspace {
   /** The oldest open ask of a live session. */
   askAt: string | null;
   waitingSince: string | null;
+  /** Its `workspace.yml` work_type, or null. */
+  workType?: string | null;
   /** Its sessions' first turns and active minutes, for `agentByDay`. */
   sessions?: { firstTurn: string | null; activeMinutes: number | null }[];
 }
@@ -268,6 +316,8 @@ export type UsageRow = Pick<
   > & {
     /** The record branch's git author email, from the `metrics rebuild` cache (SW-1104). */
     by?: string;
+    /** The record branch's `workspace.yml` work_type, from the `metrics rebuild` cache (SW-1212). */
+    work_type?: string;
   };
 export interface FlowInput {
   events: Record<string, unknown>[];
@@ -411,13 +461,98 @@ function runEvents(input: FlowInput): {
   return { firstTurn, runStart, events };
 }
 
-/** The report for *input* over *range*, as of *now*. Pure: the formulas of § Definitions. */
+type FlowCore = Omit<MetricsReport, "workType" | "byWorkType">;
+
+/**
+ * Each workspace's work type, last wins: the rebuild cache, then create/init lines, then an open
+ * workspace's own workspace.yml (SW-1212). Keyed by name, as {@link runEvents} is.
+ */
+function workTypes(input: FlowInput): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const u of [...input.usages].sort((a, b) => ms(a.closedAt) - ms(b.closedAt)))
+    if (u.work_type) out.set(u.workspace, u.work_type);
+  for (const e of [...input.events].sort((a, b) => ms(String(a["at"])) - ms(String(b["at"]))))
+    if (
+      (e["event"] === "workspace.create" || e["event"] === "workspace.init") &&
+      typeof e["work_type"] === "string"
+    )
+      out.set(String(e["workspace"]), e["work_type"]);
+  for (const o of input.open) if (o.workType) out.set(o.workspace, o.workType);
+  return out;
+}
+
+/** *input* cut to the runs of *type*. */
+function sliceInput(input: FlowInput, types: Map<string, string>, type: string): FlowInput {
+  const of = (ws: unknown) => (types.get(String(ws)) ?? WORK_TYPE_UNKNOWN) === type;
+  return {
+    events: input.events.filter((e) => of(e["workspace"])),
+    open: input.open.filter((o) => of(o.workspace)),
+    usages: input.usages.filter((u) => of(u.workspace)),
+  };
+}
+
+/**
+ * The report for *input* over *range*, as of *now*, over *workType*'s runs only when given. Pure: the
+ * formulas of § Definitions. `byWorkType` runs the same formulas over each type's runs alone, and a
+ * card is red against its own type's column p90, or the pooled one below {@link WORK_TYPE_MIN_RUNS}.
+ */
 export function flowMetrics(
   input: FlowInput,
   range: MetricsRange,
   now: Date,
   workspace?: string,
+  workType?: string,
 ): MetricsReport {
+  const types = workTypes(input);
+  const typeOf = (ws: string) => types.get(ws) ?? WORK_TYPE_UNKNOWN;
+  const core = (i: FlowInput) => flowCore(i, range, now, typeOf, workspace);
+  const pooled = core(input);
+  const names = [
+    ...input.events.flatMap((e) => (typeof e["workspace"] === "string" ? [e["workspace"]] : [])),
+    ...[...input.open, ...input.usages].map((r) => r.workspace),
+  ];
+  const own = new Map<string, FlowCore>();
+  for (const t of new Set(names.map(typeOf))) own.set(t, core(sliceInput(input, types, t)));
+  const base = workType ? (own.get(workType) ?? core(sliceInput(input, types, workType))) : pooled;
+  for (const col of base.board)
+    for (const c of col.cards) {
+      const mine = own.get(c.workType)?.board.find((b) => b.column === col.column);
+      c.p90Pooled = !mine || mine.count < WORK_TYPE_MIN_RUNS;
+      const p90 = c.p90Pooled
+        ? pooled.board.find((b) => b.column === col.column)?.p90Minutes
+        : mine?.p90Minutes;
+      c.overP90 = c.ageMinutes !== null && p90 != null && c.ageMinutes > p90;
+    }
+  const byWorkType: Record<string, WorkTypeSlice> = {};
+  for (const [t, r] of [...own].sort(([a], [b]) => a.localeCompare(b))) {
+    const { byPerson: _p, byProject: _j, byModel: _m, ...usage } = r.usage;
+    const columns = r.board.map(({ column, count, p50Minutes, p90Minutes }) => ({
+      column,
+      count,
+      p50Minutes,
+      p90Minutes,
+    }));
+    byWorkType[t] = {
+      runs: r.tickets.length,
+      fewRuns: r.tickets.length < WORK_TYPE_MIN_RUNS,
+      cycle: r.cycle,
+      lead: r.lead,
+      columns,
+      sumOfMediansMinutes: columns.reduce((a, c) => a + (c.p50Minutes ?? 0), 0),
+      waits: r.waits,
+      usage,
+    };
+  }
+  return { ...base, workType: workType ?? null, byWorkType };
+}
+
+function flowCore(
+  input: FlowInput,
+  range: MetricsRange,
+  now: Date,
+  typeOf: (ws: string) => string,
+  workspace?: string,
+): FlowCore {
   const to = now.getTime();
   const from = range === "all" ? null : to - Number.parseInt(range, 10) * DAY_MS;
   const inRange = (t: string | undefined | null): t is string =>
@@ -569,14 +704,24 @@ export function flowMetrics(
           stage: column === "working" ? o.stage : null,
           enteredAt,
           ageMinutes,
-          overP90: ageMinutes !== null && p90Minutes !== null && ageMinutes > p90Minutes,
+          // Set per work type by flowMetrics.
+          overP90: false,
+          workType: typeOf(o.workspace),
+          p90Pooled: false,
           wait: open?.[1]
             ? { cause: open[0], since: open[1], minutes: minutes(open[1], nowIso) }
             : null,
         };
       })
       .sort((a, b) => (b.ageMinutes ?? -1) - (a.ageMinutes ?? -1));
-    return { column, wip: cards.length, p50Minutes, p90Minutes, cards };
+    return {
+      column,
+      wip: cards.length,
+      p50Minutes,
+      p90Minutes,
+      count: visits[column].length,
+      cards,
+    };
   });
 
   const ticketOf = new Map<string, string>();
@@ -597,6 +742,7 @@ export function flowMetrics(
       releasedAt,
       cycleMinutes: minutes(inProgressAt ?? start, t.lastMerged),
       leadMinutes: minutes(start, releasedAt ?? t.lastMerged),
+      workType: typeOf(ws),
     });
   }
   tickets.sort((a, b) => ms(a.mergedAt) - ms(b.mergedAt));
@@ -810,7 +956,7 @@ function usageRow(text: string): UsageRow | null {
  * gate first-pass rate. Reads the metrics event log, `usage.json` from workspace folders and from
  * the record branches already on this machine (it never fetches), and each workspace's state.
  *
- * @param opts - `range`: `"7d"`, `"30d"`, `"90d"` or `"all"`; `workspace`: a workspace name, to add its run's `timeline`.
+ * @param opts - `range`: `"7d"`, `"30d"`, `"90d"` or `"all"`; `workspace`: a workspace name, to add its run's `timeline`; `workType`: only that work type's runs (`unknown` for untyped ones).
  * @returns The {@link MetricsReport}.
  *
  * @example
@@ -823,10 +969,10 @@ function usageRow(text: string): UsageRow | null {
  * ```
  */
 export async function metricsReport(
-  opts: { range?: MetricsRange; workspace?: string } = {},
+  opts: { range?: MetricsRange; workspace?: string; workType?: string } = {},
   now = new Date(),
 ): Promise<MetricsReport> {
-  return flowMetrics(await flowInput(now), opts.range ?? "7d", now, opts.workspace);
+  return flowMetrics(await flowInput(now), opts.range ?? "7d", now, opts.workspace, opts.workType);
 }
 
 /** The event log, open workspaces' state, and `usage.json` from workspace folders and local record branches. */
@@ -838,7 +984,9 @@ async function flowInput(now: Date): Promise<FlowInput> {
         if (state !== "working" && state !== "ready" && state !== "pr-open" && state !== "merged") {
           const file = path.join(w.path, "usage.json");
           const usage = fs.existsSync(file) ? usageRow(fs.readFileSync(file, "utf8")) : null;
-          return usage ? { usage } : {};
+          // A closed folder still on disk types its run without a rebuild (SW-1212).
+          const work_type = usage?.work_type ?? w.workType?.toLowerCase();
+          return usage ? { usage: { ...usage, ...(work_type && { work_type }) } } : {};
         }
         const prTimes =
           state === "ready"
@@ -858,6 +1006,8 @@ async function flowInput(now: Date): Promise<FlowInput> {
             prFileAt: prTimes.length ? new Date(Math.max(...prTimes)).toISOString() : null,
             askAt: oldestAsk(w.path, now.getTime()),
             waitingSince: liveWaiting(w.path)?.since ?? null,
+            // Lowercased as workTypeOf does for event lines: `Bugfix` is bugfix.
+            workType: w.workType?.toLowerCase() ?? null,
             sessions,
           },
         };
@@ -1258,11 +1408,14 @@ const suitePercentiles = (items: TrendItem[]) =>
  * Pure. Every item lands in the bucket of the time it ended (SW-1097 Q3).
  */
 export function trendSeries(
-  input: FlowInput,
+  all: FlowInput,
   range: MetricsRange,
   bucket: TrendBucket,
   now: Date,
+  /** Only this work type's runs (SW-1212). */
+  workType?: string,
 ): MetricsTrends {
+  const input = workType ? sliceInput(all, workTypes(all), workType) : all;
   const to = now.getTime();
   const bucketOf = (t: number) =>
     bucket === "week" ? weekOf(t) : new Date(t).toISOString().slice(0, 10);
@@ -1471,7 +1624,7 @@ export function trendSeries(
  * version; `suites` holds the per-package test minutes over the whole range. Reads what {@link metricsReport}
  * reads; never fetches.
  *
- * @param opts - `range`: `"7d"`, `"30d"`, `"90d"` or `"all"`; `bucket`: `"day"` or `"week"`.
+ * @param opts - `range`: `"7d"`, `"30d"`, `"90d"` or `"all"`; `bucket`: `"day"` or `"week"`; `workType`: only that work type's runs.
  * @returns The {@link MetricsTrends}.
  *
  * @example
@@ -1483,8 +1636,9 @@ export function trendSeries(
  * ```
  */
 export async function metricsTrends(
-  opts: { range?: MetricsRange; bucket?: TrendBucket } = {},
+  opts: { range?: MetricsRange; bucket?: TrendBucket; workType?: string } = {},
   now = new Date(),
 ): Promise<MetricsTrends> {
-  return trendSeries(await flowInput(now), opts.range ?? "30d", opts.bucket ?? "week", now);
+  const { range = "30d", bucket = "week", workType } = opts;
+  return trendSeries(await flowInput(now), range, bucket, now, workType);
 }

@@ -11,19 +11,29 @@ import { renderMarkdown } from "werkmeister-ui/lib/markdown";
 import { Css } from "werkmeister-ui/theme";
 import type { SessionUsage } from "werkmeister-ui/usage-widget";
 import type { HostBridge } from "werkmeister-ui/workspace-ui";
-import { type StackBar, scatterView, stackedBarView, W } from "./lib/charts.js";
+import {
+  horizontalStackedBarView,
+  type StackBar,
+  scatterView,
+  stackedBarView,
+  W,
+} from "./lib/charts.js";
 import {
   agentBars,
+  COLUMN_FILL,
   COLUMN_LABEL,
   cardView,
   cyclePoints,
   flowTiles,
   formatMinutes,
   RANGES,
+  timeGoesBars,
   timelineView,
   WAIT_KEYS,
   WAIT_LABEL,
+  WORK_TYPES,
   waitBars,
+  workTypeFill,
 } from "./lib/flow-board.js";
 
 /** A `workspace-usage` session row; the tool also returns these, the shared widget type omits them. */
@@ -75,7 +85,14 @@ const CSS = `
   .flow .xlabels { display: flex; justify-content: space-between; font-size: 11px; color: var(--sd-muted); margin-top: 2px; }
   .flow .legend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; color: var(--sd-muted); margin-top: 6px; }
   .flow .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
-  .flow .usage { margin-top: 12px; }
+  .flow .usage, .flow .tg { margin-top: 12px; }
+  .flow .top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 4px 0 12px; }
+  .flow .top .ranges { margin: 0; }
+  .flow select { font: inherit; font-size: 13px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--sd-line); background: var(--sd-card); color: var(--sd-ink); }
+  .flow .tg-rows { display: flex; gap: 8px; }
+  .flow .tg-rows > div { display: flex; flex-direction: column; flex: none; font-size: 12px; color: var(--sd-muted); }
+  .flow .tg-rows > div span { height: 24px; line-height: 24px; white-space: nowrap; }
+  .flow .tg-rows svg { flex: 1; min-width: 0; }
   .flow .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 6px 0 10px; }
   .flow .tile .v { font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
   .flow .tile .k, .flow .tile .s { color: var(--sd-muted); font-size: 12px; }
@@ -193,28 +210,148 @@ function CycleScatter({ report }: { report: MetricsReport }) {
           >
             {rule(v.p50Y, "var(--sd-accent)")}
             {rule(v.p90Y, "var(--sd-err)")}
-            {v.dots.map((d) => (
+            {v.dots.map((d, i) => {
+              const type = c.points[i].workType;
               // A zero-length round-capped stroke stays a circle under preserveAspectRatio="none".
-              <path
-                key={d.label}
-                d={`M${d.x} ${d.y} h0`}
-                stroke={d.over ? "var(--sd-err)" : "var(--sd-accent)"}
-                strokeWidth={8}
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-              >
-                <title>{`${d.label}: ${formatMinutes(d.value)}${d.over ? ", past p90" : ""}`}</title>
-              </path>
-            ))}
+              const dot = (stroke: string, width: number) => (
+                <path
+                  d={`M${d.x} ${d.y} h0`}
+                  stroke={stroke}
+                  strokeWidth={width}
+                  strokeLinecap="round"
+                  vectorEffect="non-scaling-stroke"
+                >
+                  <title>{`${d.label} (${type}): ${formatMinutes(d.value)}${d.over ? ", past p90" : ""}`}</title>
+                </path>
+              );
+              // Past p90 is a red ring, so the fill keeps showing the work type.
+              return (
+                <g key={d.label}>
+                  {d.over && dot("var(--sd-err)", 13)}
+                  {dot(workTypeFill(type), 8)}
+                </g>
+              );
+            })}
           </svg>
           <div className="xlabels">
             <span>{new Date(c.x0).toISOString().slice(0, 10)}</span>
             <span>merged →</span>
             <span>{new Date(c.x1).toISOString().slice(0, 10)}</span>
           </div>
+          <div className="legend">
+            {[...new Set(c.points.map((p) => p.workType))].sort().map((t) => (
+              <span key={t}>
+                <i style={{ background: workTypeFill(t) }} />
+                {t}
+              </span>
+            ))}
+            <span>
+              <i style={{ background: "var(--sd-err)" }} />
+              ring: past p90
+            </span>
+          </div>
         </>
       )}
     </section>
+  );
+}
+
+const TG_ROW = 24;
+const TG_KEYS = Object.keys(COLUMN_LABEL) as (keyof typeof COLUMN_LABEL)[];
+
+/** One bar per work type: the median minutes its finished runs spent in each column (SW-1212). */
+function WhereTimeGoes({ report }: { report: MetricsReport }) {
+  const bars = timeGoesBars(report);
+  const v = horizontalStackedBarView(bars, TG_KEYS, W, TG_ROW);
+  const height = bars.length * TG_ROW;
+  return (
+    <section className="chart tg">
+      <h3>Where the time goes</h3>
+      <div className="cap">
+        Median minutes per column, by work type, of column visits that ended in range; n counts runs
+        merged in range. Medians don't add up to the median cycle time.
+      </div>
+      {bars.length === 0 ? (
+        <div className="empty">No finished runs in this range.</div>
+      ) : (
+        <>
+          <div className="tg-rows">
+            <div>
+              {bars.map((b) => (
+                <span key={b.label}>
+                  {b.label} n={b.n}
+                  {b.faded && " · few runs"}
+                </span>
+              ))}
+            </div>
+            <svg
+              viewBox={`0 0 ${W} ${height}`}
+              preserveAspectRatio="none"
+              height={height}
+              role="img"
+              aria-label="Median minutes per flow column, one bar per work type"
+            >
+              {v.rows.flatMap((row, i) =>
+                row.segments.map((s) => {
+                  const tip = bars[i].tips[s.key];
+                  return (
+                    <rect
+                      key={`${row.label}${s.key}`}
+                      x={s.x}
+                      y={row.y + 4}
+                      width={s.width}
+                      height={TG_ROW - 8}
+                      fill={COLUMN_FILL[s.key as keyof typeof COLUMN_FILL]}
+                      opacity={bars[i].faded ? 0.45 : 1}
+                    >
+                      <title>
+                        {`${row.label} · ${COLUMN_LABEL[s.key as keyof typeof COLUMN_LABEL]}: p50 ${formatMinutes(tip.p50)}, p90 ${formatMinutes(tip.p90)}, ${tip.count} column visits`}
+                      </title>
+                    </rect>
+                  );
+                }),
+              )}
+            </svg>
+            <div>
+              {bars.map((b) => (
+                <span key={b.label}>sum of medians {formatMinutes(b.sumOfMedians)}</span>
+              ))}
+            </div>
+          </div>
+          <div className="legend">
+            {TG_KEYS.map((k) => (
+              <span key={k}>
+                <i style={{ background: COLUMN_FILL[k] }} />
+                {COLUMN_LABEL[k]}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** All, then the report's work types (or the built-ins before one loads). */
+export function WorkTypeSelect({
+  value,
+  types,
+  onChange,
+}: {
+  value: string;
+  types: string[];
+  onChange: (t: string) => void;
+}) {
+  const options = [...new Set([...types, ...(value === "all" ? [] : [value])])];
+  return (
+    <select aria-label="Work type" value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="all">All work types</option>
+      {options.map((t) => (
+        <option key={t} value={t}>
+          {t}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -245,6 +382,7 @@ function Charts({ report }: { report: MetricsReport }) {
         </section>
         <CycleScatter report={report} />
       </div>
+      <WhereTimeGoes report={report} />
       <section className="chart usage">
         <h3>Cost and agent time</h3>
         <div className="cap">Closed runs in range.</div>
@@ -418,6 +556,7 @@ export function FlowTab({
   focus?: string | null;
 }) {
   const [range, setRange] = useState<MetricsRange>("7d");
+  const [workType, setWorkType] = useState("all");
   const [report, setReport] = useState<MetricsReport | null>(null);
   const [status, setStatus] = useState({ text: "Loading…", err: false });
   const [selected, setSelected] = useState<string | null>(focus);
@@ -427,7 +566,8 @@ export function FlowTab({
   useEffect(() => {
     let stale = false;
     setStatus({ text: "Loading…", err: false });
-    (bridge.callTool("metrics", { range }) as Promise<MetricsReport>).then(
+    const args = { range, ...(workType !== "all" && { work_type: workType }) };
+    (bridge.callTool("metrics", args) as Promise<MetricsReport>).then(
       (r) => {
         if (stale) return;
         setReport(r);
@@ -439,18 +579,25 @@ export function FlowTab({
     return () => {
       stale = true;
     };
-  }, [bridge, range]);
+  }, [bridge, range, workType]);
 
   return (
     <div className="flow">
       <Css id="wsd-flow" css={CSS} />
-      <fieldset className="ranges" aria-label="Range">
-        {RANGES.map(([r, label]) => (
-          <button key={r} type="button" aria-pressed={r === range} onClick={() => setRange(r)}>
-            {label}
-          </button>
-        ))}
-      </fieldset>
+      <div className="top">
+        <fieldset className="ranges" aria-label="Range">
+          {RANGES.map(([r, label]) => (
+            <button key={r} type="button" aria-pressed={r === range} onClick={() => setRange(r)}>
+              {label}
+            </button>
+          ))}
+        </fieldset>
+        <WorkTypeSelect
+          value={workType}
+          types={report ? Object.keys(report.byWorkType) : WORK_TYPES}
+          onChange={setWorkType}
+        />
+      </div>
       <div className={status.err ? "load-status err" : "load-status"}>{status.text}</div>
       {report && (
         <div className="board">
@@ -470,7 +617,7 @@ export function FlowTab({
                     key={c.workspace}
                     type="button"
                     className={cls}
-                    aria-label={`${v.title}, ${v.age} in ${COLUMN_LABEL[col.column]}${v.red ? ", past p90" : ""}${v.badge ? `, waiting ${v.badge}` : ""}`}
+                    aria-label={`${v.title}, ${v.age} in ${COLUMN_LABEL[col.column]}${v.red ? (v.pooled ? ", past pooled p90 (few runs of its type)" : ", past p90") : ""}${v.badge ? `, waiting ${v.badge}` : ""}`}
                     onClick={() => setSelected(c.workspace)}
                   >
                     <div className="t">{v.title}</div>

@@ -1,4 +1,4 @@
-// SW-1127: `metrics rebuild` keeps the usage cache when the record branches can't be read.
+// SW-1127: `metrics rebuild` keeps the usage cache when the record branches can't be read; SW-1212: it caches each branch's work_type.
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -27,8 +27,10 @@ function teamRepo(branches) {
   fs.mkdirSync(work);
   git(work, "init", "-q", "-b", "main");
   const commitAs = (email, files) => {
-    for (const [rel, body] of Object.entries(files))
+    for (const [rel, body] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(work, rel)), { recursive: true });
       fs.writeFileSync(path.join(work, rel), `${body}\n`);
+    }
     git(work, "add", "-A");
     git(work, "-c", `user.email=${email}`, "-c", "user.name=n", "commit", "-q", "-m", "c");
   };
@@ -93,5 +95,47 @@ test("a failed cat-file read keeps the old usage cache and warns (SW-1127)", asy
     }
     assert.equal(fs.readFileSync(cache, "utf8"), old, "cache unchanged");
     assert.match(out.text(), /usage\.json[\s\S]*keep/i, "says the old cache is kept");
+  }, TEAM_CONFIG);
+});
+
+test("the usage cache takes each branch's work_type from its workspace.yml, else unknown (SW-1212)", async () => {
+  await withSandboxHome(async (home) => {
+    const yml = ".werkmeister/workspace.yml";
+    const root = teamRepo([
+      {
+        name: "a/ws-a",
+        email: "a@x",
+        files: { "usage.json": usageJson("ws-a"), [yml]: "work_type: bugfix" },
+      },
+      { name: "b/ws-b", email: "b@x", files: { "usage.json": usageJson("ws-b") } },
+      {
+        name: "c/ws-c",
+        email: "c@x",
+        files: { "usage.json": usageJson("ws-c"), [yml]: "issue_id: SW-1" },
+      },
+      {
+        name: "d/ws-d",
+        email: "d@x",
+        files: { "usage.json": usageJson("ws-d"), [yml]: "work_type: [" },
+      },
+    ]);
+    try {
+      await withReporter(collectingReporter(), () => rebuildMetrics());
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+    const cache = path.join(sandboxHome(), "metrics", "usage-branches.jsonl");
+    assert.ok(cache.startsWith(home));
+    const rows = fs
+      .readFileSync(cache, "utf8")
+      .trimEnd()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+    assert.deepEqual(rows.map((u) => [u.workspace, u.by, u.work_type]).sort(), [
+      ["ws-a", "a@x", "bugfix"],
+      ["ws-b", "b@x", "unknown"], // no workspace.yml
+      ["ws-c", "c@x", "unknown"], // a yml with no work_type: not guessed
+      ["ws-d", "d@x", "unknown"], // unparsable
+    ]);
   }, TEAM_CONFIG);
 });

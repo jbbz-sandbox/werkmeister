@@ -17,6 +17,8 @@ const {
   flowTiles,
   formatCount,
   agentBars,
+  timeGoesBars,
+  workTypeFill,
 } = await import(path.join(pkgRoot, "dist/lib/flow-board.js"));
 const { stackedBarView } = await import(path.join(pkgRoot, "dist/lib/charts.js"));
 const { TABS, isTab, parseHash } = await import(path.join(pkgRoot, "dist/lib/tabs.js"));
@@ -96,6 +98,7 @@ assert.deepEqual(cardView(working.cards[0]), {
   age: "6h 0m",
   badge: "on you · 42 min",
   red: true,
+  pooled: true, // no run has a type, so the pooled p90
 });
 const pr = cardView(report.board[2].cards[0]);
 assert.equal(pr.title, "ws-pr", "no ticket → the workspace name");
@@ -233,7 +236,7 @@ assert.deepEqual(
 
   const cycle = cyclePoints(r);
   assert.deepEqual(cycle.points, [
-    { t: Date.parse("2026-11-18T12:00:00Z"), value: 28 * 60, label: "SW-9" },
+    { t: Date.parse("2026-11-18T12:00:00Z"), value: 28 * 60, label: "SW-9", workType: "unknown" },
   ]);
   assert.equal(cycle.p50, r.cycle.p50Minutes);
   assert.deepEqual([cycle.x0, cycle.x1], [Date.parse(r.from), NOW.getTime()]);
@@ -293,5 +296,55 @@ assert.deepEqual(
     "1.0M",
     "56.4M",
   ]);
+}
+// SW-1212: the "where the time goes" bars read byWorkType as is; the scatter colours by type.
+{
+  const col = (column, p50, p90, count) => ({ column, p50Minutes: p50, p90Minutes: p90, count });
+  const slice = (runs, fewRuns, columns, sum) => ({
+    runs,
+    fewRuns,
+    columns,
+    sumOfMediansMinutes: sum,
+  });
+  const bars = timeGoesBars({
+    byWorkType: {
+      bugfix: slice(
+        6,
+        false,
+        [
+          col("working", 40, 60, 6),
+          col("ready", 5, 9, 6),
+          col("pr-open", 10, 30, 6),
+          col("awaiting-release", null, null, 0),
+        ],
+        55,
+      ),
+      spike: slice(
+        2,
+        true,
+        [
+          col("working", 100, 110, 2),
+          col("ready", 5, 5, 2),
+          col("pr-open", 30, 30, 2),
+          col("awaiting-release", 60, 60, 1),
+        ],
+        195,
+      ),
+      unknown: slice(0, true, [col("working", 20, 20, 1)], 20), // no finished run: no bar
+    },
+  });
+  assert.deepEqual(
+    bars.map((b) => [b.label, b.n, b.faded, b.sumOfMedians]),
+    [
+      ["bugfix", 6, false, 55],
+      ["spike", 2, true, 195],
+    ],
+  );
+  assert.deepEqual(bars[0].values, { working: 40, ready: 5, "pr-open": 10, "awaiting-release": 0 });
+  assert.deepEqual(bars[1].tips["awaiting-release"], { p50: 60, p90: 60, count: 1 });
+  assert.equal(workTypeFill("bugfix"), "var(--sd-ok)");
+  assert.equal(workTypeFill("my-workflow"), "var(--sd-faint)");
+  assert.notEqual(workTypeFill("feature"), "var(--sd-err)", "red stays the past-p90 ring");
+  console.log("✓ timeGoesBars, workTypeFill");
 }
 console.log("flow-board smoke: OK");

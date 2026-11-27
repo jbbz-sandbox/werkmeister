@@ -17,7 +17,7 @@ import {
   STUBBED_BINS,
   seedDashboardHome,
 } from "../dist/dashboard_seed.js";
-import { trendSeries } from "../dist/metrics_report.js";
+import { flowMetrics, trendSeries } from "../dist/metrics_report.js";
 import { lifecycleOf } from "../dist/pr_lifecycle.js";
 
 const Ajv2020 = createRequire(import.meta.url)("ajv/dist/2020.js").default;
@@ -260,6 +260,35 @@ test("the seed's gates fill the Metrics tab's gate and test charts, pkg-b slower
     assert.ok(latest.tests["pkg-c"].cached > 0, "pkg-c is partly cached");
     for (const r of done.slice(-5, -1)) assert.equal(r.tests["pkg-b"].p50Minutes, 3.1);
     assert.ok(t.rows.some((r) => r.gate.byKind.lint > 0 && r.gate.byKind.setup > 0));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test("the seed types its runs with two work types, one with enough merged runs for its own p90 (SW-1212)", () => {
+  const home = tmp("dashboard-seed-");
+  try {
+    seedDashboardHome(home);
+    const metrics = path.join(home, ".werkmeister", "metrics");
+    const events = fs
+      .readdirSync(metrics)
+      .flatMap((f) => fs.readFileSync(path.join(metrics, f), "utf8").trim().split("\n"))
+      .map((l) => JSON.parse(l));
+    const created = events.filter((e) => e.event === "workspace.create").map((e) => e.work_type);
+    assert.ok(new Set(created).size >= 2, `create lines' types: ${created}`);
+    const root = path.join(home, "ws");
+    const ymlTypes = fs
+      .readdirSync(root)
+      .map((n) => fs.readFileSync(path.join(root, n, ".werkmeister", "workspace.yml"), "utf8"))
+      .map((y) => /^work_type: (\S+)$/m.exec(y)?.[1]);
+    assert.ok(ymlTypes.every(Boolean) && new Set(ymlTypes).size >= 2);
+    const usages = fs.readdirSync(root).flatMap((n) => {
+      const f = path.join(root, n, "usage.json");
+      return fs.existsSync(f) ? [JSON.parse(fs.readFileSync(f, "utf8"))] : [];
+    });
+    const r = flowMetrics({ events, open: [], usages }, "30d", new Date());
+    assert.deepEqual([r.byWorkType.feature.runs, r.byWorkType.feature.fewRuns], [5, false]);
+    assert.ok(Object.keys(r.byWorkType).length >= 2);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

@@ -8,6 +8,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import type { CostlyTicket, MetricsRange, MetricsTrends } from "werkmeister-core/metrics_report";
 import { Css } from "werkmeister-ui/theme";
 import type { HostBridge } from "werkmeister-ui/workspace-ui";
+import { WorkTypeSelect } from "./flow-ui.js";
 import {
   formatUsd,
   heatmapView,
@@ -16,7 +17,7 @@ import {
   stackedBarView,
   W,
 } from "./lib/charts.js";
-import { formatCount, formatMinutes, RANGES } from "./lib/flow-board.js";
+import { formatCount, formatMinutes, RANGES, WORK_TYPES } from "./lib/flow-board.js";
 import {
   AFTER_STAGES,
   bottleneck,
@@ -692,9 +693,10 @@ function TokenSection({ rows }: { rows: SlicedRow[] }) {
 export function MetricsTab({ bridge, active }: { bridge: HostBridge; active: boolean }) {
   const [range, setRange] = useState<MetricsRange>("30d");
   const [version, setVersion] = useState("all");
+  const [workType, setWorkType] = useState("all");
   const [trends, setTrends] = useState<MetricsTrends | null>(null);
   const [status, setStatus] = useState({ text: "Loading…", err: false });
-  // Range and showing the tab re-query: version filters the rows' byVersion locally (SW-1098 Q1);
+  // Range, work type and showing the tab re-query: version filters the rows' byVersion locally (SW-1098 Q1);
   // a hidden tab makes no call, so a run that closed meanwhile shows when it is opened (SW-1142).
   useEffect(() => {
     if (!active) return;
@@ -704,6 +706,7 @@ export function MetricsTab({ bridge, active }: { bridge: HostBridge; active: boo
       bridge.callTool("metrics-trends", {
         range,
         bucket: RANGE_BUCKET[range],
+        ...(workType !== "all" && { work_type: workType }),
       }) as Promise<MetricsTrends>
     ).then(
       (t) => {
@@ -717,7 +720,7 @@ export function MetricsTab({ bridge, active }: { bridge: HostBridge; active: boo
     return () => {
       stale = true;
     };
-  }, [bridge, range, active]);
+  }, [bridge, range, workType, active]);
 
   const versions = trends ? versionsOf(trends) : [];
   if (version !== "all" && !versions.includes(version)) versions.push(version);
@@ -743,6 +746,7 @@ export function MetricsTab({ bridge, active }: { bridge: HostBridge; active: boo
             </option>
           ))}
         </select>
+        <WorkTypeSelect value={workType} types={WORK_TYPES} onChange={setWorkType} />
       </div>
       <div className={status.err ? "load-status err" : "load-status"}>{status.text}</div>
       {trends && isEmpty(rows) && <div className="empty">{emptyText(range, version)}</div>}

@@ -9,7 +9,7 @@ werkmeister\-metrics\-rebuild \- Backfill the metrics event log from record bran
 .IP 1. 3
 Clones the workspace repo (the origin of \fB<repos_root>/sandbox\-workspace\fR, else \fBoverrides.workspace_repo\fR) into a temporary bare clone, removed when the command ends. The shared checkout is never fetched into or written \" name-check: ignore
 .IP 2. 3
-On each record branch except the default one, first: copies the lines of its \fBmetrics.jsonl\fR, the events its close\-out pushed (a teammate's too), and caches its \fBusage.json\fR with the branch's git author email in \fB~/.werkmeister/metrics/usage\-branches.jsonl\fR, rewritten each run, for the \fBmetrics\fR report's per\-person rollups
+On each record branch except the default one, first: copies the lines of its \fBmetrics.jsonl\fR, the events its close\-out pushed (a teammate's too), and caches its \fBusage.json\fR with the branch's git author email and its \fB.werkmeister/workspace.yml\fR \fBwork_type\fR (\fBunknown\fR when the file can't be read or has none, never guessed) in \fB~/.werkmeister/metrics/usage\-branches.jsonl\fR, rewritten each run, for the \fBmetrics\fR report's per\-person and per\-work\-type rollups
 .IP 3. 3
 On each record branch: writes \fBstage.done\fR for each stage at the commit that first filled its \fBoutput/\fR, and \fBpr.open\fR / \fBpr.merged\fR at GitHub's \fBcreatedAt\fR / \fBmergedAt\fR for each PR file's \fBurl:\fR (through \fBgh\fR). The ticket comes from the branch's \fBusage.json\fR
 .IP 4. 3

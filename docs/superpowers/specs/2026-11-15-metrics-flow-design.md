@@ -59,7 +59,7 @@ Rejected: one column per ICM stage (too wide), and separate wait columns (cards 
 | Cycle time per ticket | **kept** | A scatter with p50 and p90 lines shows outliers and trend. |
 | Lead time per ticket | kept as a toggle on the cycle-time scatter | Same axes, a different start point (see § Definitions). |
 | Blocked time | **kept**, as wait time by cause | Weekly stacked bars by cause (§ Q5). |
-| Cumulative flow diagram | **dropped** | With 2-6 items in flow, the bands are a few pixels high. Aging and the scatter show the same thing. Revisit if WIP often passes about 10. |
+| Cumulative flow diagram | **dropped** | With 2-6 items in flow, the bands are a few pixels high. Aging and the scatter show the same thing. Revisit if WIP often passes about 10. SW-1212: the "where the time goes" bars (median minutes per column, one bar per work type) answer the bottleneck question instead. |
 | WIP limits per column | **dropped** | The capacity scheduler already enforces the real limit (slots and the CPU budget). Each column header shows its current WIP count instead. |
 
 Rejected: all five as the ticket lists them (the CFD and WIP limits add nothing at this scale).

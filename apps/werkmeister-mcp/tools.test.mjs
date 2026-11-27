@@ -366,3 +366,45 @@ test("skills: an over-long stages: entry returns an [err] line, not a stack", as
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("metrics and metrics-trends take a work_type filter; the report's per-type fields pass the output schema (SW-1212)", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-tools-root-"));
+  try {
+    await withSandboxHome(
+      async () => {
+        const { sandboxHome } = await import("../../packages/werkmeister-core/dist/config.js");
+        const dir = path.join(sandboxHome(), "metrics");
+        fs.mkdirSync(dir, { recursive: true });
+        const at = new Date(Date.now() - 3_600_000).toISOString();
+        fs.writeFileSync(
+          path.join(dir, `events-${at.slice(0, 7)}.jsonl`),
+          `${JSON.stringify({ v: 1, at, event: "workspace.create", workspace: "w", duration_ms: 1, result: "ok", work_type: "bugfix" })}\n`,
+        );
+        const client = await connect();
+        const { tools } = await client.listTools();
+        for (const n of ["metrics", "metrics-trends"]) {
+          const wt = tools.find((t) => t.name === n)?.inputSchema.properties?.work_type;
+          assert.equal(wt?.type, "string", n);
+        }
+        const r = await client.callTool({ name: "metrics", arguments: { work_type: "bugfix" } });
+        assert.ok(!r.isError, JSON.stringify(r.content));
+        assert.equal(r.structuredContent.workType, "bugfix");
+        assert.deepEqual(Object.keys(r.structuredContent.byWorkType), ["bugfix"]);
+        assert.deepEqual(
+          r.structuredContent.byWorkType.bugfix.columns.map((c) => c.column),
+          ["working", "ready", "pr-open", "awaiting-release"],
+        );
+        const t = await client.callTool({
+          name: "metrics-trends",
+          arguments: { work_type: "bugfix" },
+        });
+        assert.ok(!t.isError, JSON.stringify(t.content));
+        const bad = await client.callTool({ name: "metrics", arguments: { work_type: "Bug Fix" } });
+        assert.ok(bad.isError, "a value off the work_type pattern is refused");
+      },
+      { config: `paths:\n  workspaces_root: ${root}\n  repos_root: ${root}\n` },
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

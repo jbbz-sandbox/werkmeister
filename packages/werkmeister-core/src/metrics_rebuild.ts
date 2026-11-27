@@ -21,6 +21,8 @@ import {
   recordEvent,
   runTagOf,
   usageCachePath,
+  WORK_TYPE_UNKNOWN,
+  workTypeOf,
 } from "./metrics.js";
 import { warn } from "./reporter.js";
 import { runCapture } from "./tool_bins.js";
@@ -313,7 +315,8 @@ export async function rebuildMetrics(): Promise<RebuildResult> {
       const usage = parseUsage(usageFiles?.get(branch));
       if (usage) {
         const by = authors.get(branch) || undefined;
-        usages.push(JSON.stringify({ ...usage, by }));
+        const work_type = workTypeOf(ymls?.get(branch)) ?? WORK_TYPE_UNKNOWN; // SW-1212
+        usages.push(JSON.stringify({ ...usage, by, work_type }));
       }
     }
     if (usageFiles) {

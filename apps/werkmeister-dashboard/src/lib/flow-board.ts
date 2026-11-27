@@ -35,6 +35,49 @@ export const WAIT_LABEL: Record<WaitCause, string> = {
   release: "release",
 };
 
+/** The work types the selectors offer before a report lists the ones in use. */
+export const WORK_TYPES = ["feature", "bugfix", "refactor", "spike", "incident", "unknown"];
+// `--sd-err` stays the past-p90 colour and `--sd-info` equals accent in light mode, so neither is a type.
+const WORK_TYPE_FILL: Record<string, string> = {
+  feature: "var(--sd-accent)",
+  bugfix: "var(--sd-ok)",
+  refactor: "var(--sd-pr)",
+  spike: "var(--sd-warn)",
+  incident: "var(--sd-muted)",
+};
+/** A work type's dot colour; a workflow type or `unknown` is faint. */
+export const workTypeFill = (t: string) => WORK_TYPE_FILL[t] ?? "var(--sd-faint)";
+export const COLUMN_FILL: Record<FlowColumn, string> = {
+  working: "var(--sd-accent)",
+  ready: "var(--sd-ok)",
+  "pr-open": "var(--sd-pr)",
+  "awaiting-release": "var(--sd-warn)",
+};
+
+/** One "where the time goes" bar: a work type's column medians, from the report's `byWorkType` (SW-1212). */
+export interface TimeGoesBar extends StackBar {
+  n: number;
+  faded: boolean;
+  sumOfMedians: number;
+  tips: Record<string, { p50: number | null; p90: number | null; count: number }>;
+}
+
+/** A bar per work type with a run that finished in range, its segments the column p50s in flow order. */
+export function timeGoesBars(r: MetricsReport): TimeGoesBar[] {
+  return Object.entries(r.byWorkType)
+    .filter(([, s]) => s.runs > 0)
+    .map(([type, s]) => ({
+      label: type,
+      values: Object.fromEntries(s.columns.map((c) => [c.column, c.p50Minutes ?? 0])),
+      n: s.runs,
+      faded: s.fewRuns,
+      sumOfMedians: s.sumOfMediansMinutes,
+      tips: Object.fromEntries(
+        s.columns.map((c) => [c.column, { p50: c.p50Minutes, p90: c.p90Minutes, count: c.count }]),
+      ),
+    }));
+}
+
 /** `42m`, `3h 5m`, `2d 4h`; `—` when unknown. */
 export function formatMinutes(m: number | null): string {
   if (m === null) return "—";
@@ -50,6 +93,8 @@ export interface CardView {
   age: string;
   badge: string | null;
   red: boolean;
+  /** Red against the pooled p90: its work type has too few runs for its own. */
+  pooled: boolean;
 }
 
 export function cardView(c: FlowCard): CardView {
@@ -59,6 +104,7 @@ export function cardView(c: FlowCard): CardView {
     age: formatMinutes(c.ageMinutes),
     badge: c.wait ? `${WAIT_LABEL[c.wait.cause]} · ${Math.round(c.wait.minutes)} min` : null,
     red: c.overP90,
+    pooled: c.overP90 && c.p90Pooled,
   };
 }
 
@@ -155,6 +201,7 @@ export function cyclePoints(r: MetricsReport) {
     t: Date.parse(t.mergedAt),
     value: t.cycleMinutes,
     label: t.ticket,
+    workType: t.workType,
   }));
   const p = r.cycle;
   const x1 = Date.parse(r.to);
