@@ -17,7 +17,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Argument, Command, CommanderError, Option } from "commander";
+import { Argument, Command, CommanderError, InvalidArgumentError, Option } from "commander";
 import { COMPOSE_FILE } from "werkmeister-core/compose_file";
 import { envVar } from "werkmeister-core/config";
 import { buildOf, expectDaemonBuild } from "werkmeister-core/daemon_client";
@@ -271,6 +271,14 @@ const SPECS: CommandSpec[] = [
           "--service <name>",
           "Start only this service and wait for it, the way the PR gate does — including one " +
             "behind the on-demand profile. `feature stop` stops it.",
+          // SW-1252: a repeat used to replace the earlier value, so only the last one started.
+          (v: string, prev?: string) => {
+            if (prev !== undefined)
+              throw new InvalidArgumentError(
+                "--service takes one service; run one `werkmeister feature up --service <name>` per service.",
+              );
+            return v;
+          },
         );
     },
     namespace: ([feature], o) => ({

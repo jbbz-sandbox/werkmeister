@@ -90,7 +90,7 @@ Warns about routed hostnames that do not resolve to 127.0.0.1 on this machine an
 .PP
 \fBIf every slot is taken\fR (12 by default, \fBfeature_slots.count\fR), the command exits with an error. Free a slot by running \fBwerkmeister feature down\fR on another feature.
 .PP
-\fB`\-\-service <name>`\fR starts only that one service, the way the PR gate starts it, and prints \fBStarted <feature>\-<name>\fR.
+\fB`\-\-service <name>`\fR starts only that one service, the way the PR gate starts it (one per call: a repeated \fB\-\-service\fR is refused), and prints \fBStarted <feature>\-<name>\fR.
 .PP
 \fBAdding a service to a running feature.\fR To run another service locally, add it to the \fBservices\fR field in the workspace's \fB.werkmeister/workspace.yml\fR, rerun \fBwerkmeister workspace init\fR (this also adds the owning repo's worktree if it isn't there yet), then \fBwerkmeister feature up\fR.
 .SH SEE ALSO
