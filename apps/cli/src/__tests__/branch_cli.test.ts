@@ -29,12 +29,14 @@ function node(args: string[], cwd: string, env: NodeJS.ProcessEnv = {}): Promise
 let tmp: string;
 afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
-/** A workspace `<tmp>/ws` with a `.env` and a repo `wm` (cwd for the runs); `cli` adds apps/cli/werkmeister. */
+/** A workspace `<tmp>/ws` (its .werkmeister/workspace.yml) with a `.env` and a repo `wm` (cwd for the runs); `cli` adds apps/cli/werkmeister. */
 function workspace(cli: boolean): string {
   tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "branch-cli-")));
   const repo = path.join(tmp, "ws", "wm");
   fs.mkdirSync(path.join(repo, ".git"), { recursive: true });
   fs.writeFileSync(path.join(tmp, "ws", ".env"), "FEATURE=demo\n");
+  fs.mkdirSync(path.join(tmp, "ws", ".werkmeister"));
+  fs.writeFileSync(path.join(tmp, "ws", ".werkmeister", "workspace.yml"), "feature: demo\n");
   if (cli) {
     fs.mkdirSync(path.join(repo, "apps", "cli"), { recursive: true });
     fs.writeFileSync(path.join(repo, "apps", "cli", "werkmeister"), "");
@@ -52,6 +54,15 @@ describe("internal branch-cli", () => {
       );
       fs.rmSync(tmp, { recursive: true, force: true });
     }
+  });
+
+  it("SW-975: refuses outside a workspace, without falling back to the nearest .git", async () => {
+    const repo = workspace(true);
+    fs.rmSync(path.join(tmp, "ws", ".werkmeister"), { recursive: true });
+    const r = await node([MAIN, "internal", "branch-cli", "feature", "status"], repo);
+    expect(r.code).toBe(2);
+    expect(r.stderr).toMatch(/not inside a workspace: no \.werkmeister\/workspace\.yml/);
+    expect(r.stderr).not.toMatch(/running/);
   });
 
   it("refuses a workspace with no werkmeister worktree", async () => {
@@ -83,7 +94,7 @@ describe("internal branch-cli", () => {
       NODE_PATH: "/elsewhere",
     });
     expect(r.code).toBe(3);
-    expect(r.stderr).toContain(`branch-cli: running ${path.join(dist, "main.js")}`);
+    expect(r.stderr).toContain(`branch-cli: checking and running ${path.join(dist, "main.js")}`);
     expect(JSON.parse(r.stdout)).toEqual({
       argv: args,
       root: CLI_DIR,

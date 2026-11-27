@@ -11,10 +11,17 @@ import * as path from "node:path";
 import { containerOf, sandboxRoot } from "werkmeister-core/config";
 import { gitEnv } from "werkmeister-core/proc";
 import { repoDirs } from "werkmeister-core/standards";
-import { findWorkspaceRoot } from "werkmeister-core/workspace_init";
 
 // Branch code runs with the real ~/.werkmeister, so only verbs scoped to this workspace: no daemon, machine or infra.
 const ALLOWED = ["pr gate", "feature up", "feature stop", "feature status"];
+
+/** SW-975: the nearest folder above the cwd with a .werkmeister/workspace.yml; no `.git` fallback. */
+function workspaceAbove(dir: string): string | null {
+  for (let d = path.resolve(dir); ; d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, ".werkmeister", "workspace.yml"))) return d;
+    if (path.dirname(d) === d) return null;
+  }
+}
 
 function refuse(message: string): void {
   console.error(`branch-cli: ${message}`);
@@ -26,7 +33,8 @@ export async function run(argv: string[]): Promise<void> {
     return refuse(
       `runs only ${ALLOWED.map((v) => `\`${v}\``).join(", ")}; got \`${argv.join(" ")}\``,
     );
-  const ws = findWorkspaceRoot();
+  const ws = workspaceAbove(process.cwd());
+  if (!ws) return refuse("not inside a workspace: no .werkmeister/workspace.yml above the cwd");
   const wt = repoDirs(ws).find((d) => fs.existsSync(path.join(d, "apps", "cli", "werkmeister")));
   if (!wt) return refuse(`no werkmeister worktree in ${ws}`);
   const main = path.join(wt, "apps", "cli", "dist", "main.js");
@@ -49,7 +57,8 @@ export async function run(argv: string[]): Promise<void> {
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
   } catch {}
-  console.error(`branch-cli: running ${main} (worktree at ${head})`);
+  // SW-975: the child checks its build stamp first and may refuse (exit 2), so this is not yet a run.
+  console.error(`branch-cli: checking and running ${main} (worktree at ${head})`);
 
   const root = sandboxRoot();
   const nodePath = [path.join(root, "node_modules"), process.env.NODE_PATH].filter(Boolean);
