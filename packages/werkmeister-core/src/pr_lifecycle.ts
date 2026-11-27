@@ -3231,7 +3231,8 @@ async function releasePackages(
     }
     for (const group of Array.isArray(fixed) ? fixed : [])
       if (Array.isArray(group) && group.some((g) => names.has(g)))
-        for (const g of group) if (typeof g === "string") names.add(g);
+        // shortcut: glob members are not expanded, so a changeset naming only a glob-matched package doesn't widen its group; expand against the repo's package names if a glob-fixed repo needs it (SW-1232).
+        for (const g of group) if (typeof g === "string" && !/[*?{[]/.test(g)) names.add(g);
   }
   const named: string[] = [];
   for (const name of names) {
