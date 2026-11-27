@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import * as fs from "node:fs";
-import { createRequire } from "node:module";
+import { createRequire, syncBuiltinESMExports } from "node:module";
 import * as path from "node:path";
 import { test } from "node:test";
 
@@ -791,6 +791,64 @@ test("pr status logs one ci.result per PR head once its checks finish", async ()
           ],
         ],
       );
+    },
+    { gate: true },
+  );
+});
+
+// SW-1189: a poll over a head whose ci.result is logged reads the one month file it would be in, not the whole log.
+test("a repeat status pass over a finished head reads one metrics file, and logs ci.result once", async () => {
+  await withFixtureWorkspace(
+    async (fx) => {
+      await withReporter(collectingReporter(), () =>
+        initWorkspace({}, fx.workspace, { build: false }),
+      );
+      const open = await openPrs(fx.workspace, undefined, undefined, { wait: false });
+      assert.equal(open.ok, true, open.lines.join("\n"));
+      // Older months the full slice would read.
+      for (const at of ["2025-06-01T00:00:00Z", "2025-07-01T00:00:00Z"])
+        recordEvent(
+          { event: "pr.open", workspace: "other", pr: "https://github.com/o/x/pull/9" },
+          at,
+        );
+      const view = {
+        headRefOid: "a1",
+        statusCheckRollup: [
+          {
+            __typename: "CheckRun",
+            name: "test",
+            conclusion: "SUCCESS",
+            startedAt: "2026-01-03T10:00:00Z",
+            completedAt: "2026-01-03T10:09:00Z",
+          },
+        ],
+      };
+      const base = defaultDeps();
+      const deps = {
+        ...base,
+        run: async (cmd, args, cwd) => {
+          const r = await base.run(cmd, args, cwd);
+          if (cmd !== "gh" || args[1] !== "view" || r.code !== 0) return r;
+          return { ...r, stdout: JSON.stringify({ ...JSON.parse(r.stdout), ...view }) };
+        },
+      };
+      await refreshPrStatus(fx.workspace, deps);
+      const cfs = createRequire(import.meta.url)("node:fs");
+      const orig = cfs.readFileSync;
+      const reads = [];
+      cfs.readFileSync = function (p, ...rest) {
+        if (/events-.*\.jsonl$/.test(String(p))) reads.push(path.basename(String(p)));
+        return orig.call(this, p, ...rest);
+      };
+      syncBuiltinESMExports();
+      try {
+        await refreshPrStatus(fx.workspace, deps);
+      } finally {
+        cfs.readFileSync = orig;
+        syncBuiltinESMExports();
+      }
+      assert.deepEqual(reads, [path.basename(metricsPath("2026-01-03T10:09:00.000Z"))]);
+      assert.equal(eventsOf(fx, "ci.result").length, 1);
     },
     { gate: true },
   );

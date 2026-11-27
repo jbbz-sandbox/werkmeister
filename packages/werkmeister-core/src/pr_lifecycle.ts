@@ -73,6 +73,7 @@ import {
 } from "./machine_setup.js";
 import {
   gateRowKind,
+  metricsPath,
   recordEvent,
   runTag,
   timed,
@@ -3064,9 +3065,32 @@ function recordCiResult(ws: string, pr: string, view: PrView): void {
   const pending = (c: (typeof checks)[number]) =>
     c.__typename === "StatusContext" ? PENDING_STATUS.has(c.state ?? "") : !c.conclusion;
   if (!commit || !checks.length || checks.some(pending)) return;
-  const logged = workspaceSlice(ws).some((l) => {
-    const e = JSON.parse(l);
-    return e.event === "ci.result" && e.pr === pr && e.commit === commit;
+  const times = (k: "startedAt" | "completedAt") =>
+    checks.map((c) => Date.parse(c[k] ?? "")).filter((t) => !Number.isNaN(t));
+  const [starts, ends] = [times("startedAt"), times("completedAt")];
+  const end = ends.length ? Math.max(...ends) : Date.now();
+  // The line is logged at the last check's end, so with one only that month file can hold it (SW-1189): every poll, not the whole log.
+  // shortcut: a job re-run on the same head that ends in the next month logs a second ci.result; read the prior month too if that shows in reports.
+  let lines: string[];
+  try {
+    lines = ends.length
+      ? fs.readFileSync(metricsPath(new Date(end).toISOString()), "utf8").split("\n")
+      : workspaceSlice(ws);
+  } catch {
+    lines = [];
+  }
+  const logged = lines.some((l) => {
+    try {
+      const e = JSON.parse(l);
+      return (
+        e.event === "ci.result" &&
+        e.workspace === path.basename(ws) &&
+        e.pr === pr &&
+        e.commit === commit
+      );
+    } catch {
+      return false;
+    }
   });
   if (logged) return;
   const failed = checks.some((c) =>
@@ -3074,10 +3098,6 @@ function recordCiResult(ws: string, pr: string, view: PrView): void {
       ? FAILED_STATUS.has(c.state ?? "")
       : FAILED_RUN.has(c.conclusion ?? ""),
   );
-  const times = (k: "startedAt" | "completedAt") =>
-    checks.map((c) => Date.parse(c[k] ?? "")).filter((t) => !Number.isNaN(t));
-  const [starts, ends] = [times("startedAt"), times("completedAt")];
-  const end = ends.length ? Math.max(...ends) : Date.now();
   const ticket = issueRefsOf(loadConfigFile(ws, null))[0];
   recordEvent(
     {
