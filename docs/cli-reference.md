@@ -260,7 +260,7 @@ Stop containers without removing them or releasing the slot
 
 Stops a feature's containers without removing them or releasing its slot. A start of the feature still waiting for capacity leaves the queue too. Bring it back with `werkmeister feature restart` or `werkmeister feature up`. Use `infra` as the feature name to stop the shared infrastructure.
 
-Two modes run without a person: `--if-idle` is the SessionEnd hook behind a workspace's `auto_stop`, and `--idle` is one pass of the idle reaper over every workspace.
+Two commands do this without a person: `werkmeister internal session-end` is the SessionEnd hook behind a workspace's `auto_stop`, and `werkmeister internal reap <minutes>` is one pass of the idle reaper over every workspace.
 
 **Examples**
 
