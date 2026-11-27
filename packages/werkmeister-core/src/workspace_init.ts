@@ -111,6 +111,7 @@ import {
   commitRecord,
   createWorktree,
   removeWorktree,
+  repoSourceProblem,
   resolveRepos,
   worktreeIsDirty,
   writeWorkspaceGitignore,
@@ -557,6 +558,26 @@ function workspaceBranch(workspaceRoot: string): string {
   return `${getuser()}/${path.basename(workspaceRoot)}`;
 }
 
+/**
+ * Refuse before anything is made: a name outside repos_root, then each of *toCreate* that is missing,
+ * not git, has no `origin` or no base ref (SW-927).
+ */
+function checkRepoSources(reposRoot: string, names: string[], toCreate: string[]): void {
+  // A `../` name would add a worktree and branch in a repo outside repos_root.
+  const escaping = names.filter((r) => path.basename(r) !== r || r === "." || r === "..");
+  if (escaping.length)
+    fail(`Repo name(s) must be a folder directly under ${reposRoot}: ${escaping.join(", ")}.`);
+  const missingSrc = toCreate.filter((r) => !isDir(path.join(reposRoot, r)));
+  if (missingSrc.length) {
+    fail(
+      `Source repo(s) not found under ${reposRoot}: ${missingSrc.join(", ")}. ` +
+        "Clone them there (or fix `repos` in .werkmeister/workspace.yml) and rerun.",
+    );
+  }
+  const problems = toCreate.flatMap((r) => repoSourceProblem(path.join(reposRoot, r)) ?? []);
+  if (problems.length) fail(`Cannot make a worktree of:\n${problems.join("\n")}`);
+}
+
 /** Create missing repo worktrees and remove ones no longer desired. */
 function reconcileWorktrees(workspaceRoot: string, desiredRepos: string[], force: boolean): void {
   const reposRoot = getReposRoot();
@@ -567,17 +588,7 @@ function reconcileWorktrees(workspaceRoot: string, desiredRepos: string[], force
   const toCreate = desired.filter((r) => !present.has(r));
   const toRemove = [...present].filter((r) => !desiredSet.has(r)).sort();
 
-  // A `../` name would add a worktree and branch in a repo outside repos_root.
-  const escaping = desired.filter((r) => path.basename(r) !== r || r === "." || r === "..");
-  if (escaping.length)
-    fail(`Repo name(s) must be a folder directly under ${reposRoot}: ${escaping.join(", ")}.`);
-  const missingSrc = toCreate.filter((r) => !isDir(path.join(reposRoot, r)));
-  if (missingSrc.length) {
-    fail(
-      `Source repo(s) not found under ${reposRoot}: ${missingSrc.join(", ")}. ` +
-        "Clone them there (or fix `repos` in .werkmeister/workspace.yml) and rerun.",
-    );
-  }
+  checkRepoSources(reposRoot, desired, toCreate);
 
   // Pre-flight: a dirty removal aborts the whole run without changes.
   if (toRemove.length && !force) {
@@ -1162,6 +1173,8 @@ export async function provisionWorkspace(
     refreshRegistry();
     const repos = await selectRepos(resolved.repos, resolved.services);
     resolved.repos = repos.join(",");
+    const codeRepos = repos.filter((r) => r !== WORKSPACE_ROOT_REPO);
+    checkRepoSources(resolveReposRoot(), codeRepos, codeRepos);
     createWorkspaceRoot(workspaceDir, branch, Boolean(opts.force));
     // A new workspace.yml names its strategy: an absent key reads as jit (pre-field files).
     resolved.context_strategy ||= STRATEGY_IDS[0];

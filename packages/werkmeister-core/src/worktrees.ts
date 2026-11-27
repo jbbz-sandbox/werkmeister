@@ -209,7 +209,30 @@ export function baseRef(src: string): string {
     }
   }
 
+  // SW-927: say why when the cause is a missing remote, and how to add it.
+  if (run(["git", "-C", src, "remote", "get-url", "origin"], { capture: true }).status !== 0) {
+    const branch =
+      run(["git", "-C", src, "branch", "--show-current"], { capture: true }).stdout.trim() ||
+      "main";
+    throw new Error(
+      `${src} has no \`origin\` remote. Add one and push the default branch:\n` +
+        `  git -C ${src} remote add origin <url> && git -C ${src} push -u origin ${branch}`,
+    );
+  }
   throw new Error(`Could not determine default branch for ${src}`);
+}
+
+/** SW-927: why *src* can't be a workspace's code repo (missing, not git, no origin, no base), or null. */
+export function repoSourceProblem(src: string): string | null {
+  if (!fs.existsSync(src) || !fs.statSync(src).isDirectory()) return `${src} not found`;
+  if (run(["git", "-C", src, "rev-parse", "--git-dir"], { capture: true }).status !== 0)
+    return `${src} is not a git repository`;
+  try {
+    defaultBaseRef(src);
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
 }
 
 /** True when `dir` is a git working tree (worktree `.git` file or a `.git` dir). */

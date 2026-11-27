@@ -205,3 +205,71 @@ test("SW-577: a tier with no model for the harness fails create before the works
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// SW-927: each repo is checked before the workspace root exists, so a bad one leaves nothing behind.
+for (const [label, setup, want] of [
+  [
+    "a repo with no origin remote",
+    (git, dir) => {
+      git("init", "-q", "-b", "main", dir);
+      git(
+        "-C",
+        dir,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "init",
+      );
+    },
+    /demo-repo.*has no `origin` remote.*git -C \S+demo-repo remote add origin <url>.*push -u origin main/s,
+  ],
+  [
+    "a folder that is not a git repo",
+    (_git, dir) => fs.mkdirSync(dir),
+    /demo-repo.*is not a git repository/s,
+  ],
+  [
+    "an origin with no default branch",
+    (git, dir, tmp) => {
+      const empty = path.join(tmp, "empty.git");
+      git("init", "-q", "--bare", empty);
+      git("init", "-q", "-b", "main", dir);
+      git("-C", dir, "remote", "add", "origin", empty);
+    },
+    /Could not determine default branch for \S+demo-repo/,
+  ],
+]) {
+  test(`SW-927: create refuses ${label} before the workspace root is created`, async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "create-preflight-"));
+    const repos = path.join(tmp, "repos");
+    fs.mkdirSync(repos);
+    setup(
+      (...args) => execFileSync("git", args, { stdio: "pipe" }),
+      path.join(repos, "demo-repo"),
+      tmp,
+    );
+    try {
+      await withSandboxHome(
+        async () => {
+          const { err } = await abort(() =>
+            createWorkspace(
+              { feature: "demo", services: "backend", work_type: "feature" },
+              { open: false, cwd: tmp, distill: false, build: false },
+            ),
+          );
+          assert.ok(err, "create must fail");
+          assert.match(err.message, want);
+          assert.ok(!fs.existsSync(path.join(tmp, "ws", "demo")), "no workspace root made");
+        },
+        { config: `paths:\n  repos_root: ${repos}\n  workspaces_root: ${path.join(tmp, "ws")}\n` },
+      );
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+}
