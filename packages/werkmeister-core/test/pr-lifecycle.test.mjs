@@ -7132,6 +7132,19 @@ test("pr push: force-pushes this workspace's own rebased branch with a lease on 
   }
 });
 
+test("pr push says when the record of the pushed head fails to push (SW-923)", async () => {
+  const { ws, own } = pushWorkspace();
+  try {
+    const d = pushDeps(own);
+    d.commitRecord = async () => ({ ok: false, message: "record: push failed — remote hung up" });
+    const r = await pushPrs(ws, undefined, d);
+    assert.ok(r.ok, "the code push itself succeeded");
+    assert.match(r.lines[0], /pushed .*rerun the gate's tests.*\n.*push failed — remote hung up/s);
+  } finally {
+    clean(ws);
+  }
+});
+
 test("pr push refuses another branch, a dirty tree, a merged-in base and a stale lease, and pushes nothing (SW-717)", async () => {
   const { ws, own } = pushWorkspace();
   try {

@@ -4731,8 +4731,11 @@ async function pushOne(ws: string, all: PrFile[], f: PrFile, deps: Deps): Promis
   if (push.code) return `failed: ${(push.stderr || push.stdout).trim()}`;
   // A second push in the same fix (the gate's tests failed, amend) leases on what this push put there.
   writePrFields(f, { conflict_head: pushed });
-  await deps.commitRecord(ws, "chore: record pushed PR head", [path.relative(ws, f.path)]);
-  return `pushed ${branch} (lease ${lease.slice(0, 12)}); rerun the gate's tests (rule 5)`;
+  const rec = await deps.commitRecord(ws, "chore: record pushed PR head", [
+    path.relative(ws, f.path),
+  ]);
+  // SW-923: a failed record push is said, as the other commitRecord callers do.
+  return `pushed ${branch} (lease ${lease.slice(0, 12)}); rerun the gate's tests (rule 5)\n${rec.message}`;
 }
 
 /**
