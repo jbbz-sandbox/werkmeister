@@ -1,5 +1,5 @@
 // SW-1098, SW-1099: the Metrics tab's inline-SVG chart primitives (data → marks) and its view model over a
-// hand-built `metrics-trends` result: versions, the empty state, tiles and preview inputs. No DOM.
+// hand-built `metrics-trends` result: versions, the empty state, tiles and chart inputs (SW-1100: the model stack). No DOM.
 //   npm run build && node test/charts.smoke.mjs
 import assert from "node:assert";
 import path from "node:path";
@@ -23,7 +23,15 @@ const {
   isEmpty,
   emptyText,
   metricsTiles,
-  previewCharts,
+  MODEL_FAMILIES,
+  modelFamily,
+  modelBars,
+  priceNote,
+  cacheShareLine,
+  ticketCostLines,
+  costliestTickets,
+  stageTokenBars,
+  AFTER_STAGES,
   stageTrend,
   leadTrend,
   stageHeatmap,
@@ -152,6 +160,22 @@ const slice = (o = {}) => ({
   costUnknown: 0,
   byModel: {},
   cacheReadShare: null,
+  unstagedTokens: { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 },
+  perTicket: {
+    tickets: 0,
+    p50Tokens: null,
+    p90Tokens: null,
+    p50Usd: null,
+    p90Usd: null,
+    unpriced: 0,
+  },
+  costliest: [],
+  abandonedSpend: {
+    workspaces: 0,
+    tokens: { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 },
+    estUsd: null,
+    costUnknown: 0,
+  },
   activeMinutes: 0,
   wallClockMinutes: 0,
   gate: {
@@ -240,18 +264,10 @@ assert.deepEqual(metricsTiles(all), [
   { label: "Shipped", value: "2" },
   { label: "Abandoned", value: "1" },
   { label: "Est. cost", value: "$5.50" },
+  { label: "Abandoned spend", value: "—" },
   { label: "Gate first pass", value: "67%", sub: "2 of 3 workspaces" },
 ]);
-assert.equal(metricsTiles(only9)[3].value, "—", "no gate runs → unknown first-pass rate");
-const p = previewCharts(all);
-assert.deepEqual(
-  p.closed.map((b) => b.values),
-  [
-    { shipped: 0, abandoned: 0 },
-    { shipped: 0, abandoned: 1 },
-    { shipped: 2, abandoned: 0 },
-  ],
-);
+assert.equal(metricsTiles(only9)[4].value, "—", "no gate runs → unknown first-pass rate");
 assert.deepEqual(stageHeatmap(all), {
   rows: ["01_research", "03_implement"],
   cols: ["2026-10-26", "2026-11-02", "2026-11-09"],
@@ -260,7 +276,128 @@ assert.deepEqual(stageHeatmap(all), {
     [null, null, 90],
   ],
 });
-console.log("✓ metricsTiles, previewCharts, stageHeatmap");
+console.log("✓ metricsTiles, stageHeatmap");
+
+// SW-1100: the model stack, its cost toggle, the price notes, per-ticket cost and tokens per stage.
+const t = (input, output = 0, cacheCreation = 0, cacheRead = 0) => ({
+  input,
+  output,
+  cacheCreation,
+  cacheRead,
+});
+assert.deepEqual(
+  [
+    "claude-opus-5-5",
+    "claude-opus-4-8",
+    "claude-sonnet-5-5",
+    "claude-haiku-4-5",
+    "claude-fable-5-2",
+  ].map(modelFamily),
+  ["Opus", "Opus", "Sonnet", "Haiku", "Fable"],
+);
+assert.deepEqual(["<synthetic>", "gpt-5", "claude-opusx"].map(modelFamily), [
+  "Other",
+  "Other",
+  "Other",
+]);
+assert.deepEqual(MODEL_FAMILIES, ["Opus", "Sonnet", "Haiku", "Fable", "Other"]);
+const wk1 = slice({
+  shipped: 2,
+  abandoned: 1,
+  estUsd: 9,
+  costUnknown: 2,
+  byModel: {
+    "claude-opus-5-5": { tokens: t(10, 20, 30, 40), estUsd: 5 },
+    "claude-opus-4-8": { tokens: t(1), estUsd: 1 },
+    "claude-haiku-4-5": { tokens: t(5), estUsd: null },
+    "<synthetic>": { tokens: t(0), estUsd: 0 },
+  },
+  cacheReadShare: 0.8,
+  stages: { "01_research": { ...pct(1, 1, 1), tokens: t(100), tokenRuns: 1 } },
+  unstagedTokens: t(7),
+  perTicket: { tickets: 2, p50Tokens: 50, p90Tokens: 90, p50Usd: 2, p90Usd: 6, unpriced: 1 },
+  costliest: [
+    { ticket: "SW-1", workspaces: ["a"], tokens: 90, estUsd: 6 },
+    { ticket: "SW-2", workspaces: ["b"], tokens: 50, estUsd: null },
+  ],
+  abandonedSpend: { workspaces: 1, tokens: t(2000), estUsd: 3, costUnknown: 1 },
+});
+const wk2 = slice({
+  shipped: 1,
+  estUsd: 4,
+  byModel: { "claude-sonnet-5-5": { tokens: t(8), estUsd: 4 } },
+  stages: {
+    "01_research": { ...pct(1, 1, 1), tokens: t(20), tokenRuns: 1 },
+    "02_spec": { ...pct(1, 1, 1), tokens: t(0), tokenRuns: 0 },
+  },
+  costliest: [{ ticket: "SW-1", workspaces: ["c"], tokens: 10, estUsd: 1 }],
+});
+const money = sliceRows(
+  {
+    ...trends,
+    rows: [
+      { bucket: "w1", ...wk1, byVersion: {} },
+      { bucket: "w2", ...wk2, byVersion: {} },
+    ],
+  },
+  "all",
+);
+assert.deepEqual(
+  modelBars(money, "tokens").map((b) => b.values),
+  [{ Opus: 101, Haiku: 5, Other: 0 }, { Sonnet: 8 }],
+  "versions of one family stack as one segment; tokens are all four kinds",
+);
+assert.deepEqual(
+  modelBars(money, "cost").map((b) => b.values),
+  [{ Opus: 6, Haiku: 0, Other: 0 }, { Sonnet: 4 }],
+  "an unpriced model counts $0 in cost mode",
+);
+// The stacked view of it: Opus at the bottom, a segment per family present.
+assert.deepEqual(
+  stackedBarView(modelBars(money, "tokens"), [...MODEL_FAMILIES], 100).bars[0].segments.map(
+    (s) => s.key,
+  ),
+  ["Opus", "Haiku"],
+);
+assert.equal(priceNote(0), undefined);
+assert.equal(priceNote(2), "2 without a price");
+const tiles = metricsTiles(money);
+assert.deepEqual(tiles[2], { label: "Est. cost", value: "$13", sub: "2 without a price" });
+assert.deepEqual(tiles[3], {
+  label: "Abandoned spend",
+  value: "$3.00",
+  sub: "2k tokens · 23% of spend · 1 without a price",
+});
+assert.deepEqual(cacheShareLine(money).series[0].values, [0.8, null]);
+assert.deepEqual(
+  ticketCostLines(money, "cost").series.map((s) => [s.key, s.values]),
+  [
+    ["p50", [2, null]],
+    ["p90", [6, null]],
+  ],
+);
+assert.deepEqual(ticketCostLines(money, "tokens").series[1].values, [90, null]);
+assert.deepEqual(
+  costliestTickets(money).map((x) => [x.ticket, x.workspaces, x.tokens, x.estUsd]),
+  [
+    ["SW-1", ["a", "c"], 100, 7],
+    ["SW-2", ["b"], 50, null],
+  ],
+  "a ticket's buckets sum",
+);
+const perStage = stageTokenBars(money);
+assert.deepEqual(perStage.keys, ["01_research", "02_spec", AFTER_STAGES]);
+assert.deepEqual(
+  perStage.bars.map((b) => [b.label, b.values]),
+  [
+    ["01_research", { "01_research": 120 }],
+    ["02_spec", { "02_spec": 0 }],
+    [AFTER_STAGES, { [AFTER_STAGES]: 7 }],
+  ],
+);
+console.log(
+  "✓ modelFamily, modelBars, priceNote, cost tiles, cacheShareLine, ticketCostLines, costliestTickets, stageTokenBars",
+);
 
 // 7. Daily points only for 7d.
 assert.deepEqual(RANGE_BUCKET, { "7d": "day", "30d": "week", "90d": "week", all: "week" });

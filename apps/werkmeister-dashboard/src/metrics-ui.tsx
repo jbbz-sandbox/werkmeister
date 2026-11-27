@@ -1,17 +1,27 @@
 /**
  * "Metrics" dashboard tab (SW-1098): the `metrics-trends` series over a range, filtered by
  * werkmeister version, drawn with the inline-SVG primitives in lib/charts.ts. SW-1099 adds stage
- * and ticket time, SW-1101 gate and test time; the closed-workspaces chart stays a preview until SW-1100.
+ * and ticket time, SW-1101 gate and test time, SW-1100 tokens and cost.
  */
 
 import { type ReactNode, useEffect, useState } from "react";
-import type { MetricsRange, MetricsTrends } from "werkmeister-core/metrics_report";
+import type { CostlyTicket, MetricsRange, MetricsTrends } from "werkmeister-core/metrics_report";
 import { Css } from "werkmeister-ui/theme";
 import type { HostBridge } from "werkmeister-ui/workspace-ui";
-import { heatmapView, multiLineView, type StackBar, stackedBarView, W } from "./lib/charts.js";
-import { formatMinutes, RANGES } from "./lib/flow-board.js";
 import {
+  formatUsd,
+  heatmapView,
+  multiLineView,
+  type StackBar,
+  stackedBarView,
+  W,
+} from "./lib/charts.js";
+import { formatCount, formatMinutes, RANGES } from "./lib/flow-board.js";
+import {
+  AFTER_STAGES,
   bottleneck,
+  cacheShareLine,
+  costliestTickets,
   emptyText,
   firstPassLine,
   formatTestMinutes,
@@ -19,9 +29,11 @@ import {
   gateKindBars,
   isEmpty,
   leadTrend,
+  MODEL_FAMILIES,
   metricsTiles,
+  modelBars,
   type Pct,
-  previewCharts,
+  priceNote,
   RANGE_BUCKET,
   type SlicedRow,
   type SlowSuite,
@@ -29,10 +41,13 @@ import {
   slowestSuites,
   slowestTickets,
   stageHeatmap,
+  stageTokenBars,
   stageTrend,
+  type TokenMode,
   type TrendLines,
   testRegression,
   testTrend,
+  ticketCostLines,
   versionsOf,
   waitSplit,
 } from "./lib/metrics-view.js";
@@ -86,6 +101,7 @@ const CSS = `
   .metrics .suites tr.warn { background: var(--sd-warn-bg); }
   .metrics .suites .tag { margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--sd-ink); border: 1px solid var(--sd-warn-bd); border-radius: 4px; padding: 0 4px; }
   @media (max-width: 599px) { .metrics .suites th:nth-child(3), .metrics .suites td:nth-child(3) { display: none; } }
+  .metrics .suites.costly th:nth-child(3), .metrics .suites.costly td:nth-child(3) { display: table-cell; }
 `;
 
 const H = 120;
@@ -100,19 +116,10 @@ function XLabels({ cols }: { cols: string[] }) {
   );
 }
 
-function Chart({
-  title,
-  preview,
-  children,
-}: {
-  title: ReactNode;
-  preview?: boolean;
-  children: ReactNode;
-}) {
+function Chart({ title, children }: { title: ReactNode; children: ReactNode }) {
   return (
     <section className="chart">
       <h3>{title}</h3>
-      {preview && <div className="cap">Preview — replaced by SW-1100</div>}
       {children}
     </section>
   );
@@ -373,11 +380,6 @@ function SplitBars({ rows }: { rows: SlicedRow[] }) {
   );
 }
 
-const CLOSED_FILL: Record<string, string> = {
-  shipped: "var(--sd-ok)",
-  abandoned: "var(--sd-muted)",
-};
-
 function StackedBars({
   bars,
   keys,
@@ -558,6 +560,135 @@ function GateSection({
   );
 }
 
+const MODEL_FILL: Record<string, string> = {
+  Opus: "var(--sd-accent)",
+  Sonnet: "var(--sd-ok)",
+  Haiku: "var(--sd-warn)",
+  Fable: "var(--sd-pr)",
+  Other: "var(--sd-muted)",
+};
+
+function ModeToggle({ value, onChange }: { value: TokenMode; onChange: (m: TokenMode) => void }) {
+  return (
+    <fieldset className="ranges" aria-label="Tokens or cost">
+      {(["tokens", "cost"] as const).map((m) => (
+        <button key={m} type="button" aria-pressed={m === value} onClick={() => onChange(m)}>
+          {m === "tokens" ? "Tokens" : "Cost"}
+        </button>
+      ))}
+    </fieldset>
+  );
+}
+
+const Note = ({ text }: { text: string | undefined }) =>
+  text ? <div className="cap">{text}</div> : null;
+
+function CostliestTickets({ tickets }: { tickets: CostlyTicket[] }) {
+  if (!tickets.length) return <div className="empty">No ticket shipped in this range.</div>;
+  return (
+    <table className="suites costly">
+      <thead>
+        <tr>
+          <th scope="col">Ticket</th>
+          <th scope="col">Tokens</th>
+          <th scope="col">Est. cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        {tickets.map((t) => (
+          <tr key={t.ticket}>
+            <th scope="row">{t.ticket}</th>
+            <td>{formatCount(t.tokens)}</td>
+            <td>{t.estUsd === null ? "—" : formatUsd(t.estUsd)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** SW-1100: tokens and cost by model, cache-read share, per-ticket cost and tokens per stage. */
+function TokenSection({ rows }: { rows: SlicedRow[] }) {
+  const [modelMode, setModelMode] = useState<TokenMode>("tokens");
+  const [ticketMode, setTicketMode] = useState<TokenMode>("cost");
+  const fmtOf = (m: TokenMode) => (m === "tokens" ? formatCount : formatUsd);
+  const unpriced = priceNote(rows.reduce((a, r) => a + (r.slice?.costUnknown ?? 0), 0));
+  const unpricedTickets = priceNote(
+    rows.reduce((a, r) => a + (r.slice?.perTicket.unpriced ?? 0), 0),
+  );
+  const perStage = stageTokenBars(rows);
+  const stageFill: Record<string, string> = Object.fromEntries(
+    perStage.keys.map((k, i) => [
+      k,
+      k === AFTER_STAGES ? "var(--sd-muted)" : STAGE_COLORS[i % STAGE_COLORS.length],
+    ]),
+  );
+  const ticketLines = ticketCostLines(rows, ticketMode);
+  return (
+    <>
+      <Chart
+        title={
+          <>
+            {modelMode === "tokens" ? "Tokens" : "Est. cost"} by model
+            <ModeToggle value={modelMode} onChange={setModelMode} />
+          </>
+        }
+      >
+        <StackedBars
+          bars={modelBars(rows, modelMode)}
+          keys={[...MODEL_FAMILIES]}
+          fill={MODEL_FILL}
+          fmt={fmtOf(modelMode)}
+          label={`${modelMode === "tokens" ? "Tokens" : "Estimated cost"} per bucket, stacked by model family`}
+          empty="No workspace closed in this range."
+        />
+        <Legend items={MODEL_FAMILIES.map((f) => [f, MODEL_FILL[f]])} />
+        {modelMode === "cost" && <Note text={unpriced} />}
+      </Chart>
+      <Chart title="Cache-read share of input (higher is cheaper)">
+        <Lines
+          trend={cacheShareLine(rows)}
+          colors={["var(--sd-ok)"]}
+          fmt={pct}
+          label="Cache reads as a share of input tokens, per bucket"
+          empty="No workspace closed in this range."
+        />
+      </Chart>
+      <Chart
+        title={
+          <>
+            {ticketMode === "tokens" ? "Tokens" : "Est. cost"} per shipped ticket
+            <ModeToggle value={ticketMode} onChange={setTicketMode} />
+          </>
+        }
+      >
+        <Lines
+          trend={ticketLines}
+          colors={LEAD_COLORS}
+          fmt={fmtOf(ticketMode)}
+          label={`p50 and p90 ${ticketMode === "tokens" ? "tokens" : "estimated cost"} per shipped ticket, per bucket`}
+          empty="No ticket shipped in this range."
+        />
+        {ticketMode === "cost" && <Note text={unpricedTickets} />}
+      </Chart>
+      <Chart title="Costliest tickets">
+        <CostliestTickets tickets={costliestTickets(rows)} />
+      </Chart>
+      <Chart title="Tokens per stage">
+        <StackedBars
+          bars={perStage.bars}
+          keys={perStage.keys}
+          fill={stageFill}
+          fmt={formatCount}
+          label="Summed tokens per ICM stage over the range, and after the last stage"
+          empty="No stage tokens in this range (runs closed before SW-1100 have none)."
+        />
+        <Legend items={perStage.keys.map((k) => [k, stageFill[k]])} />
+      </Chart>
+    </>
+  );
+}
+
 export function MetricsTab({ bridge, active }: { bridge: HostBridge; active: boolean }) {
   const [range, setRange] = useState<MetricsRange>("30d");
   const [version, setVersion] = useState("all");
@@ -591,7 +722,6 @@ export function MetricsTab({ bridge, active }: { bridge: HostBridge; active: boo
   const versions = trends ? versionsOf(trends) : [];
   if (version !== "all" && !versions.includes(version)) versions.push(version);
   const rows = trends ? sliceRows(trends, version) : [];
-  const charts = previewCharts(rows);
   const flag = bottleneck(rows);
 
   return (
@@ -641,15 +771,7 @@ export function MetricsTab({ bridge, active }: { bridge: HostBridge; active: boo
           </Chart>
           <LeadChart rows={rows} />
           <GateSection trends={trends} rows={rows} version={version} />
-          <Chart title="Closed workspaces (shipped / abandoned)" preview>
-            <StackedBars
-              bars={charts.closed}
-              keys={charts.closedKeys}
-              fill={CLOSED_FILL}
-              label="Closed workspaces per bucket, shipped and abandoned"
-              empty="No workspace closed in this range."
-            />
-          </Chart>
+          <TokenSection rows={rows} />
         </>
       )}
     </div>

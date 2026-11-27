@@ -182,7 +182,28 @@ export function seedDashboardHome(
   ev(1400, "pr.merged", "seed-shipped", { pr: prUrl(21) });
   ev(1300, "release", "seed-shipped", { pr: prUrl(21), tag: "v1.2.0" });
 
-  // Closed runs; *stages* is minutes per stage, counted back from *firstTurnMin*.
+  // SW-1100: three model families per run, priced at the built-in rates ($/M: input, output, cache write, cache read).
+  const SEED_MODELS: [model: string, tokens: number[], rate: number[] | null][] = [
+    ["claude-opus-5-5", [40e3, 120e3, 600e3, 9e6], [4, 20, 5, 0.2]],
+    ["claude-sonnet-5-5", [10e3, 30e3, 200e3, 2e6], [2, 10, 2.5, 0.1]],
+    ["claude-haiku-4-5", [5e3, 10e3, 50e3, 400e3], [1, 5, 1.25, 0.1]],
+  ];
+  const UNPRICED_MODEL: (typeof SEED_MODELS)[number] = [
+    "claude-unpriced-9",
+    [20e3, 8e3, 60e3, 900e3],
+    null,
+  ];
+  const totalsOf = ([input = 0, output = 0, cacheCreation = 0, cacheRead = 0]: number[]) => ({
+    input,
+    output,
+    cacheCreation,
+    cacheRead,
+  });
+  // Share of each run's tokens per stage; the rest is after the last stage.
+  const STAGE_SHARE = [0.1, 0.15, 0.55, 0.1];
+
+  // Closed runs; *stages* is minutes per stage, counted back from *firstTurnMin*; stages past its
+  // length are not reached.
   const closedRun = (
     name: string,
     ticket: string,
@@ -190,31 +211,53 @@ export function seedDashboardHome(
     firstTurnMin: number,
     closedMin: number,
     stages: number[],
+    { outcome = "shipped", scale = 1, unpriced = false } = {},
   ) => {
-    const ws = workspace(name, ticket, null, firstTurnMin, 4);
+    const ws = workspace(name, ticket, null, firstTurnMin, stages.length);
     write(path.join(ws, "closeout.md"), "closed\n");
+    const models = unpriced ? [UNPRICED_MODEL] : SEED_MODELS;
+    const byModel = models.map(([model, t, rate]) => {
+      const n = t.map((v) => Math.round(v * scale));
+      return {
+        model,
+        totals: totalsOf(n),
+        estUsd: rate ? n.reduce((a, v, i) => a + (v / 1e6) * (rate[i] ?? 0), 0) : null,
+      };
+    });
+    const total = [0, 1, 2, 3].map((k) =>
+      byModel.reduce((a, m) => a + (Object.values(m.totals)[k] ?? 0), 0),
+    );
+    const used = [0, 0, 0, 0];
     let at = firstTurnMin;
     const timings = STAGES.map((stage, i) => {
+      if (i >= stages.length) return { stage, finishedAt: null, minutes: null, tokens: null };
       at -= stages[i] ?? 0;
       ev(at, "stage.done", name, { stage, commit: `${name}-${i}` });
-      return { stage, finishedAt: ago(at), minutes: stages[i] };
+      const part = total.map((v) => Math.round(v * (STAGE_SHARE[i] ?? 0)));
+      part.forEach((v, k) => {
+        used[k] = (used[k] ?? 0) + v;
+      });
+      return { stage, finishedAt: ago(at), minutes: stages[i], tokens: totalsOf(part) };
     });
+    const priced = byModel.flatMap((m) => (m.estUsd === null ? [] : [m.estUsd]));
     write(
       path.join(ws, "usage.json"),
       JSON.stringify({
         schema: 1,
         workspace: name,
         ticket,
-        outcome: "shipped",
+        outcome,
         werkmeister: { version, commit: null },
         closedAt: ago(closedMin),
         firstTurn: ago(firstTurnMin),
-        estUsd: 1,
-        totals: { input: 1, output: 1, cacheCreation: 0, cacheRead: 0 },
+        estUsd: priced.length ? priced.reduce((a, v) => a + v, 0) : null,
+        totals: totalsOf(total),
+        byModel,
         activeMinutes: 5,
         wallClockMinutes: 10,
         turns: 3,
         stages: timings,
+        unstagedTokens: totalsOf(total.map((v, k) => v - (used[k] ?? 0))),
       }),
     );
     return ws;
@@ -222,6 +265,14 @@ export function seedDashboardHome(
 
   // A closed run: working → gate in 2 h gives the working column its p90.
   closedRun("seed-closed-out", "SW-900", "0.111.0", 2900, 2000, [50, 30, 30, 25]);
+  // SW-1100: spend on abandoned work, and a run with no price for the "without a price" notes.
+  closedRun("seed-abandoned-spend", "SW-920", "0.111.0", 2400, 1800, [60, 40], {
+    outcome: "abandoned",
+    scale: 0.5,
+  });
+  closedRun("seed-unpriced", "SW-921", "0.111.0", 1700, 1200, [40, 30, 90, 20], {
+    unpriced: true,
+  });
 
   // SW-1099: three weekly closed runs on two versions, 03_implement the longest (the seeded
   // bottleneck), each with a person wait in 01_research, a capacity wait across the 02_spec →

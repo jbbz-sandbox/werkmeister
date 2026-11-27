@@ -3,6 +3,7 @@
  * empty state, the stat tiles and each chart's input. Pure, so the smoke test needs no DOM.
  */
 import type {
+  CostlyTicket,
   MetricsRange,
   MetricsTrends,
   SlowTicket,
@@ -11,6 +12,9 @@ import type {
   TrendSlice,
 } from "werkmeister-core/metrics_report";
 import { formatUsd, type LineSeries, type StackBar, type StatTile, statTile } from "./charts.js";
+import { formatCount } from "./flow-board.js";
+
+type UsageTotals = TrendSlice["tokens"];
 
 /** `"all"` or one `byVersion` key. */
 export type VersionFilter = string;
@@ -70,15 +74,31 @@ export function emptyText(range: MetricsRange, v: VersionFilter): string {
 const slices = (rows: SlicedRow[]) => rows.flatMap((r) => (r.slice ? [r.slice] : []));
 const sum = (ns: number[]) => ns.reduce((a, n) => a + n, 0);
 
+/** `"<n> without a price"`, so a partial cost doesn't read as the whole (SW-1100 Q3); none at 0. */
+export const priceNote = (n: number) => (n > 0 ? `${n} without a price` : undefined);
+
+const sumUsd = (vs: (number | null)[]) => {
+  const priced = vs.filter((v): v is number => v !== null);
+  return priced.length ? sum(priced) : null;
+};
+
 export function metricsTiles(rows: SlicedRow[]): StatTile[] {
   const s = slices(rows);
-  const priced = s.flatMap((x) => (x.estUsd === null ? [] : [x.estUsd]));
+  const cost = sumUsd(s.map((x) => x.estUsd));
   const passed = sum(s.map((x) => x.gate.passed));
   const gated = sum(s.map((x) => x.gate.workspaces));
+  const lost = sumUsd(s.map((x) => x.abandonedSpend.estUsd));
+  const lostTokens = sum(s.map((x) => tokenSum(x.abandonedSpend.tokens)));
+  const lostSub = [
+    lostTokens ? `${formatCount(lostTokens)} tokens` : null,
+    lost !== null && cost ? `${Math.round((lost / cost) * 100)}% of spend` : null,
+    priceNote(sum(s.map((x) => x.abandonedSpend.costUnknown))),
+  ].filter(Boolean);
   return [
     statTile("Shipped", sum(s.map((x) => x.shipped)), String),
     statTile("Abandoned", sum(s.map((x) => x.abandoned)), String),
-    statTile("Est. cost", priced.length ? sum(priced) : null, formatUsd),
+    statTile("Est. cost", cost, formatUsd, priceNote(sum(s.map((x) => x.costUnknown)))),
+    statTile("Abandoned spend", lost, formatUsd, lostSub.join(" · ") || undefined),
     statTile(
       "Gate first pass",
       gated ? passed / gated : null,
@@ -88,20 +108,90 @@ export function metricsTiles(rows: SlicedRow[]): StatTile[] {
   ];
 }
 
-export interface PreviewCharts {
-  closed: StackBar[];
-  closedKeys: string[];
+export const tokenSum = (t: UsageTotals) => t.input + t.output + t.cacheCreation + t.cacheRead;
+
+/** The model stack's segments, bottom-up (SW-1100 Q1). */
+export const MODEL_FAMILIES = ["Opus", "Sonnet", "Haiku", "Fable", "Other"] as const;
+export type ModelFamily = (typeof MODEL_FAMILIES)[number];
+export type TokenMode = "tokens" | "cost";
+
+/** `claude-opus-5-5` and `claude-opus-4-8` → `Opus`; `<synthetic>` and other harnesses' ids → `Other`. */
+export function modelFamily(id: string): ModelFamily {
+  const m = /^claude-(opus|sonnet|haiku|fable)\b/.exec(id)?.[1];
+  return m ? (`${m[0]?.toUpperCase()}${m.slice(1)}` as ModelFamily) : "Other";
 }
 
-/** The closed-workspaces preview, until SW-1100 decides its chart. */
-export function previewCharts(rows: SlicedRow[]): PreviewCharts {
+/** Tokens (all four kinds) or estimated USD per bucket, stacked by model family. */
+export function modelBars(rows: SlicedRow[], mode: TokenMode): StackBar[] {
+  return rows.map((r) => {
+    const values: Record<string, number> = {};
+    for (const [id, m] of Object.entries(r.slice?.byModel ?? {})) {
+      const f = modelFamily(id);
+      values[f] = (values[f] ?? 0) + (mode === "tokens" ? tokenSum(m.tokens) : (m.estUsd ?? 0));
+    }
+    return { label: r.bucket, values };
+  });
+}
+
+/** Cache reads' share of input tokens per bucket: higher is cheaper. */
+export function cacheShareLine(rows: SlicedRow[]): TrendLines {
   return {
-    closed: rows.map((r) => ({
-      label: r.bucket,
-      values: { shipped: r.slice?.shipped ?? 0, abandoned: r.slice?.abandoned ?? 0 },
-    })),
-    closedKeys: ["shipped", "abandoned"],
+    cols: rows.map((r) => r.bucket),
+    series: [
+      {
+        key: "cache read",
+        values: rows.map((r) => r.slice?.cacheReadShare ?? null),
+        counts: rows.map((r) => (r.slice ? r.slice.shipped + r.slice.abandoned : 0)),
+      },
+    ],
   };
+}
+
+/** p50 and p90 tokens or USD per shipped ticket, per bucket. */
+export function ticketCostLines(rows: SlicedRow[], mode: TokenMode): TrendLines {
+  const line = (p: "p50" | "p90") => ({
+    key: p,
+    values: rows.map((r) => {
+      const t = r.slice?.perTicket;
+      return t ? (mode === "tokens" ? t[`${p}Tokens`] : t[`${p}Usd`]) : null;
+    }),
+    counts: rows.map((r) => r.slice?.perTicket.tickets ?? 0),
+  });
+  return { cols: rows.map((r) => r.bucket), series: [line("p50"), line("p90")] };
+}
+
+/** Up to 5 shipped tickets with the highest cost (then tokens) over the range, buckets summed. */
+export function costliestTickets(rows: SlicedRow[]): CostlyTicket[] {
+  const byTicket = new Map<string, CostlyTicket>();
+  // shortcut: each bucket sends only its top 5, so a ticket outside one bucket's top 5 loses that part; send every ticket if ranges get busy.
+  for (const t of slices(rows).flatMap((x) => x.costliest)) {
+    const seen = byTicket.get(t.ticket);
+    byTicket.set(t.ticket, {
+      ticket: t.ticket,
+      workspaces: [...(seen?.workspaces ?? []), ...t.workspaces],
+      tokens: (seen?.tokens ?? 0) + t.tokens,
+      estUsd: t.estUsd === null ? (seen?.estUsd ?? null) : (seen?.estUsd ?? 0) + t.estUsd,
+    });
+  }
+  return [...byTicket.values()]
+    .sort((a, b) => (b.estUsd ?? 0) - (a.estUsd ?? 0) || b.tokens - a.tokens)
+    .slice(0, 5);
+}
+
+export const AFTER_STAGES = "After stages";
+const ZERO_TOKENS: UsageTotals = { input: 0, output: 0, cacheCreation: 0, cacheRead: 0 };
+
+/** One bar per stage, plus turns after the last stage, of summed tokens over the range. */
+export function stageTokenBars(rows: SlicedRow[]): { bars: StackBar[]; keys: string[] } {
+  const s = slices(rows);
+  const keys = [...stageNames(rows), AFTER_STAGES];
+  const total = (k: string) =>
+    sum(
+      s.map((x) =>
+        tokenSum(k === AFTER_STAGES ? x.unstagedTokens : (x.stages[k]?.tokens ?? ZERO_TOKENS)),
+      ),
+    );
+  return { keys, bars: keys.map((k) => ({ label: k, values: { [k]: total(k) } })) };
 }
 
 export type Pct = "p50" | "p90";

@@ -75,6 +75,7 @@ export {
   type SessionReduction,
   type SessionUsage,
   type UsageTotals,
+  usageAndTurnsForDir,
   usageForDir,
   type WorkspaceUsage,
 } from "./harness/claude/usage.js";

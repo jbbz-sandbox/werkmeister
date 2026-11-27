@@ -160,6 +160,8 @@ const TREND_SLICE = z.object({
       personMinutes: z.number(),
       capacityMinutes: z.number(),
       workingMinutes: z.number(),
+      tokens: TOKENS,
+      tokenRuns: z.number(),
     }),
   ),
   slowest: z.array(
@@ -177,6 +179,29 @@ const TREND_SLICE = z.object({
   costUnknown: z.number(),
   byModel: BY_MODEL,
   cacheReadShare: z.number().nullable(),
+  unstagedTokens: TOKENS,
+  perTicket: z.object({
+    tickets: z.number(),
+    p50Tokens: z.number().nullable(),
+    p90Tokens: z.number().nullable(),
+    p50Usd: z.number().nullable(),
+    p90Usd: z.number().nullable(),
+    unpriced: z.number(),
+  }),
+  costliest: z.array(
+    z.object({
+      ticket: z.string(),
+      workspaces: z.array(z.string()),
+      tokens: z.number(),
+      estUsd: z.number().nullable(),
+    }),
+  ),
+  abandonedSpend: z.object({
+    workspaces: z.number(),
+    tokens: TOKENS,
+    estUsd: z.number().nullable(),
+    costUnknown: z.number(),
+  }),
   activeMinutes: z.number(),
   wallClockMinutes: z.number(),
   gate: z.object({
@@ -304,7 +329,8 @@ export function registerDaemonTools(server: McpServer): void {
         "week): shipped and abandoned workspaces, minutes per ICM stage (p50, p90, count, and summed " +
         "total, waiting on a person, waiting on capacity and working), lead time from the first turn to " +
         "merge and to release (p50, p90) with the five slowest tickets, tokens and estimated cost in total and by " +
-        "model, cache-read share, active and wall minutes, and gate runs, gate minutes (also by row kind: " +
+        "model, cache-read share, tokens per ICM stage and after the last stage, per-shipped-ticket tokens and cost " +
+        "(p50, p90, unpriced count) with the five costliest tickets, spend on abandoned workspaces, active and wall minutes, and gate runs, gate minutes (also by row kind: " +
         "setup, lint, test, release, checks) and first-pass rate (exit-75 capacity retries left out), and " +
         "test minutes per package (p50, p90, count, cached and failed runs; cached runs left out of the " +
         "percentiles), with suites: the same per package over the whole range, for the slowest suites. Each item counts in the bucket it ended in: a workspace by " +

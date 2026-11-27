@@ -35,6 +35,8 @@ export interface SessionReduction {
   models: string[];
   /** `[startMs, endMs]` runs of messages less than {@link ACTIVE_GAP_MS} apart. */
   activeSpans?: Array<[number, number]>;
+  /** Each counted turn's time and tokens, to split a run by ICM stage (SW-1100); harnesses with no per-turn times leave it out. */
+  turnTokens?: Array<[ms: number, tokens: UsageTotals]>;
 }
 
 // A longer gap is idle (waiting on a person, or nobody there): metrics-flow design § Definitions, SW-784.
@@ -73,6 +75,7 @@ export function reduceSession(text: string): SessionReduction {
   let lastTurn: string | null = null;
   let turns = 0;
   const times: number[] = [];
+  const turnTokens: Array<[number, UsageTotals]> = [];
   for (const line of text.split("\n")) {
     if (!line.trim()) continue;
     let e: {
@@ -102,10 +105,15 @@ export function reduceSession(text: string): SessionReduction {
       acc = zeroTotals();
       byModel.set(model, acc);
     }
-    acc.input += u.input_tokens ?? 0;
-    acc.output += u.output_tokens ?? 0;
-    acc.cacheCreation += u.cache_creation_input_tokens ?? 0;
-    acc.cacheRead += u.cache_read_input_tokens ?? 0;
+    const turn: UsageTotals = {
+      input: u.input_tokens ?? 0,
+      output: u.output_tokens ?? 0,
+      cacheCreation: u.cache_creation_input_tokens ?? 0,
+      cacheRead: u.cache_read_input_tokens ?? 0,
+    };
+    addTotals(acc, turn);
+    const at = typeof e.timestamp === "string" ? Date.parse(e.timestamp) : Number.NaN;
+    if (!Number.isNaN(at)) turnTokens.push([at, turn]);
   }
   return {
     byModel,
@@ -114,6 +122,7 @@ export function reduceSession(text: string): SessionReduction {
     turns,
     models: [...byModel.keys()],
     activeSpans: activeSpans(times),
+    turnTokens,
   };
 }
 
@@ -183,6 +192,14 @@ export async function loadPriceTable(): Promise<Record<string, ModelRate>> {
  * getWorkspaceUsage resolves the name; close-out's snapshot passes the folder (SW-206).
  */
 export async function usageForDir(name: string, target: string): Promise<WorkspaceUsage> {
+  return (await usageAndTurnsForDir(name, target)).usage;
+}
+
+/** {@link usageForDir} plus every session's per-turn tokens, which close-out splits by stage (SW-1100). */
+export async function usageAndTurnsForDir(
+  name: string,
+  target: string,
+): Promise<{ usage: WorkspaceUsage; turns: Array<[number, UsageTotals]> }> {
   const projectDir = await findClaudeProjectDir(target);
   const files = projectDir ? await listSessionFiles(projectDir) : []; // newest first
   const sessions: SessionTally[] = [];
@@ -201,7 +218,10 @@ export async function usageForDir(name: string, target: string): Promise<Workspa
       reduction: reduceSession(text),
     });
   }
-  return rollUpUsage(name, sessions);
+  return {
+    usage: await rollUpUsage(name, sessions),
+    turns: sessions.flatMap((s) => s.reduction.turnTokens ?? []),
+  };
 }
 
 /** One session's reduced usage, the input {@link rollUpUsage} takes from any harness. */
