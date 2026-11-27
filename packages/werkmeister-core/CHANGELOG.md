@@ -1,5 +1,16 @@
 # sandbox-core
 
+## 0.115.0
+
+### Minor Changes
+
+- f268ea6: `workspace.create` and `workspace.init` metrics lines record the run's `work_type`, and `metrics rebuild` backfills it from each record branch's `workspace.yml` (`unknown` when unreadable). The `metrics` and `metrics-trends` tools take a `work_type` filter, the report adds `byWorkType` (cycle and lead time, column p50/p90, waits and cost per type), and a flow card is past p90 against its own type's column p90, or the pooled one below 5 runs. The dashboard's Flow and Metrics tabs get a work type selector, the cycle-time scatter is coloured by type, and the Flow tab adds a "where the time goes" chart of median minutes per column, one bar per work type (SW-1212).
+
+### Patch Changes
+
+- 8cb166b: A workflow folder symlinked into `~/.werkmeister/workflows/` from a repo now gets a repo workflow's grants, not the user grants: `grantsFor` compares real paths (SW-1122).
+- e3460ee: Autonomous workspaces now pre-approve `werkmeister feature stop` and `werkmeister feature stop <own feature>` (and the legacy `stop` spellings), exact, so the implement stage's stop and the run limits' stop after `pr open` no longer prompt. `stop infra` and another feature's name still ask. As any stop does, it frees the feature's capacity, so a waiting workspace may start. A bare `feature stop` now refuses `FEATURE=infra` read from a `.env`; `werkmeister infra stop` stops shared infra (SW-1215).
+
 ## 0.114.0
 
 ### Minor Changes
