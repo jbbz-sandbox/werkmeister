@@ -39,7 +39,7 @@ description: "Begin the research/planning phase in a workspace. Use when explori
 
 ## Exit by work type
 
-Read Work type in CLAUDE.md; none → architectural.
+Read Work type in AGENTS.md; none → architectural.
 
 - **architectural**: spec deliverable. Present the design in chat (scope,
   approach, what's out); explicit yes → write `NNN-decision-<slug>.md`,

@@ -376,13 +376,13 @@ Create a new workspace under $WERKMEISTER_WORKSPACES_ROOT (git worktrees on a \<
 - `-r, --repos <list>`: Comma-separated repos to create worktrees for (union with the repos derived from --services). Interactive multi-select if neither --repos nor --services is given.
 - `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search; passed through to init-workspace.
 - `--group <keys>`: Comma-separated member issue keys of a grouped PR led by --issue-id (one PR, one commit per ticket); passed through to init-workspace.
-- `-t, --task <title>`: Task title for the workspace CLAUDE.md; passed through to init-workspace.
+- `-t, --task <title>`: Task title for the workspace AGENTS.md; passed through to init-workspace.
 - `--test-path <path>`: URL path for feature testing; passed through to init-workspace.
-- `--description <text>`: Free-form description for the CLAUDE.md header; passed through to init-workspace.
+- `--description <text>`: Free-form description for the AGENTS.md header; passed through to init-workspace.
 - `--starting-prompt <text>`: First instruction for the agent; passed through to init-workspace.
 - `--work-type <type>`: Kind of work; selects the ICM stages and seeds the JIT first-phase handoff note (env: WERKMEISTER_WORK_TYPE; config: work_type).
 - `--context-strategy <id>`: Context layer to generate: icm (staged folders; the supported strategy) or jit (experimental: skills, hooks, notes). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
-- `--harness <id>`: Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).
+- `--harness <id>`: Agent harness that reads the workspace: claude (AGENTS.md with a one-line CLAUDE.md import, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).
 - `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
 - `--model <tier|model>`: Model tier (small, mid, frontier, advanced_frontier) or an explicit model; blank = models.default_tier in ~/.werkmeister/config.yaml (frontier) (env: WERKMEISTER_MODEL; config: model).
 - `--auto-stop`: Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).
@@ -453,7 +453,7 @@ werkmeister workspace serve --dashboard
 
 #### werkmeister workspace init
 
-Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktrees to match the `repos`/`services` fields, then (re)generate CLAUDE.md / .env / compose.yml. Idempotent — edit workspace.yml and rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.
+Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktrees to match the `repos`/`services` fields, then (re)generate AGENTS.md / CLAUDE.md / .env / compose.yml. Idempotent — edit workspace.yml and rerun. Inputs resolve as CLI flag > env (WERKMEISTER_*) > workspace.yml.
 
 `werkmeister workspace init`
 
@@ -468,11 +468,11 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 - `--labels <list>`: Comma-separated free-form tags for filtering workspaces in the dashboard search (env: WERKMEISTER_LABELS; config: labels).
 - `--group <keys>`: Comma-separated member issue keys of a grouped PR led by issue_id: one PR, one commit per ticket (env: WERKMEISTER_GROUP; config: group).
 - `--test-path <path>`: URL path for feature testing (env: WERKMEISTER_TEST_PATH; config: test_path).
-- `--description <text>`: Free-form description for the CLAUDE.md header (env: WERKMEISTER_DESCRIPTION; config: description).
+- `--description <text>`: Free-form description for the AGENTS.md header (env: WERKMEISTER_DESCRIPTION; config: description).
 - `--starting-prompt <text>`: First instruction for the agent; persisted to .werkmeister/workspace.yml (env: WERKMEISTER_STARTING_PROMPT; config: starting_prompt).
 - `--work-type <type>`: Kind of work; selects the ICM stages and seeds the JIT first-phase handoff note (env: WERKMEISTER_WORK_TYPE; config: work_type).
 - `--context-strategy <id>`: Context layer to generate: icm (staged folders; the supported strategy) or jit (experimental: skills, hooks, notes). (env: WERKMEISTER_CONTEXT_STRATEGY; config: context_strategy).
-- `--harness <id>`: Agent harness that reads the workspace: claude (CLAUDE.md, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).
+- `--harness <id>`: Agent harness that reads the workspace: claude (AGENTS.md with a one-line CLAUDE.md import, .claude/, hooks), mcp (AGENTS.md, .agents/skills, no hooks), codex (AGENTS.md, .agents/skills, .codex/hooks.json, .codex/config.toml) or opencode (AGENTS.md, .agents/skills, opencode.json, hooks plugin) (env: WERKMEISTER_HARNESS; config: harness).
 - `--autonomous`: Run an icm workspace stage-to-PR with no human checks, and allow the Bash calls a headless session needs (env: WERKMEISTER_AUTONOMOUS; config: autonomous).
 - `--model <tier|model>`: Model tier (small, mid, frontier, advanced_frontier) or an explicit model; blank = models.default_tier in ~/.werkmeister/config.yaml (frontier) (env: WERKMEISTER_MODEL; config: model).
 - `--auto-stop`: Stop this workspace's feature containers when a Claude session in it ends and no other is open (a SessionEnd hook; env: WERKMEISTER_AUTO_STOP; config: auto_stop).
@@ -480,7 +480,7 @@ Reconcile a workspace from .werkmeister/workspace.yml: create/remove repo worktr
 - `--prune-context`: After a context_strategy change, delete the previous strategy's files that git tracks unmodified (anything else is kept and reported).
 - `--refresh-issue`: Re-fetch the workspace's issue into .werkmeister/issue.md (BRIEF.md is not rewritten, except an untouched placeholder brief).
 
-Reconciles a workspace from its `.werkmeister/workspace.yml` and regenerates its context files. It adds a git worktree for each repo the config needs (its `repos` plus the repos owning its `services`) and removes worktrees for repos it dropped; a dirty worktree stops the run unless `--force`. Then it writes CLAUDE.md, `.env`, `compose.yml`, the `.claude/` skills and agents, `.mcp.json`, `.devcontainer/devcontainer.json` (harness: claude only) and `.werkmeister/*`.
+Reconciles a workspace from its `.werkmeister/workspace.yml` and regenerates its context files. It adds a git worktree for each repo the config needs (its `repos` plus the repos owning its `services`) and removes worktrees for repos it dropped; a dirty worktree stops the run unless `--force`. Then it writes AGENTS.md (for `harness: claude` also a one-line CLAUDE.md that imports it), `.env`, `compose.yml`, the `.claude/` skills and agents, `.mcp.json`, `.devcontainer/devcontainer.json` (harness: claude only) and `.werkmeister/*`.
 
 It is idempotent: edit `workspace.yml` and rerun. It never prompts, and refuses to run in a bare folder; create a workspace with `werkmeister workspace new`.
 
@@ -934,7 +934,7 @@ Write an ICM workspace's stages as a workflow folder (workflow.yaml + stages/)
 
 - `--to <dir>`: A missing or empty folder to write the workflow into
 
-Writes an ICM workspace's stages as a workflow folder: `workflow.yaml` and one `stages/<name>.md` per stage, read from the workspace's `stages/NN_<name>/CONTEXT.md`, the root `CONTEXT.md` and `CLAUDE.md`. It drops what werkmeister adds to each contract (the `## Pre-approved` section, step `0.`, the ask-tool line and the standards line) and turns this workspace's stage paths, worktrees and reload line back into the workflow variables `at:<stage>`, `repos` and `restart` (each written in double braces). Hand edits to the contracts are kept.
+Writes an ICM workspace's stages as a workflow folder: `workflow.yaml` and one `stages/<name>.md` per stage, read from the workspace's `stages/NN_<name>/CONTEXT.md`, the root `CONTEXT.md` and `AGENTS.md`. It drops what werkmeister adds to each contract (the `## Pre-approved` section, step `0.`, the ask-tool line and the standards line) and turns this workspace's stage paths, worktrees and reload line back into the workflow variables `at:<stage>`, `repos` and `restart` (each written in double braces). Hand edits to the contracts are kept.
 
 `<workspace>` is a workspace name, as `werkmeister workspace list` prints it, or a path (`.` or anything with a `/`). It refuses a workspace that isn't icm, or a `--to` folder that exists and isn't empty. Before it finishes, it loads the folder as `workspace init` would, and removes what it wrote if that fails.
 

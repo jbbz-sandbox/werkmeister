@@ -79,7 +79,7 @@
     },
     "task": {
       "type": "string",
-      "description": "Task title embedded into CLAUDE.md."
+      "description": "Task title embedded into AGENTS.md."
     },
     "starting_prompt": {
       "type": "string",
@@ -98,7 +98,7 @@
     "standards_override": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Tunes the CLAUDE.md Standards routing block (see docs/jit-context-system.md).",
+      "description": "Tunes the AGENTS.md Standards routing block (see docs/jit-context-system.md).",
       "properties": {
         "add": { "type": "array", "items": { "type": "string" } },
         "remove": { "type": "array", "items": { "type": "string" } }

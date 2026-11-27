@@ -83,7 +83,7 @@ A courier is a Claude Code `Explore` subagent, which cannot edit files. Its brie
 
 | Reads | To learn |
 |---|---|
-| the workspace's `CLAUDE.md` | the routing table, so it can name the current stage |
+| the workspace's `AGENTS.md` | the routing table, so it can name the current stage |
 | the listing of `stages/*/output` | which stage is current: the first one with an empty `output/` |
 | the first 15 lines of each gate file | what is waiting for approval |
 | the last 8 messages, through the `claude-transcript` MCP tool | what the workspace agent last asked |

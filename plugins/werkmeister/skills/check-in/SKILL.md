@@ -31,7 +31,7 @@ Candidates: the workspaces the person named, else `candidates` from `check-in`. 
 
 Brief, verbatim, with `<root>` and `<ws>` filled in:
 
-> Workspace `<root>/<ws>`. Read only: its `CLAUDE.md` (routing table), `ls stages/*/output`, the first 15 lines of each file listed by `grep -l -e "^status: proposed" -e "^status: draft" stages/*/output/*.md` (a line starting with it; the phrase quoted in instruction text is not a gate), and the werkmeister MCP tool `claude-transcript` for `<ws>` with limit 8. Do not read the code worktrees, `_shared/`, `.werkmeister/`, or stage contracts. Return exactly this card and nothing else:
+> Workspace `<root>/<ws>`. Read only: its `AGENTS.md` (routing table; `CLAUDE.md` in an older workspace), `ls stages/*/output`, the first 15 lines of each file listed by `grep -l -e "^status: proposed" -e "^status: draft" stages/*/output/*.md` (a line starting with it; the phrase quoted in instruction text is not a gate), and the werkmeister MCP tool `claude-transcript` for `<ws>` with limit 8. Do not read the code worktrees, `_shared/`, `.werkmeister/`, or stage contracts. Return exactly this card and nothing else:
 >
 > ```
 > ## <ws> — stage <NN_name or done> — claude <idle|working>

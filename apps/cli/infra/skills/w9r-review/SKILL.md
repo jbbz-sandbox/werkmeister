@@ -8,7 +8,7 @@ description: "Begin the code-review phase in a workspace. Use BEFORE reviewing a
 Run these steps before reading the first line of the diff. A review without the
 active standards in context degrades to taste — the checklist has to load first.
 
-1. **Read the "Standards routing" block** in the workspace `CLAUDE.md`.
+1. **Read the "Standards routing" block** in the workspace `AGENTS.md`.
 2. **Map the diff to domains:** list the files the diff touches and match them
    against each Active row's "Loads on" patterns. Load every matching
    `w9r-*-standard` skill. The inline anti-pattern one-liners in each standard
@@ -56,6 +56,6 @@ status: open
 
 `werkmeister feature down` will offer to graduate it into the standards tree (`overrides.standards_dir`).
 
-If the workspace `CLAUDE.md` has no "Standards routing" block (not a
+If the workspace `AGENTS.md` has no "Standards routing" block (not a
 werkmeister-initialized workspace), load `w9r-comments-standard` +
 `w9r-engineering-standard` only and review against them.

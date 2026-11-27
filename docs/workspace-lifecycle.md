@@ -49,7 +49,7 @@ The state is read from the PR files alone (`lifecycleOf` in `packages/werkmeiste
 6. **Merge is the person's act.** Tooling never merges. On a repo with a merge queue, the queue's method decides how every PR merges (`gh api repos/<repo>/rules/branches/<base>`, the `merge_queue` rule's `merge_method`); without one, squash is the default. A PR that needs another method says so at the top of its body, and the person merges it that way, bypassing the queue: a grouped PR (`group` in `workspace.yml`) says "Rebase and merge, not squash" and keeps its per-ticket commits (`werkmeister pr gate` warns when the base won't allow it); a PR whose commit SHAs must survive (e.g. a commit listed in `.git-blame-ignore-revs`) says "Merge with a merge commit", since squash and rebase both rewrite SHAs. A PR the repo's own automation queues (a release bot's version PR) is the exception: leave it to that automation, and don't tell the person it's theirs to merge.
 7. **Close out only once every PR file is `shipped`, `closed` or `abandoned`.**
 
-Each workspace gets these as `_shared/pr-rules.md` (ICM) or `.werkmeister/pr-rules.md` (JIT), routed from its `CLAUDE.md`.
+Each workspace gets these as `_shared/pr-rules.md` (ICM) or `.werkmeister/pr-rules.md` (JIT), routed from its `AGENTS.md`.
 
 ## PR files
 
@@ -375,7 +375,7 @@ Every close-out, shipped or abandoned, needs `postmortem.md` at the workspace ro
 <details>
 <summary>How it works</summary>
 
-Lessons found mid-run (say, a CI failure on a typecheck the listed test commands never ran) are lost with the workspace unless someone asks for them on purpose. So every close-out, shipped or abandoned, needs `postmortem.md` at the workspace root. The werkmeister `postmortem` skill writes it, and every route to close-out points there first (the ICM `CLAUDE.md` row and propose/spike checks, `pr-rules.md` rule 7 for ICM and JIT, `w9r-pr`, `workspace-pr`).
+Lessons found mid-run (say, a CI failure on a typecheck the listed test commands never ran) are lost with the workspace unless someone asks for them on purpose. So every close-out, shipped or abandoned, needs `postmortem.md` at the workspace root. The werkmeister `postmortem` skill writes it, and every route to close-out points there first (the ICM `AGENTS.md` row and propose/spike checks, `pr-rules.md` rule 7 for ICM and JIT, `w9r-pr`, `workspace-pr`).
 
 1. **Gather** the run's problems: failed checks, Auto-fix commits and change-requesting reviews on each PR file's `url`; issues filed from the workspace (their bodies name it); deviations and FAIL rows in stage outputs or JIT notes; gate failures and the person's corrections in the session transcripts; and every `left:` row in the run's `review.md` files.
 2. **Agree** a change per problem: the agent proposes what could have been done differently, and the person accepts, edits or rejects it.

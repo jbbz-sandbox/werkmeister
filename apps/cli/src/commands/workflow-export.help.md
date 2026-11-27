@@ -1,6 +1,6 @@
 ## Description
 
-Writes an ICM workspace's stages as a workflow folder: `workflow.yaml` and one `stages/<name>.md` per stage, read from the workspace's `stages/NN_<name>/CONTEXT.md`, the root `CONTEXT.md` and `CLAUDE.md`. It drops what werkmeister adds to each contract (the `## Pre-approved` section, step `0.`, the ask-tool line and the standards line) and turns this workspace's stage paths, worktrees and reload line back into the workflow variables `at:<stage>`, `repos` and `restart` (each written in double braces). Hand edits to the contracts are kept.
+Writes an ICM workspace's stages as a workflow folder: `workflow.yaml` and one `stages/<name>.md` per stage, read from the workspace's `stages/NN_<name>/CONTEXT.md`, the root `CONTEXT.md` and `AGENTS.md`. It drops what werkmeister adds to each contract (the `## Pre-approved` section, step `0.`, the ask-tool line and the standards line) and turns this workspace's stage paths, worktrees and reload line back into the workflow variables `at:<stage>`, `repos` and `restart` (each written in double braces). Hand edits to the contracts are kept.
 
 `<workspace>` is a workspace name, as `werkmeister workspace list` prints it, or a path (`.` or anything with a `/`). It refuses a workspace that isn't icm, or a `--to` folder that exists and isn't empty. Before it finishes, it loads the folder as `workspace init` would, and removes what it wrote if that fails.
 

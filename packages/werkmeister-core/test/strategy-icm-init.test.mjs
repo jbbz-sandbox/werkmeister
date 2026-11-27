@@ -98,6 +98,7 @@ test("init writes the icm layer and nothing of jit's", async () => {
     );
     assert.deepEqual(files, [
       ".claude/settings.json",
+      "AGENTS.md",
       "BRIEF.md",
       "CLAUDE.md",
       "CONTEXT.md",
@@ -138,8 +139,8 @@ test("init writes the icm layer and nothing of jit's", async () => {
     assert.match(standards, /^\| ponytail \| optional plugin/m);
     assert.match(standards, /do not load\): ui\./);
 
-    const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
-    assert.ok(claude.split("\n").length <= 60, `CLAUDE.md is ${claude.split("\n").length} lines`);
+    const claude = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
+    assert.ok(claude.split("\n").length <= 60, `AGENTS.md is ${claude.split("\n").length} lines`);
     assert.match(claude, /`docker restart demo-backend`/);
     assert.match(claude, /`stages\/02_spec\/CONTEXT\.md`/);
     assert.match(
@@ -267,11 +268,11 @@ test("check is empty right after init, and sync repairs an edited contract", asy
     icm.init(ctx);
     assert.deepEqual(icm.check(root), []);
     fs.writeFileSync(path.join(root, "stages", "02_spec", "CONTEXT.md"), "hand edit\n");
-    fs.writeFileSync(path.join(root, "CLAUDE.md"), "hand edit\n");
+    fs.writeFileSync(path.join(root, "AGENTS.md"), "hand edit\n");
     assert.deepEqual(icm.check(root), ["stages/02_spec/CONTEXT.md"]);
     assert.deepEqual(icm.sync(root), { wrote: ["stages/02_spec/CONTEXT.md"] });
     assert.deepEqual(icm.check(root), []);
-    assert.equal(fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"), "hand edit\n");
+    assert.equal(fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"), "hand edit\n");
   });
 });
 
@@ -311,7 +312,13 @@ test("init leaves a pre-rename stage layout alone: no new stage dirs, no rewritt
   await withIcmWorkspace(
     async (root, ctx) => {
       const old = ["01_reproduce", "02_fix", "03_verify", "04_ship"];
-      const kept = ["CLAUDE.md", "CONTEXT.md", "_shared/standards.md", "_shared/issues-report.md"];
+      const kept = [
+        "AGENTS.md",
+        "CLAUDE.md",
+        "CONTEXT.md",
+        "_shared/standards.md",
+        "_shared/issues-report.md",
+      ];
       for (const d of old) {
         fs.mkdirSync(path.join(root, "stages", d, "output"), { recursive: true });
         fs.writeFileSync(path.join(root, "stages", d, "CONTEXT.md"), `old ${d} contract\n`);
@@ -353,7 +360,7 @@ test("spike: pr-rules and the PR route point at 02_findings; findings may write 
         /`stages\/02_findings\/output\/pr-<worktree>\[-<slug>\]\.md`/,
       );
       assert.match(read("_shared/pr-rules.md"), /skip_exercise:/);
-      assert.match(read("CLAUDE.md"), /^\| asked to open or create a PR /m);
+      assert.match(read("AGENTS.md"), /^\| asked to open or create a PR /m);
       const findings = read("stages/02_findings/CONTEXT.md");
       assert.match(
         findings,
@@ -419,7 +426,7 @@ test("no feature or services: the restart sentence points at werkmeister-context
   await withIcmWorkspace(
     async (root, ctx) => {
       icm.init(ctx);
-      const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+      const claude = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
       assert.doesNotMatch(claude, /docker restart/);
       assert.match(claude, /as `\.werkmeister\/werkmeister-context\.md` describes/);
     },
@@ -431,7 +438,7 @@ test("no feature (but services present): the restart sentence still points at we
   await withIcmWorkspace(
     async (root, ctx) => {
       icm.init(ctx);
-      const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+      const claude = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
       assert.doesNotMatch(claude, /docker restart/);
       assert.match(claude, /as `\.werkmeister\/werkmeister-context\.md` describes/);
     },
@@ -443,7 +450,7 @@ test("feature and services both present: the restart sentence uses docker restar
   await withIcmWorkspace(
     async (root, ctx) => {
       icm.init(ctx);
-      const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+      const claude = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
       assert.match(claude, /`docker restart demo-backend`/);
     },
     { meta: { FEATURE: "demo", SERVICES: "backend" } },
@@ -458,7 +465,7 @@ test("an idle-type service is reloaded by docker exec, not restart (SW-32)", asy
         "  tool:\n    type: cli\n    repo: demo-repo\n",
       );
       icm.init(ctx);
-      const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+      const claude = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
       assert.match(claude, /`docker restart demo-backend`/);
       assert.doesNotMatch(claude, /docker restart demo-tool/);
       assert.match(claude, /`demo-tool` run no watcher, so a restart rebuilds nothing/);
@@ -472,7 +479,7 @@ test("the merged-or-released router row runs the post-mortem, then asks the pers
     icm.init(ctx);
     const read = (f) => fs.readFileSync(path.join(root, f), "utf8");
     assert.match(
-      read("CLAUDE.md"),
+      read("AGENTS.md"),
       /^\| a PR merged or released, or asked to close out \| `werkmeister pr status`, then the werkmeister `postmortem` skill \(writes `postmortem\.md`\), then ask the person before `werkmeister workspace close` \| .* \|$/m,
     );
     assert.match(
@@ -512,11 +519,11 @@ const ISSUE = {
   fetchedAt: "2026-10-11T18:04:00.000Z",
 };
 
-test("an issue puts the issue section in CLAUDE.md and BRIEF.md", async () => {
+test("an issue puts the issue section in AGENTS.md and BRIEF.md", async () => {
   await withIcmWorkspace(
     async (root, ctx) => {
       icm.init({ ...ctx, issue: ISSUE });
-      const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+      const claude = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
       assert.match(
         claude,
         /\n## Issue\n\n\[o\/r#5\]\(https:\/\/github.com\/o\/r\/issues\/5\): Stale config\./,
@@ -564,10 +571,10 @@ test("a placeholder brief is rebuilt once an issue exists; an edited brief is ke
   );
 });
 
-test("no issue: CLAUDE.md and BRIEF.md are unchanged from before", async () => {
+test("no issue: AGENTS.md and BRIEF.md are unchanged from before", async () => {
   await withIcmWorkspace(async (root, ctx) => {
     icm.init({ ...ctx, issue: null });
-    const claude = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+    const claude = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
     assert.doesNotMatch(claude, /## Issue|issue\.md/);
     assert.match(
       fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"),
@@ -679,7 +686,7 @@ test("a no-copy issue keeps the placeholder brief; a fetched copy then rebuilds 
       icm.init({ ...ctx, issue: noCopy });
       assert.equal(fs.readFileSync(path.join(root, "BRIEF.md"), "utf8"), placeholder);
       assert.doesNotMatch(
-        fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"),
+        fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"),
         /\| `\.werkmeister\/issue\.md` \| the issue as fetched at creation; refresh with `werkmeister workspace init --refresh-issue` \|/,
       );
       icm.init({ ...ctx, issue: ISSUE });
@@ -707,7 +714,7 @@ test("a .werkmeister workspace gets docs that name it, and reads as in sync", as
         );
       }
       assert.match(
-        fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"),
+        fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"),
         /\.werkmeister\/werkmeister-context\.md/,
       );
       assert.deepEqual(icm.check(root), []);
@@ -830,7 +837,7 @@ test("SW-807: each bugfix contract lists its own pre-approved commands and steer
       for (const d of ["01_reproduce", "02_fix", "03_exercise", "04_propose"])
         assert.match(section(d), /never a `python3` heredoc or `python3 -c`/);
       // SW-1011: the router agrees with 04_propose: `pr open` pushes the record.
-      const router = fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8");
+      const router = fs.readFileSync(path.join(root, "AGENTS.md"), "utf8");
       assert.match(
         router,
         /\| this folder's git branch \| the run's record \(contracts \+ stage outputs\): commit it; `werkmeister pr open` and `werkmeister workspace close` push it;/,

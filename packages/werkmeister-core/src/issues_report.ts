@@ -6,7 +6,7 @@
  * its own routing rows) or, for werkmeister itself, on the werkmeister repo
  * unless the tracker takes those too (`overrides.werkmeister_issues_project`) — and the
  * body per type. icm writes it to `_shared/issues-report.md`, jit to
- * `.werkmeister/issues-report.md`; each strategy's CLAUDE.md points at its copy.
+ * `.werkmeister/issues-report.md`; each strategy's AGENTS.md points at its copy.
  */
 
 import { COMPOSE_FILE } from "./compose_file.js";
@@ -69,7 +69,7 @@ File one when the person asks for it, or when you find work outside this workspa
 
 | Issue is about | File at | Command |
 |---|---|---|
-| the \`werkmeister\` tool: CLI, MCP tools, plugin skills, generated files (\`.werkmeister/\`, \`${COMPOSE_FILE}\`, \`.env\`, \`CLAUDE.md\`, context files), containers, ports, Caddy routing, workspace init/teardown | ${sandboxWhere.where} | ${sandboxWhere.command} |
+| the \`werkmeister\` tool: CLI, MCP tools, plugin skills, generated files (\`.werkmeister/\`, \`${COMPOSE_FILE}\`, \`.env\`, \`AGENTS.md\`, \`CLAUDE.md\`, context files), containers, ports, Caddy routing, workspace init/teardown | ${sandboxWhere.where} | ${sandboxWhere.command} |
 ${appRow}
 
 ## How

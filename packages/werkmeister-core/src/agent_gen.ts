@@ -216,7 +216,7 @@ ${smokeLines.join("\n")}
       .join(", ");
     standardsLine =
       `\nWhen writing or editing test code, apply the ${skills} ` +
-      "standard(s) — the workspace CLAUDE.md's Standards routing table " +
+      "standard(s) — the workspace AGENTS.md's Standards routing table " +
       "maps them.\n";
   }
 

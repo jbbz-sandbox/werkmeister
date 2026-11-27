@@ -17,7 +17,7 @@
  *   3. writes ``.werkmeister/workspace.yml`` (the durable source of truth, including
  *      the resolved ``repos`` set); and
  *   4. runs ``werkmeister workspace init`` inside it, which creates the nested repo
- *      worktrees from that config and writes CLAUDE.md / .env /
+ *      worktrees from that config and writes AGENTS.md / .env /
  *      compose.yml / .claude/ / .werkmeister/*. The initial state is then
  *      committed (not pushed).
  *

@@ -56,7 +56,7 @@ docker exec w9r-caddy caddy reload --config /tmp/Caddyfile
 
 ## The Agent Asks Which Task to Do (jit Workspaces)
 
-**What you see:** on its first turn the agent treats CLAUDE.md's Current Task (from `--task` and `--description`) and the starting prompt as two different tasks, and stops to ask which one you mean.
+**What you see:** on its first turn the agent treats AGENTS.md's Current Task (from `--task` and `--description`) and the starting prompt as two different tasks, and stops to ask which one you mean.
 
 **What to do:** tell it the starting prompt is the task. When you create the workspace, make `--task` a short title for the prompt and leave `--description` empty.
 

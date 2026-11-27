@@ -29,7 +29,7 @@ const _GITIGNORE_HEADER =
 // service's resolved secrets) and files `up`, the PR gate and the agent-state hook
 // rewrite at runtime — compose.yml carries the slot's ports, and the slot lives on
 // container labels — which would otherwise leave the record branch dirty (SW-144).
-// The other generated projections (.claude/, CLAUDE.md, .mcp.json, .werkmeister/*)
+// The other generated projections (.claude/, AGENTS.md, CLAUDE.md, .mcp.json, .werkmeister/*)
 // are deliberately TRACKED — versioned workspace state is the point of the root repo.
 export const RUNTIME_FILES = [
   "compose.yml",

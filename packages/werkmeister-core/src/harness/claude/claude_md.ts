@@ -1,12 +1,12 @@
 /**
- * CLAUDE.md / routing-table / werkmeister-context builders — extracted from
+ * AGENTS.md / routing-table / werkmeister-context builders — extracted from
  * init-workspace per DEBT-03 (it was the largest file in the codebase,
  * mixing workspace discovery,
- * input resolution, interactive prompting, CLAUDE.md generation, and compose
+ * input resolution, interactive prompting, AGENTS.md generation, and compose
  * orchestration).
  *
  * This module owns pure string-rendering logic for the workspace-facing
- * markdown artifacts: the workspace `CLAUDE.md`, its routing table, and
+ * markdown artifacts: the workspace `AGENTS.md`, its routing table, and
  * `.werkmeister/werkmeister-context.md`.
  */
 
@@ -76,11 +76,11 @@ function isDict(value: unknown): value is Record<string, any> {
 }
 
 // ---------------------------------------------------------------------------
-// CLAUDE.md generation
+// AGENTS.md generation
 // ---------------------------------------------------------------------------
 
 /**
- * Build the routing table for CLAUDE.md.
+ * Build the routing table for AGENTS.md.
  *
  * Per-repo routing rows are only emitted when `{repo}/CLAUDE.md` actually
  * exists — pointing at a file that isn't there is worse than no row at all.
@@ -154,7 +154,7 @@ function gateLine(plan: WorkTypePlan): string {
  * docs/standards/ and projected into the workspace's `.claude/skills/` by
  * init-workspace (`workspace_skills.ts`); `w9r-implement`/`w9r-research`/
  * `w9r-test`/`w9r-review` are the phase-entry skills that read this table (docs/jit-context-system.md §5.2 — the
- * CLAUDE.md-table → entry-skill chain is the measured 15/15 PREVENTIVE
+ * AGENTS.md-table → entry-skill chain is the measured 15/15 PREVENTIVE
  * mechanism). *workType* selects which By-phase rows render and adds the Work type / Gate lines; an empty or unknown type renders all five rows and no gate (`DEFAULT_PLAN`).
  */
 export function buildStandardsRoutingSection(
@@ -228,7 +228,7 @@ ${plan.phases.map((p) => phaseRows[p]).join("\n")}
 `;
 }
 
-/** Render the workspace CLAUDE.md content. */
+/** Render the workspace AGENTS.md content. */
 export function buildClaudeMd(
   workspaceName: string,
   workspaceRoot: string,

@@ -1,7 +1,7 @@
 /**
  * The `jit` context strategy — docs/jit-context-system.md §5–6. What was
  * initWorkspace steps 5b–6c: active standards + gate manifest, notes +
- * CLAUDE.md, w9r-* skills, generated agents, hooks. 5b, 6, 6a and 6c moved
+ * AGENTS.md, w9r-* skills, generated agents, hooks. 5b, 6, 6a and 6c moved
  * verbatim; 6b's present-archetype resolution now goes through the shared
  * `presentArchetypes` helper (archetypes.ts) instead of calling
  * `resolvePresentArchetypes` inline.
@@ -115,7 +115,7 @@ function supersedeNote(note: Note): void {
  *
  * Writes nothing without a prompt or an issue (the caller passes the issue
  * alone only at creation) — the work-type line alone is already in
- * CLAUDE.md's by-phase table, and a placeholder used to block the real prompt
+ * AGENTS.md's by-phase table, and a placeholder used to block the real prompt
  * forever. Exported for its tests.
  */
 export function seedStartingHandoff(
@@ -227,11 +227,13 @@ function init(ctx: InitContext): void {
     );
   }
 
-  // 6. Write the instructions file (CLAUDE.md, or the harness's). The notes directory is created; legacy free-text Handoff
+  // 6. Write the instructions file (AGENTS.md, and claude's CLAUDE.md import). The notes directory is created; legacy free-text Handoff
   // Notes content is salvaged first, then the starting prompt / work type is
   // seeded as the first handoff note if the workspace has none yet.
   fs.mkdirSync(notesDir(workspaceRoot), { recursive: true });
   salvageLegacyHandoffNotes(workspaceRoot, instructionsPath);
+  // A workspace from before SW-1231 kept its notes in CLAUDE.md.
+  salvageLegacyHandoffNotes(workspaceRoot, path.join(workspaceRoot, "CLAUDE.md"));
   // The issue alone seeds only at creation: a re-init or --refresh-issue on a run in progress must not open a new handoff.
   const prompt = inputs["starting_prompt"] ?? "";
   seedStartingHandoff(
@@ -250,8 +252,10 @@ function init(ctx: InitContext): void {
     ctx.issue ?? null,
   );
   fs.writeFileSync(instructionsPath, content + layout.notice());
+  if (layout.importStub)
+    fs.writeFileSync(path.join(workspaceRoot, layout.importStub), `@${layout.instructionsFile}\n`);
   success(`Wrote ${instructionsPath}`);
-  // CLAUDE.md's "## Issues" section points here.
+  // AGENTS.md's "## Issues" section points here.
   const issuesReportPath = path.join(dotDir(workspaceRoot), "issues-report.md");
   fs.mkdirSync(path.dirname(issuesReportPath), { recursive: true });
   fs.writeFileSync(

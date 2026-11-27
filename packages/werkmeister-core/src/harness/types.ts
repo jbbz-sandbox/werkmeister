@@ -79,8 +79,13 @@ export type HooksSupport =
 export interface HarnessLayout {
   /** The harness: `claude`, `mcp`, `codex` or `opencode`. */
   readonly id: HarnessId;
-  /** The instructions file the harness reads first, such as `CLAUDE.md`. */
+  /** The instructions file werkmeister writes the workspace context to, such as `AGENTS.md`. */
   readonly instructionsFile: string;
+  /**
+   * A file holding only `@<instructionsFile>`, for a harness that reads its own name first. Claude Code
+   * imports it on every version, while its native AGENTS.md fallback stops at any CLAUDE.md above.
+   */
+  readonly importStub?: string;
   /** Workspace-relative folder the harness loads project skills from. */
   readonly skillsDir: string;
   /**

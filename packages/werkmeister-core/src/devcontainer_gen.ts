@@ -4,7 +4,7 @@
  *
  * Everything container-only lives here, never in the shared `.mcp.json` (SW-115):
  * the MCP registration is made inside the container by `postCreateCommand`.
- * Overwritten on every init, like CLAUDE.md.
+ * Overwritten on every init, like AGENTS.md.
  */
 
 import * as fs from "node:fs";

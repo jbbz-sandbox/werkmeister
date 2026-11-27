@@ -8,7 +8,7 @@ host daemon. The workspace's `harness` (in `.werkmeister/workspace.yml`, set by
 
 | | Claude Code (plugin) | Claude Code (devcontainer) | Generic MCP harness (`harness: mcp`) | Codex CLI (`harness: codex`) | OpenCode (`harness: opencode`) |
 |---|---|---|---|---|---|
-| Instructions file | `CLAUDE.md` | `CLAUDE.md` | `AGENTS.md` | `AGENTS.md` | `AGENTS.md` |
+| Instructions file | `AGENTS.md`, plus a one-line `CLAUDE.md` holding `@AGENTS.md` | same | `AGENTS.md` | `AGENTS.md` | `AGENTS.md` |
 | Skills | `.claude/skills/w9r-*` | `.claude/skills/w9r-*` | `.agents/skills/w9r-*` | `.agents/skills/w9r-*` | `.agents/skills/w9r-*` |
 | Subagents | `.claude/agents/w9r-*` | `.claude/agents/w9r-*` | none | none | none |
 | Question tool (stage human checks) | `AskUserQuestion` | `AskUserQuestion` | none: a numbered plain-text block | none: a numbered plain-text block | `question` |
@@ -16,7 +16,9 @@ host daemon. The workspace's `harness` (in `.werkmeister/workspace.yml`, set by
 | Hooks | `.claude/settings.json` | same | **unavailable** | `.codex/hooks.json` | `.opencode/plugins/werkmeister.js` (partial) |
 | Session tools and Workspaces pane | yes | yes | no | yes | yes (limited) |
 
-Details for the three rows above:
+Details for the rows above:
+
+- **Instructions file.** Werkmeister writes the workspace context to `AGENTS.md` for every harness. Claude Code also gets a `CLAUDE.md` that holds only `@AGENTS.md`: Claude Code reads `AGENTS.md` by itself only when no `CLAUDE.md` sits in the folder or above it (a features root often has one), while the import loads on every version. A workspace made before this change moves over on its next `werkmeister workspace init`: `AGENTS.md` gets the content, `CLAUDE.md` becomes the import, and any `## Handoff Notes` in the old file are kept as a note.
 
 - **MCP server.** Claude Code (plugin): the plugin's `.mcp.json` (`werkmeister internal mcp`, a stdio proxy to the daemon). Claude Code (devcontainer): `http://host.docker.internal:3002/mcp` with the workspace token, registered by `postCreateCommand`. Generic MCP harness: the daemon at `http://127.0.0.1:3002/mcp`, registered by you (below). Codex CLI: the daemon, registered by `workspace init` in `.codex/config.toml` (below). OpenCode: `mcp.werkmeister` in the workspace's `opencode.json`, written by `workspace init`.
 - **Hooks.** Claude Code: session start, standards gate, PR guard, agent state, auto-stop. Generic MCP harness: `workspace init` and `werkmeister feature up` print `hooks: unavailable on mcp (…)`, the `hooks` MCP tool returns `hooks: "unavailable: …"`, and `AGENTS.md` carries the note. Codex CLI: the same hooks; see [Codex](#codex) for what differs. OpenCode: standards gate, PR guard and agent state; session-start context and auto-stop do not run (no such OpenCode events), and `workspace init` prints `hooks: partial on opencode (…)`.

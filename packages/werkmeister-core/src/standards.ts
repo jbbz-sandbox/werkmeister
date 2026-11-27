@@ -10,7 +10,7 @@
  *     services.yaml `archetype:` / legacy `standards:` per service
  *         ▼ normalized by lib/archetypes, union over the workspace's repos,
  *           ± workspace.yml `standards_override`
- *     "Standards routing" block in the workspace CLAUDE.md  (rendered by claude_md.ts)
+ *     "Standards routing" block in the workspace AGENTS.md  (rendered by claude_md.ts)
  *
  * `comments` is the universal base: always active, never listed in
  * `standards:`. Since jit-context-system.md §4.1 this module is a
@@ -742,7 +742,7 @@ export function resolveActiveStandards(
  * standard, plus the active universal keys, plus `phase_gate` (the work
  * type's pre-implementation gate, `gate.ts`) when the plan has one. Built
  * from `resolveActiveStandards` output so it can never diverge from the
- * CLAUDE.md routing table — one compilation of the same resolution, not a
+ * AGENTS.md routing table — one compilation of the same resolution, not a
  * second source of truth.
  */
 export function buildStandardsManifest(

@@ -44,7 +44,7 @@ This is the most common infrastructure issue.
 curl -sk -o /dev/null -w "Caddy: HTTP %{http_code} | Size: %{size_download}\n" \
   "https://frontend.local.werkmeister.io/your/path"
 
-# Test direct to expected service (check CLAUDE.md routing table for correct port)
+# Test direct to expected service (check AGENTS.md routing table for correct port)
 curl -s -o /dev/null -w "Direct: HTTP %{http_code} | Size: %{size_download}\n" \
   "http://localhost:11102/your/path"
 ```

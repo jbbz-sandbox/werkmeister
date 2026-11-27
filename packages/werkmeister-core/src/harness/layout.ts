@@ -19,7 +19,8 @@ import { HARNESS_IDS, type HarnessAdapter, type HarnessId, type HarnessLayout } 
 
 export const claudeLayout: HarnessLayout = {
   id: "claude",
-  instructionsFile: "CLAUDE.md",
+  instructionsFile: "AGENTS.md",
+  importStub: "CLAUDE.md",
   skillsDir: ".claude/skills",
   hooks: { available: true },
   agents: true,

@@ -17,7 +17,7 @@ With an `issue_id`, `createWorkspace` always:
 2. fills `task` from the issue title when empty;
 3. has a model rewrite the issue into `description` / `starting_prompt` for whichever is
    empty (`--no-distill` skips it; a failed rewrite only warns);
-4. renders the issue section (link, copy date, `werkmeister issue view`) in CLAUDE.md and the
+4. renders the issue section (link, copy date, `werkmeister issue view`) in AGENTS.md and the
    brief, for both JIT and ICM.
 
 The create leaves the issue's status alone (a workspace can be created and parked). From
@@ -45,14 +45,14 @@ runs `werkmeister issue start` → In Review at `werkmeister pr open` → Done a
 **Batch check** — after creating, for each new workspace:
 
 ```bash
-test -f <ws>/.werkmeister/issue.md && grep -q '^## Issue$' <ws>/CLAUDE.md && echo ok
+test -f <ws>/.werkmeister/issue.md && grep -q '^## Issue$' <ws>/AGENTS.md && echo ok
 ```
 
 Report any workspace that fails it; don't hand-patch files.
 
 The workspace is git worktrees (one per repo, derived from the selected **services**) on a
 `<user>/<workspace>` branch under `$WERKMEISTER_WORKSPACES_ROOT`, followed by `init-workspace`
-(writes `CLAUDE.md`, `.env`, `compose.yml`, …).
+(writes `AGENTS.md`, `.env`, `compose.yml`, …).
 
 There is **no hand-maintained schema** — fields are built from the same prompt
 definitions (`_WIZARD_PROMPTS` in `packages/werkmeister-core/src/workspace_prompts.ts`) that

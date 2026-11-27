@@ -44,7 +44,7 @@ test("buildStartArgs: title, model only when set, and a background of at least 8
   const bare = buildStartArgs({ ...W, name: "x", issueId: null, task: null });
   assert.equal(bare.title, "x");
   assert.ok(bare.background.length >= 80, bare.background);
-  assert.match(bare.background, /CLAUDE\.md.*\.werkmeister\/issue\.md/);
+  assert.match(bare.background, /AGENTS\.md.*\.werkmeister\/issue\.md/);
   assert.match(a.background, /for SW-9/);
 
   assert.equal(buildStartArgs({ ...W, task: "t".repeat(100) }).title.length, 59);

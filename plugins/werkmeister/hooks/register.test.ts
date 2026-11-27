@@ -1051,12 +1051,12 @@ const AUTONOMOUS_ARGS = {
   title: "SW-1 Do it",
   model: "sonnet",
   prompt: "start the run\n\nRun limits:\n- …",
-  background: "Workspace `empty` for SW-1. Read `CLAUDE.md`, then `.werkmeister/issue.md`.",
+  background: "Workspace `empty` for SW-1. Read `AGENTS.md`, then `.werkmeister/issue.md`.",
 };
 const INTERACTIVE_ARGS = {
   title: "empty",
   prompt: "start the run\n\nThis is an interactive run: check with me at each stage's human check.",
-  background: "Workspace `empty`. Read `CLAUDE.md`, then `.werkmeister/issue.md`.",
+  background: "Workspace `empty`. Read `AGENTS.md`, then `.werkmeister/issue.md`.",
 };
 
 for (const [kind, args] of [

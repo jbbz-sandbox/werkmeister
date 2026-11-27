@@ -97,7 +97,7 @@ export interface StartArgs {
   model?: string;
   /** The first message: `start the run`, plus the run limits for an autonomous workspace or an interactive note otherwise. */
   prompt: string;
-  /** A short note that points the session at the workspace's `CLAUDE.md` and issue copy. */
+  /** A short note that points the session at the workspace's `AGENTS.md` and issue copy. */
   background: string;
 }
 
@@ -117,8 +117,8 @@ export function buildStartArgs(w: {
     title,
     ...(w.model ? { model: w.model } : {}),
     prompt: startPrompt(w.autonomous),
-    // The run reads its own CLAUDE.md and issue copy; this only points at them. The fixed text keeps it over
+    // The run reads its own AGENTS.md and issue copy; this only points at them. The fixed text keeps it over
     // start_session's 80-character minimum for a fresh context.
-    background: `Workspace \`${w.name}\`${w.issueId ? ` for ${w.issueId}` : ""}. Read \`CLAUDE.md\`, then \`.werkmeister/issue.md\`; its routing table picks the stage.`,
+    background: `Workspace \`${w.name}\`${w.issueId ? ` for ${w.issueId}` : ""}. Read \`AGENTS.md\` (\`CLAUDE.md\` in an older workspace), then \`.werkmeister/issue.md\`; its routing table picks the stage.`,
   };
 }

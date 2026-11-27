@@ -1,7 +1,7 @@
 /**
  * The context-strategy interface (docs/context-strategies.md, option B).
  *
- * A strategy owns every write to a workspace's context layer: CLAUDE.md and
+ * A strategy owns every write to a workspace's context layer: AGENTS.md and
  * whatever the agent reads besides it. `initWorkspace`, `up`, `werkmeister
  * skills|notes context|hooks gate` and the MCP skills/hooks tools each make one
  * call through `strategyFor` and never name a strategy.
@@ -71,7 +71,7 @@ export interface InitContext {
 }
 
 /**
- * How a workspace's context layer (its `CLAUDE.md` and whatever else the agent
+ * How a workspace's context layer (its `AGENTS.md` and whatever else the agent
  * reads) is written, kept fresh and fed to the agent. There are two: `icm`
  * (staged pipeline folders) and `jit` (standards and skills delivered as the
  * agent works). Get the one a workspace uses from {@link strategyFor}. Every

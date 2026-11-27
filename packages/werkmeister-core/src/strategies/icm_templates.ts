@@ -53,7 +53,7 @@ export interface Stage {
   writes: string;
   /** CONTEXT.md "Human check" cell. */
   check: string;
-  /** CLAUDE.md route-table "If" cell; default "`<previous dir>` output approved", or its {@link Stage.gate} reading decided. */
+  /** AGENTS.md route-table "If" cell; default "`<previous dir>` output approved", or its {@link Stage.gate} reading decided. */
   enter?: string;
   /** The `output/` file whose `status: proposed` line the human check flips, when the stage has no other gate. */
   gate?: string;

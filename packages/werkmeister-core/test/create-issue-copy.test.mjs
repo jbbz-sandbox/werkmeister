@@ -64,7 +64,7 @@ for (const strategy of ["jit", "icm"]) {
       async (root) => {
         await initWorkspace({}, root, { issue: SNAP });
         assert.ok(fs.existsSync(issueCopyPath(root)));
-        assert.match(fs.readFileSync(path.join(root, "CLAUDE.md"), "utf8"), /^## Issue$/m);
+        assert.match(fs.readFileSync(path.join(root, "AGENTS.md"), "utf8"), /^## Issue$/m);
       },
     );
   });
