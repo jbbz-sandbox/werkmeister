@@ -78,14 +78,16 @@ test("no Jira key in an SDK page's prose", () => {
 
 // Note numbers, PR numbers, internal entry points and CLI internals mean nothing to an SDK user.
 // Symbol pages only, code spans included: index.md names `werkmeister-core/config` to say it is internal.
-test("no internal reference in an SDK symbol page's prose", () => {
+test("no internal reference in an SDK symbol page's prose", async () => {
   const pages = sdkPages("apps/docs-site/sdk/*/*.md");
-  // The lookbehind lets "Defined in: packages/werkmeister-core/src/…" through.
-  const internal =
-    /\b[Nn]ote \d+\b|(?<![\w/])#\d+\b|(?<![\w/])werkmeister-core\/(?!sdk\b)\w|\bmain\.ts\b|proposal §/;
+  // docs:sdk checks the TSDoc with the same regex in lint (SW-947). Imported here, not at the top, so this
+  // ticket's lines stay apart from the import block other tickets edit and each commit reverts alone.
+  const { INTERNAL_REF } = await import(
+    "../../packages/werkmeister-core/typedoc-require-example.mjs"
+  );
   const hits = pages
     .flatMap(proseLines)
-    .filter(([, , l]) => internal.test(l))
+    .filter(([, , l]) => INTERNAL_REF.test(l))
     .map(([f, n, l]) => `${f}:${n}: ${l.trim().slice(0, 80)}`);
   assert.deepEqual(hits, []);
 });
