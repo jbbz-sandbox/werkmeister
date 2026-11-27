@@ -3,6 +3,7 @@ import { existsSync, globSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { braceLines } from "../../scripts/check-docs.mjs";
 import config from "./.vitepress/config.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -39,11 +40,9 @@ test("site heading ids follow GitHub's slug rule", () => {
   );
 });
 
-// VitePress runs Vue interpolation over prose and inline code; only fences are v-pre.
+// docs:check runs the same rule in lint (SW-1123); this keeps the built site's own check.
 test("no unescaped {{ }} in prose", () => {
-  const hits = FILES.flatMap(proseLines)
-    .filter(([, , l]) => /\{\{/.test(l.replace(/<code v-pre>.*?<\/code>/g, "")))
-    .map(([f, n, l]) => `${f}:${n}: ${l.trim().slice(0, 80)}`);
+  const hits = FILES.flatMap((f) => braceLines(f, readFileSync(join(ROOT, f), "utf8")));
   assert.deepEqual(hits, []);
 });
 

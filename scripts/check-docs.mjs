@@ -152,6 +152,25 @@ export function jiraKeyLines(rel, text) {
 }
 
 /**
+ * SW-1123: a `{{` VitePress would parse as Vue interpolation, which it runs over prose and inline code,
+ * caught by lint before the gate's docs-site build fails on it. Fences and `<code v-pre>` are left alone.
+ */
+export function braceLines(rel, text) {
+  let fenced = false;
+  return text.split("\n").flatMap((line, i) => {
+    if (/^\s*(```|~~~)/.test(line)) {
+      fenced = !fenced;
+      return [];
+    }
+    return !fenced && /\{\{/.test(line.replace(/<code v-pre>.*?<\/code>/g, ""))
+      ? [
+          `${rel}:${i + 1}: unescaped {{ (VitePress parses it): wrap it in <code v-pre>, or in a *.help.md write it without double braces: ${line.trim().slice(0, 80)}`,
+        ]
+      : [];
+  });
+}
+
+/**
  * Every problem in one doc. `cli` is { commands: Map<name, Set<flag>> }, `tools`
  * a Set of MCP tool names, `regions` docs:gen's Markdown by region name,
  * `exists`/`read` take repo-relative paths.
@@ -432,6 +451,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       sdk: new Set(Object.keys(sdk)),
     }),
     ...published.flatMap((rel) => jiraKeyLines(rel, readFileSync(join(ROOT, rel), "utf8"))),
+    // Every docs/*.md, SKIP's records too: VitePress builds them all, as the docs-site test checks.
+    ...tracked
+      .filter((rel) => /^docs\/[^/]+\.md$/.test(rel))
+      .flatMap((rel) => braceLines(rel, readFileSync(join(ROOT, rel), "utf8"))),
     ...checkMan(pages, MAN_DIR),
     ...(withMan(readFileSync(CLI_PACKAGE, "utf8"), pages) === readFileSync(CLI_PACKAGE, "utf8")
       ? []
