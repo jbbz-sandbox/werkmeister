@@ -104,7 +104,10 @@ export function unattendedCreateRefusal(
     return `An autonomous workspace files only in its own issue's project (${own || "none set"}), not '${project}'.`;
   const bodyFile = String(args.bodyFile ?? "");
   const outside = `An autonomous workspace's --body-file must be a file inside the workspace, not '${bodyFile}'.`;
-  if (!bodyFile || bodyFile === "-") return outside;
+  // SW-1036: refused on purpose (SW-815): the pre-approved `issue create --relates` rule would let stdin carry any host file.
+  if (bodyFile === "-")
+    return `${outside} Stdin is refused here: write the body to a file in the workspace.`;
+  if (!bodyFile) return outside;
   try {
     const real = fs.realpathSync(path.resolve(bodyFile));
     const root = fs.realpathSync(workspace);

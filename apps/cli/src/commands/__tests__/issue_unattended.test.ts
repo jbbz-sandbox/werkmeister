@@ -29,6 +29,15 @@ it("an autonomous workspace files a workspace file in its own issue's project, n
   fs.rmSync(outside);
 });
 
+it("SW-1036: stdin is refused in an autonomous workspace, and the help says so", () => {
+  const ws = workspace("autonomous: true\nissue_id: SW-855\n");
+  expect(unattendedCreateRefusal({ project: "SW", bodyFile: "-" }, ws)).toMatch(
+    /Stdin is refused here: write the body to a file in the workspace/,
+  );
+  const main = fs.readFileSync(path.join(import.meta.dirname, "..", "..", "main.ts"), "utf8");
+  expect(main).toContain("(- for stdin, except in an autonomous workspace)");
+});
+
 it("a person's workspace, or no workspace, is not limited", () => {
   const args = { project: "OTHER", bodyFile: "-" };
   expect(unattendedCreateRefusal(args, workspace("issue_id: SW-855\n"))).toBeNull();
