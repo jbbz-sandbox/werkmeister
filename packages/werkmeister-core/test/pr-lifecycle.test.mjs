@@ -18,6 +18,7 @@ import { metricsPath } from "../dist/metrics.js";
 import {
   abandonWorkspace,
   adoptPr,
+  autosquash,
   callbackFields,
   callbackMessage,
   claimCallbacks,
@@ -7719,5 +7720,24 @@ test("runGate: a timeout at normal load, or an assertion failure under load, sta
     } finally {
       clean(ws);
     }
+  }
+});
+
+test("pr autosquash's fold turns off auto gc and maintenance for its rebase (SW-1125)", async () => {
+  const { ws, own } = pushWorkspace();
+  try {
+    const d = deps([
+      [/rev-parse --abbrev-ref HEAD$/, { stdout: `${own}\n` }],
+      [/status --porcelain$/, { stdout: "" }],
+      [/rev-list --merges --count origin\/main\.\.HEAD$/, { stdout: "0\n" }],
+      [/merge-base HEAD origin\/main$/, { stdout: "base000\n" }],
+      [/log --format=%s base000\.\.HEAD$/, { stdout: "fixup! SW-1 first\nSW-1 first\n" }],
+    ]);
+    await autosquash(ws, undefined, d);
+    const rebase = d.calls.find((c) => / rebase -q -i --autosquash /.test(c));
+    assert.ok(rebase, d.calls.join("\n"));
+    assert.match(rebase, /-c maintenance\.auto=false -c gc\.auto=0 rebase /);
+  } finally {
+    clean(ws);
   }
 });
