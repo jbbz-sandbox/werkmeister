@@ -64,3 +64,46 @@ test("sidecars with their own volume names each get a distinct <feature>-<name> 
     "f-frontend-pgdata:/var/lib/postgresql/data",
   ]);
 });
+
+// SW-1233: each sidecar is a `services:` key and a container_name, so a repeated name is a duplicate key.
+const named = (a, b) => `services:
+  backend:
+    type: api
+    repo: demo-repo
+    port_offset: 2
+    extra_services:
+      ${a}: { image: "postgres:16", extra_volumes: ["backend-pgdata:/var/lib/postgresql/data"] }
+  frontend:
+    type: web
+    repo: demo-repo
+    port_offset: 3
+    extra_services:
+      ${b}: { image: "postgres:16", extra_volumes: ["frontend-pgdata:/var/lib/postgresql/data"] }
+`;
+
+test("two services' sidecars with one name refuse generation, naming both services", async () => {
+  await assert.rejects(
+    render(named("postgres", "postgres")),
+    /Sidecar 'postgres' is declared by backend and frontend/,
+  );
+});
+
+test("a sidecar named like a service refuses generation, naming both", async () => {
+  await assert.rejects(
+    render(named("backend-db", "backend")),
+    /Sidecar 'backend' of frontend has the name of service backend/,
+  );
+});
+
+test("a sidecar named like a rendered setup service refuses generation, naming both", async () => {
+  const services = `${named("backend-db", "install").replace(
+    "    port_offset: 2\n",
+    "    port_offset: 2\n    setup_service: install\n",
+  )}setup_services:
+  install: { repo: demo-repo, command: "true" }
+`;
+  await assert.rejects(
+    render(services),
+    /Sidecar 'install' of frontend has the name of setup service install/,
+  );
+});
