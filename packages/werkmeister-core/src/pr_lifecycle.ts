@@ -3594,6 +3594,8 @@ const conflictSteps = (e: Extract<WakeEvent, { kind: "conflict" }>) =>
     // SW-890: the lease is the head this wake saw (conflict_head), so a fetch can't move it.
     "  Then push it (a lease on the PR head this message saw; refuses anything but this workspace's own clean branch):",
     `    werkmeister pr push ${path.basename(e.dir)}`,
+    // SW-1225: an allow rule matches only when every segment does; any other segment sends the line to the classifier.
+    "  Run it exactly like that, from the workspace root: no cd && or pipe. Any extra segment sends the line to auto mode's classifier, which can refuse it as a force-push.",
     "  and rerun the gate's tests.",
   ].join("\n");
 
