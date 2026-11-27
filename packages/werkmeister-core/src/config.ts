@@ -813,7 +813,7 @@ export const SHARED_VOLUME_MARKER = "^";
  * docker-compose.feature.yml.njk: every `node_modules_volume`, plus every
  * `extra_volumes` entry whose left side is a named volume rather than a host
  * bind mount (a "/" marks a bind mount) — across both `services:` and
- * `setup_services:`.
+ * `setup_services:`, and their `extra_services` sidecars.
  */
 function registryVolumeBases(): Set<string> {
   const bases = new Set<string>();
@@ -829,6 +829,8 @@ function registryVolumeBases(): Set<string> {
         if (typeof def["repo"] === "string" && def["repo"])
           bases.add(`${def["repo"]}-${nodeModulesVol}`);
       }
+      // SW-1234: a sidecar's data volume (SW-933) is `<feature>-<name>` too.
+      if (isDict(def["extra_services"])) collect(def["extra_services"]);
       const extraVolumes = def["extra_volumes"];
       if (!Array.isArray(extraVolumes)) {
         continue;

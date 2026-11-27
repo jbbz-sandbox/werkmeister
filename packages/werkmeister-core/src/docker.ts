@@ -725,11 +725,17 @@ export async function execCapture(container: string, cmd: string[]): Promise<Exe
   );
 }
 
-/** Every volume name known to the daemon, or `null` when it is unreachable. */
-export async function listVolumeNames(): Promise<string[] | null> {
+/**
+ * Every volume known to the daemon, with the compose project that created it (its
+ * `com.docker.compose.project` label, absent on one compose didn't make), or `null` when it is unreachable.
+ */
+export async function listVolumes(): Promise<{ name: string; project?: string }[] | null> {
   try {
     const { Volumes } = await docker().listVolumes();
-    return (Volumes ?? []).map((v) => v.Name);
+    return (Volumes ?? []).map((v) => ({
+      name: v.Name,
+      project: v.Labels?.["com.docker.compose.project"],
+    }));
   } catch {
     return null;
   }

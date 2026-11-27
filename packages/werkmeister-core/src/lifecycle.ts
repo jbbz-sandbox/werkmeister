@@ -60,7 +60,9 @@ import {
   dependencyOrder,
   getContainerStatus,
   isOneShotService,
+  legacyProjectName,
   liveProject,
+  projectName,
   workspaceForFeature,
 } from "./compose.js";
 import { COMPOSE_FILE, migrateWorkspaceCompose } from "./compose_file.js";
@@ -74,7 +76,7 @@ import {
 import {
   containerLogs,
   docker,
-  listVolumeNames,
+  listVolumes,
   projectContainers,
   removeVolume,
   runningExecCommands,
@@ -2418,20 +2420,22 @@ export function volumeBaseNames(): string[] {
  * Every Docker volume name that looks like a workspace per-feature volume.
  *
  * They follow `<feature>-<volume_base_name>`, identified by checking against the
- * base names the service registry declares.
+ * base names the service registry declares, and were created by that feature's
+ * compose project ({@link isFeatureVolume}).
  */
 async function listSandboxVolumes(baseNames: string[]): Promise<string[]> {
   if (!baseNames.length) {
     return [];
   }
 
-  const allVolumes = await listVolumeNames();
+  const allVolumes = await listVolumes();
   if (allVolumes === null) {
     return [];
   }
 
   const sandboxVolumes: string[] = [];
-  for (const vol of allVolumes) {
+  for (const { name: vol, project } of allVolumes) {
+    if (!isFeatureVolume(vol, project)) continue;
     for (const base of baseNames) {
       if (vol.endsWith(`-${base}`)) {
         sandboxVolumes.push(vol);
@@ -2440,6 +2444,20 @@ async function listSandboxVolumes(baseNames: string[]): Promise<string[]> {
     }
   }
   return sandboxVolumes.sort();
+}
+
+/**
+ * Whether volume *name* was made by the compose project of the feature it is prefixed with.
+ *
+ * SW-1234: the name alone could be any project's (`myapp-pgdata` ends in a sidecar's `-pgdata`), and
+ * `clean` deletes what it lists. Compose labels each volume it creates with its project,
+ * `werkmeister-<feature>`, or the pre-SW-93 {@link legacyProjectName}.
+ */
+export function isFeatureVolume(name: string, project: string | undefined): boolean {
+  if (!project) return false;
+  return [projectName(""), legacyProjectName("")].some(
+    (prefix) => project.startsWith(prefix) && name.startsWith(`${project.slice(prefix.length)}-`),
+  );
 }
 
 /**

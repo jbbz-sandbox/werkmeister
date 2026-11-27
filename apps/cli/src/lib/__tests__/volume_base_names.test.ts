@@ -74,6 +74,22 @@ services:
     expect(getVolumeBaseNames()).toEqual(["shared_cache"]);
   });
 
+  // SW-1234: a sidecar's data volume is `<feature>-<name>` too, so `clean` must know its base.
+  it("collects the named extra_volumes of extra_services sidecars", () => {
+    writeServices(`
+services:
+  api:
+    node_modules_volume: null
+    extra_services:
+      api-db:
+        image: postgres:16
+        extra_volumes:
+          - pgdata:/var/lib/postgresql/data
+          - ^shared_dump:/dump
+`);
+    expect(getVolumeBaseNames()).toEqual(["pgdata"]);
+  });
+
   it("returns an empty list for a registry that declares no volumes", () => {
     writeServices(`
 services:
