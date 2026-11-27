@@ -13,8 +13,6 @@ import { WorkspaceError } from "../../errors.js";
 import { childEnv, fixtureCodexBin, isExecutable, shellQuote, stripAnsi } from "../../tool_bins.js";
 import { extractJson, extractResult } from "../claude/cli.js";
 
-const execFileAsync = promisify(execFile);
-
 /** $CODEX_BIN → the usual install locations → bare `codex` (resolved against `childEnv`'s PATH). */
 export async function resolveCodexBin(): Promise<string> {
   if (isFixture()) return fixtureCodexBin();
@@ -54,7 +52,8 @@ async function runExec(prompt: string, _opts: AskOpts): Promise<string> {
   const out = path.join(tmp, "out.json");
   try {
     await fs.writeFile(schema, JSON.stringify(RESULT_SCHEMA));
-    const run = execFileAsync(
+    // Promisified here, not at load: a test mocking node:child_process without execFile must still import this (SW-876).
+    const run = promisify(execFile)(
       bin,
       [
         "exec",
