@@ -13,7 +13,7 @@ Reads or updates one issue in this machine's tracker (\fBwerkmeister machine set
 .IP \(bu 3
 \fBcreate\fR files a new issue and prints its URL. \fB\-\-relates <key>\fR (repeatable) then links it "relates to" each key and prints each link; every key's format is checked (exactly one key per value, no comma lists; not that it exists) before the issue is filed. Only trackers with an API path (Jira); file GitHub issues with \fBgh issue create\fR.
 .IP \(bu 3
-\fBstart\fR moves the workspace's issue to in progress, forward only, then fetches each code worktree's base: a branch with no commits of its own is fast\-forwarded, any other gets an \fBN commits behind <base>\fR line. It exits 0 when the tracker refuses or a fetch fails, so a stage never fails on it.
+\fBstart\fR moves the workspace's issue to in progress, forward only, then fetches each code worktree's base: a branch with no commits of its own is fast\-forwarded, any other gets an \fBN commits behind <base>\fR line. It exits 0 when the tracker refuses or a fetch fails, so a stage never fails on it. \fBstart <ref>\fR starts that issue instead; \fBstart <ref> \-\-attach\fR first records it as the workspace's issue in \fB.werkmeister/workspace.yml\fR, without rerunning \fBworkspace init\fR or touching \fBstages/\fR. With no ref and no workspace issue it warns. In an autonomous workspace only the bare \fBstart\fR is pre\-approved.
 .IP \(bu 3
 \fBready\fR lists a project's open work in priority order: its board's ready column, else the open issues.
 .PP
@@ -26,6 +26,7 @@ werkmeister issue view
 werkmeister issue update \-\-status "In Review" \-\-comment "PR opened"
 werkmeister issue create \-\-project SW \-\-type bug \-\-title "Short summary" \-\-body\-file body.md
 werkmeister issue create \-\-project SW \-\-type task \-\-title "Follow\-up" \-\-body\-file body.md \-\-relates SW\-292 \-\-relates SW\-263
+werkmeister issue start SW\-1071 \-\-attach
 werkmeister issue ready \-\-json
 .RE
 .fi

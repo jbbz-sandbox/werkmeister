@@ -1,8 +1,12 @@
 .TH WERKMEISTER-ISSUE-START 1 "" "werkmeister" "Werkmeister Manual"
 .SH NAME
-werkmeister\-issue\-start \- Move the workspace's issue to in progress and fast\-forward its worktrees
+werkmeister\-issue\-start \- Move the workspace's issue (or \e<ref>) to in progress and fast\-forward its worktrees
 .SH SYNOPSIS
 \fBwerkmeister issue start\fR [ref]
+.SH OPTIONS
+.TP
+\fB\-\-attach\fR
+Record \e<ref> as the workspace's issue in .werkmeister/workspace.yml (no init rerun, stages/ untouched)
 .PP
 .SH SEE ALSO
 \fBwerkmeister\fR(1)

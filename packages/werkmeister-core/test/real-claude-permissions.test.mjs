@@ -126,6 +126,8 @@ test("SW-632: everyday commands run under the real matcher; escapes are refused"
     "werkmeister workspace serve --dashboard",
     // SW-1059: the fixup fold the grouped contracts name.
     "werkmeister pr autosquash",
+    // SW-1085: the bare start stays pre-approved.
+    "werkmeister issue start",
     ...f.wrapped,
   ];
   const mustDeny = [
@@ -150,6 +152,10 @@ test("SW-632: everyday commands run under the real matcher; escapes are refused"
     "git -c sequence.editor=true rebase -q -i --autosquash HEAD",
     "GIT_SEQUENCE_EDITOR=true git rebase -q -i --autosquash HEAD",
     "werkmeister pr autosquash && touch squash.mark",
+    // SW-1085: a ref moves another ticket; --attach rewrites the issue_id the --relates rule keys on.
+    "werkmeister issue start SW-1",
+    "werkmeister issue start SW-1 --attach",
+    "w9r issue start --attach SW-1",
   ];
   // Sequential: parallel haiku sessions in one folder would share its transcript dir.
   for (const cmd of mustRun) {

@@ -1660,7 +1660,11 @@ const SPECS: CommandSpec[] = [
         "File a new issue and print its URL (Jira)",
         ["project", "type", "title", "body-file", "relates"],
       ],
-      ["start", "Move the workspace's issue to in progress and fast-forward its worktrees", []],
+      [
+        "start",
+        "Move the workspace's issue (or <ref>) to in progress and fast-forward its worktrees",
+        ["attach"],
+      ],
       ["ready", "List a project's open work in priority order", ["project", "json"]],
     ] as const
   ).map(
@@ -1693,6 +1697,10 @@ const SPECS: CommandSpec[] = [
             "The issue's description, from a file (- for stdin, except in an autonomous workspace)",
           ],
           relates: ["--relates <issue>", "Link the new issue 'relates to' this one (repeatable)"],
+          attach: [
+            "--attach",
+            "Record <ref> as the workspace's issue in .werkmeister/workspace.yml (no init rerun, stages/ untouched)",
+          ],
         };
         for (const f of flags)
           if (f === "relates")
@@ -1710,6 +1718,7 @@ const SPECS: CommandSpec[] = [
         title: o.title ?? null,
         bodyFile: o.bodyFile ?? null,
         relates: o.relates ?? [],
+        attach: Boolean(o.attach),
       }),
     }),
   ),
