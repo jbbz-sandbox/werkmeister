@@ -3295,6 +3295,34 @@ test("refreshPrStatus: a changeset naming one member of a fixed group waits on e
   }
 });
 
+// SW-1232: a glob member names no package, so adding it would wait forever on a tag that never exists.
+test("refreshPrStatus: a fixed group's glob members are not added to release_packages (SW-1232)", async () => {
+  const ws = icmWorkspace({
+    files: { app: prFile({ status: "open", extra: "url: https://x/pr/9\n" }) },
+  });
+  try {
+    const view = {
+      state: "MERGED",
+      mergeCommit: { oid: "abc123" },
+      headRefOid: "h1",
+      files: [{ path: ".changeset/a.md" }],
+    };
+    const config = JSON.stringify({ fixed: [["app", "@acme/*", "lib-?", "{a,b}", "x[12]"]] });
+    await refreshPrStatus(
+      ws,
+      deps([
+        [/^gh pr view/, { stdout: JSON.stringify(view) }],
+        [/show h1:\.changeset\/a\.md$/, { stdout: '---\n"app": patch\n---\n\nfix\n' }],
+        [/show h1:\.changeset\/config\.json$/, { stdout: config }],
+        [/tag --contains/, { stdout: "" }],
+      ]),
+    );
+    assert.equal(readPrFiles(ws)[0].fm.release_packages, "app", "no glob member is a package");
+  } finally {
+    clean(ws);
+  }
+});
+
 test("refreshPrStatus: a single-package changesets repo (v* tags) ships on its v* tag, release_packages or not (SW-712)", async () => {
   const ws = icmWorkspace({
     files: {
