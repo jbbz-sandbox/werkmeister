@@ -19,7 +19,7 @@ import { standardsDirPath, standardsDirProblem } from "../global_config.js";
 import { noteDecisions } from "../graduate.js";
 import { buildClaudeMd, buildStandardsRoutingSection } from "../harness/claude/claude_md.js";
 import { writeWorkspaceHooks, writeWorkspaceSettings } from "../harness/claude/hooks_gen.js";
-import { harnessLayoutFor, hooksAvailable } from "../harness/layout.js";
+import { harnessLayoutFor, writeHarnessHooks } from "../harness/layout.js";
 import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import {
@@ -279,7 +279,7 @@ function init(ctx: InitContext): void {
   if (layout.agents) writeAgents(ctx);
 
   // 6c. SessionStart hook. Merges into settings.json, never clobbers.
-  if (hooksAvailable(workspaceRoot)) {
+  if (writeHarnessHooks(workspaceRoot)) {
     const hooksPath = writeWorkspaceHooks(workspaceRoot);
     writeWorkspaceSettings(workspaceRoot);
     success(`Wrote ${hooksPath}`);
@@ -316,7 +316,7 @@ export const jit: ContextStrategy = {
     // init-workspace is otherwise the only writer, so a workspace created before
     // a hook-template change kept the stale hook until someone re-ran it by hand.
     // The merge is idempotent and never clobbers a hand-added entry.
-    if (!hooksAvailable(workspaceRoot)) return;
+    if (!writeHarnessHooks(workspaceRoot)) return;
     writeWorkspaceHooks(workspaceRoot);
     writeWorkspaceSettings(workspaceRoot);
   },
