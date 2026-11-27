@@ -4823,6 +4823,11 @@ async function autosquashOne(ws: string, name: string, deps: Deps): Promise<stri
     "core.editor=true",
     "-c",
     "core.hooksPath=/dev/null",
+    // SW-1125: no auto gc or maintenance in the shared clone every workspace's worktree uses.
+    "-c",
+    "maintenance.auto=false",
+    "-c",
+    "gc.auto=0",
     "rebase",
     "-q",
     // Before git 2.44 `--autosquash` needs `-i`; the no-op sequence editor keeps it non-interactive.
