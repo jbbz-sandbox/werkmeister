@@ -21,7 +21,7 @@ import {
   writePrGuardHook,
   writeWorkspaceSettings,
 } from "../harness/claude/hooks_gen.js";
-import { harnessLayoutFor, hooksAvailable } from "../harness/layout.js";
+import { harnessLayoutFor, writeHarnessHooks } from "../harness/layout.js";
 import { issueIdOfMeta, issueTracker } from "../issue_tracker.js";
 import { buildIssuesReportMd } from "../issues_report.js";
 import { buildPrRulesMd, CHAT_APPROVAL } from "../pr_rules.js";
@@ -807,7 +807,7 @@ export const icm: ContextStrategy = {
       fs.rmSync(gateDir, { recursive: true, force: true });
       info(`Removed ${path.basename(dotDir(root))}/.gate/`);
     }
-    if (!hooksAvailable(root)) return;
+    if (!writeHarnessHooks(root)) return;
     writePrGuardHook(root);
     writeWorkspaceSettings(root);
   },

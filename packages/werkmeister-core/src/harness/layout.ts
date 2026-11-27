@@ -93,12 +93,16 @@ export function harnessFor(workspaceRoot: string): HarnessAdapter {
   return ADAPTERS[harnessIdOf(workspaceRoot)];
 }
 
-/**
- * True when the workspace takes Claude Code hooks, which the caller then writes. A harness
- * with its own hook files gets them written here and answers false, so no caller writes
- * `.claude/settings.json` for it; either way says what does not run, never silently.
- */
+/** True when the workspace takes Claude Code hooks. Pure: writes and prints nothing (SW-538). */
 export function hooksAvailable(workspaceRoot: string): boolean {
+  return harnessLayoutFor(workspaceRoot).hooks.available === true;
+}
+
+/**
+ * For the hook writers (init, refresh): writes a harness's own hook files and says what does
+ * not run, never silently. True when the caller should write the Claude-shaped hooks itself.
+ */
+export function writeHarnessHooks(workspaceRoot: string): boolean {
   const { id, hooks } = harnessLayoutFor(workspaceRoot);
   if (hooks.available === true) return true;
   if (hooks.available === "own") {
