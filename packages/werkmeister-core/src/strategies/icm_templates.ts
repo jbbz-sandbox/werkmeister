@@ -231,7 +231,7 @@ const reviewStep = (rerun: string, { group, questionTool }: IcmVars) =>
   'Also add: "never read, list or write the real `~/.werkmeister`, the host daemon or another workspace; anything you need from them, ask for or reproduce under a temp HOME". ' +
   // SW-449: a left Should fix shipped a false "every key is checked" in a changeset (sw-412).
   "Fix every **Must fix** finding in place, and any **Should fix** finding that shows the change's own docs, comments, help text or release entry state something false (fix the code, or reword that text so it is true), " +
-  `${group.length ? `fold each fix into the commit of the ticket it belongs to (${FOLD}), ` : ""}then ${rerun}. Leave the other **Should fix** and **Nice to have** findings as they are. ` +
+  `${group.length ? `fold each fix into the commit of the ticket it belongs to (${FOLD}), ` : ""}then ${rerun}. Before leaving another **Should fix**, check it in the exercise when the exercise reaches the behaviour it describes (a browser check, a CLI run), and fix it when the exercise confirms it (when the exercise step comes after this review, mark it \`pending exercise\` and settle it there, updating its \`review.md\` row; a fix there takes the delta review); leave it only when the exercise doesn't reach it or doesn't confirm it, and say which in \`review.md\` (SW-1093). Leave **Nice to have** findings as they are. ` +
   `${generatedFileCheck(questionTool)} ` +
   "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
   `${REVIEW_FORMAT}, with one row per worktree (\`PASS\` means no Must fix left open). ` +
