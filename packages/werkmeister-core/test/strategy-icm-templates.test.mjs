@@ -355,12 +355,17 @@ test("each template renders with no undefined and a route per stage", async () =
             /Each question states the URL to open, how to reach this workspace's copy \(the `X-Feature` cookie or selector.*direct published port, `localhost:<port>`.*\), and the visible before → after that means PASS/,
             `${wt}/${d}`,
           );
-        // SW-579: the bugfix review step rewrites exercise.md, so the MANUAL step comes before it; elsewhere it follows the exercise.md write.
+        // SW-1066: the MANUAL step (and its host script for the person) follows the review and the exercise.md write in every stage.
         if (c.includes("Write `output/exercise.md`")) {
           const manual = c.indexOf("Before asking for approval, list the exercise rows");
           const review = c.indexOf("Review the diff: for each code worktree");
-          if (d.endsWith("_exercise")) assert.ok(manual > -1 && manual < review, `${wt}/${d}`);
-          else assert.ok(manual > c.indexOf("Write `output/exercise.md`"), `${wt}/${d}`);
+          assert.ok(review > -1 && manual > review, `${wt}/${d}: MANUAL after review`);
+          assert.ok(manual > c.indexOf("Write `output/exercise.md`"), `${wt}/${d}`);
+          assert.match(
+            c,
+            /Before giving the person a host script, start a fresh subagent with the review step's brief over that script file/,
+            `${wt}/${d}: host script reviewed`,
+          );
         }
         // SW-653: the plan stages say commits belong to a later stage (the grouped text is asserted in the group test).
         if (/_(spec|reproduce|scope)$/.test(d))
