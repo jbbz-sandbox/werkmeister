@@ -7,7 +7,10 @@ A rank call can return 204 without moving the issue, and the agile board endpoin
 a stale order, so every move is checked against the issue's own Rank field and retried.
 On GitHub the order is the Projects (v2) board's item order; each move is checked by re-reading the board.
 """
-import argparse, base64, json, os, re, subprocess, sys, time, urllib.parse, urllib.request
+import argparse, base64, json, os, subprocess, sys, time, urllib.parse, urllib.request
+import importlib.util as _iu
+_s = _iu.spec_from_file_location("jira_creds", os.path.join(os.path.dirname(os.path.abspath(__file__)), "jira_creds.py"))
+_jc = _iu.module_from_spec(_s); _s.loader.exec_module(_jc)  # by path: the scripts run with -I (SW-994)
 
 DELAY = float(os.environ.get('RANK_RETRY_DELAY', '1'))  # seconds; tests set 0
 ap = argparse.ArgumentParser()
@@ -59,10 +62,8 @@ if a.tracker == 'github':
     print(f'ok: {len(a.keys)} issues in order (checked by re-reading board {a.board})')
     sys.exit(0)
 
-cfg = open(os.path.expanduser('~/.werkmeister/config.yaml')).read().split('\njira:')[1]
-g = lambda k: re.search(rf'^\s+{k}:\s*(\S+)', cfg, re.M).group(1).strip('"\'')
-BASE = g('base_url')
-H = {'Authorization': 'Basic ' + base64.b64encode(f"{g('email')}:{g('api_token')}".encode()).decode(),
+BASE, EMAIL, TOKEN = _jc.jira_creds()
+H = {'Authorization': 'Basic ' + base64.b64encode(f"{EMAIL}:{TOKEN}".encode()).decode(),
      'Accept': 'application/json', 'Content-Type': 'application/json'}
 def call(method, path, body=None):
     r = urllib.request.urlopen(urllib.request.Request(BASE + path, method=method, headers=H,

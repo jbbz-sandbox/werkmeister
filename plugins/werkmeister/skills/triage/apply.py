@@ -14,7 +14,10 @@ plan.json (every key optional):
    "close": [{"key": "SW-4", "duplicate_of": "SW-5", "comment": "why"}],
    "order": ["SW-1", "SW-2"]}                              # the whole open order, passed to rank.py
 """
-import argparse, base64, concurrent.futures as cf, datetime as dt, json, os, re, subprocess, sys, urllib.parse, urllib.request
+import argparse, base64, concurrent.futures as cf, datetime as dt, json, os, subprocess, sys, urllib.parse, urllib.request
+import importlib.util as _iu
+_s = _iu.spec_from_file_location("jira_creds", os.path.join(os.path.dirname(os.path.abspath(__file__)), "jira_creds.py"))
+_jc = _iu.module_from_spec(_s); _s.loader.exec_module(_jc)  # by path: the scripts run with -I (SW-994)
 
 ap = argparse.ArgumentParser()
 ap.add_argument('plan', nargs='?')
@@ -89,10 +92,8 @@ if a.self_test:
 
 if not a.plan: ap.error('give the plan file')
 plan = json.load(open(a.plan))
-cfg = open(os.path.expanduser('~/.werkmeister/config.yaml')).read().split('\njira:')[1]
-g = lambda k: re.search(rf'^\s+{k}:\s*(\S+)', cfg, re.M).group(1).strip('"\'')
-BASE = g('base_url')
-H = {'Authorization': 'Basic ' + base64.b64encode(f"{g('email')}:{g('api_token')}".encode()).decode(),
+BASE, EMAIL, TOKEN = _jc.jira_creds()
+H = {'Authorization': 'Basic ' + base64.b64encode(f"{EMAIL}:{TOKEN}".encode()).decode(),
      'Accept': 'application/json', 'Content-Type': 'application/json'}
 
 def call(method, path, body=None):
