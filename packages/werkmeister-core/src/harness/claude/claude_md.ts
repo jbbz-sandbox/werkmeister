@@ -457,8 +457,11 @@ export function buildSandboxContextMd(
   // SW-646: contracts name no repo's toolchain; they send the agent here for the repo's own commands.
   const repoCommands = [...new Set(rows.map((r) => r.repo))]
     .map((repo) => {
-      const { format, release_check, ship } = reposConfig[repo] ?? {};
+      const { format, lint, release_check, ship } = reposConfig[repo] ?? {};
       const lines = [
+        // SW-1238: the lint chain on its own, so a run checks it before the gate without the full test row.
+        lint &&
+          `- Lint: \`${lint}\` — the PR gate's lint row, the \`<lint> &&\` head of each test command above; run it the way they run (in the service's container when its Validation text says so), as one \`sh -c '…'\` under \`with-temp-home\`, so every \`&&\` part gets the temp HOME`,
         format &&
           `- Format: \`${format}\` — ${format.includes("{files}") ? "`{files}` replaced with the files you touched" : "run as written, from the repo root"}`,
         ship === "tag" &&

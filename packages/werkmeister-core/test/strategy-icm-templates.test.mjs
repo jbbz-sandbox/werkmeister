@@ -510,7 +510,7 @@ test("each template renders with no undefined and a route per stage", async () =
         if (d.endsWith("_reproduce"))
           assert.match(c, /^1\. Reproduce .*Judge each run by its exit code/m, `${wt}/${d}`);
         // SW-124: every test step, and the subagents it briefs, go through the wrapper.
-        if (c.includes("Run the test command")) {
+        if (c.includes("run the tests the change reaches")) {
           assert.match(c, /through `\.werkmeister\/bin\/with-temp-home`/, `${wt}/${d}`);
           assert.match(c, /A subagent you brief to run tests/, `${wt}/${d}`);
           // SW-316: the host run misses the container env; the tests-only gate runs where pr open will.
@@ -531,7 +531,7 @@ test("each template renders with no undefined and a route per stage", async () =
             `${wt}/${d}`,
           );
           assert.ok(
-            c.indexOf("tick off each edit") < c.indexOf("Run the test command"),
+            c.indexOf("tick off each edit") < c.indexOf("run the tests the change reaches"),
             `${wt}/${d}: diff check before tests`,
           );
           // SW-547, SW-646: the repo's own format command runs on the touched files before the tests.
@@ -542,7 +542,7 @@ test("each template renders with no undefined and a route per stage", async () =
           );
           assert.doesNotMatch(c, /\b(pnpm|biome|turbo|changesets?)\b/, `${wt}/${d}`);
           assert.ok(
-            c.indexOf("format command") < c.indexOf("Run the test command"),
+            c.indexOf("format command") < c.indexOf("run the tests the change reaches"),
             `${wt}/${d}: format before tests`,
           );
           // SW-846: format and lint run where the service's tests run, and lint runs before the gate.
@@ -552,7 +552,13 @@ test("each template renders with no undefined and a route per stage", async () =
             `${wt}/${d}`,
           );
           const lint = c.indexOf(
-            "Before `werkmeister pr gate --tests`, run the repo's whole lint chain there too (every command the test command in `werkmeister-context.md` runs ahead of the service's own tests",
+            "Never leave out the `Lint:` command, and fix what it fails: a fast route that runs one test file skips the lint chain",
+          );
+          // SW-1238: targeted tests and lint before the gate; the gate runs the full row once.
+          assert.match(
+            c,
+            /run the tests the change reaches .* and the repo's `Lint:` command .* Don't run the full test row by hand: the gate runs it once\./,
+            `${wt}/${d}`,
           );
           assert.ok(lint > 0, `${wt}/${d}: lint step`);
           assert.ok(
@@ -634,7 +640,7 @@ test("each template renders with no undefined and a route per stage", async () =
             // SW-430: host tests → review and fix → the gate, once → exercise.md.
             // SW-1203: containers stopped before the review; the full gate only after it settles.
             const order = [
-              "Run the test command",
+              "run the tests the change reaches",
               "Before the review below, and before a browser check that doesn't use the test containers, run `werkmeister feature stop`",
               "Review the diff",
               "Run `werkmeister pr gate --tests` once, after the last review round has no open finding the person wants fixed",

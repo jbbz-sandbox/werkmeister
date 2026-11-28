@@ -470,3 +470,32 @@ test("How to validate names the probe's load-time temp-HOME guard (SW-1049)", as
     { services: SERVICES },
   );
 });
+
+test("Repo commands print the repo's lint chain as its own Lint: line, and none without one (SW-1238)", async () => {
+  await withSandboxHome(
+    async () => {
+      const ctx = (repos) =>
+        buildSandboxContextMd(
+          "test",
+          1,
+          11100,
+          11119,
+          ["frontend"],
+          loadServices(),
+          "",
+          null,
+          ["frontend"],
+          false,
+          "/ws/.werkmeister/bin/with-temp-home",
+          repos,
+          {},
+        );
+      assert.match(
+        ctx({ "demo-repo": { lint: "pnpm lint", format: "pnpm fmt {files}" } }),
+        /^Repo commands for demo-repo:\n- Lint: `pnpm lint` — the PR gate's lint row/m,
+      );
+      assert.doesNotMatch(ctx({ "demo-repo": { format: "pnpm fmt {files}" } }), /^- Lint:/m);
+    },
+    { services: SERVICES },
+  );
+});
