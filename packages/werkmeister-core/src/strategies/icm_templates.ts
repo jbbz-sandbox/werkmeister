@@ -235,7 +235,9 @@ const reviewStep = (rerun: string, { group, questionTool }: IcmVars) =>
   `${generatedFileCheck(questionTool)} ` +
   "Write `output/review.md`: per worktree, the findings as the review grouped them, each marked `fixed` or `left: <why>`, then " +
   `${REVIEW_FORMAT}, with one row per worktree (\`PASS\` means no Must fix left open). ` +
-  "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`; a file of prose alone fails with `has no PASS row`.";
+  "The PR gate refuses to open a PR while `review.md` is missing or has a row that is not `PASS`; a file of prose alone fails with `has no PASS row`. " +
+  // SW-1146: sw-190's Should fix #1 was a correctness bug the change introduced; the contract would have shipped it.
+  `A **Should fix** that is a correctness or security defect in this change's own code is never left without asking: before \`review.md\`'s status flips, ask the person about each one (fix now / file a ticket / leave), ${questionTool ? `through \`${questionTool}\`` : "as one numbered block at the end of your reply"}, and record the answer beside the finding. Style and simplification findings stay as they are.`;
 const implementReview = (v: IcmVars) =>
   reviewStep(
     "rerun only the test files the fix reaches and the cheap rows (the repo's lint chain, a service's test row that runs in about a minute or less), not the full gate, which runs once below",
