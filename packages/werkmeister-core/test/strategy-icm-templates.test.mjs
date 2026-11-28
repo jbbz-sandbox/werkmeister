@@ -489,7 +489,7 @@ test("each template renders with no undefined and a route per stage", async () =
         if (d.endsWith("_reproduce"))
           assert.match(
             c,
-            /^5\. .* When the fix adds persisted state \(a file, a record field, a marker\), list each write and each clear point \(every path that ends what the state stands for: success, failure, the other entry points to the same lifecycle\) and give each clear point a test\./m,
+            /^5\. .* When the fix adds persisted state \(a file, a record field, a marker\), list each write and each clear point \(every path that ends what the state stands for: success, failure, the other entry points to the same lifecycle\) and give each clear point a test\. When the fix keeps, holds or defers something until another party acts \(a reaper keep, a queue hold, a wait\), give the hold a time bound, name what happens when it expires, and test a case past the bound\./m,
             `${wt}/${d}`,
           );
         // SW-566: step 4 also lists what each caller does with the result.
