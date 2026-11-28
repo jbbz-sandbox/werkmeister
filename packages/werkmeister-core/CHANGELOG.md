@@ -1,5 +1,18 @@
 # sandbox-core
 
+## 0.116.0
+
+### Minor Changes
+
+- 5d0a7cb: SW-1231: claude workspaces now keep their instructions in `AGENTS.md`, like every other harness, and `CLAUDE.md` becomes the one line `@AGENTS.md`. Claude Code loads that import on every version, even under a folder that has its own `CLAUDE.md`, which turns off Claude Code's native `AGENTS.md` fallback. Re-run `werkmeister workspace init` in a workspace to migrate it. Its old `## Handoff Notes` are kept as a note.
+
+### Patch Changes
+
+- c72cc4b: Compose generation refuses a sidecar name that two services declare in `extra_services`, or that a service or setup service in the feature already has, naming both: each sidecar is its own compose service and container, so a repeated name wrote a duplicate key that `docker compose up` rejected (SW-1233).
+- 653e120: `machine clean` now finds an orphaned `extra_services` sidecar volume (a removed feature's `<feature>-pgdata`), and removes a per-feature volume only when that feature's compose project created it, so another project's `myapp-pgdata` is never deleted (SW-1234).
+- 3cf1303: SW-538: pausing an OpenCode workspace no longer rewrites `opencode.json` and its plugin or prints `Wrote …`. `hooksAvailable()` is now a pure check, and the hook writers (workspace init, `feature up`, the `hooks` tool) write OpenCode's files through `writeHarnessHooks()`.
+- ccc7ec4: SW-876: importing the Codex harness no longer calls into `node:child_process` at load, so a test that mocks it without `execFile` can still import it.
+
 ## 0.115.1
 
 ### Patch Changes

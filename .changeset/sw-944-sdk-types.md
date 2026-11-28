@@ -1,5 +1,0 @@
----
-"werkmeister": patch
----
-
-The `werkmeister-core/sdk` entry now exports the types its public members use, so callers can name them: `AbandonedSpend`, `Activity`, `ActivityId`, `AgentChip`, `AgentState`, `Board`, `CheckInRow`, `ClaudeSessionSignal`, `Conflict`, `ContainerStatus`, `CostlyTicket`, `CountedPercentiles`, `CrashLoop`, `Distiller`, `Finding`, `FindingKind`, `FlowCard`, `FlowColumn`, `FlowColumnReport`, `GateRowKind`, `IssueComment`, `IssueKind`, `IssueParent`, `IssuePoint`, `IssueRef`, `IssueUpdate`, `MetricsRange`, `ModelRollup`, `ModelUsage`, `NeedItem`, `NeedKind`, `NeedSource`, `NewIssue`, `OpenPr`, `Percentiles`, `Phase`, `PhaseId`, `PrWatchScheduleOptions`, `RepoPr`, `ReviewStatus`, `RunningContainer`, `SchemaProp`, `ServiceHealth`, `SessionSignal`, `SessionUsage`, `SetupPlan`, `SlowTicket`, `StageTrend`, `Stalled`, `StalledReason`, `Started`, `StartedBy`, `SuiteTrend`, `TicketCost`, `TicketTimes`, `TimelineEvent`, `TrackerAuth`, `TrendBucket`, `TrendRow`, `TrendSlice`, `UsageRollup`, `UsageStatus`, `UsageTotals`, `WaitCause`, `WaitSeconds`, `WorkspaceState`, `WorkTypeColumn` and `WorkTypeSlice`.

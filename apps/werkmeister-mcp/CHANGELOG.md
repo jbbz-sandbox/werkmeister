@@ -1,5 +1,18 @@
 # sandbox-mcp
 
+## 0.10.12
+
+### Patch Changes
+
+- 8c17825: The daemon's GitHub ingest logs every line of a pushed pass, not only the first, so `desktop pass owed for <repo>` (the hand-off to a Desktop session) shows in the daemon log (SW-1245).
+- Updated dependencies [5d0a7cb]
+- Updated dependencies [c72cc4b]
+- Updated dependencies [653e120]
+- Updated dependencies [3cf1303]
+- Updated dependencies [ccc7ec4]
+  - werkmeister-core@0.116.0
+  - werkmeister-ui@0.7.107
+
 ## 0.10.11
 
 ### Patch Changes
