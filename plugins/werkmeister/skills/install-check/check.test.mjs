@@ -225,6 +225,29 @@ test("--pull off main pulls and builds nothing", () => {
   assert.ok(!fs.existsSync(path.join(repo, "apps/werkmeister-mcp/src/x.ts")));
 });
 
+// SW-974: the plain check (and SessionStart's --fix) says when the dev link is off main, so a
+// feature-branch CLI never goes unnoticed. Squash-merged work counts as merged when the tree matches.
+test("off main, the plain check is drift: it names the branch and its unmerged commits", () => {
+  behindOrigin("jayboyer/feature");
+  const git = (...a) => spawnSync("git", a, { cwd: repo, encoding: "utf8" });
+  write(path.join(repo, "apps/cli/src/feature.ts"), "x");
+  git("add", "-A");
+  git("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "feature");
+  const r = run();
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stdout,
+    /^DRIFT .* is on jayboyer\/feature, not main .*1 commit not on origin\/main/m,
+  );
+});
+
+test("off main with nothing unmerged, the check still flags the branch and says it is merged", () => {
+  behindOrigin("jayboyer/feature");
+  const r = run();
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /^DRIFT .* is on jayboyer\/feature, not main .*already on origin\/main/m);
+});
+
 /**
  * A fake gh: checks pass unless CHECKS_RC says otherwise, the queue reports QUEUE_STATE.
  * ENQUEUE_ERR makes the enqueue fail with that message, as gh prints a GraphQL error.

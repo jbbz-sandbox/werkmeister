@@ -23,6 +23,7 @@ Run the check first and show the person its output. If it finds drift, run `--fi
 
 | Check | `--fix` does |
 |---|---|
+| The checkout is on `main` (SW-974). Off it, the `DRIFT` line names the branch and its commits not on `origin/main`, or says it is already on `origin/main` (squash-merged) | reports only: no fetch, no branch switch |
 | `werkmeister`, `w9r` on PATH resolve into `apps/cli` | `npm rm -g werkmeister && npm link` in `apps/cli` |
 | `dist/main.js` is newer than `apps/cli/src` and `packages/*/src` | `corepack pnpm install --frozen-lockfile && corepack pnpm turbo run build --filter=werkmeister` (turbo builds core first); prints `FIX` only when it succeeds, `ERROR` otherwise |
 | `~/.werkmeister/env.sh` `WERKMEISTER_ROOT` is `apps/cli` | reports only: fix `werkmeister_root` in `~/.werkmeister/config.yaml`, then run `werkmeister machine config --write` |
