@@ -202,8 +202,13 @@ test("once launchd owns the daemon, a PID-file stop leaves it running", {
 for (const [why, env] of [
   ["with-temp-home", () => ({ WERKMEISTER_TEMP_HOME: home })],
   ["a fixture run", () => ({ WERKMEISTER_FIXTURE: "1" })],
+  // SW-946: a scratch-home `machine setup --yes` must not repoint the host's one daemon agent.
+  [
+    "a relocated WERKMEISTER_CONFIG_FILE",
+    () => ({ WERKMEISTER_CONFIG_FILE: path.join(home, "scratch", "config.yaml") }),
+  ],
 ]) {
-  test(`under ${why}, daemon install and uninstall never run launchctl (SW-1054)`, async (t) => {
+  test(`under ${why}, daemon install and uninstall never run launchctl (SW-1054, SW-946)`, async (t) => {
     const set = env();
     const prev = Object.fromEntries(Object.keys(set).map((k) => [k, process.env[k]]));
     Object.assign(process.env, set);

@@ -57,11 +57,11 @@ import { applyEdits, modify, type ParseError, parse as parseJsonc } from "jsonc-
 import {
   expandUser,
   getReposRoot,
-  hostSessionSkipReason,
   isFixture,
   sandboxHome,
   sandboxRoot,
   servicesLocalYamlPath,
+  sharedProxySkipReason,
 } from "./config.js";
 import { daemonUrl } from "./daemon_client.js";
 import {
@@ -1705,7 +1705,7 @@ export function installPrWatchSchedule(opts: PrWatchScheduleOptions = {}): {
   ok: boolean;
   lines: string[];
 } {
-  const skip = hostSessionSkipReason();
+  const skip = sharedProxySkipReason();
   if (skip) return { ok: true, lines: [`PR watch schedule skipped (${skip}).`] };
   const r = resolvePrWatch(opts);
   const done = (where: string, changed: boolean) => ({
@@ -1740,7 +1740,7 @@ export function uninstallPrWatchSchedule(opts: PrWatchScheduleOptions = {}): {
   ok: boolean;
   lines: string[];
 } {
-  const skip = hostSessionSkipReason();
+  const skip = sharedProxySkipReason();
   if (skip) return { ok: true, lines: [`PR watch schedule skipped (${skip}).`] };
   const r = resolvePrWatch(opts);
   const none = { ok: true, lines: ["No PR watch schedule installed."] };
@@ -1769,7 +1769,7 @@ export function syncPrWatchSchedule(
   opts: PrWatchScheduleOptions = {},
 ): Step[] {
   const label = "PR watch schedule (optional)";
-  const skip = hostSessionSkipReason();
+  const skip = sharedProxySkipReason();
   if (skip) return [{ label, ok: true, optional: true, detail: `skipped (${skip})` }];
   if (install && !checkOnly) {
     const res = installPrWatchSchedule(opts);
@@ -1929,7 +1929,7 @@ export async function syncDaemonAgent(
       },
     ];
   }
-  const skip = hostSessionSkipReason();
+  const skip = sharedProxySkipReason();
   if (skip) return [{ label, ok: true, detail: `skipped (${skip})` }];
   // The PID-file server `connect` started holds the port; launchd's copy replaces it.
   if (!fs.existsSync(r.plist)) await (opts.stopPidServer ?? (() => stopWebServer(MCP)))();
@@ -1947,7 +1947,7 @@ export async function syncDaemonAgent(
 /** `werkmeister daemon uninstall`: hand the daemon back to `connect`'s PID-file start (SW-186). */
 export function uninstallDaemonAgent(opts: DaemonAgentOptions = {}): Step {
   const label = "werkmeister daemon";
-  const skip = hostSessionSkipReason();
+  const skip = sharedProxySkipReason();
   if (skip) return { label, ok: true, detail: `skipped (${skip})` };
   const r = resolveDaemonAgent(opts);
   if (!fs.existsSync(r.plist)) return { label, ok: true, detail: "no launchd agent installed" };
