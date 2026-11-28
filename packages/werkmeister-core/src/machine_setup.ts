@@ -1073,12 +1073,11 @@ export const JIRA_TOKEN_URL = "https://id.atlassian.com/manage-profile/security/
 /** The `jira:` keys the REST fast path needs, and the paste-me placeholders. */
 const JIRA_REQUIRED_KEYS = ["base_url", "email", "api_token"] as const;
 
-/** Copy-pasteable stanza for the report when the section is missing. */
+/** Copy-pasteable config.yaml stanza for the report; the token goes in secrets.env (SW-945). */
 export const JIRA_CONFIG_SNIPPET =
   "jira:\n" +
   "  base_url: https://your-org.atlassian.net\n" +
-  "  email: <your-atlassian-login-email>\n" +
-  "  api_token: PASTE_TOKEN_HERE";
+  "  email: <your-atlassian-login-email>";
 
 // A token verifier: the config's jira settings in, [ok, detail] out. Injected in
 // tests; the default hits GET /rest/api/2/myself with Basic auth. Async because
@@ -1106,7 +1105,7 @@ async function defaultJiraVerifier(jira: JiraSettings): Promise<[boolean, string
 }
 
 /**
- * Report the optional Jira REST credentials from `jira:` in the global config.
+ * Report the optional Jira REST credentials: `jira:` in the global config, the token in secrets.env.
  *
  * Absent or unfilled is ok-with-guidance (the fast path is an optimization —
  * everything falls back to the claude CLI). Fix mode live-verifies a filled
@@ -1120,20 +1119,22 @@ export async function syncJiraToken(
 ): Promise<Step[]> {
   const label = "jira token (optional)";
   const where = configPath();
+  const secrets = secretsPath();
+  const name = (k: string) => (k === "api_token" ? "JIRA_API_TOKEN" : `jira.${k}`);
 
   const unfilled = JIRA_REQUIRED_KEYS.filter((k) => {
     const value = (jira[k] ?? "").trim();
     return !value || JIRA_PLACEHOLDERS.has(value);
   });
   if (unfilled.length) {
-    const keys = unfilled.map((k) => `jira.${k}`).join(", ");
+    const keys = unfilled.map(name).join(", ");
     return [
       {
         label,
         ok: true,
         detail:
           `not configured (${keys}) — create a token at ${JIRA_TOKEN_URL}, ` +
-          `then add it to ${where}:\n${JIRA_CONFIG_SNIPPET}`,
+          `then add JIRA_API_TOKEN=<token> to ${secrets} and this to ${where}:\n${JIRA_CONFIG_SNIPPET}`,
       },
     ];
   }
@@ -1161,7 +1162,7 @@ export async function syncJiraToken(
       optional: true,
       detail:
         `token rejected (${detail}) — renew at ${JIRA_TOKEN_URL} and update ` +
-        `jira.api_token in ${where}. Reads fall back to the claude CLI meanwhile.`,
+        `JIRA_API_TOKEN in ${secrets}. Reads fall back to the claude CLI meanwhile.`,
     },
   ];
 }

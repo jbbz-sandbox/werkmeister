@@ -87,7 +87,9 @@ describe("config command", () => {
     const saved = YAML.parse(fs.readFileSync(cfgFile, "utf8"));
     expect(saved.ingress.local_domain).toBe("keep.me.test");
     expect(saved.ingress.certs_dir).toBe("/custom/certs");
-    expect(saved.jira.api_token).toBe("tok");
+    // SW-945: kept, in secrets.env rather than config.yaml.
+    expect(saved.jira.api_token).toBeUndefined();
+    expect(gc.loadJira().api_token).toBe("tok");
     expect(saved.overrides.services_yaml).toBe("/custom/services.yaml");
   });
 

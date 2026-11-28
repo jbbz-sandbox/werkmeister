@@ -1,5 +1,5 @@
 /**
- * Jira. REST first (one HTTP call when `jira.api_token` is configured, see
+ * Jira. REST first (one HTTP call when the Jira API token is configured, see
  * docs/issue-trackers.md); otherwise a `claude -p` run over the Atlassian MCP
  * the same machine's `claude` has connected.
  */
@@ -279,7 +279,7 @@ export function wikiToMarkdown(wiki: string): string {
 const WERKMEISTER_ISSUES_REPO = "jbbz-sandbox/werkmeister";
 
 const NO_REST =
-  "no Jira REST credentials: set jira.base_url, jira.email and jira.api_token (docs/issue-trackers.md), " +
+  "no Jira REST credentials: set jira.base_url and jira.email in config.yaml, JIRA_API_TOKEN in secrets.env (docs/issue-trackers.md), " +
   "or file it with the Atlassian MCP tools";
 
 const ISSUE_TYPES: Record<IssueKind, string> = { bug: "Bug", feature: "Story", task: "Task" };
@@ -388,7 +388,8 @@ export function jiraTracker(scope: TrackerScope = {}): IssueTrackerStrategy {
     },
 
     async checkAuth() {
-      const fix = "set jira.base_url, jira.email and jira.api_token (docs/issue-trackers.md)";
+      const fix =
+        "set jira.base_url and jira.email in config.yaml, JIRA_API_TOKEN in secrets.env (docs/issue-trackers.md)";
       try {
         const me = await jiraMyself();
         if (me) return { ok: true, who: me.who, fix: "" };
