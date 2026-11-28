@@ -6,6 +6,9 @@
   python3 -I report.py --self-test            # check the placement rules on fixtures, no Jira or GitHub
 """
 import argparse, base64, datetime as dt, json, os, re, subprocess, sys, urllib.parse, urllib.request
+import importlib.util as _iu
+_s = _iu.spec_from_file_location("jira_creds", os.path.join(os.path.dirname(os.path.abspath(__file__)), "jira_creds.py"))
+_jc = _iu.module_from_spec(_s); _s.loader.exec_module(_jc)  # by path: the scripts run with -I (SW-994)
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--tracker', choices=('jira', 'github'), default='jira')
@@ -244,10 +247,8 @@ if a.tracker == 'github':
     f = gh_fields(nodes, {c.strip() for c in a.components.split(',') if c.strip()})  # board order = rank
     ref_re = GH_REF
 else:
-    cfg = open(os.path.expanduser('~/.werkmeister/config.yaml')).read().split('\njira:')[1]
-    g = lambda k: re.search(rf'^\s+{k}:\s*(\S+)', cfg, re.M).group(1).strip('"\'')
-    BASE = g('base_url')
-    H = {'Authorization': 'Basic ' + base64.b64encode(f"{g('email')}:{g('api_token')}".encode()).decode(), 'Accept': 'application/json'}
+    BASE, EMAIL, TOKEN = _jc.jira_creds()
+    H = {'Authorization': 'Basic ' + base64.b64encode(f"{EMAIL}:{TOKEN}".encode()).decode(), 'Accept': 'application/json'}
     get = lambda p: json.load(urllib.request.urlopen(urllib.request.Request(BASE + p, headers=H), timeout=30))
 
     # Open issues in board order (board order = rank)
