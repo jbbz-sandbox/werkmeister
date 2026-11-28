@@ -848,10 +848,12 @@ function serverArgs(body: Record<string, unknown>): unknown[] {
  * Drop the redundant `env` block from the werkmeister MCP server entry, and move
  * a pre-SW-186 `mcp` to `internal mcp`.
  *
- * Idempotent; no-op when the file, the server, or the block is absent. Returns
- * true if a change was written, or with *checkOnly* would be.
+ * Idempotent; no-op when the file, the server, or the block is absent, and when a relocated
+ * home or a test run would reach the person's own Desktop config (SW-957). Returns true if a
+ * change was written, or with *checkOnly* would be.
  */
 export function patchDesktopConfig(p?: string, checkOnly = false): boolean {
+  if (!p && sharedProxySkipReason()) return false;
   const target = p ?? desktopConfigPath();
   if (!fs.existsSync(target)) {
     return false;
@@ -935,8 +937,9 @@ export function check(cfg: GlobalConfig): string[] {
     problems.push(`${zpath} does not source env.sh — run \`werkmeister machine config --write\``);
   }
 
+  // Nor the Claude Desktop config (SW-957).
   const dpath = desktopConfigPath();
-  if (fs.existsSync(dpath)) {
+  if (!sharedProxySkipReason() && fs.existsSync(dpath)) {
     try {
       const data = JSON.parse(fs.readFileSync(dpath, "utf8"));
       for (const body of Object.values(data["mcpServers"] ?? {})) {

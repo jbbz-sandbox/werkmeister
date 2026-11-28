@@ -177,7 +177,11 @@ export async function run(args: Record<string, unknown>): Promise<void> {
   if (fs.existsSync(desktopPath)) {
     info(
       `${path.basename(desktopPath)}: ` +
-        `${desktopChanged ? "dropped stale env block" : "no env block to remove"}`,
+        (shellSkip
+          ? `left alone (${shellSkip})`
+          : desktopChanged
+            ? "dropped stale env block"
+            : "no env block to remove"),
     );
   }
   info("Open a new shell (or `source ~/.zshenv`) for the exports to take effect.");
