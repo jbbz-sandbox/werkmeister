@@ -49,7 +49,7 @@ describe("loadJira", () => {
     expect(gc.loadJira()).toEqual(FILLED);
   });
 
-  it("save() locks the file down — it holds a live token", () => {
+  it("save() keeps config.yaml owner-only", () => {
     fs.writeFileSync(cfgFile, "version: 1\n"); // pre-existing 0644 file
     gc.save({ version: 1, jira: FILLED });
     expect(fs.statSync(cfgFile).mode & 0o777).toBe(0o600);
@@ -65,7 +65,10 @@ describe("sandbox config rewrite", () => {
 
     await runConfig({ repos_root: repos, workspaces_root: repos, show: false, check: false });
 
-    expect(YAML.parse(fs.readFileSync(cfgFile, "utf8")).jira).toEqual(FILLED);
+    // SW-945: the token moves to secrets.env; readers still see the whole section.
+    const { api_token: _, ...rest } = FILLED;
+    expect(YAML.parse(fs.readFileSync(cfgFile, "utf8")).jira).toEqual(rest);
+    expect(gc.loadJira()).toEqual(FILLED);
   });
 
   it("preserves a hand-written projects section (SW-104)", async () => {
@@ -89,11 +92,11 @@ describe("syncJiraToken", () => {
     const empty = await stepFor({});
     expect(empty.ok).toBe(true);
     expect(empty.detail).toContain("jira.base_url");
-    expect(empty.detail).toContain("jira.api_token");
+    expect(empty.detail).toContain("JIRA_API_TOKEN");
 
     const placeholder = await stepFor({ ...FILLED, api_token: "PASTE_TOKEN_HERE" });
     expect(placeholder.ok).toBe(true);
-    expect(placeholder.detail).toContain("jira.api_token");
+    expect(placeholder.detail).toContain("JIRA_API_TOKEN");
   });
 
   it("the unedited setup snippet counts as not configured", async () => {
@@ -121,7 +124,7 @@ describe("syncJiraToken", () => {
     const step = await stepFor(FILLED, () => [false, "HTTP 401"] as [boolean, string]);
     expect(step.ok).toBe(false);
     expect(step.detail).toContain("HTTP 401");
-    expect(step.detail).toContain(cfgFile);
+    expect(step.detail).toContain(path.join(tmp, "secrets.env"));
   });
 
   it("check-only skips the network and names the account", async () => {

@@ -46,15 +46,24 @@ Jira rejects, are reported as a fault.
      the date, because you'll repeat this step then.
    - Copy the token immediately (it is shown once).
 
-2. **Add the credentials** to `~/.werkmeister/config.yaml` (or answer
-   `werkmeister machine setup`'s prompts):
+2. **Add the credentials** (or answer `werkmeister machine setup`'s prompts). The site and
+   login go in `~/.werkmeister/config.yaml`:
 
    ```yaml
    jira:
      base_url: https://your-org.atlassian.net
      email: <your-atlassian-login-email>
-     api_token: <paste-token-here>
    ```
+
+   The token goes in `~/.werkmeister/secrets.env` (owner-only), never in config.yaml,
+   which people and agents read to check a setting:
+
+   ```bash
+   JIRA_API_TOKEN=<paste-token-here>
+   ```
+
+   A token still in config.yaml as `jira.api_token` works and moves to secrets.env
+   the next time werkmeister writes the config.
 
    `email` is the address on your Atlassian *account*. Email aliases may
    authenticate too, but use the canonical one if in doubt. Check your
@@ -63,7 +72,7 @@ Jira rejects, are reported as a fault.
 3. **Verify** (scriptable; this is the health check):
 
    ```bash
-   curl -s -u "<email>:<api_token>" \
+   curl -s -u "<email>:<token>" \
      "https://your-org.atlassian.net/rest/api/3/myself" | jq '{displayName, emailAddress}'
    ```
 
@@ -87,8 +96,8 @@ For a proxy allow-list or token scopes. Werkmeister talks to Jira REST API v2, e
 
 Tokens expire (max 1 year). Symptom: Jira status pills and cards quietly fall
 back to the slow path, or the server log shows a `401`. Fix: repeat step 1, then paste
-the new token into `jira.api_token` in `~/.werkmeister/config.yaml`. `JIRA_BASE_URL`,
-`JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment win over the `jira:` section, so if
+the new token into `JIRA_API_TOKEN` in `~/.werkmeister/secrets.env`. `JIRA_BASE_URL`,
+`JIRA_EMAIL` and `JIRA_API_TOKEN` in the environment win over both files, so if
 you export them, update or unset them too.
 
 ## GitHub Issues (`gh auth`)

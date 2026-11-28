@@ -340,7 +340,7 @@ export function candidateWorkspaceRoots(): string[] {
   return [...new Set([...roots, path.join(os.homedir(), "workspace")])];
 }
 
-/** Jira REST credentials as stored in the YAML (`base_url`, `email`, `api_token`). */
+/** Jira REST credentials: `base_url` and `email` from the YAML, `api_token` from secrets.env. */
 export interface JiraSettings {
   base_url?: string;
   email?: string;
@@ -354,15 +354,20 @@ export interface JiraSettings {
 }
 
 /**
- * Return the `jira:` sub-dict (or `{}`) — the optional Jira REST fast path.
+ * Return the `jira:` sub-dict (or `{}`) — the optional Jira REST fast path — with
+ * `api_token` from secrets.env's `JIRA_API_TOKEN` (SW-945); a token still in an
+ * un-migrated config.yaml is the fallback.
  *
  * Deliberately absent from `_ENV_MAP`: env.sh is sourced from ~/.zshenv, so
  * projecting `api_token` there would export a live credential into every shell
- * and every child process. Consumers read the YAML instead.
+ * and every child process.
  */
 export function loadJira(): JiraSettings {
   const jira = load()["jira"];
-  return isDict(jira) ? jira : {};
+  const settings: JiraSettings = isDict(jira) ? { ...jira } : {};
+  const token = secretValue("JIRA_API_TOKEN");
+  if (token) settings.api_token = token;
+  return settings;
 }
 
 // ---------------------------------------------------------------------------
@@ -601,33 +606,65 @@ export const INGEST_SECRET_KEYS = {
   secret_access_key: "GITHUB_INGEST_SECRET_ACCESS_KEY",
 } as const;
 
-/**
- * SW-759: the github_ingest AWS key pair belongs in secrets.env, not in a file people read
- * to check a setting. Moves any left in *cfg* there; secrets.env is written before the key
- * leaves config.yaml, so a failed write loses nothing.
- */
-function moveIngestKeys(cfg: GlobalConfig): void {
-  const block = cfg.github_ingest;
-  if (!isDict(block)) return;
-  const moved = Object.entries(INGEST_SECRET_KEYS).filter(([key]) => !isEmpty(block[key]));
-  if (!moved.length) return;
-  const file = secretsPath();
-  const lines = fs.existsSync(file)
-    ? fs.readFileSync(file, "utf8").replace(/\n+$/, "").split("\n")
-    : [];
-  for (const [key, name] of moved) {
-    // secrets.env wins, as the reader does: a key rotated there isn't overwritten by the stale one.
-    if (!lines.some((l) => l.trim().startsWith(`${name}=`))) {
-      lines.push(`${name}=${String(block[key]).trim()}`);
-    }
-  }
+/** Per config.yaml block, each credential key → its secrets.env name (SW-759, SW-945). */
+const SECRET_KEYS: Record<string, Record<string, string>> = {
+  github_ingest: INGEST_SECRET_KEYS,
+  jira: { api_token: "JIRA_API_TOKEN" },
+};
+
+function secretLines(file: string): string[] {
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf8").replace(/\n+$/, "").split("\n") : [];
+}
+
+function writeSecretLines(file: string, lines: string[]): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, `${lines.join("\n")}\n`, { mode: 0o600 });
   fs.chmodSync(file, 0o600);
-  cfg.github_ingest = Object.fromEntries(
-    Object.entries(block).filter(([key]) => !(key in INGEST_SECRET_KEYS)),
-  );
-  info(`Moved the github_ingest AWS keys from ${configPath()} to ${file}`);
+}
+
+/** *name*'s value in secrets.env, as `loadSecrets` parses it (the last line wins), or undefined. */
+function secretValue(name: string): string | undefined {
+  const line = secretLines(secretsPath())
+    .filter((l) => l.trim().startsWith(`${name}=`))
+    .at(-1);
+  return line?.slice(line.indexOf("=") + 1).trim() || undefined;
+}
+
+/** Set *name* in secrets.env (0600) as its one line, at the end; other lines kept. */
+export function writeSecret(name: string, value: string): void {
+  const file = secretsPath();
+  refuseInsideContainer(file);
+  const lines = secretLines(file).filter((l) => !l.trim().startsWith(`${name}=`));
+  lines.push(`${name}=${value.trim()}`);
+  writeSecretLines(file, lines);
+}
+
+/**
+ * Credentials belong in secrets.env, not in a file people read to check a setting
+ * (SW-759, SW-945). Moves any left in *cfg* there; secrets.env is written before the key
+ * leaves config.yaml, so a failed write loses nothing.
+ */
+function moveSecretKeys(cfg: GlobalConfig): void {
+  const file = secretsPath();
+  const lines = secretLines(file);
+  const sections: string[] = [];
+  for (const [section, keys] of Object.entries(SECRET_KEYS)) {
+    const block = cfg[section];
+    if (!isDict(block)) continue;
+    const moved = Object.entries(keys).filter(([key]) => !isEmpty(block[key]));
+    if (!moved.length) continue;
+    for (const [key, name] of moved) {
+      // secrets.env wins, as the reader does: a key rotated there isn't overwritten by the stale one.
+      if (!lines.some((l) => l.trim().startsWith(`${name}=`))) {
+        lines.push(`${name}=${String(block[key]).trim()}`);
+      }
+    }
+    cfg[section] = Object.fromEntries(Object.entries(block).filter(([key]) => !(key in keys)));
+    sections.push(section);
+  }
+  if (!sections.length) return;
+  writeSecretLines(file, lines);
+  info(`Moved the ${sections.join(" and ")} credentials from ${configPath()} to ${file}`);
 }
 
 /** Write the config YAML (creating ~/.werkmeister/ as needed). */
@@ -635,12 +672,12 @@ export function save(cfg: GlobalConfig): string {
   const p = configPath();
   refuseInsideContainer(p);
   keepStoredRoot(cfg);
-  moveIngestKeys(cfg);
+  moveSecretKeys(cfg);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, _HEADER + YAML.stringify(cfg));
-  // `jira.api_token` is a live Atlassian credential — owner-only, like the
-  // secrets file. chmod separately: writeFileSync's mode applies to a file it
-  // creates, not to one that already exists at the default 644.
+  // Owner-only, like the secrets file: an un-migrated hand edit can still hold a credential.
+  // chmod separately: writeFileSync's mode applies to a file it creates, not to one that
+  // already exists at the default 644.
   fs.chmodSync(p, 0o600);
   return p;
 }

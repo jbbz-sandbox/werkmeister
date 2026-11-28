@@ -555,7 +555,7 @@ scoped repo's open issues, oldest first). The project is `--project`, else the w
 the `default: true` one, else the only one. The `next-wave` plugin skill reads its tickets from it.
 The `triage` skill reads the project's `tracker.project` (Jira) or `tracker.org` (GitHub) and `board.id` from
 `projects:`, and needs a board. On GitHub the board's item order is the rank, and priority and work-in-progress status
-are `priority:` and `status:` labels. Jira needs the REST token (`jira.api_token`,
+are `priority:` and `status:` labels. Jira needs the REST token (`JIRA_API_TOKEN` in secrets.env,
 [Issue trackers § Jira](issue-trackers.md#jira-api-token)). A GitHub board needs the `read:project` token scope
 (`gh auth refresh -s read:project`); triage also needs `project` to reorder it (`gh auth refresh -s project`).
 `issue ready` reads one page: 100 issues on Jira, 200 board items on GitHub.

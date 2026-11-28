@@ -23,7 +23,7 @@
  *   moves and comments
  * - `POST /rest/api/2/issueLink`: "relates to" links
  */
-import { loadConfig } from "./config.js";
+import { loadJira } from "./global_config.js";
 import { currentLogger } from "./logger.js";
 import { noteSlow } from "./metrics.js";
 
@@ -60,9 +60,9 @@ function normalizeCreds(baseUrl: string, email: string, token: string): JiraCred
 
 /**
  * Resolve Jira credentials: process env first (per-process override), then the
- * `jira:` section of ~/.werkmeister/config.yaml. Re-read per call (one small file
- * read, dwarfed by the network call) so a token paste/renewal takes effect
- * without a server restart.
+ * `jira:` section of config.yaml with its token from secrets.env (`loadJira`).
+ * Re-read per call (two small file reads, dwarfed by the network call) so a
+ * token paste/renewal takes effect without a server restart.
  */
 export async function jiraCreds(): Promise<JiraCreds | null> {
   const fromEnv = normalizeCreds(
@@ -72,7 +72,7 @@ export async function jiraCreds(): Promise<JiraCreds | null> {
   );
   if (fromEnv) return fromEnv;
   try {
-    const jira = loadConfig()["jira"] ?? {};
+    const jira = loadJira();
     return normalizeCreds(
       String(jira.base_url ?? ""),
       String(jira.email ?? ""),

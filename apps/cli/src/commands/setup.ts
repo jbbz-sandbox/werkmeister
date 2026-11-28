@@ -472,6 +472,7 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   // --- write ---------------------------------------------------------------
   // Every section the wizard never asks about (projects, budget, models…) is carried across
   // as is: dropping one would be a silent data loss (SW-852).
+  const { api_token: jiraToken, ...jiraBlock } = jira;
   const newCfg: Record<string, any> = {
     ...cfg,
     version: 1,
@@ -496,9 +497,11 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
       ...(resolvedGh.workspace_repo ? { workspace_repo: resolvedGh.workspace_repo } : {}),
       ...(resolvedGh.github_org ? { github_org: resolvedGh.github_org } : {}),
     },
-    ...(jira.base_url || jira.email || jira.api_token ? { jira } : {}),
+    ...(jira.base_url || jira.email || jiraToken ? { jira: jiraBlock } : {}),
   };
 
+  // SW-945: the token lives in secrets.env; one typed here replaces a rotated one there.
+  if (jiraToken?.trim()) gc.writeSecret("JIRA_API_TOKEN", jiraToken);
   const saved = gc.save(newCfg);
   const envSh = gc.writeEnvSh(newCfg);
   // SW-866: a WERKMEISTER_CONFIG_FILE or fixture home is a scratch run; the person's shell files aren't its own.
