@@ -529,7 +529,11 @@ async function configureMachine(interactive: boolean): Promise<Answers> {
   if (fs.existsSync(gc.desktopConfigPath())) {
     info(
       `${path.basename(gc.desktopConfigPath())}: ` +
-        `${desktopChanged ? "dropped stale env block" : "no env block to remove"}`,
+        (shellSkip
+          ? leftAlone
+          : desktopChanged
+            ? "dropped stale env block"
+            : "no env block to remove"),
     );
   }
 
