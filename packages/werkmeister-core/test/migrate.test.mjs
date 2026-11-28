@@ -91,10 +91,11 @@ beforeEach(() => {
   write(path.join(features, "ws2", ".werkmeister", "workspace.yml"), "feature: ws2\n");
   write(path.join(features, "ws2", "compose.yml"), "services: {}\n");
 
-  // Installed by a pre-move CLI, so its log path is still the old home.
-  process.env.WERKMEISTER_CONFIG_FILE = path.join(legacy, "config.yaml");
+  // Installed by a pre-move CLI, so its log path is still the old home. Installed at the default
+  // home and repointed: a relocated WERKMEISTER_CONFIG_FILE leaves launchd alone (SW-946).
   assert.equal(installPrWatchSchedule(prWatch()).ok, true);
-  delete process.env.WERKMEISTER_CONFIG_FILE;
+  fs.writeFileSync(plist(), fs.readFileSync(plist(), "utf8").replaceAll(target, legacy));
+  fs.rmSync(target, { recursive: true, force: true }); // the install made its logs dir there
   calls = [];
 });
 
