@@ -91,6 +91,7 @@ import {
   STANDARDS_README,
   seedFile,
 } from "./scaffold.js";
+import { VM_LOAD_IMAGE } from "./scheduler_state.js";
 import {
   BREW_FORMULA,
   DOWNLOAD_HINT,
@@ -2192,6 +2193,37 @@ export function syncTelepresence(
 }
 
 /**
+ * Pull the image the Docker VM load probe runs (macOS and Windows; Linux reads its own
+ * loadavg), so the probe's 4 s cap never spends itself on a first pull (SW-970). Optional: a
+ * failed pull only leaves the scheduler without the VM's load until it is pulled.
+ */
+export function syncVmLoadImage(
+  runner: Runner,
+  checkOnly: boolean,
+  platform: NodeJS.Platform = process.platform,
+): Step[] {
+  if (platform !== "darwin" && platform !== "win32") return [];
+  const label = `vm-load image ${VM_LOAD_IMAGE} (optional)`;
+  const [inspectRc] = runner(["docker", "image", "inspect", VM_LOAD_IMAGE]);
+  if (inspectRc === 0) return [{ label, ok: true, detail: "present" }];
+  if (checkOnly) {
+    return [
+      { label, ok: false, optional: true, detail: "not pulled — run `werkmeister machine setup`" },
+    ];
+  }
+  const [pullRc, pullOut] = runner(["docker", "pull", VM_LOAD_IMAGE]);
+  if (pullRc === 0) return [{ label, ok: true, detail: "pulled" }];
+  return [
+    {
+      label,
+      ok: false,
+      optional: true,
+      detail: `\`docker pull ${VM_LOAD_IMAGE}\` failed: ${pullOut.trim()}`,
+    },
+  ];
+}
+
+/**
  * Install the Chromium build the pinned Playwright expects — each release wants
  * one exact revision, so a cache holding another one fails at launch (werkmeister#99).
  */
@@ -2520,6 +2552,7 @@ export async function runSetup(options: RunSetupOptions = {}): Promise<Step[]> {
   );
   steps.push(...(await syncJiraToken(jira, checkOnly, options.jiraVerifier)));
   steps.push(...syncTelepresence(runner, checkOnly, { install: options.installTelepresence }));
+  steps.push(...syncVmLoadImage(runner, checkOnly));
   steps.push(...syncPlaywright(runner, checkOnly, options.interactiveRunner));
   steps.push(...syncEditorSchemas(checkOnly, options.mapEditorSchemas ?? false));
   steps.push(...syncClaudeStandardsDir(checkOnly, options.grantStandardsDir ?? false));

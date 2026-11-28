@@ -328,6 +328,9 @@ export const readHostLoad = () => ({ load: os.loadavg(), cores: os.availablePara
 // 7 reads × 4 s on top of with-temp-home's 90 s stays under an agent's 2 min Bash timeout (SW-469).
 const VM_LOAD_TIMEOUT_MS = 4_000;
 
+/** The image readVmLoad runs; machine setup pulls it once so a first pull never spends the 4 s cap (SW-970). */
+export const VM_LOAD_IMAGE = "alpine:3";
+
 /** Marks the probe's container as werkmeister's, so `machine clean` can sweep one a killed run left (SW-969). */
 const VM_LOAD_LABEL = "com.werkmeister.role=vm-load";
 
@@ -374,7 +377,7 @@ export function readVmLoad(): Promise<{ load: number[]; cores: number } | null> 
         "none",
         "--label",
         VM_LOAD_LABEL,
-        "alpine:3",
+        VM_LOAD_IMAGE,
         "sh",
         "-c",
         "cat /proc/loadavg; nproc",

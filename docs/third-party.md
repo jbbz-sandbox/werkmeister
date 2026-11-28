@@ -303,6 +303,7 @@ An image's licence covers its contents (base OS packages and the tool) and can d
 | `node:22` + xvfb, xauth, GTK 3, NSS, … | dev-only | `packages/werkmeister-vscode/Dockerfile` | MIT (Node.js) | Debian packages: xvfb MIT/X11, GTK LGPL-2.1-or-later, NSS MPL-2.0, others mixed |
 | Static docker 27.5.1, compose v2.32.4, kubectl v1.31.4 (downloaded into a tools volume) | dev-only (the werkmeister repo's own services) | `apps/cli/infra/compose/scripts/werkmeister-install-startup.sh` | Apache-2.0 ×3 | — |
 | `alpine:3` (`detect` fallback guess) | — | `fragment_detect/precedence.ts` | — | Alpine: mixed |
+| `alpine:3` (Docker VM load probe; `machine setup` pulls it on macOS and Windows) | optional (the scheduler reads the VM's load with it) | `packages/werkmeister-core/src/scheduler_state.ts` | — | Alpine: mixed |
 
 Werkmeister pulls or builds these on the person's machine and doesn't redistribute them.
 
