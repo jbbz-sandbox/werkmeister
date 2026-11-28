@@ -104,6 +104,10 @@ const IMPLEMENT_STEPS = [
   "Confirm ponytail is active (see `_shared/standards.md`; invoke the skill only if it is not), then read the standards rows above. Restate the rule you are applying beside each edit.",
 ];
 
+// SW-1021: sw-1008's person asked "I don't see the logs from the running tests"; the agent's own `tail -f` never returns.
+const BACKGROUND_LOG =
+  "In the reply that starts a background test or gate job, give the person the log's absolute path and a `! tail -f <absolute log path>` line to follow it; never run `tail -f` from your own Bash: it never returns.";
+
 // SW-619: sw-597's decision rested on a ticket that merged to main between research and implement; only `issue start` fetched the base.
 const baseCheck = (doc: string) =>
   `Before writing code, fetch the base and list \`git log --oneline HEAD..origin/<base> -- <the files \`${doc}\` changes>\` (\`<base>\` is \`main\` unless the workspace's PR base differs; name those files, never the whole tree), and run \`werkmeister issue view <KEY>\` for each ticket a decided question names. ` +
@@ -129,11 +133,16 @@ const TEST_TAIL =
   // SW-526: a background job's notice carries the exit code; a trailing echo would make it always read 0.
   'Redirect output to a file as one group, so every command in an `&&` chain lands there. For a background job (`run_in_background`) write background: `{ <test command>; } > <log> 2>&1` and read the exit code from the job\'s completion notice; for a foreground call write foreground: `{ <test command>; } > <log> 2>&1; echo "exit $?"`. Read back only the failing slice. ' +
   // SW-764: a stalled background job sends no notice, so waiting on one never ends by itself.
-  "For a background test or gate job you wait on, check its log's last-write time: after 10 minutes with no write, stop it and rerun it once, then tell the person if it stalls again.";
+  "For a background test or gate job you wait on, check its log's last-write time: after 10 minutes with no write, stop it and rerun it once, then tell the person if it stalls again. " +
+  BACKGROUND_LOG;
+// SW-1021: per-row gate logs reached the record only at `pr open` (sw-1008); SW-1244: stage record files by name.
+const GATE_LOGS =
+  " Each record commit after a gate run stages the gate's logs by name, `git -C <absolute workspace path> add '.werkmeister/logs/gate-*.log'` (`gate-run.log` and the per-row `gate-<repo>-<row>.log` the gate writes beside it), never `git commit -a`.";
 const TEST_STEP =
   HOST_TESTS +
   "Once it passes, run `werkmeister pr gate --tests` (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows) and fix what it fails; record both exit codes. " +
-  TEST_TAIL;
+  TEST_TAIL +
+  GATE_LOGS;
 const HOST_TEST_STEP = `${HOST_TESTS}Record its exit code. ${TEST_TAIL}`;
 // SW-825: sw-798's check after the gate hit "container … is not running". SW-1046: a passing gate keeps its starts.
 const GATE_CONTAINERS =
@@ -145,7 +154,7 @@ const IDLE_STOP =
 // SW-1203: sw-1099 started six gates in implement; one ran beside a review whose fix then changed the code.
 const GATE_STEP =
   "Run `werkmeister pr gate --tests` once, after the last review round has no open finding the person wants fixed (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows), and never while a review runs: a fix the review then finds wastes the run. Fix what it fails; record its exit code. A fix here reruns the host test step first. " +
-  `Then: ${GATE_CONTAINERS}`;
+  `Then: ${GATE_CONTAINERS}${GATE_LOGS}`;
 
 // SW-534: sw-385's exercise on the real harness fixed ~40 lines after the review; they shipped unreviewed.
 // SW-678: a docs fix rerun with one service's tests skipped docs-site's, and the first `pr open` failed on it.
