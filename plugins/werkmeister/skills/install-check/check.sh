@@ -39,6 +39,21 @@ if [ $PULL = 1 ]; then
   else moved=1; echo "PULL  main $before -> $after (roll back: git -C $REPO checkout $before, then rerun --fix)"; fi
 fi
 
+# 0b. SW-974: a dev link off main is drift. Warn only: no fetch, no switch. A squash-merged
+# branch counts as merged when merging it into origin/main changes nothing.
+if [ $PULL = 0 ]; then
+  branch="$(git -C "$REPO" symbolic-ref --short HEAD 2>/dev/null)"
+  if [ "$branch" != main ] && git -C "$REPO" rev-parse -q --verify origin/main >/dev/null; then
+    if [ "$(git -C "$REPO" merge-tree --write-tree origin/main HEAD 2>/dev/null)" = "$(git -C "$REPO" rev-parse 'origin/main^{tree}')" ]; then
+      state="already on origin/main"
+    else
+      n="$(git -C "$REPO" rev-list --count origin/main..HEAD)"
+      state="$n commit$([ "$n" = 1 ] || echo s) not on origin/main"
+    fi
+    bad "$REPO is on ${branch:-a detached HEAD}, not main ($state)"
+  fi
+fi
+
 # 1. CLI binaries on PATH resolve into the repo
 for bin in werkmeister w9r; do
   path="$(command -v "$bin" 2>/dev/null || true)"
