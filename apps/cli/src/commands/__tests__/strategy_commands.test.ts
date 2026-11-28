@@ -165,6 +165,16 @@ describe("skills check in an icm workspace from a user workflow", () => {
     expect(text).toContain("lags the werkmeister repo");
     expect(text).not.toContain("changed since init");
   });
+
+  // SW-1109: _shared/ is never rendered from a template, so its drift is werkmeister's even beside a template change.
+  it("prints both footers when the template changed and _shared/ drifted too", async () => {
+    fs.appendFileSync(path.join(tpl, "stages", "triage.md"), "One more line.\n");
+    fs.writeFileSync(path.join(ws, "_shared", "standards.md"), "hand edit\n");
+    const { text, code } = await check();
+    expect(code).toBe(1);
+    expect(text).toContain(`Workflow template ${tpl} changed since init`);
+    expect(text).toContain("lags the werkmeister repo");
+  });
 });
 
 // SW-1143: services' `stages:` text renders from the live registry, so it can drift a workspace too.

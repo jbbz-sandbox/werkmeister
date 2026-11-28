@@ -544,3 +544,26 @@ test("a built-in workflow gets no lock; a workspace without one reports drift as
     assert.deepEqual(icm.check(root), ["stages/01_triage/CONTEXT.md"]);
   });
 });
+
+// SW-1109: the one sync path that deletes a file. A user folder that replaces a built-in type, with
+// that type's stage names, falls back to the built-in once removed (other types keep their stages).
+test("a removed template folder reads as a template change, and sync removes the lock", async () => {
+  await withWs(async (root, ctx, home) => {
+    const dir = path.join(home, "workflows", "bugfix");
+    writeWorkflow(dir, {
+      stages: [
+        { name: "reproduce", job: "make it fail" },
+        { name: "fix", job: "fix it" },
+      ],
+      files: { reproduce: STAGE("USER-REPRODUCE {{repos}}."), fix: STAGE("USER-FIX.") },
+    });
+    withReporter(collectingReporter(), () => icm.init(ctx));
+    assert.ok(fs.existsSync(lockFile(root)), "init wrote workflow.lock");
+    fs.rmSync(dir, { recursive: true });
+    assert.equal(icm.check(root)[0], `template changed since init: ${dir}`);
+    const { wrote } = withReporter(collectingReporter(), () => icm.sync(root));
+    assert.ok(wrote.includes(".werkmeister/workflow.lock"), wrote.join(", "));
+    assert.ok(!fs.existsSync(lockFile(root)), "workflow.lock removed");
+    assert.deepEqual(icm.check(root), []);
+  }, "bugfix");
+});
