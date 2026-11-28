@@ -387,7 +387,7 @@ Lessons found mid-run (say, a CI failure on a typecheck the listed test commands
    3. **Memory entry, only for one person's own preferences,** such as their PR rules. It lives in Claude Code's auto-memory on one machine (`~/.claude/projects/<project>/memory/`), in no repo, and never ships with werkmeister, so no other developer or machine sees it. Never use it for a lesson about how werkmeister works.
 
    **Already enforced by `<check>`** (for example `name:check`) is also an action when a shipped check already catches the problem: confirm it does, name the check, and file nothing.
-6. **Commit and push** `postmortem.md` on the record branch. The handoff also stages it by name, as it does `closeout.md`.
+6. **Commit** `postmortem.md` on the record branch; `werkmeister workspace close` pushes it. The handoff also stages it by name, as it does `closeout.md`.
 
 Without `postmortem.md`, close-out refuses before it changes anything: an unshipped workspace hears the ship refusal first, and with `--abandon` the PR files stay as they were. `--skip-postmortem "<reason>"` (MCP `skip_postmortem`) closes out without one, only when the person says to, and the reason goes in `closeout.md`. A retry of a `closed-out` workspace isn't checked again. The pane's and VS Code's buttons have no skip: they show the refusal, which says to ask Claude to close out.
 

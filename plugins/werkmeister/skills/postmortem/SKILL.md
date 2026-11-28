@@ -35,7 +35,7 @@ Do not rebuild the CLI or run `werkmeister registry sync` at close-out, even aft
      `claude-transcript` MCP tool when it is available.
    - One cause is one problem: a CI failure and the issue filed for it are one row.
 2. **No problems and no `left:` rows:** write `postmortem.md` with
-   `Problems: none`, commit and push it (step 7), say so, and go on. Ask nothing.
+   `Problems: none`, commit it (step 7; `werkmeister workspace close` pushes it), say so, and go on. Ask nothing.
    With `left:` rows but no problems, skip step 3 and still run step 4.
 3. **For each problem** show the problem, its source and its cause, and propose
    what could have been done differently plus the action that makes it stick
@@ -110,6 +110,6 @@ Do not rebuild the CLI or run `werkmeister registry sync` at close-out, even aft
    **Already enforced by `<check>`** (for example `name:check`) is also an action
    when a shipped check already catches the problem: confirm it does, name the
    check in Action, and file nothing.
-7. **Commit and push `postmortem.md`** on the workspace (record) branch. Then
+7. **Commit `postmortem.md`** on the workspace (record) branch; `werkmeister workspace close` pushes it. Then
    close out as `workspace-pr` step 6 says: ask the person before
    `werkmeister workspace close`.
