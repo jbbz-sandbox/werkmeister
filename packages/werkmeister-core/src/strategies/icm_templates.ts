@@ -167,9 +167,13 @@ const diffCheck = (doc: string) =>
 
 // SW-562: sw-499's two MANUAL rows (a real VS Code window) were approved unrun and shipped as MANUAL, never recorded.
 // SW-613: sw-594's browser row listed pages only ("what am I looking for?"); sw-601 saw another workspace's copy with no cookie set.
+// SW-1066: the review briefs code worktrees only, and the host script is written after it; review the script itself.
+const HOST_SCRIPT_REVIEW =
+  " Before giving the person a host script, start a fresh subagent with the review step's brief over that script file (its path in place of the worktree's commits), fix its **Must fix** findings, and record its result in `review.md`: a script the person runs on the host is reviewed code first.";
 const MANUAL_STEP =
   "Before asking for approval, list the exercise rows only a person can run (a real VS Code window, a device, a browser). Ask the person for each one's result, one question per row (pass / fail / not run). Each question states the URL to open, how to reach this workspace's copy (the `X-Feature` cookie or selector for a routed hostname, which serves another workspace's copy when none is set, or the container's direct published port, `localhost:<port>`, from `werkmeister-context.md`), and the visible before → after that means PASS; a question that only lists pages to open is not asked. Write the answer into `exercise.md`: PASS or FAIL in the table, and for a row not run a `MANUAL: not run (person's reason)` line under it (the table's result cell stays PASS or FAIL). An approval that skips this keeps those rows MANUAL, and the PR file says why. " +
-  HOST_SCRIPT_RULE;
+  HOST_SCRIPT_RULE +
+  HOST_SCRIPT_REVIEW;
 
 const SKIPPED = "every skipped test by name with its skip reason and where it ran instead";
 // SW-126: the stages already ran each service's tests in its container before propose (SW-316, SW-430, SW-506); record them per service.
@@ -688,13 +692,13 @@ const bugfix: Stage[] = [
         "Rerun the reproduction steps from `repro.md` exactly. Capture the output.",
         `Exercise one neighbouring path through each caller \`repro.md\` listed. Capture the output. ${EXERCISE_WORKAROUND} ${TIMING_CLAIM}`,
         `Write \`output/exercise.md\`: steps 2–3 as ${exerciseFormat("detail")}.`,
-        // SW-579: the review step rewrites exercise.md, so recorded MANUAL results come first.
-        MANUAL_STEP,
         // SW-678: these edits come after the fix stage's gate; one service's test command missed docs-site's (sw-631, sw-669).
         reviewStep(
           "rerun `werkmeister pr gate --tests` (from the workspace, as a background job with its log, as rule 3 of `_shared/pr-rules.md` shows), not one service's test command: it retests every service the diff touches, and these edits come after the fix stage's gate. Then rerun steps 2–3 and update `exercise.md`",
           v,
         ),
+        // SW-1066: a host script for the person is reviewed code first (sw-1016's listed real workspaces); the review's exercise.md rewrite (SW-579) now precedes every MANUAL answer.
+        MANUAL_STEP,
       ],
       outputs: [
         "`output/exercise.md`",
